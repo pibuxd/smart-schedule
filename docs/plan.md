@@ -257,3 +257,9 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 8. Odświeżanie wyniku generowania przez odpytywanie co 1–2 s, bez websocketów.
 9. CI na GitHub Actions (ruff, pytest, eslint, typecheck, build) to część stosu narzędzi, nie aplikacji; dodam w etapie 1, jeśli się zgadzasz.
 10. Row Level Security w Postgresie odłożone; izolacja w warstwie aplikacji z testami.
+
+## 8. Uwagi na kolejne etapy (z przeglądu etapu 2)
+
+- Etap 7: pracownika "usuwa" się przez `is_active = false` (historia przypisań zostaje); usuwanie lokalu lub okresu z opublikowanym grafikiem nie jest dostępne w aplikacji, tylko archiwizacja (do ustalenia przy ekranach).
+- Etap 7: lista zasad lokalu pokazuje, które zasady są dziedziczone z grupy, a które zmienione lub wyłączone w lokalu.
+- Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.
