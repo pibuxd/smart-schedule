@@ -260,6 +260,6 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 ## 8. Uwagi na kolejne etapy (z przeglądu etapu 2)
 
-- Etap 7: pracownika "usuwa" się przez `is_active = false` (historia przypisań zostaje); usuwanie lokalu lub okresu z opublikowanym grafikiem nie jest dostępne w aplikacji, tylko archiwizacja (do ustalenia przy ekranach).
+- Usuwanie a historia (od etapu 2 pilnuje tego baza, `on_delete=RESTRICT`): nie da się usunąć pojedynczo lokalu z okresami grafiku, okresu z wersjami, stanowiska użytego w zmianach ani pracownika z przypisaniami. Usunięcie całej firmy (tylko superadmin, np. firma testowa) nadal usuwa wszystko. Etap 7: pracownika wyłącza się przez `is_active = false`, a lokal archiwizuje (nowe pole przy ekranach), zamiast usuwać.
 - Etap 7: lista zasad lokalu pokazuje, które zasady są dziedziczone z grupy, a które zmienione lub wyłączone w lokalu.
 - Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.

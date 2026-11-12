@@ -153,7 +153,7 @@ class EmployeeProfile(CompanyOwnedModel):
 
     membership = models.OneToOneField(Membership, on_delete=models.CASCADE, related_name="employee_profile")
     home_location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, related_name="employees", verbose_name="lokal domowy"
+        Location, on_delete=models.RESTRICT, related_name="employees", verbose_name="lokal domowy"
     )
     positions = models.ManyToManyField(Position, blank=True, related_name="employees", verbose_name="stanowiska")
     contract = models.CharField("umowa", max_length=16, choices=Contract.choices, default=Contract.CIVIL)

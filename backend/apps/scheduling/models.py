@@ -18,7 +18,9 @@ class SchedulePeriod(CompanyOwnedModel):
 
     company_from = "location"
 
-    location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="periods")
+    # RESTRICT: a location with schedule history cannot be deleted on its own (archive it instead);
+    # deleting the whole company still removes everything, because periods also cascade from the company.
+    location = models.ForeignKey(Location, on_delete=models.RESTRICT, related_name="periods")
     start = models.DateField("od")
     end = models.DateField("do")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.COLLECTING)
@@ -86,7 +88,7 @@ class ScheduleVersion(CompanyOwnedModel):
 
     company_from = "period"
 
-    period = models.ForeignKey(SchedulePeriod, on_delete=models.CASCADE, related_name="versions")
+    period = models.ForeignKey(SchedulePeriod, on_delete=models.RESTRICT, related_name="versions")
     number = models.PositiveIntegerField("numer")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
@@ -122,7 +124,7 @@ class Shift(CompanyOwnedModel):
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="+")
     date = models.DateField()
     shift_type = models.ForeignKey(ShiftType, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    position = models.ForeignKey(Position, on_delete=models.PROTECT, related_name="+")
+    position = models.ForeignKey(Position, on_delete=models.RESTRICT, related_name="+")
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
     slot_key = models.CharField(
@@ -150,7 +152,7 @@ class Assignment(CompanyOwnedModel):
 
     shift = models.OneToOneField(Shift, on_delete=models.CASCADE, related_name="assignment")
     employee = models.ForeignKey(
-        EmployeeProfile, on_delete=models.PROTECT, null=True, blank=True, related_name="assignments"
+        EmployeeProfile, on_delete=models.RESTRICT, null=True, blank=True, related_name="assignments"
     )
     pinned = models.BooleanField("przypięte", default=False)
     borrowed = models.BooleanField("z innego lokalu", default=False)
@@ -176,8 +178,8 @@ class AssignmentEvent(CompanyOwnedModel):
 
     company_from = "location"
 
-    location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="+")
-    period = models.ForeignKey(SchedulePeriod, on_delete=models.CASCADE, related_name="assignment_events")
+    location = models.ForeignKey(Location, on_delete=models.RESTRICT, related_name="+")
+    period = models.ForeignKey(SchedulePeriod, on_delete=models.RESTRICT, related_name="assignment_events")
     slot_key = models.CharField(max_length=120)
     from_employee = models.ForeignKey(
         EmployeeProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

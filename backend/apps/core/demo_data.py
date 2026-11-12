@@ -289,8 +289,8 @@ def delete_demo_data() -> int:
     """Remove the demo companies and the accounts that belonged only to them. Returns deleted companies."""
     user_ids = set(Membership.objects.filter(company_id__in=DEMO_COMPANY_IDS).values_list("user_id", flat=True))
     deleted = Company.objects.filter(id__in=DEMO_COMPANY_IDS).count()
-    # Children first: some links are PROTECT so that normal use never deletes people with history.
-    EmployeeProfile.objects.filter(company_id__in=DEMO_COMPANY_IDS).delete()
+    # Locations, periods and people with history are RESTRICT-protected one by one, but deleting the whole
+    # company removes everything (every company-owned row also cascades from the company).
     Company.objects.filter(id__in=DEMO_COMPANY_IDS).delete()
     User.objects.filter(id__in=user_ids, memberships__isnull=True).delete()
     return deleted
