@@ -5,8 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './availabilityDayOut';
+export * from './availabilityDayOutState';
+export * from './availabilityIn';
+export * from './availabilityPeriodOut';
+export * from './availabilityPeriodOutStatus';
 export * from './companyIn';
 export * from './companyOut';
+export * from './dayIn';
+export * from './dayInState';
 export * from './errorOut';
 export * from './generatedVersionOut';
 export * from './generateIn';
@@ -21,17 +28,30 @@ export * from './invitationOutRole';
 export * from './invitationOutStatus';
 export * from './meIn';
 export * from './meOut';
+export * from './monthHoursOut';
+export * from './myAvailabilityOut';
+export * from './myAvailabilityParams';
 export * from './myCompanyOut';
 export * from './myCompanyOutRole';
 export * from './myInvitationOut';
 export * from './myInvitationOutRole';
+export * from './myRequestOut';
+export * from './myRequestOutStatus';
+export * from './myRequestsParams';
+export * from './myScheduleOut';
+export * from './myScheduleParams';
+export * from './myShiftOut';
+export * from './patternIn';
+export * from './patternInState';
 export * from './periodIn';
 export * from './periodOut';
 export * from './periodOutStatus';
+export * from './periodRefIn';
 export * from './redeemIn';
 export * from './requestCodeIn';
 export * from './requestCodeInPurpose';
 export * from './requestCodeOut';
+export * from './requestIn';
 export * from './scoresOut';
 export * from './subscriptionOut';
 export * from './verifyCodeIn';

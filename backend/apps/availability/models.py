@@ -16,11 +16,15 @@ class AvailabilityState(models.TextChoices):
     PREFER = "prefer", "chętnie"
 
 
-HOURS_IN_ORDER = Q(from_time__isnull=True) | Q(to_time__isnull=True) | Q(from_time__lt=models.F("to_time"))
+# An end at or before the start means the next morning (night shifts); only an empty window is refused.
+HOURS_NOT_EMPTY = Q(from_time__isnull=True) | Q(to_time__isnull=True) | ~Q(from_time=models.F("to_time"))
 
 
 class AvailabilityDay(CompanyOwnedModel):
-    """State for one employee and day; optional hours ("chętnie od 14:00"). No row = nothing submitted."""
+    """State for one employee and day, with optional hours (see `engine.problem.Availability`).
+
+    No row = nothing submitted.
+    """
 
     class Source(models.TextChoices):
         MANUAL = "manual", "ręcznie"
@@ -43,7 +47,7 @@ class AvailabilityDay(CompanyOwnedModel):
         ordering = ["employee", "date"]
         constraints = [
             models.UniqueConstraint(fields=["employee", "date"], name="availability_day_unique"),
-            models.CheckConstraint(condition=HOURS_IN_ORDER, name="availability_day_hours_in_order"),
+            models.CheckConstraint(condition=HOURS_NOT_EMPTY, name="availability_day_hours_not_empty"),
         ]
 
     def __str__(self) -> str:
@@ -68,7 +72,7 @@ class AvailabilityPattern(CompanyOwnedModel):
         verbose_name_plural = "powtarzana dyspozycyjność"
         constraints = [
             models.CheckConstraint(condition=WEEKDAY_RANGE, name="availability_pattern_weekday_range"),
-            models.CheckConstraint(condition=HOURS_IN_ORDER, name="availability_pattern_hours_in_order"),
+            models.CheckConstraint(condition=HOURS_NOT_EMPTY, name="availability_pattern_hours_not_empty"),
         ]
 
 

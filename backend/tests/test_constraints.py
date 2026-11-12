@@ -109,7 +109,7 @@ def test_availability_unique_per_employee_and_day(make_company):
             employee=a["employee"],
             date=date(2026, 12, 2),
             state=AvailabilityState.PREFER,
-            from_time=time(16),
+            from_time=time(14),
             to_time=time(14),
         )
     )

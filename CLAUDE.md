@@ -98,5 +98,12 @@ cd ../frontend && npm run api:generate
 - Do not edit generated files: `frontend/src/api/generated/**`, `frontend/src/routeTree.gen.ts`.
 - Frontend calls the API only through the generated hooks; `src/api/http.ts` adds the session cookie and CSRF token.
 - Every screen has an empty, loading and error state with plain-language Polish text.
-- Visual tokens (stage 6) are the only source of colours, type, spacing and radii. No purple gradients, glass, emoji icons.
+- Visual tokens live in `frontend/src/styles/tokens.css` (Tailwind `@theme`; default colours, font sizes, radii and
+  shadows are switched off, so only token classes exist: `bg-paper`, `text-ink`, `text-accent`, `rounded-md`, `text-lg`…).
+  Touch sizes: `min-h-(--touch)` (48 px) and `min-h-(--touch-main)` (56 px). No purple gradients, glass, emoji icons.
+  Availability states always use colour + icon + pattern (`.avail-<state>` + `StateIcon`).
+- Frontend layout: screens in `src/features/<area>/`, shadcn/ui-style building blocks in `src/components/ui/`
+  (`Button`, `Sheet`, `Loading`/`ErrorState`/`EmptyState`), route files in `src/routes/` only wire them up.
+  Employee screens get the company from `useEmployee()`; component tests use `renderScreen` and `mockApi` from `src/test/render.tsx`.
+- To see "Mój grafik" on demo data: `generate_schedule --period <id> --publish` (publishing from the UI is stage 8).
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

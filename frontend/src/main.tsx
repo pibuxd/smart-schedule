@@ -3,6 +3,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
+import '@fontsource-variable/atkinson-hyperlegible-next'
 import './index.css'
 import { routeTree } from './routeTree.gen'
 

@@ -169,8 +169,12 @@ class ExternalShift:
 class Availability:
     """An employee's mark for one day. Without hours it covers every shift that starts that day.
 
-    With hours (`from_time`/`to_time`, either may be open) it covers a window on that day's wall clock:
-    "cannot" and "prefer not" apply to shifts that overlap the window, "prefer" to shifts that fit inside it.
+    With hours (`from_time`/`to_time`, either may be open) it covers a window on that day's wall clock; an end
+    at or before the start means the next morning (e.g. 22:00-06:00 for a night shift):
+    - "cannot" and "prefer not" apply to shifts that overlap the window ("nie mogę od 8 do 12");
+    - "prefer" and "neutral" mean "I can only in these hours": a shift that fits inside the window gets that
+      state, any other shift of that day counts as "cannot" (civil contracts are fully flexible, so people
+      mark the hours they can work).
     No entry for a day means "neutral" (nothing submitted).
     """
 
@@ -182,8 +186,8 @@ class Availability:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "state", AvailabilityState(self.state))
-        if self.from_time and self.to_time and self.from_time >= self.to_time:
-            raise ProblemError("Availability hours must be in order")
+        if self.from_time is not None and self.from_time == self.to_time:
+            raise ProblemError("Availability hours must not start and end at the same time")
 
 
 @dataclass(frozen=True)
@@ -355,6 +359,8 @@ class Problem:
         start = local_datetime(entry.date, entry.from_time or time(0), self.tz)
         if entry.to_time is None:
             end = local_datetime(entry.date + timedelta(days=1), time(0), self.tz)
+        elif entry.to_time <= (entry.from_time or time(0)):  # ends the next morning
+            end = local_datetime(entry.date + timedelta(days=1), entry.to_time, self.tz)
         else:
             end = local_datetime(entry.date, entry.to_time, self.tz)
         return start.astimezone(UTC), end.astimezone(UTC)
@@ -367,9 +373,9 @@ class Problem:
         if entry.from_time is None and entry.to_time is None:
             return entry.state
         window_start, window_end = self.availability_window(entry)
-        if entry.state == AvailabilityState.PREFER:
+        if entry.state in (AvailabilityState.PREFER, AvailabilityState.NEUTRAL):
             fits = window_start <= slot.start_utc and slot.end_utc <= window_end
-            return entry.state if fits else AvailabilityState.NEUTRAL
+            return entry.state if fits else AvailabilityState.CANNOT
         overlaps = slot.start_utc < window_end and window_start < slot.end_utc
         return entry.state if overlaps else AvailabilityState.NEUTRAL
 
