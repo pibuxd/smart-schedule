@@ -27,6 +27,8 @@ import type {
   ErrorOut,
   GenerateIn,
   GenerationRunOut,
+  MyScheduleOut,
+  MyScheduleParams,
   PeriodIn,
   PeriodOut
 } from '../model';
@@ -543,6 +545,145 @@ export function useGenerationRun<TData = Awaited<ReturnType<typeof generationRun
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGenerationRunQueryOptions(runId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type myScheduleResponse200 = {
+  data: MyScheduleOut
+  status: 200
+}
+
+export type myScheduleResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type myScheduleResponseSuccess = (myScheduleResponse200) & {
+  headers: Headers;
+};
+export type myScheduleResponseError = (myScheduleResponse404) & {
+  headers: Headers;
+};
+
+export type myScheduleResponse = (myScheduleResponseSuccess | myScheduleResponseError)
+
+export const getMyScheduleUrl = (params: MyScheduleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/me/schedule?${stringifiedParams}` : `/api/me/schedule`
+}
+
+/**
+ * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * @summary My Schedule
+ */
+export const mySchedule = async (params: MyScheduleParams, options?: Parameters<typeof apiFetch>[1]): Promise<myScheduleResponse> => {
+
+  return apiFetch<myScheduleResponse>(getMyScheduleUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getMyScheduleQueryKey = (params?: MyScheduleParams,) => {
+    return [
+    `/api/me/schedule`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getMyScheduleQueryOptions = <TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(params: MyScheduleParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mySchedule>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMyScheduleQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof mySchedule>>> = ({ signal }) => mySchedule(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof mySchedule>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MyScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof mySchedule>>>
+export type MyScheduleQueryError = ErrorOut
+
+
+/**
+ * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * @summary My Schedule
+ */
+export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(
+ params: MyScheduleParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof mySchedule>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof mySchedule>>,
+          TError,
+          Awaited<ReturnType<typeof mySchedule>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * @summary My Schedule
+ */
+export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(
+ params: MyScheduleParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mySchedule>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof mySchedule>>,
+          TError,
+          Awaited<ReturnType<typeof mySchedule>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * @summary My Schedule
+ */
+export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(
+ params: MyScheduleParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mySchedule>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * @summary My Schedule
+ */
+export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(
+ params: MyScheduleParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mySchedule>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMyScheduleQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

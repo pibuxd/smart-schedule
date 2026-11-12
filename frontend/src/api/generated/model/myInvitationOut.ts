@@ -12,5 +12,6 @@ export interface MyInvitationOut {
   location_name: string;
   location_address: string;
   role: MyInvitationOutRole;
+  invited_by_name: string;
   created_at: string;
 }

@@ -1,17 +1,21 @@
 """Schedule periods and generating a schedule (the solver runs in the worker; the frontend polls the run)."""
 
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.utils import timezone
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
 from apps.scheduling.generation import request_generation
-from apps.scheduling.models import GenerationRun, SchedulePeriod, ScheduleVersion
+from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
+from apps.staffing.me import employee_context
 from apps.tenancy.context import context_for
 from apps.tenancy.models import Location
 
@@ -178,3 +182,113 @@ def generation_run(request, run_id: UUID):
     for period in run.periods.select_related("location"):
         ctx.require_manager_of(period.location)
     return _run_out(run)
+
+
+# --- The employee's "Mój grafik" -------------------------------------------------------------------------
+
+# How far ahead "Mój grafik" lists shifts (about two monthly periods).
+MY_SCHEDULE_DAYS = 62
+
+
+class MyShiftOut(Schema):
+    id: UUID  # the assignment
+    date: date
+    start_at: datetime
+    end_at: datetime
+    # Local wall-clock hours of the location, e.g. "06:00" and "14:00" (an overnight shift ends the next day).
+    start_time: str
+    end_time: str
+    hours: float
+    location_name: str
+    position_name: str
+    shift_type_name: str
+    # True when the shift is in another location than my home one.
+    away: bool
+    coworkers: list[str]
+
+
+class MonthHoursOut(Schema):
+    month: str  # "2026-11"
+    hours: float
+
+
+class MyScheduleOut(Schema):
+    home_location_name: str
+    shifts: list[MyShiftOut]
+    # Hours of published shifts in each month that the list touches (and the current month).
+    months: list[MonthHoursOut]
+
+
+def _hours(shift: Shift) -> float:
+    return round((shift.end_at - shift.start_at).total_seconds() / 3600, 2)
+
+
+@router.get("/me/schedule", response={200: MyScheduleOut, 404: ErrorOut})
+def my_schedule(request, company_id: UUID):
+    """My published shifts from today on, who works with me, and my hours per month. Works in read-only mode."""
+    ctx, profile = employee_context(request, company_id)
+    today = timezone.localdate()
+    published = ctx.qs(Assignment).filter(employee=profile, shift__version__status=ScheduleVersion.Status.PUBLISHED)
+    published = published.select_related("shift__location", "shift__position", "shift__shift_type")
+    upcoming = list(
+        published.filter(shift__date__gte=today, shift__date__lte=today + timedelta(days=MY_SCHEDULE_DAYS)).order_by(
+            "shift__start_at"
+        )
+    )
+
+    others: dict = defaultdict(list)
+    if upcoming:
+        same_days = (
+            ctx.qs(Assignment)
+            .filter(
+                shift__version__status=ScheduleVersion.Status.PUBLISHED,
+                shift__date__in={a.shift.date for a in upcoming},
+                shift__location__in={a.shift.location_id for a in upcoming},
+                employee__isnull=False,
+            )
+            .exclude(employee=profile)
+            .select_related("shift", "employee__membership__user")
+        )
+        for other in same_days:
+            others[(other.shift.location_id, other.shift.date)].append(other)
+
+    shifts = []
+    for assignment in upcoming:
+        shift = assignment.shift
+        tz = ZoneInfo(shift.location.timezone)
+        start, end = shift.start_at.astimezone(tz), shift.end_at.astimezone(tz)
+        overlapping = [
+            o
+            for o in others[(shift.location_id, shift.date)]
+            if o.shift.start_at < shift.end_at and o.shift.end_at > shift.start_at
+        ]
+        names = sorted({o.employee.membership.user.full_name for o in overlapping})
+        shifts.append(
+            MyShiftOut(
+                id=assignment.id,
+                date=shift.date,
+                start_at=start,
+                end_at=end,
+                start_time=f"{start:%H:%M}",
+                end_time=f"{end:%H:%M}",
+                hours=_hours(shift),
+                location_name=shift.location.name,
+                position_name=shift.position.name,
+                shift_type_name=shift.shift_type.name if shift.shift_type else "",
+                away=shift.location_id != profile.home_location_id,
+                coworkers=names,
+            )
+        )
+
+    months = sorted({today.strftime("%Y-%m")} | {s.date.strftime("%Y-%m") for s in shifts})
+    totals = dict.fromkeys(months, 0.0)
+    first = date.fromisoformat(months[0] + "-01")
+    for assignment in published.filter(shift__date__gte=first):
+        key = assignment.shift.date.strftime("%Y-%m")
+        if key in totals:
+            totals[key] += _hours(assignment.shift)
+    return MyScheduleOut(
+        home_location_name=profile.home_location.name,
+        shifts=shifts,
+        months=[MonthHoursOut(month=m, hours=round(h, 2)) for m, h in totals.items()],
+    )

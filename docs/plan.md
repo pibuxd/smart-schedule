@@ -213,7 +213,7 @@ Pracownik (telefon)
 1. Logowanie: numer telefonu → kod (duże pola, automatyczne przejście, "wyślij ponownie" z odliczaniem).
 2. Zaproszenie: nazwa firmy i lokalu, Akceptuj / Odrzuć.
 3. Mój grafik: lista najbliższych zmian (data, lokal, godziny, stanowisko, kto ze mną), suma godzin, "Oddaj zmianę", sekcja "Zmiany do wzięcia" z przyciskiem "Biorę".
-4. Kiedy mogę: kalendarz okresu z czterema stanami (kolor + ikona + podpis), stuknięcie przełącza, przeciągnięcie zaznacza kilka dni, "Powtarzaj co tydzień do…", "Skopiuj z poprzedniego miesiąca", termin zgłoszenia; na dole "Coś jeszcze?" na prośbę tekstem i pokazanie, jak system ją zrozumiał.
+4. Kiedy mogę: kalendarz okresu z czterema stanami (kolor + ikona + wzór, podpis na przyciskach pędzla), wybór stanu "pędzlem" na dole, potem stuknięcie lub przeciągnięcie po dniach, "Powtarzaj co tydzień do…", "Skopiuj z poprzedniego miesiąca", termin zgłoszenia; na dole "Coś jeszcze?" na prośbę tekstem i pokazanie, jak system ją zrozumiał.
 
 Menedżer (komputer)
 1. Rejestracja firmy i kod dostępu (także później w Ustawieniach → Subskrypcja).
@@ -247,7 +247,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 ## 7. Założenia (do potwierdzenia albo poprawy)
 
-1. Dyspozycyjność: stan na cały dzień, z opcjonalnym zakresem godzin ("chętnie od 14:00"), wybieranym z listy, nie pisanym. Domyślnie cały dzień.
+1. Dyspozycyjność: stan na cały dzień, z opcjonalnym zakresem godzin wybieranym z listy, nie pisanym (znaczenie godzin: spec.md, Pracownik, punkt 2). Domyślnie cały dzień.
 2. Brak zgłoszenia dyspozycji = "obojętnie", ale osoba jest na liście "nie zgłosił" u menedżera.
 3. Generator przypisuje ludzi tylko do ich lokalu domowego; praca w innym lokalu tylko ręcznie albo przez wzięcie oddanej zmiany.
 4. Zmiany typu "dowolne godziny" generator traktuje jak sloty z godzinami ustawionymi w obsadzie lub wyjątku na dany dzień; menedżer może też dodać zmianę z dowolnymi godzinami ręcznie.
@@ -330,3 +330,21 @@ Założenia:
 8. Limit generowań liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
 9. Zlecenie, które zostało "w trakcie" ponad 10 minut (albo "w kolejce" ponad 30), zadanie okresowe co 10 minut oznacza jako nieudane, żeby ekran nie czekał w nieskończoność.
 10. Warianty: kod przyjmuje inny profil wag i listę wcześniejszych grafików, od których nowy musi się różnić w min. 15 % przypisań; w tej wersji wołamy go raz.
+
+## 12. Etap 6: wygląd i ekrany pracownika
+
+- Kierunek wizualny "kartka z zaplecza" zaakceptowany przez Piotra 12.11.2026 (podgląd: https://claude.ai/artifact/1oXFa1qyj6754qT9KLoKrx). Tokeny: `frontend/src/styles/tokens.css` (blok `@theme` Tailwinda z wyłączonymi domyślnymi kolorami, rozmiarami pisma, promieniami i cieniami, więc klasy spoza tokenów nie istnieją). Krój Atkinson Hyperlegible Next z paczki `@fontsource-variable` (bez zapytań do Google Fonts). Komponenty w stylu shadcn/ui: `src/components/ui/` (przycisk na `class-variance-authority`, panel na Radix Dialog).
+- Ekrany: `/logowanie` (numer, potem kod: sześć pól, wpisanie szóstej cyfry loguje, odliczanie do ponownego wysłania), `/zaproszenia`, `/grafik` ("Mój grafik"), `/kiedy-moge`. Ekrany pracownika mają zakładki na dole na telefonie i u góry na komputerze, kolumna do 560 px. `/` kieruje do logowania, zaproszeń albo grafiku.
+- "Kiedy mogę": pasek stanów ("pędzel") przyklejony do dołu ekranu, przeciąganie po dniach, zapis od razu po każdym ruchu, "Cofnij", "Godziny dnia" (panel z godzinami jednego dnia), "Więcej opcji" (powtarzanie co tydzień, kopiowanie z poprzedniego miesiąca), "Gotowe, wysyłam kierownikowi", "Coś jeszcze?" (prośby tekstem, interpretacja w etapie 10).
+- Nowe endpointy pracownika (zawsze z `company_id`, na własnym profilu pracownika w tej firmie; bez profilu 404 z wyjaśnieniem): `GET /me/schedule`, `GET/PUT /me/availability`, `POST /me/availability/pattern`, `POST /me/availability/copy-previous`, `POST /me/availability/submit`, `GET/POST /me/requests`, `DELETE /me/requests/{id}`. `MyInvitationOut` podaje też, kto zaprasza.
+- `manage.py generate_schedule ... --publish` od razu publikuje wynik, żeby na danych demo "Mój grafik" miał co pokazać (publikacja z ekranu menedżera w etapie 8).
+
+Założenia:
+1. Firma w adresach pracownika to parametr `company_id` (jedna osoba może pracować w kilku firmach); aplikacja zapamiętuje wybraną firmę na urządzeniu, a przy kilku firmach pokazuje wybór w nagłówku.
+2. "Kiedy mogę" pokazuje najbliższy okres lokalu domowego w stanie "zbieranie dyspozycji". Zmieniać można tylko wtedy; po terminie, a przed rozpoczęciem układania, zmiany są nadal przyjmowane (termin jest informacją; zamyka dopiero generowanie). Termin = początek okresu minus `availability_deadline_days` lokalu.
+3. "Powtarzaj co tydzień" zapisuje `AvailabilityPattern` i od razu wpisuje dni od początku okresu do wybranej daty (najwyżej rok), nadpisując wcześniejsze zaznaczenia tych dni tygodnia. "Skopiuj z poprzedniego miesiąca" bierze ten sam dzień tygodnia 4 tygodnie wcześniej (5, gdy 4 tygodnie wcześniej to nadal ten okres).
+4. "Cofnij" zapisuje poprzedni stan dni; dzień bez wcześniejszego zaznaczenia wraca do "obojętnie" (wiersz zostaje, co dla generatora znaczy to samo co brak wiersza).
+5. "Mój grafik" pokazuje opublikowane zmiany od dziś na 62 dni naprzód; suma godzin dla bieżącego miesiąca i każdego miesiąca z listy liczy wszystkie opublikowane zmiany tego miesiąca (także te, które minęły). "Z Tobą" to osoby z opublikowanego grafiku tego samego lokalu, których zmiana nakłada się na moją; na ekranie trzy imiona i liczba pozostałych.
+6. Godziny dnia (prośba Piotra): zmienia się znaczenie godzin w silniku (`engine.problem.Availability`): "chętnie"/"obojętnie" z godzinami = tylko w tych godzinach, poza nimi "nie mogę"; koniec przed początkiem = do rana. Ograniczenie w bazie zmienione z "początek przed końcem" na "początek różny od końca".
+7. Kierownik bez profilu pracownika, który wejdzie na ekrany pracownika, widzi komunikat, że nie jest pracownikiem; jego ekrany powstają w etapie 7.
+

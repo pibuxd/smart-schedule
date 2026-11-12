@@ -146,11 +146,24 @@ class TestAvailability:
         assert self.state(entry, slot("s", self.day, "06:00", "14:01")) == "cannot"
         assert self.state(entry, slot("s", self.day, "22:00", "06:00")) == "cannot"
 
-    def test_prefer_with_hours_applies_only_to_shifts_inside_the_window(self):
+    def test_prefer_with_hours_means_only_inside_the_window(self):
         entry = Availability("a", self.day, "prefer", from_time=time(14), to_time=time(22))
         assert self.state(entry, slot("s", self.day, "14:00", "22:00")) == "prefer"
-        assert self.state(entry, slot("s", self.day, "13:00", "21:00")) == "neutral"
+        assert self.state(entry, slot("s", self.day, "13:00", "21:00")) == "cannot"
 
-    def test_hours_must_be_in_order(self):
+    def test_neutral_with_hours_means_only_inside_the_window(self):
+        entry = Availability("a", self.day, "neutral", to_time=time(12))
+        assert self.state(entry, slot("s", self.day, "06:00", "12:00")) == "neutral"
+        assert self.state(entry, slot("s", self.day, "06:00", "14:00")) == "cannot"
+
+    def test_window_ending_before_it_starts_runs_into_the_next_morning(self):
+        entry = Availability("a", self.day, "prefer", from_time=time(22), to_time=time(6))
+        assert self.state(entry, slot("s", self.day, "22:00", "06:00")) == "prefer"
+        assert self.state(entry, slot("s", self.day, "06:00", "14:00")) == "cannot"
+        nights = Availability("a", self.day, "cannot", from_time=time(20), to_time=time(4))
+        assert self.state(nights, slot("s", self.day, "22:00", "06:00")) == "cannot"
+        assert self.state(nights, slot("s", self.day, "06:00", "14:00")) == "neutral"
+
+    def test_hours_must_not_be_an_empty_window(self):
         with pytest.raises(ProblemError):
-            Availability("a", self.day, "cannot", from_time=time(14), to_time=time(10))
+            Availability("a", self.day, "cannot", from_time=time(14), to_time=time(14))

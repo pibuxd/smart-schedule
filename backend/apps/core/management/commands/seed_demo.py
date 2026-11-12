@@ -27,5 +27,5 @@ class Command(BaseCommand):
             f"  {cafe['company']}: {cafe['employees']} employees\n"
             f"    manager phone: {cafe['manager_phone']}\n"
             "  Employee phones: +48 600 100 001 … (bakery), +48 700 200 001 … (café). "
-            "Logging in with an SMS code arrives in stage 3."
+            "Log in at /logowanie; the SMS code is printed by runserver."
         )

@@ -1,0 +1,132 @@
+/*
+ * Visual tokens of Grafikomat, accepted by Piotr on 12.11.2026 ("kartka z zaplecza").
+ * The only source of colours, type, radii and touch sizes: Tailwind's defaults are switched off below,
+ * so a class like `bg-blue-500` does not exist and every screen uses these names.
+ *
+ *   paper    calm, slightly cool background         ink        main text (7:1+ on white)
+ *   surface  cards and fields                       ink-muted  secondary text (7:1 on white)
+ *   line     borders, grid  light squared paper     accent     the one accent colour ("ballpoint blue")
+ *
+ * Availability states differ by colour, icon AND pattern (see `.avail-*` below), never by colour alone.
+ */
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-paper: #f3f5f1;
+  --color-surface: #ffffff;
+  --color-ink: #17212f;
+  --color-ink-muted: #4a5566;
+  --color-line: #cdd3da;
+  --color-grid: #e1e6ea;
+  --color-accent: #1e44b8;
+  --color-accent-strong: #163590;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #e5ebfa;
+  --color-cannot: #b3261e;
+  --color-cannot-soft: #fce9e7;
+  --color-prefer-not: #7a5300;
+  --color-prefer-not-soft: #fff1cc;
+  --color-prefer: #12663f;
+  --color-prefer-soft: #dff2e6;
+
+  --font-*: initial;
+  --font-sans: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible', 'Segoe UI', Roboto, system-ui, sans-serif;
+
+  --text-*: initial;
+  /* Only for the hours inside a calendar day ("14–22"); every other text is 16 px or more. */
+  --text-cell: 13px;
+  --text-cell--line-height: 1;
+  --text-xs: 14px;
+  --text-xs--line-height: 1.35;
+  --text-sm: 16px;
+  --text-sm--line-height: 1.4;
+  --text-base: 18px;
+  --text-base--line-height: 1.45;
+  --text-lg: 21px;
+  --text-lg--line-height: 1.35;
+  --text-xl: 26px;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 34px;
+  --text-2xl--line-height: 1.1;
+  --text-hero: 76px;
+  --text-hero--line-height: 0.95;
+
+  --radius-*: initial;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-sheet: 0 -12px 32px -16px rgb(23 33 47 / 0.35);
+}
+
+:root {
+  /* Touch sizes: every control at least --touch, the main action of a screen --touch-main. */
+  --touch: 48px;
+  --touch-main: 56px;
+  /* Readable column for the employee screens on a computer. */
+  --column: 560px;
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.45;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    margin: 0;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@layer components {
+  /* Availability states: colour + pattern (the icon is in the markup). */
+  .avail-cannot {
+    color: var(--color-cannot);
+    border-color: var(--color-cannot);
+    background:
+      repeating-linear-gradient(45deg, transparent 0 6px, rgb(179 38 30 / 0.16) 6px 8px),
+      repeating-linear-gradient(-45deg, transparent 0 6px, rgb(179 38 30 / 0.16) 6px 8px),
+      var(--color-cannot-soft);
+  }
+  .avail-prefer_not {
+    color: var(--color-prefer-not);
+    border-color: var(--color-prefer-not);
+    background:
+      repeating-linear-gradient(45deg, transparent 0 7px, rgb(122 83 0 / 0.16) 7px 10px),
+      var(--color-prefer-not-soft);
+  }
+  .avail-neutral {
+    color: var(--color-ink-muted);
+    border-color: var(--color-line);
+    border-style: dashed;
+    background: var(--color-surface);
+  }
+  .avail-prefer {
+    color: var(--color-prefer);
+    border-color: var(--color-prefer);
+    background: var(--color-prefer-soft);
+  }
+}

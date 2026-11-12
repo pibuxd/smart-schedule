@@ -1,3 +1,2 @@
 @import 'tailwindcss';
-
-/* Visual tokens (colours, type, spacing, touch sizes) arrive in stage 6 and must be approved first. */
+@import './styles/tokens.css';

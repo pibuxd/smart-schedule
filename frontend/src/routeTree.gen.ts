@@ -10,33 +10,85 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PracownikRouteImport } from './routes/_pracownik'
+import { Route as LogowanieRouteImport } from './routes/logowanie'
+import { Route as ZaproszeniaRouteImport } from './routes/zaproszenia'
+import { Route as PracownikGrafikRouteImport } from './routes/_pracownik/grafik'
+import { Route as PracownikKiedyMogeRouteImport } from './routes/_pracownik/kiedy-moge'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PracownikRoute = PracownikRouteImport.update({
+  id: '/_pracownik',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogowanieRoute = LogowanieRouteImport.update({
+  id: '/logowanie',
+  path: '/logowanie',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ZaproszeniaRoute = ZaproszeniaRouteImport.update({
+  id: '/zaproszenia',
+  path: '/zaproszenia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PracownikGrafikRoute = PracownikGrafikRouteImport.update({
+  id: '/grafik',
+  path: '/grafik',
+  getParentRoute: () => PracownikRoute,
+} as any)
+const PracownikKiedyMogeRoute = PracownikKiedyMogeRouteImport.update({
+  id: '/kiedy-moge',
+  path: '/kiedy-moge',
+  getParentRoute: () => PracownikRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/logowanie': typeof LogowanieRoute
+  '/zaproszenia': typeof ZaproszeniaRoute
+  '/grafik': typeof PracownikGrafikRoute
+  '/kiedy-moge': typeof PracownikKiedyMogeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/logowanie': typeof LogowanieRoute
+  '/zaproszenia': typeof ZaproszeniaRoute
+  '/grafik': typeof PracownikGrafikRoute
+  '/kiedy-moge': typeof PracownikKiedyMogeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_pracownik': typeof PracownikRouteWithChildren
+  '/logowanie': typeof LogowanieRoute
+  '/zaproszenia': typeof ZaproszeniaRoute
+  '/_pracownik/grafik': typeof PracownikGrafikRoute
+  '/_pracownik/kiedy-moge': typeof PracownikKiedyMogeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/logowanie' | '/zaproszenia' | '/grafik' | '/kiedy-moge'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/logowanie' | '/zaproszenia' | '/grafik' | '/kiedy-moge'
+  id:
+    | '__root__'
+    | '/'
+    | '/_pracownik'
+    | '/logowanie'
+    | '/zaproszenia'
+    | '/_pracownik/grafik'
+    | '/_pracownik/kiedy-moge'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PracownikRoute: typeof PracownikRouteWithChildren
+  LogowanieRoute: typeof LogowanieRoute
+  ZaproszeniaRoute: typeof ZaproszeniaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +100,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_pracownik': {
+      id: '/_pracownik'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof PracownikRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logowanie': {
+      id: '/logowanie'
+      path: '/logowanie'
+      fullPath: '/logowanie'
+      preLoaderRoute: typeof LogowanieRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/zaproszenia': {
+      id: '/zaproszenia'
+      path: '/zaproszenia'
+      fullPath: '/zaproszenia'
+      preLoaderRoute: typeof ZaproszeniaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_pracownik/grafik': {
+      id: '/_pracownik/grafik'
+      path: '/grafik'
+      fullPath: '/grafik'
+      preLoaderRoute: typeof PracownikGrafikRouteImport
+      parentRoute: typeof PracownikRoute
+    }
+    '/_pracownik/kiedy-moge': {
+      id: '/_pracownik/kiedy-moge'
+      path: '/kiedy-moge'
+      fullPath: '/kiedy-moge'
+      preLoaderRoute: typeof PracownikKiedyMogeRouteImport
+      parentRoute: typeof PracownikRoute
+    }
   }
 }
 
+interface PracownikRouteChildren {
+  PracownikGrafikRoute: typeof PracownikGrafikRoute
+  PracownikKiedyMogeRoute: typeof PracownikKiedyMogeRoute
+}
+
+const PracownikRouteChildren: PracownikRouteChildren = {
+  PracownikGrafikRoute: PracownikGrafikRoute,
+  PracownikKiedyMogeRoute: PracownikKiedyMogeRoute,
+}
+
+const PracownikRouteWithChildren = PracownikRoute._addFileChildren(
+  PracownikRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PracownikRoute: PracownikRouteWithChildren,
+  LogowanieRoute: LogowanieRoute,
+  ZaproszeniaRoute: ZaproszeniaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

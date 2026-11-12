@@ -49,6 +49,8 @@ class MyInvitationOut(Schema):
     location_name: str
     location_address: str
     role: InvitationRole
+    # Who sent it, e.g. "Teresa Gawlik", so the person recognises the invitation ("" when unknown).
+    invited_by_name: str
     created_at: datetime
 
 
@@ -78,6 +80,7 @@ def _my_invitation_out(invitation: Invitation) -> MyInvitationOut:
         location_name=invitation.location.name,
         location_address=invitation.location.address,
         role=invitation.role,
+        invited_by_name=invitation.invited_by.full_name if invitation.invited_by else "",
         created_at=invitation.created_at,
     )
 
@@ -146,7 +149,7 @@ def my_invitations(request):
         Invitation.objects.filter(  # tenant-ok: invitations addressed to my phone number
             phone_e164=request.user.phone_e164, status=InvitationStatus.PENDING
         )
-        .select_related("company", "location")
+        .select_related("company", "location", "invited_by")
         .order_by("created_at")
     )
     return [_my_invitation_out(invitation) for invitation in pending]
