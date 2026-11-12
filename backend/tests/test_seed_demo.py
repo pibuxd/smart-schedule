@@ -47,7 +47,7 @@ def test_availability_is_for_next_month_and_some_people_are_missing(demo):
     assert {(p.start, p.end) for p in periods} == {(date(2026, 12, 1), date(2026, 12, 31))}
     days = AvailabilityDay.objects.for_company(BAKERY_COMPANY_ID)
     assert days.filter(date__lt=date(2026, 12, 1)).count() == 0
-    assert set(days.values_list("state", flat=True)) == {"cannot", "prefer_not", "neutral", "prefer"}
+    assert set(days.values_list("state", flat=True)) == {"cannot", "neutral", "prefer"}
 
     employees = EmployeeProfile.objects.for_company(BAKERY_COMPANY_ID).count()
     submitted = AvailabilitySubmission.objects.for_company(BAKERY_COMPANY_ID).count()

@@ -10,8 +10,8 @@ Hard rules (always): one person or a hole per slot, the right position, home loc
 no "cannot" days, no overlapping shifts, pinned slots, frozen past days, "no exceptions" rules and, for employment
 contracts, 11 h daily rest, 35 h weekly rest and at most 8 h a day.
 
-The penalty in phase 2 is a linear stand-in for `engine.scoring.penalty`. Most parts are exact (requests,
-"wolę nie" days, hours, closings, days in a row); rules whose score is a share of a varying count (e.g. "rest
+The penalty in phase 2 is a linear stand-in for `engine.scoring.penalty`. Most parts are exact (text
+requests, hours, closings, days in a row); rules whose score is a share of a varying count (e.g. "rest
 between shifts" = broken pairs / all pairs) divide by an estimate of that count instead. The manager always sees
 the numbers from the independent validator, never the solver's own objective.
 
@@ -590,15 +590,7 @@ class _Builder:
             employee_id = measure.employee
             mine = self.x_of_emp.get(employee_id, ())
             weight = measure.weight * points
-            if measure.kind == RequestKind.PREFER_NOT:
-                hits = [
-                    v
-                    for s, v in mine
-                    if s.date == measure.date and p.availability_for(employee_id, s) == AvailabilityState.PREFER_NOT
-                ]
-                if hits:
-                    self.add_penalty(weight, self._or(hits, f"prefer_not[{employee_id},{measure.date}]"))
-            elif measure.kind == RequestKind.PREFER:
+            if measure.kind == RequestKind.PREFER:
                 by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
                 for s, v in mine:
                     if p.availability_for(employee_id, s) == AvailabilityState.PREFER:
@@ -659,6 +651,12 @@ class _Builder:
                 capped = self.m.new_int_var(0, limit, f"over_capped[{request.id}]")
                 self.m.add_min_equality(capped, [over, limit])
                 self.add_penalty(weight / limit, capped)
+            case RequestType.DAYS_OFF:
+                by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
+                for slot, var in own:
+                    by_day[slot.date].append(var)
+                for day, vars_ in by_day.items():
+                    self.add_penalty(weight / len(request.dates), self._or(vars_, f"day_off[{request.id},{day}]"))
             case _:
                 return
 

@@ -192,25 +192,10 @@ class TestOtherRules:
 
 
 class TestCalendarRequests:
-    def test_prefer_not_day(self):
-        p = problem(
-            [employee("anna")],
-            [slot("a", MON), slot("b", day(1))],
-            availability=(Availability("anna", MON, "prefer_not"),),
-        )
-        (item,) = validate(p, {"a": "anna"}).requests
-        assert (item.kind, item.degree, item.weight, item.date) == (RequestKind.PREFER_NOT, 1.0, 3.0, MON)
-        assert validate(p, {"b": "anna"}).requests[0].degree == 0.0
-
-    def test_many_prefer_not_days_do_not_outweigh_colleagues(self):
-        # A 14-day period counts 4 "wolę nie" days at full weight per person; 12 days share that same total.
-        slots = [slot(f"d{i}", day(i)) for i in range(14)]
-        availability = tuple(Availability("anna", day(i), "prefer_not") for i in range(12)) + tuple(
-            Availability("ola", day(i), "prefer_not") for i in range(2)
-        )
-        report = validate(problem([employee("anna"), employee("ola")], slots, availability=availability), {})
-        totals = {name: sum(r.weight for r in report.requests if r.employee == name) for name in ("anna", "ola")}
-        assert totals == {"anna": pytest.approx(12.0), "ola": pytest.approx(6.0)}
+    def test_unmarked_day_is_not_a_request(self):
+        # "Wolę nie" left the calendar (13.11.2026): an unmarked day, even a stored one, asks for nothing.
+        p = problem([employee("anna")], [slot("a", MON)], availability=(Availability("anna", MON, "neutral"),))
+        assert validate(p, {"a": "anna"}).requests == ()
 
     def test_prefer_days_count_against_days_actually_worked(self):
         availability = tuple(Availability("anna", day(i), "prefer") for i in range(4))
@@ -246,6 +231,13 @@ class TestTextRequests:
         no_mornings = Request("r", "anna", "shift_type", shift_type="06:00-14:00", avoid=True)
         assert self.degree(only_mornings, {"a1": "anna"}) == 0.0
         assert self.degree(no_mornings, {"a1": "anna"}) == 1.0
+
+    def test_days_off(self):
+        request = Request("r", "anna", "days_off", dates=frozenset({MON, day(1)}))
+        assert self.degree(request, {"o1": "ola", "e2": "ewa"}) == 0.0
+        assert self.degree(request, {"a1": "anna"}) == 0.5
+        assert self.degree(request, {"a1": "anna", "a2": "anna"}) == 1.0
+        assert self.degree(Request("r", "anna", "days_off"), {"a1": "anna"}) is None  # no dates: for the manager
 
     def test_hours_limit(self):
         request = Request("r", "anna", "hours_limit", max_hours=8)

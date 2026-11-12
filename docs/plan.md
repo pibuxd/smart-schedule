@@ -114,7 +114,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 
 | Model | Pola | Uwagi |
 |---|---|---|
-| `AvailabilityDay` | employee, date, state (cannot/prefer_not/neutral/prefer), from_time, to_time (opcjonalne), source (manual/pattern/copy) | unikalne (employee, date); brak wiersza = brak zgłoszenia |
+| `AvailabilityDay` | employee, date, state (cannot/neutral/prefer; neutral = dzień bez zaznaczenia, potrzebny tylko dla godzin "mogę tylko w tych godzinach"), from_time, to_time (opcjonalne), source (manual/pattern/copy) | unikalne (employee, date); brak wiersza = brak zgłoszenia |
 | `AvailabilityPattern` | employee, weekday, state, from/to, repeat_until | "powtarzaj co tydzień do [data]"; rozwijany do `AvailabilityDay` przy zapisie |
 | `AvailabilitySubmission` | employee, period, submitted_at | do listy "kto nie zgłosił" |
 | `TextRequest` | employee, period, text, status (new/interpreted/needs_manager/rejected), interpretation (JSON), employee_corrected, manager_priority (lower/normal/higher), manager_rejected | interpretacja: type, subject_employee, dates, level, confidence, summary |
@@ -248,7 +248,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 ## 7. Założenia (do potwierdzenia albo poprawy)
 
 1. Dyspozycyjność: stan na cały dzień, z opcjonalnym zakresem godzin wybieranym z listy, nie pisanym (znaczenie godzin: spec.md, Pracownik, punkt 2). Domyślnie cały dzień.
-2. Brak zgłoszenia dyspozycji = "obojętnie", ale osoba jest na liście "nie zgłosił" u menedżera.
+2. Brak zgłoszenia dyspozycji = dzień bez zaznaczenia ("mogę"), ale osoba jest na liście "nie zgłosił" u menedżera.
 3. Generator przypisuje ludzi tylko do ich lokalu domowego; praca w innym lokalu tylko ręcznie albo przez wzięcie oddanej zmiany.
 4. Zmiany typu "dowolne godziny" generator traktuje jak sloty z godzinami ustawionymi w obsadzie lub wyjątku na dany dzień; menedżer może też dodać zmianę z dowolnymi godzinami ręcznie.
 5. Tydzień zaczyna się w poniedziałek, strefa czasowa Europe/Warsaw, godziny zmian liczone w czasie lokalnym z uwzględnieniem zmiany czasu.
@@ -301,8 +301,8 @@ Założenia:
 2. Umowa o pracę, uproszczenia zgodne ze spec (doba pracownicza i okres rozliczeniowy później): 11 h odpoczynku między końcem zmiany a początkiem następnej (dokładnie 11 h wystarcza, 10 h 59 min nie); najwyżej 8 h łącznie w zmianach zaczynających się danego dnia kalendarzowego; 35 h nieprzerwanego wolnego w każdym tygodniu kalendarzowym (pon. 00:00 – pon. 00:00 czasu lokalnego), sprawdzane w tygodniach, w których osoba ma zmianę z tego grafiku.
 3. Zmiany stykające się (06–14 i 14–22) nie nachodzą na siebie; dla zlecenia to poprawny grafik, dla umowy o pracę łamie 11 h odpoczynku i 8 h na dobę.
 4. Zmiany spoza okresu (poprzedni okres, inny lokal) przekazuje warstwa Django jako `ExternalShift`; liczą się do nakładania, odpoczynku, 8 h na dobę i dni z rzędu, nie do godzin miesięcznych.
-5. Dyspozycyjność: wpis bez godzin dotyczy każdej zmiany zaczynającej się tego dnia. Wpis z godzinami: "nie mogę" i "wolę nie" dotyczą zmian nachodzących na ten zakres (styk się nie liczy), "chętnie" tylko zmian mieszczących się w zakresie.
-6. Prośby z kalendarza: każdy dzień "wolę nie" to osobna pozycja o wadze poziomu "ważne", ale pełną wagę mają najwyżej 2 dni na tydzień okresu na osobę; kto zaznaczy więcej, ma tę samą łączną wagę rozłożoną na wszystkie dni (zaznaczenie całego miesiąca nie przeważy kolegów); dni "chętnie" jednej osoby to jedna pozycja o wadze "mile widziane", liczona jako udział dni pracy przypadających na dni "chętnie" (spośród tylu dni, ile się da). Osoba bez zmian nie łamie "chętnie".
+5. Dyspozycyjność: wpis bez godzin dotyczy każdej zmiany zaczynającej się tego dnia. Wpis z godzinami: "nie mogę" dotyczy zmian nachodzących na ten zakres (styk się nie liczy), "chętnie" i dzień bez zaznaczenia z godzinami tylko zmian mieszczących się w zakresie.
+6. Prośby z kalendarza (od 13.11.2026 bez "wolę nie", które przeszło do próśb tekstem jako wolne_dni): dni "chętnie" jednej osoby to jedna pozycja o wadze "mile widziane", liczona jako udział dni pracy przypadających na dni "chętnie" (spośród tylu dni, ile się da). Osoba bez zmian nie łamie "chętnie".
 7. Prośby tekstem: unikaj osoby / preferuj osobę = udział zmian prośbodawcy, na których ta druga osoba pracuje w tym samym lokalu w tym samym czasie; typ zmiany = udział zmian innego typu (albo tego typu przy "nie chcę"); limit godzin = nadwyżka / limit; "inne" nie są oceniane. Waga = waga poziomu × korekta menedżera (ważniejsza ×2, mniej ważna ×0,5). Odrzucone prośby nie trafiają do `Problem`.
 8. Zasady liczone per lokal: zasady dotyczące osoby (odpoczynek, dni z rzędu, godziny, pora w tygodniu, zmiany w tygodniu) dla osób z tym lokalem domowym, zasady dotyczące zmian (zamknięcia, pora stanowiska) dla slotów tego lokalu. Stopień naruszenia zasady = udział miejsc, w których jest złamana (np. par kolejnych zmian, dni pracy, tygodni osoby), albo dla godzin średnie względne odchylenie.
 9. Równy podział weekendów i zamknięć: osobno dla każdego stanowiska, porównujemy osoby z tym stanowiskiem, które mają w okresie choć jedną zmianę; różnica 1 jest w porządku. Zasada "bez wyjątków" = różnica najwyżej 1.
@@ -314,7 +314,7 @@ Założenia:
 ## 11. Etap 5: generator i przyjęte założenia
 
 - `engine/solver.py`: `solve(problem, time_limit_s, workers, seed, weights=None, diversity_from=())` buduje model CP-SAT z tego samego `Problem` co walidator. Faza 1 minimalizuje dziury (40 % limitu czasu; na danych demo dowód optimum w ok. 1–2 s), faza 2 przy tej liczbie dziur minimalizuje karę z `engine.scoring.penalty`, z podpowiedzią z fazy 1. Każda zasada z katalogu ma metodę `_rule_<kod>`: dla "bez wyjątków" ograniczenie, dla zwykłej kara.
-- Kara w modelu odwzorowuje ocenę walidatora: dokładnie dla dni "wolę nie", próśb tekstem (poza mianownikiem udziału), celu i maksimum godzin, dni z rzędu, osoby odpowiedzialnej na zamknięciu, równego podziału (dzielenie w modelu) i stabilności. Zasady liczone jako udział w zmiennej liczbie miejsc (odpoczynek, ta sama pora w tygodniu, zmiany w tygodniu, stała pora stanowiska) i "chętnie" dzielą przez oszacowanie tej liczby. Menedżer zawsze widzi ocenę z walidatora, nie wartość z modelu.
+- Kara w modelu odwzorowuje ocenę walidatora: dokładnie dla próśb tekstem (poza mianownikiem udziału), celu i maksimum godzin, dni z rzędu, osoby odpowiedzialnej na zamknięciu, równego podziału (dzielenie w modelu) i stabilności. Zasady liczone jako udział w zmiennej liczbie miejsc (odpoczynek, ta sama pora w tygodniu, zmiany w tygodniu, stała pora stanowiska) i "chętnie" dzielą przez oszacowanie tej liczby. Menedżer zawsze widzi ocenę z walidatora, nie wartość z modelu.
 - Gdy model nie ma rozwiązania: najpierw walidator sprawdza same przypięcia i dni minione (np. przypięta osoba ma "nie mogę"), potem generator po kolei wyłącza zasady "bez wyjątków" i nazywa te, bez których grafik da się ułożyć (najwyżej 2 s na zasadę i łącznie nie dłużej niż limit czasu generowania).
 - `apps/scheduling/problem_builder.py` czyta bazę do `Problem`, `apps/scheduling/generation.py` przyjmuje zlecenie (API), wykonuje je (worker) i zapisuje szkic, `apps/scheduling/tasks.py` to zadania kolejki. Endpointy: `GET/POST /locations/{id}/periods`, `POST /periods/generate`, `GET /generation-runs/{id}`.
 - Docker Compose ma osobny kontener `solver` (kolejka `solver`, `SOLVER_CONCURRENCY=1`, max 2) obok `worker` (kolejka `default`). `SOLVER_WORKERS` = liczba wątków CP-SAT na jedno generowanie (domyślnie 8).
@@ -344,9 +344,9 @@ Założenia:
 1. Firma w adresach pracownika to parametr `company_id` (jedna osoba może pracować w kilku firmach); aplikacja zapamiętuje wybraną firmę na urządzeniu, a przy kilku firmach pokazuje wybór w nagłówku.
 2. "Kiedy mogę" pokazuje najbliższy okres lokalu domowego w stanie "zbieranie dyspozycji". Zmieniać można tylko wtedy; po terminie, a przed rozpoczęciem układania, zmiany są nadal przyjmowane (termin jest informacją; zamyka dopiero generowanie). Termin = początek okresu minus `availability_deadline_days` lokalu.
 3. "Powtarzaj co tydzień" zapisuje `AvailabilityPattern` i od razu wpisuje dni od początku okresu do wybranej daty (najwyżej rok), nadpisując wcześniejsze zaznaczenia tych dni tygodnia. "Skopiuj z poprzedniego miesiąca" bierze ten sam dzień tygodnia 4 tygodnie wcześniej (5, gdy 4 tygodnie wcześniej to nadal ten okres).
-4. "Cofnij" zapisuje poprzedni stan dni; dzień bez wcześniejszego zaznaczenia wraca do "obojętnie" (wiersz zostaje, co dla generatora znaczy to samo co brak wiersza).
+4. "Cofnij" zapisuje poprzedni stan dni; dzień bez wcześniejszego zaznaczenia wraca do stanu bez zaznaczenia (wiersz "neutral" zostaje, co dla generatora znaczy to samo co brak wiersza).
 5. "Mój grafik" pokazuje opublikowane zmiany od dziś na 62 dni naprzód; suma godzin dla bieżącego miesiąca i każdego miesiąca z listy liczy wszystkie opublikowane zmiany tego miesiąca (także te, które minęły). "Z Tobą" to osoby z opublikowanego grafiku tego samego lokalu, których zmiana nakłada się na moją; na ekranie trzy imiona i liczba pozostałych.
-6. Godziny dnia (prośba Piotra): zmienia się znaczenie godzin w silniku (`engine.problem.Availability`): "chętnie"/"obojętnie" z godzinami = tylko w tych godzinach, poza nimi "nie mogę"; koniec przed początkiem = do rana. Ograniczenie w bazie zmienione z "początek przed końcem" na "początek różny od końca".
+6. Godziny dnia (prośba Piotra): zmienia się znaczenie godzin w silniku (`engine.problem.Availability`): "chętnie" i dzień bez zaznaczenia z godzinami = tylko w tych godzinach, poza nimi "nie mogę"; koniec przed początkiem = do rana. Ograniczenie w bazie zmienione z "początek przed końcem" na "początek różny od końca".
 7. Kierownik bez profilu pracownika, który wejdzie na ekrany pracownika, widzi komunikat, że nie jest pracownikiem; jego ekrany powstają w etapie 7.
 
 
@@ -369,3 +369,14 @@ Założenia:
 Na etap 8 (dopisane tutaj, nie zrobione w etapie 7): przycisk "Ułóż grafik" przy lokalu, aktywny jako świadoma akcja, z podpowiedzią, gdy termin minął albo wszyscy wpisali (i ostrzeżeniem, ilu osób brakuje); "Ułóż dla wszystkich". Ekran rejestracji firmy i wpisania kodu dostępu (API jest od etapu 3) też nie powstał w etapie 7; do zrobienia razem z etapem 8 albo osobno.
 
 Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że pracownicy zobaczą powiadomienie w jednej z następnych wersji i że na razie trzeba im powiedzieć osobiście; podgląd zasad mówi wprost, że to sprawdzenie ostatniego grafiku, a nie prognoza; ekran zasad lokalu tłumaczy, kiedy zasada przestaje iść za grupą; licznik to "Wysłali dyspozycje" (przycisk "Gotowe"), nie zaznaczone dni. Do sprawdzenia w pilocie: czy kierownik chce móc pominąć zmiany po terminie, czy podgląd na ostatnim grafiku wystarcza, i czy ktoś poza właścicielem musi zakładać lokale i grupy.
+
+## 14. Zmiana z 13.11.2026: w kalendarzu tylko "nie mogę" i "chętnie"
+
+Decyzja Piotra po przeglądzie zrzutów: "wolę nie" i "obojętnie" znikają z kalendarza; takie życzenia pracownik pisze jako prośbę tekstem, a LLM (etap 10) zamienia je na nowy typ `wolne_dni`.
+
+1. Stan `neutral` zostaje w bazie i silniku jako "dzień bez zaznaczenia" ("mogę"): niesie godziny "mogę tylko w tych godzinach" i zostaje po wyczyszczeniu dnia. Dla generatora znaczy to samo co brak wiersza.
+2. Na pędzlu są trzy przyciski: "Nie mogę", "Wyczyść" (gumka, zdejmuje stan i godziny) i "Chętnie". W arkuszu dnia i w "Więcej opcji" ten stan nazywa się "Mogę".
+3. Migracja `availability.0003` zamienia istniejące dni i wzorce "wolę nie" na dni bez zaznaczenia i usuwa ich godziny (godziny przy "wolę nie" znaczyły "nie w tych godzinach", a przy dniu bez zaznaczenia znaczyłyby "tylko w tych godzinach").
+4. Typ prośby `wolne_dni` (`RequestType.DAYS_OFF`): stopień złamania = część podanych dni, w które osoba pracuje; bez dat prośba trafia do kierownika jako "inne". W solverze kara za każdy z tych dni, w który osoba ma zmianę.
+5. Do etapu 10 prośby tekstem nie mają interpretacji, więc życzenia typu "wolę nie" widzi tylko kierownik, a generator ich nie liczy.
+6. Siatka kierownika: dzień bez zaznaczenia to pusta kratka z pełną ramką; przerywana ramka zostaje dla osób, które nic nie wysłały.

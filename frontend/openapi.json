@@ -2104,7 +2104,7 @@
             }
           }
         },
-        "description": "\"Gotowe\": tells the manager I have finished. Days left unmarked count as \"obojętnie\".",
+        "description": "\"Gotowe\": tells the manager I have finished. Days left unmarked mean \"mogę\".",
         "tags": [
           "availability"
         ],
@@ -5292,7 +5292,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -5463,7 +5462,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -5526,7 +5524,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -5662,7 +5659,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],

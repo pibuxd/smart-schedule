@@ -52,6 +52,7 @@ REQUEST_TYPES = {
     "preferuj_osobe": RequestType.PREFER_PERSON,
     "typ_zmiany": RequestType.SHIFT_TYPE,
     "limit_godzin": RequestType.HOURS_LIMIT,
+    "wolne_dni": RequestType.DAYS_OFF,
     "inne": RequestType.OTHER,
 }
 

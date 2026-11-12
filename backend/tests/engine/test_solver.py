@@ -77,11 +77,11 @@ def test_leaves_holes_when_people_are_missing_and_still_returns_a_schedule():
 
 
 def test_minimises_holes_before_anything_else():
-    # Anna marked "wolę nie" for the only day she could cover: the slot is filled anyway (holes come first).
+    # Anna asked for that day off, but she is the only one who can cover it: the slot is filled anyway.
     p = problem(
         [employee("anna")],
         [slot("m0", day(0))],
-        availability=[Availability("anna", day(0), "prefer_not")],
+        requests=[Request("off", "anna", "days_off", dates=frozenset({day(0)}), level="bardzo_wazne")],
     )
     result, _ = solved(p)
     assert result.schedule == {"m0": "anna"}
@@ -230,7 +230,7 @@ def test_time_limit_is_kept_on_a_big_problem():
         )
     ]
     availability = [
-        Availability(e.id, MON + timedelta(days=d), rng.choice(["cannot", "prefer_not", "prefer", "neutral"]))
+        Availability(e.id, MON + timedelta(days=d), rng.choice(["cannot", "prefer", "neutral"]))
         for e in people
         for d in range(30)
         if rng.random() < 0.4
@@ -269,17 +269,13 @@ def test_regenerating_after_one_absence_changes_little():
 
 
 def test_stability_penalty_zero_allows_a_better_reshuffle():
-    # Published: Anna on both mornings. Anna marked "wolę nie" on day 1 later; Ewa is free.
+    # Published: Anna on both mornings. Later Anna asked for day 1 off; Ewa is free.
     people = [employee("anna"), employee("ewa")]
     slots = [slot("m0", day(0)), slot("m1", day(1))]
     published = {"m0": "anna", "m1": "anna"}
-    availability = [Availability("anna", day(1), "prefer_not")]
-    sticky = problem(
-        people, slots, published=published, availability=availability, weights=WeightProfile(stability_penalty=50)
-    )
-    loose = problem(
-        people, slots, published=published, availability=availability, weights=WeightProfile(stability_penalty=0)
-    )
+    requests = [Request("off", "anna", "days_off", dates=frozenset({day(1)}))]
+    sticky = problem(people, slots, published=published, requests=requests, weights=WeightProfile(stability_penalty=50))
+    loose = problem(people, slots, published=published, requests=requests, weights=WeightProfile(stability_penalty=0))
     assert solved(sticky)[0].schedule == published
     assert solved(loose)[0].schedule["m1"] == "ewa"
 
@@ -287,18 +283,25 @@ def test_stability_penalty_zero_allows_a_better_reshuffle():
 # ----------------------------------------------------------------- soft rules and requests
 
 
-def test_prefers_people_who_marked_prefer_and_avoids_prefer_not():
+def test_prefers_people_who_marked_prefer():
     people = [employee("anna"), employee("ewa"), employee("ola")]
+    p = problem(people, [slot("m0", day(0))], availability=[Availability("ewa", day(0), "prefer")])
+    result, _ = solved(p)
+    assert result.schedule == {"m0": "ewa"}
+
+
+def test_keeps_days_off_asked_for_in_text():
+    people = [employee("anna"), employee("ewa")]
     p = problem(
         people,
-        [slot("m0", day(0))],
-        availability=[
-            Availability("anna", day(0), "prefer_not"),
-            Availability("ewa", day(0), "prefer"),
+        [slot("m0", day(0)), slot("m1", day(1))],
+        requests=[
+            Request("anna-off", "anna", "days_off", dates=frozenset({day(0)})),
+            Request("ewa-off", "ewa", "days_off", dates=frozenset({day(1)})),
         ],
     )
     result, _ = solved(p)
-    assert result.schedule == {"m0": "ewa"}
+    assert result.schedule == {"m0": "ewa", "m1": "anna"}
 
 
 def test_manager_rules_outweigh_employee_requests():
@@ -312,9 +315,8 @@ def test_manager_rules_outweigh_employee_requests():
         availability=[
             Availability("anna", day(0), "prefer"),
             Availability("anna", day(1), "prefer"),
-            Availability("ewa", day(0), "prefer_not"),
-            Availability("ewa", day(1), "prefer_not"),
         ],
+        requests=[Request("ewa-off", "ewa", "days_off", dates=frozenset({day(0), day(1)}))],
     )
     result, report = solved(p)
     # Ewa works one shift she would rather not, so that Anna gets her 11 h rest.
@@ -419,7 +421,7 @@ def random_problem(seed: int):
     for person in people:
         for d in range(-1, days + 1):
             if rng.random() < 0.35:
-                state = rng.choice(["cannot", "prefer_not", "prefer", "neutral"])
+                state = rng.choice(["cannot", "prefer", "neutral"])
                 hours = rng.choice([(None, None), (None, None), (time(12), None), (None, time(15))])
                 availability.append(Availability(person.id, MON + timedelta(days=d), state, *hours))
     rules = []
@@ -493,11 +495,12 @@ def test_finds_the_lowest_penalty_on_tiny_problems(seed):
         slot("b1", day(1), "06:00", "14:00", position=BAKER, shift_type="b"),
         slot("a1", day(1), "14:00", "22:00", shift_type="a", closing=True),
     ]
-    availability = [
-        # "chętnie" is left out: its share of possible days is only approximated in the model.
-        Availability(e.id, day(d), rng.choice(["prefer_not", "neutral"]))
+    # "chętnie" is left out: its share of possible days is only approximated in the model.
+    days_off = [
+        Request(f"off-{e.id}", e.id, "days_off", dates=frozenset({day(d)}))
         for e in people
         for d in range(2)
+        if rng.random() < 0.5
     ]
     p = problem(
         people,
@@ -509,8 +512,10 @@ def test_finds_the_lowest_penalty_on_tiny_problems(seed):
             RuleConfig("personal_max_hours", LOC, rank=2),
             RuleConfig("min_position_on_closing", LOC, rank=3, params={"position": BAKER}),
         ],
-        availability=availability,
-        requests=[Request("r1", "anna", "hours_limit", max_hours=8, level=rng.choice(["wazne", "mile_widziane"]))],
+        requests=[
+            Request("r1", "anna", "hours_limit", max_hours=8, level=rng.choice(["wazne", "mile_widziane"])),
+            *days_off,
+        ],
     )
     _result, report = solved(p)
     best = min((len(r.holes), penalty(p, r)) for r in (validate(p, s) for s in all_schedules(p)) if r.ok)
@@ -533,7 +538,7 @@ def test_second_variant_differs_by_at_least_15_percent():
 
 
 def test_weights_can_be_replaced_for_a_variant():
-    # Manager share 1.0: employee requests do not count at all, so "wolę nie" may be ignored for a rule.
+    # Manager share 1.0: employee requests do not count at all, so a wish may be ignored for a rule.
     people = [employee("anna"), employee("ewa")]
     slots = [slot("a0", day(0), "14:00", "22:00", shift_type="a"), slot("m1", day(1), "06:00", "14:00", shift_type="m")]
     p = problem(people, slots, rules=[RuleConfig("min_rest_between_shifts", LOC, rank=1)])

@@ -231,7 +231,8 @@ REQUEST_TEMPLATES = [
     ("W tym miesiącu wolę tylko ranne zmiany, po południu mam zajęcia na uczelni.", "typ_zmiany", "bardzo_wazne"),
     ("Potrzebuję w tym miesiącu maksymalnie 80 godzin, mam sesję.", "limit_godzin", "bardzo_wazne"),
     ("Proszę nie dawać mi dwóch nocek pod rząd, potem nie mogę dojść do siebie.", "inne", "wazne"),
-    ("{day} mam wesele siostry, najlepiej wolny cały weekend.", "inne", "bardzo_wazne"),
+    ("{day} mam wesele siostry, najlepiej wolny cały weekend.", "wolne_dni", "bardzo_wazne"),
+    ("Wolałabym nie pracować w weekend {day}, mam urodziny mamy.", "wolne_dni", "wazne"),
     ("Chętnie wezmę więcej godzin, zbieram na wakacje.", "limit_godzin", "mile_widziane"),
     ("Nie mogę zamykać w piątki, odbieram dziecko z przedszkola o 17.", "typ_zmiany", "bardzo_wazne"),
     ("Wolałbym nie pracować z {other} na nocce, nie dogadujemy się co do pieca.", "unikaj_osoby", "wazne"),
@@ -482,9 +483,8 @@ def _bakery_employees(rng, names, phones, company, location, spec: BakerySpec, p
 
 
 AVAILABILITY_WEIGHTS = [
-    (AvailabilityState.NEUTRAL, 45),
+    (AvailabilityState.NEUTRAL, 60),
     (AvailabilityState.PREFER, 20),
-    (AvailabilityState.PREFER_NOT, 15),
     (AvailabilityState.CANNOT, 20),
 ]
 

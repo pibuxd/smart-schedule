@@ -36,8 +36,7 @@ class Contract(StrEnum):
 
 class AvailabilityState(StrEnum):
     CANNOT = "cannot"
-    PREFER_NOT = "prefer_not"
-    NEUTRAL = "neutral"
+    NEUTRAL = "neutral"  # a day without a mark ("mogę"); a row exists only to carry "only these hours"
     PREFER = "prefer"
 
 
@@ -48,6 +47,7 @@ class RequestType(StrEnum):
     PREFER_PERSON = "prefer_person"
     SHIFT_TYPE = "shift_type"
     HOURS_LIMIT = "hours_limit"
+    DAYS_OFF = "days_off"  # "wolę nie pracować w te dni" (soft; a hard "nie mogę" is marked in the calendar)
     OTHER = "other"  # read by the manager, not scored
 
 

@@ -65,12 +65,21 @@ class TestAvailability:
             ],
         }
         assert put(api, payload).status_code == 200
-        payload["days"] = [{"date": str(start), "state": "prefer_not"}]
+        payload["days"] = [{"date": str(start), "state": "neutral"}]
         body = put(api, payload).json()
         assert [(d["date"], d["state"], d["from_time"], d["to_time"]) for d in body["days"]] == [
-            (str(start), "prefer_not", None, None),
+            (str(start), "neutral", None, None),
             (str(start + timedelta(days=1)), "prefer", "22:00:00", "06:00:00"),
         ]
+
+    def test_prefer_not_is_no_longer_accepted(self, api, shop):
+        api.login(shop["worker"])
+        payload = {
+            "company_id": str(shop["company"].pk),
+            "period_id": str(shop["period"].pk),
+            "days": [{"date": str(shop["period"].start), "state": "prefer_not"}],
+        }
+        assert put(api, payload).status_code == 422
 
     def test_days_outside_period_or_empty_hours_are_refused(self, api, shop):
         api.login(shop["worker"])

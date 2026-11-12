@@ -4,7 +4,7 @@ import type { AvailabilityGridOut, GridDayOut, GridEmployeeOut } from '../../api
 import { Tag } from '../../components/ui/field'
 import { cn } from '../../lib/cn'
 import { addDays, compactTime, dayTitle, parseDate, toIsoDate, weekdayIndex, weekdayShort } from '../../lib/dates'
-import { STATE_LABEL, STATES } from '../availability/marks'
+import { STATE_LABEL } from '../availability/marks'
 import { StateIcon } from '../availability/StateIcon'
 
 function periodDays(start: string, end: string): string[] {
@@ -20,9 +20,9 @@ function hoursOf(day: GridDayOut): string | null {
 
 function cellLabel(iso: string, day: GridDayOut | undefined): string {
   const title = dayTitle(parseDate(iso))
-  if (!day) return `${title}: nic nie zaznaczono`
+  if (!day) return `${title}: bez zaznaczenia`
   const hours = hoursOf(day)
-  const what = STATE_LABEL[day.state].toLowerCase()
+  const what = day.state === 'neutral' && !hours ? 'bez zaznaczenia' : STATE_LABEL[day.state].toLowerCase()
   return `${title}: ${what}${hours ? ` ${hours}` : ''}${day.late ? ', zmienione po terminie' : ''}`
 }
 
@@ -30,7 +30,7 @@ function cellLabel(iso: string, day: GridDayOut | undefined): string {
 export function GridLegend() {
   return (
     <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-2 p-0 text-sm">
-      {STATES.map((state) => (
+      {(['cannot', 'prefer'] as const).map((state) => (
         <li key={state} className="flex items-center gap-1.5">
           <span className={cn('grid size-7 place-items-center rounded-sm border-2', `avail-${state}`)}>
             <StateIcon state={state} size={16} />
@@ -39,8 +39,8 @@ export function GridLegend() {
         </li>
       ))}
       <li className="flex items-center gap-1.5">
-        <span className="grid size-7 place-items-center rounded-sm border-2 border-dashed border-line bg-surface" />
-        Nic nie zaznaczono (liczy się jak „obojętnie”)
+        <span className="grid size-7 place-items-center rounded-sm border-2 border-line bg-surface" />
+        Bez zaznaczenia (może pracować)
       </li>
       <li className="flex items-center gap-1.5">
         <span className="relative grid size-7 place-items-center rounded-sm border-2 border-line bg-surface outline-2 outline-offset-1 outline-accent">
@@ -123,7 +123,7 @@ function Row({ employee, days }: { employee: GridEmployeeOut; days: string[] }) 
                 day?.late && 'outline-2 outline-offset-1 outline-accent',
               )}
             >
-              {day && <StateIcon state={day.state} size={hours ? 14 : 18} />}
+              {day && day.state !== 'neutral' && <StateIcon state={day.state} size={hours ? 14 : 18} />}
               {hours && <span className="text-cell font-semibold whitespace-nowrap tabular-nums">{hours}</span>}
               {day?.late && (
                 <Clock aria-hidden="true" size={12} className="absolute -top-1.5 -right-1.5 rounded-full bg-surface text-accent" />

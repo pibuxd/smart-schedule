@@ -118,7 +118,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
           )}
           {collecting && passed && missing.length > 0 && (
             <p className="m-0 font-semibold text-accent">
-              Termin minął. Można układać grafik; osoby bez dyspozycji liczą się jak „obojętnie”.
+              Termin minął. Można układać grafik; osoby bez dyspozycji mogą dostać zmianę każdego dnia.
             </p>
           )}
           {period.availability_requested_at && (
