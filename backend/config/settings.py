@@ -109,6 +109,23 @@ CSRF_COOKIE_SECURE = not DEBUG
 
 # Behind Caddy.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# How many reverse proxies we trust to set X-Forwarded-For (1 behind Caddy, 0 when the API is reached directly).
+# Rate limits use the client address, so a wrong value either merges all users into one address or lets
+# a client fake its address.
+NUM_PROXIES = int(env("DJANGO_NUM_PROXIES", "0"))
+
+# Login with an SMS code (the only way app users log in).
+SMS_BACKEND = env("SMS_BACKEND", "apps.accounts.sms.ConsoleSmsSender")
+LOGIN_CODE_TTL_S = 5 * 60
+LOGIN_CODE_MAX_ATTEMPTS = 5
+LOGIN_CODE_RESEND_AFTER_S = int(env("LOGIN_CODE_RESEND_AFTER_S", "60"))
+LOGIN_CODES_PER_PHONE_PER_HOUR = int(env("LOGIN_CODES_PER_PHONE_PER_HOUR", "5"))
+LOGIN_CODES_PER_IP_PER_HOUR = int(env("LOGIN_CODES_PER_IP_PER_HOUR", "20"))
+
+# Free-access codes: failed attempts allowed per hour before further tries are refused.
+ACCESS_CODE_FAILURES_PER_USER_PER_HOUR = int(env("ACCESS_CODE_FAILURES_PER_USER_PER_HOUR", "5"))
+ACCESS_CODE_FAILURES_PER_IP_PER_HOUR = int(env("ACCESS_CODE_FAILURES_PER_IP_PER_HOUR", "20"))
+SUBSCRIPTION_BANNER_DAYS = 7
 
 # Background jobs (Procrastinate on Postgres).
 PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "tasks"

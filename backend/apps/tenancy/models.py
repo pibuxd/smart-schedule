@@ -108,6 +108,10 @@ class Invitation(CompanyOwnedModel):
 
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="invitations")
     phone_e164 = models.CharField("numer telefonu", max_length=16, db_index=True)
+    # Typed by the manager, so the invited person does not have to; copied to the account on acceptance
+    # only when the account has no name yet.
+    first_name = models.CharField("imię", max_length=80, blank=True)
+    last_name = models.CharField("nazwisko", max_length=120, blank=True)
     role = models.CharField(
         "rola",
         max_length=16,

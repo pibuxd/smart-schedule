@@ -4,6 +4,12 @@ Every company endpoint starts with `ctx = tenant_context(request, company_id)` a
 `ctx.qs(Model)` / `ctx.get(Model, ...)`. A user who is not a member of the company gets 404, never 403,
 so the API does not reveal that another company's object exists. `tests/test_tenant_guard.py` fails when
 an `api.py` file reads a company-owned model through plain `Model.objects`.
+
+Endpoints addressed by an object id alone (e.g. `/locations/{id}/...`) start with
+`ctx, obj = context_for(request, Model, object_id)`.
+
+Every endpoint that changes company data also calls `ctx.require_writable()`: a company whose access has
+expired (or that never entered a code) is read-only.
 """
 
 from dataclasses import dataclass
@@ -58,6 +64,18 @@ class TenantContext:
         if not self.is_manager:
             raise HttpError(403, "Ta czynność jest dostępna tylko dla menedżera.")
 
+    def require_manager_of(self, location: Location) -> None:
+        """The owner, or a manager assigned to this location."""
+        if not self.managed_locations().filter(pk=location.pk).exists():
+            raise HttpError(403, "Ta czynność jest dostępna tylko dla menedżera tego lokalu.")
+
+    def require_writable(self) -> None:
+        """Refuse changes when the company's access has expired (402, so the frontend can tell it apart)."""
+        from apps.billing.services import READ_ONLY_MESSAGE, subscription_state
+
+        if subscription_state(self.company.pk).read_only:
+            raise HttpError(402, READ_ONLY_MESSAGE)
+
 
 def tenant_context(request, company_id: UUID | str) -> TenantContext:
     user = getattr(request, "user", None)
@@ -67,3 +85,17 @@ def tenant_context(request, company_id: UUID | str) -> TenantContext:
     if membership is None:
         raise HttpError(404, "Nie znaleziono.")
     return TenantContext(company=membership.company, membership=membership)
+
+
+def context_for[M: Model](request, model: type[M], object_id: UUID | str) -> tuple[TenantContext, M]:
+    """Tenant context found from a company-owned object: 404 when it does not exist or is another company's."""
+    if not is_company_owned(model):
+        raise TypeError(f"{model.__name__} is not company-owned")
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        raise HttpError(401, "Zaloguj się.")
+    company_id = model._base_manager.filter(pk=object_id).values_list("company_id", flat=True).first()
+    if company_id is None:
+        raise HttpError(404, "Nie znaleziono.")
+    ctx = tenant_context(request, company_id)
+    return ctx, ctx.get(model, pk=object_id)

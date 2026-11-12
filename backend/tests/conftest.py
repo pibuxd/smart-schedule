@@ -43,3 +43,59 @@ def make_company(db):
         }
 
     return factory
+
+
+@pytest.fixture(autouse=True)
+def sms_outbox(settings):
+    """Login codes "sent" during a test; the last one is `sms_outbox[-1]` as (phone, text)."""
+    from apps.accounts.sms import MemorySmsSender
+
+    settings.SMS_BACKEND = "apps.accounts.sms.MemorySmsSender"
+    MemorySmsSender.outbox.clear()
+    return MemorySmsSender.outbox
+
+
+@pytest.fixture
+def api(client):
+    """JSON calls to the API: `api.post("/api/...", {...})`, `api.login(user)`."""
+
+    class Api:
+        def __init__(self, django_client):
+            self.client = django_client
+
+        def login(self, user):
+            self.client.force_login(user)
+            return self
+
+        def logout(self):
+            self.client.logout()
+            return self
+
+        def get(self, path, **extra):
+            return self.client.get(path, **extra)
+
+        def post(self, path, data=None, **extra):
+            return self.client.post(path, data or {}, content_type="application/json", **extra)
+
+        def patch(self, path, data=None, **extra):
+            return self.client.patch(path, data or {}, content_type="application/json", **extra)
+
+    return Api(client)
+
+
+@pytest.fixture
+def subscribe(db):
+    """Give a company active access for a number of days (negative = expired that long ago)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.billing.models import Subscription
+
+    def factory(company, days: float = 30):
+        subscription, _ = Subscription.objects.update_or_create(
+            company=company, defaults={"ends_at": timezone.now() + timedelta(days=days)}
+        )
+        return subscription
+
+    return factory

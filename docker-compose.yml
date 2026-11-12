@@ -6,6 +6,9 @@ x-backend-env: &backend-env
   DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
   DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
   DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080}
+  # Caddy is the only proxy in front of the API; rate limits read the client address it forwards.
+  DJANGO_NUM_PROXIES: "1"
+  SMS_BACKEND: ${SMS_BACKEND:-apps.accounts.sms.ConsoleSmsSender}
   POSTGRES_DB: ${POSTGRES_DB:-grafikomat}
   POSTGRES_USER: ${POSTGRES_USER:-grafikomat}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}

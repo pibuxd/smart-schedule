@@ -1,9 +1,10 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 
 from apps.accounts.models import LoginCode, User, normalize_phone
+from apps.tenancy.models import Invitation, InvitationStatus
 
 
 class PhoneCleanMixin:
@@ -47,6 +48,21 @@ class UserAdmin(BaseUserAdmin):
             },
         ),
     )
+
+    def save_model(self, request, obj, form, change):
+        """Changing the phone number moves the whole account (memberships, schedule history) to the new number.
+
+        Sessions of the account end by themselves (see `User._get_session_auth_hash`). Invitations are tied
+        to a number, not to an account, so pending ones for the old number have to be sent again.
+        """
+        old_phone = form.initial.get("phone_e164") if change and "phone_e164" in form.changed_data else None
+        super().save_model(request, obj, form, change)
+        if old_phone:
+            pending = Invitation.objects.filter(phone_e164=old_phone, status=InvitationStatus.PENDING).count()
+            text = f"Numer zmieniony z {old_phone} na {obj.phone_e164}. Ta osoba musi zalogować się ponownie."
+            if pending:
+                text += f" Oczekujące zaproszenia na stary numer: {pending}. Menedżer musi wysłać je ponownie na nowy."
+            self.message_user(request, text, messages.WARNING)
 
 
 @admin.register(LoginCode)
