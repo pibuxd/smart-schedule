@@ -501,6 +501,8 @@ class VersionOut(Schema):
     unmet_requests: list[UnmetRequestOut]
     notes: list[str]
     history: list[VersionSummaryOut]
+    # A correction of a published schedule: people whose shifts would change on publishing.
+    changed_people: list[str]
 
 
 class CandidateOut(Schema):
@@ -689,7 +691,7 @@ def _history(version: ScheduleVersion) -> list[VersionSummaryOut]:
 
 def _version_out(ctx, loaded, today: date) -> VersionOut:
     from apps.billing.services import subscription_state
-    from apps.scheduling.editing import is_editable
+    from apps.scheduling.editing import changed_people, is_editable
 
     version, problem = loaded.version, loaded.problem
     period = version.period
@@ -740,6 +742,7 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
         unmet_requests=_unmet_requests(loaded),
         notes=notes,
         history=_history(version),
+        changed_people=changed_people(loaded),
     )
 
 

@@ -6390,6 +6390,13 @@
             },
             "title": "History",
             "type": "array"
+          },
+          "changed_people": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed People",
+            "type": "array"
           }
         },
         "required": [
@@ -6410,7 +6417,8 @@
           "rules",
           "unmet_requests",
           "notes",
-          "history"
+          "history",
+          "changed_people"
         ],
         "title": "VersionOut",
         "type": "object"

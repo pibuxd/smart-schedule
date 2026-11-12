@@ -302,6 +302,35 @@ def _record_history(version: ScheduleVersion, previous: ScheduleVersion | None, 
     AssignmentEvent.objects.bulk_create(events)
 
 
+def changed_people(loaded: LoadedVersion) -> list[str]:
+    """Names of the people whose shifts in this draft differ from the published schedule of the same period, so
+    the manager knows whom to tell before publishing a correction. Empty when nothing is published yet."""
+    version = loaded.version
+    if version.status != ScheduleVersion.Status.DRAFT:
+        return []
+    published = (
+        ScheduleVersion.objects.for_company(version.company_id)
+        .filter(period_id=version.period_id, status=ScheduleVersion.Status.PUBLISHED)
+        .values_list("pk", flat=True)
+        .first()
+    )
+    if published is None:
+        return []
+    before = {
+        key: str(employee) if employee else None
+        for key, employee in Assignment.objects.for_company(version.company_id)
+        .filter(shift__version_id=published)
+        .values_list("shift__slot_key", "employee")
+    }
+    affected: set[str] = set()
+    for key, now in loaded.schedule.items():
+        was = before.get(key)
+        if now != was:
+            affected.update(e for e in (now, was) if e)
+    names = {e.id: e.name for e in loaded.problem.employees}
+    return sorted(names.get(e, "") for e in affected if names.get(e))
+
+
 def _notify_published(version: ScheduleVersion, *, first: bool) -> None:
     period = version.period
     in_schedule = Assignment.objects.for_company(version.company_id).filter(

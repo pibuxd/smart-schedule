@@ -213,9 +213,12 @@ def test_correcting_a_published_schedule_starts_a_draft_copy(api, shop, draft):
 
     taken = shift_of(corrected, MON)
     free = free_person(shop, corrected, MON)
+    assert api.get(url(corrected)).json()["changed_people"] == []
     api.patch(
         url(corrected, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
     )
+    changed = api.get(url(corrected)).json()["changed_people"]
+    assert len(changed) == 2 and api.get(url(draft)).json()["changed_people"] == []
     assert api.post(url(corrected, "/publish")).status_code == 200
 
     draft.refresh_from_db()
