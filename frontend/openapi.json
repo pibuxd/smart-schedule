@@ -8388,6 +8388,10 @@
             },
             "title": "By Location",
             "type": "array"
+          },
+          "elsewhere": {
+            "title": "Elsewhere",
+            "type": "boolean"
           }
         },
         "required": [
@@ -8397,7 +8401,8 @@
           "contract",
           "shifts",
           "total",
-          "by_location"
+          "by_location",
+          "elsewhere"
         ],
         "title": "EmployeeHoursOut",
         "type": "object"

@@ -14,4 +14,5 @@ export interface EmployeeHoursOut {
   shifts: number;
   total: number;
   by_location: LocationHoursOut[];
+  elsewhere: boolean;
 }

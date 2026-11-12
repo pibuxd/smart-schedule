@@ -16,6 +16,7 @@ from apps.tenancy.context import tenant_context
 
 router = Router(tags=["reports"])
 
+ELSEWHERE_NOTE = "pracuje też w lokalach, których nie prowadzisz; suma niepełna"
 CONTRACT_WORDS = {"civil": "umowa zlecenie", "employment": "umowa o pracę"}
 
 
@@ -37,6 +38,8 @@ class EmployeeHoursOut(Schema):
     shifts: int
     total: float
     by_location: list[LocationHoursOut]
+    # Also worked this month in locations this manager does not run: the total here is not the whole month.
+    elsewhere: bool
 
 
 class HoursReportOut(Schema):
@@ -79,6 +82,17 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
         hours[assignment.employee_id][shift.location_id] += (shift.end_at - shift.start_at).total_seconds() / 3600
         shifts[assignment.employee_id] += 1
         people[assignment.employee_id] = assignment.employee
+    elsewhere = set(
+        ctx.qs(Assignment)
+        .filter(
+            employee_id__in=list(people),
+            shift__version__status=ScheduleVersion.Status.PUBLISHED,
+            shift__date__gte=first,
+            shift__date__lt=nxt,
+        )
+        .exclude(shift__location__in=locations)
+        .values_list("employee_id", flat=True)
+    )
     used = [loc for loc in locations if any(loc.pk in h for h in hours.values())]
     result = []
     for employee_id, profile in people.items():
@@ -95,6 +109,7 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
                     for loc in used
                     if hours[employee_id].get(loc.pk)
                 ],
+                elsewhere=employee_id in elsewhere,
             )
         )
     result.sort(key=lambda r: (r.home_location_name, r.name))
@@ -122,7 +137,9 @@ def hours_report_csv(request, company_id: UUID, month: str):
     report = _report(request, company_id, month)
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(["Osoba", "Lokal domowy", "Umowa", "Zmiany", *[loc.name for loc in report.locations], "Razem"])
+    writer.writerow(
+        ["Osoba", "Lokal domowy", "Umowa", "Zmiany", *[loc.name for loc in report.locations], "Razem", "Uwagi"]
+    )
     for row in report.rows:
         by_location = {h.location_id: h.hours for h in row.by_location}
         writer.writerow(
@@ -133,6 +150,7 @@ def hours_report_csv(request, company_id: UUID, month: str):
                 row.shifts,
                 *[_number(by_location.get(loc.id, 0.0)) for loc in report.locations],
                 _number(row.total),
+                ELSEWHERE_NOTE if row.elsewhere else "",
             ]
         )
     response = HttpResponse("﻿" + buffer.getvalue(), content_type="text/csv; charset=utf-8")
