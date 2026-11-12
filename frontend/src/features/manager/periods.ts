@@ -1,5 +1,7 @@
-import type { LocationOut, PeriodOut } from '../../api/generated/model'
+import type { LocationOut, LocationSummaryOut, PeriodOut } from '../../api/generated/model'
 import { addDays, parseDate, toIsoDate } from '../../lib/dates'
+import type { ArrangeTarget } from './ArrangeSchedule'
+import { daysUntil } from './words'
 
 /** The period the manager most likely wants: the current or next one, else the latest. */
 export function pickPeriod(periods: PeriodOut[], today: Date): PeriodOut | undefined {
@@ -22,4 +24,18 @@ export function nextPeriodDates(location: LocationOut, periods: PeriodOut[], tod
   }
   const deadline = addDays(start, -location.availability_deadline_days)
   return { start: toIsoDate(start), end: toIsoDate(end), deadline: toIsoDate(deadline) }
+}
+
+/** What the "Ułóż grafik" sheet needs to know about a location from the overview. */
+export function arrangeTarget(location: LocationSummaryOut, today: Date): ArrangeTarget {
+  const period = location.period!
+  return {
+    periodId: period.id,
+    locationId: location.id,
+    locationName: location.name,
+    missing: period.missing.length,
+    deadlinePassed: daysUntil(period.deadline, today) < 0,
+    manualChanges: period.manual_changes,
+    hasVersion: period.latest_version_id !== null,
+  }
 }

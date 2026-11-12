@@ -31,13 +31,13 @@ WISH_WORDS = {
 
 # Why someone cannot take a slot, in words for the summary of an empty slot.
 _BLOCK_WORDS = {
-    Code.CANNOT: "ma „nie mogę”",
-    Code.OVERLAP: "ma w tym czasie inną zmianę",
-    Code.LABOR_DAILY_REST: "nie ma 11 h odpoczynku (umowa o pracę)",
-    Code.LABOR_DAILY_HOURS: "przekroczyłoby 8 h na dobę (umowa o pracę)",
-    Code.LABOR_WEEKLY_REST: "nie ma 35 h wolnego w tygodniu (umowa o pracę)",
-    Code.RULE: "złamałoby zasadę „bez wyjątków”",
-    Code.FROZEN: "ta zmiana już minęła",
+    Code.CANNOT: "zaznaczone „nie mogę”",
+    Code.OVERLAP: "inna zmiana w tym czasie",
+    Code.LABOR_DAILY_REST: "za krótki odpoczynek (umowa o pracę)",
+    Code.LABOR_DAILY_HOURS: "ponad 8 h na dobę (umowa o pracę)",
+    Code.LABOR_WEEKLY_REST: "brak 35 h wolnego w tygodniu (umowa o pracę)",
+    Code.RULE: "zasada „bez wyjątków”",
+    Code.FROZEN: "ten dzień już minął",
 }
 
 # At most this many soft notes per person (the list must stay readable).
@@ -97,7 +97,6 @@ def explain_slot(
     problem = without_pin(problem, slot_id)
     base = base or validate(problem, schedule)
     base_messages = {v.message for v in base.hard}
-    base_soft = {v.message for m in base.rules for v in m.violations}
     current = schedule.get(slot_id)
 
     candidates = []
@@ -118,13 +117,7 @@ def explain_slot(
             changed[slot_id] = employee.id
             report = validate(problem, changed)
             hard = [v for v in report.hard if v.message not in base_messages]
-            notes = tuple(
-                v.message
-                for m in report.rules
-                if not m.hard
-                for v in m.violations
-                if v.message not in base_soft and (v.employee in (None, employee.id))
-            )
+            notes = tuple(new_soft_violations(base, report, employee.id))
         candidates.append(
             Candidate(
                 employee=employee.id,
@@ -170,9 +163,9 @@ def _summary(problem: Problem, slot_id: str, current: str | None, candidates: li
         if not able:
             reasons: Counter[str] = Counter()
             for candidate in others:
-                reasons[_BLOCK_WORDS.get(candidate.block_code, "nie może z innego powodu")] += 1
-            parts = [f"{_people(n)} {words}" for words, n in reasons.most_common()]
-            return "Nikt nie mógł wziąć tej zmiany: " + "; ".join(parts) + "."
+                reasons[_BLOCK_WORDS.get(candidate.block_code, "inny powód")] += 1
+            parts = [f"{words} ({_people(n)})" for words, n in reasons.most_common()]
+            return "Nikt nie mógł wziąć tej zmiany. Powody: " + ", ".join(parts) + "."
         return (
             f"Tę zmianę może wziąć {_people(len(able))} z listy niżej, ale każda z tych osób jest potrzebna gdzie "
             "indziej albo złamałaby ważniejsze zasady. Możesz wpisać kogoś ręcznie."
@@ -189,6 +182,20 @@ def _summary(problem: Problem, slot_id: str, current: str | None, candidates: li
     else:
         text += " Nikt inny nie mógł wziąć tej zmiany."
     return text
+
+
+def new_soft_violations(base: ValidationReport, after: ValidationReport, employee: str | None = None) -> list[str]:
+    """Messages of soft rules that got worse (higher degree) after a change, optionally only about one person.
+    A rule that got better (e.g. hours closer to the target) is not a cost, even if its message changed."""
+    before = {(m.location, m.code): m.degree for m in base.rules}
+    known = {v.message for m in base.rules for v in m.violations}
+    return [
+        v.message
+        for m in after.rules
+        if not m.hard and m.degree > before.get((m.location, m.code), 0.0) + 1e-9
+        for v in m.violations
+        if v.message not in known and (employee is None or v.employee in (None, employee))
+    ]
 
 
 def scores_after(

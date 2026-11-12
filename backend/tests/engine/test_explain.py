@@ -28,8 +28,8 @@ def test_empty_slot_names_why_nobody_could_take_it():
     assert people["anna"].blocked and "nie mogę" in people["anna"].blocked[0]
     assert people["ewa"].blocked and "dwie zmiany" in people["ewa"].blocked[0]
     assert explanation.summary.startswith("Nikt nie mógł wziąć tej zmiany")
-    assert "1 osoba ma „nie mogę”" in explanation.summary
-    assert "1 osoba ma w tym czasie inną zmianę" in explanation.summary
+    assert "zaznaczone „nie mogę” (1 osoba)" in explanation.summary
+    assert "inna zmiana w tym czasie (1 osoba)" in explanation.summary
 
 
 def test_assigned_slot_lists_the_person_first_and_who_else_could_work():

@@ -20,4 +20,5 @@ export interface PeriodOut {
   latest_version_status: PeriodOutLatestVersionStatus;
   active_run_id: string | null;
   manual_changes: number;
+  missing_availability: number;
 }

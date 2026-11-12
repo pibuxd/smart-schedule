@@ -59,6 +59,8 @@ class PeriodOut(Schema):
     active_run_id: UUID | None
     # Manual changes in the newest version that arranging again would drop (they are not pinned).
     manual_changes: int
+    # Active employees of the location who have not sent their availability ("Gotowe") for this period.
+    missing_availability: int
 
 
 class AskAvailabilityIn(Schema):
@@ -131,7 +133,18 @@ def _period_out(period: SchedulePeriod) -> PeriodOut:
         latest_version_status=versions[0][1] if versions else None,
         active_run_id=active.first(),
         manual_changes=manual_changes(latest),
+        missing_availability=_missing_availability(period),
     )
+
+
+def _missing_availability(period: SchedulePeriod) -> int:
+    from apps.availability.models import AvailabilitySubmission
+
+    done = AvailabilitySubmission.objects.for_company(period.company_id).filter(period=period).values("employee")
+    people = EmployeeProfile.objects.for_company(period.company_id).filter(
+        home_location=period.location_id, is_active=True
+    )
+    return people.exclude(pk__in=done).count()
 
 
 def _run_out(run: GenerationRun) -> GenerationRunOut:
@@ -634,7 +647,8 @@ def _unmet_requests(loaded) -> list[UnmetRequestOut]:
         elif measure.kind == RequestKind.PREFER_NOT:
             text = f"Zaznaczył(a) „wolę nie” {measure.date:%d.%m}, a ma tego dnia zmianę."
         else:
-            text = f"Dni „chętnie”: dostał(a) zmiany w {kept:g} % z nich (tyle, ile się dało)."
+            share = f"{kept:g}".replace(".", ",")
+            text = f"Dni „chętnie”: dostał(a) zmiany w {share} % z nich (tyle, ile się dało)."
         result.append(
             UnmetRequestOut(
                 employee_name=names[measure.employee], text=text, kind=measure.kind.value, percent_kept=kept

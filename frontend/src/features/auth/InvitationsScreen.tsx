@@ -40,6 +40,9 @@ export function InvitationsScreen({ name }: { name: string }) {
           <Link to="/" className="font-semibold text-accent underline underline-offset-4">
             Wróć do grafiku
           </Link>
+          <Link to="/rejestracja" className="font-semibold text-accent underline underline-offset-4">
+            Prowadzisz lokal? Załóż firmę
+          </Link>
         </EmptyState>
       ) : (
         (invitations.data.data as MyInvitationOut[]).map((invitation) => (

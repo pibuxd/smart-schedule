@@ -5647,6 +5647,10 @@
           "manual_changes": {
             "title": "Manual Changes",
             "type": "integer"
+          },
+          "missing_availability": {
+            "title": "Missing Availability",
+            "type": "integer"
           }
         },
         "required": [
@@ -5661,7 +5665,8 @@
           "latest_version_id",
           "latest_version_status",
           "active_run_id",
-          "manual_changes"
+          "manual_changes",
+          "missing_availability"
         ],
         "title": "PeriodOut",
         "type": "object"

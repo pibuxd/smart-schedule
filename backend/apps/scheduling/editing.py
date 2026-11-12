@@ -24,7 +24,7 @@ from apps.notifications.models import Notification
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version
 from apps.staffing.models import EmployeeProfile
-from engine.explain import without_pin
+from engine.explain import new_soft_violations, without_pin
 from engine.problem import Problem
 from engine.scoring import Scores, score
 from engine.validator import ValidationReport, validate
@@ -119,9 +119,8 @@ def check_changes(
     after_schedule = {**loaded.schedule, **by_key}
     after = validate(problem, after_schedule)
     known = {v.message for v in before.hard}
-    known_soft = {v.message for m in before.rules for v in m.violations}
     problems = [v.message for v in after.hard if v.message not in known]
-    warnings = [v.message for m in after.rules if not m.hard for v in m.violations if v.message not in known_soft]
+    warnings = new_soft_violations(before, after)
     result = CheckResult(
         ok=not problems,
         problems=problems,

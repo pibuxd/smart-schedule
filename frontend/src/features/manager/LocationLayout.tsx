@@ -8,12 +8,13 @@ import { errorMessage } from '../../lib/api-error'
 
 const TABS = [
   { to: '/kierownik/lokal/$locationId/dyspozycje', label: 'Dyspozycje' },
+  { to: '/kierownik/lokal/$locationId/grafik', label: 'Grafik' },
   { to: '/kierownik/lokal/$locationId/pracownicy', label: 'Pracownicy' },
   { to: '/kierownik/lokal/$locationId/ustawienia', label: 'Ustawienia lokalu' },
   { to: '/kierownik/lokal/$locationId/zasady', label: 'Zasady' },
 ] as const
 
-/** One location: its name, and tabs for its four screens (they wrap on a phone, no sideways scrolling). */
+/** One location: its name, and tabs for its five screens (they wrap on a phone, no sideways scrolling). */
 export function LocationLayout({ locationId }: { locationId: string }) {
   const location = useLocationDetail(locationId)
   if (location.isPending) return <Loading>Wczytuję lokal…</Loading>

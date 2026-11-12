@@ -26,6 +26,10 @@ export function renderScreen(ui: ReactNode) {
     '/kierownik/lokal/$locationId/pracownicy',
     '/kierownik/lokal/$locationId/ustawienia',
     '/kierownik/lokal/$locationId/zasady',
+    '/kierownik/lokal/$locationId/grafik',
+    '/kierownik/godziny',
+    '/kierownik/dostep',
+    '/rejestracja',
   ].map((path) =>
     createRoute({ getParentRoute: () => root, path, component: () => null }),
   )

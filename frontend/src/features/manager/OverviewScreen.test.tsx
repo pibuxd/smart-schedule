@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
@@ -26,6 +26,10 @@ const location = {
     submitted: 1,
     missing: ['Anna Wróbel', 'Marek Zając'],
     late_days: 2,
+    latest_version_id: null,
+    latest_version_status: null,
+    active_run_id: null,
+    manual_changes: 0,
   },
 }
 
@@ -33,7 +37,7 @@ const overview = {
   company_id: 'c1',
   company_name: 'Złoty Kłos',
   role: 'owner',
-  subscription: { read_only: false, read_only_message: '', never_started: false, days_left: 20, expiring_soon: false },
+  subscription: { read_only: false, read_only_message: '', never_started: false, trial: false, days_left: 20, expiring_soon: false },
   groups: [{ id: 'g1', name: 'Piekarnie pod Krakowem' }],
   locations: [location],
   archived: [],
@@ -70,6 +74,38 @@ describe('OverviewScreen', () => {
     const post = calls.find((c) => c.method === 'POST')!
     expect(post.url).toBe('/api/periods/p1/ask-availability')
     expect(post.body).toEqual({ only_missing: true })
+  })
+
+  it('arranges a schedule only when the manager confirms, warning who has not answered', async () => {
+    const calls = mockApi((method) => (method === 'POST' ? [202, [{ id: 'r1', status: 'queued' }]] : [200, overview]))
+    renderScreen(
+      <AsManager>
+        <OverviewScreen today={new Date(2026, 10, 12)} />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż grafik' }))
+    expect(await screen.findByText(/Bez dyspozycji: 2 osoby/)).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Ułóż grafik' }))
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/periods/generate')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/periods/generate')!.body).toEqual({ period_ids: ['p1'] })
+  })
+
+  it('warns before the deadline and about unpinned manual changes', async () => {
+    const early = {
+      ...overview,
+      locations: [{ ...location, period: { ...location.period, deadline: '2026-11-20', latest_version_id: 'v1', latest_version_status: 'draft', manual_changes: 3 } }],
+    }
+    mockApi(() => [200, early])
+    renderScreen(
+      <AsManager>
+        <OverviewScreen today={new Date(2026, 10, 12)} />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż od nowa' }))
+    expect(await screen.findByText(/Termin dyspozycji jeszcze nie minął, a bez dyspozycji: 2 osoby/)).toBeInTheDocument()
+    expect(screen.getByText(/usunie nieprzypięte ręczne poprawki: 3/)).toBeInTheDocument()
+    expect(screen.getByText('Szkic czeka na publikację')).toBeInTheDocument()
   })
 
   it('has an empty state and an error state', async () => {
