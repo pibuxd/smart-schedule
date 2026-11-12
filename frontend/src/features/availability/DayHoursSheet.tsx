@@ -47,7 +47,7 @@ export function DayHoursSheet({
             <label
               key={String(option)}
               className={cn(
-                'flex min-h-(--touch) cursor-pointer items-center gap-3 rounded-md border-2 border-line bg-surface px-3',
+                'flex min-h-(--touch) cursor-pointer items-center gap-3 rounded-md border-2 border-line bg-surface px-3 py-2',
                 limited === option && 'border-accent bg-accent-soft',
               )}
             >
@@ -58,7 +58,16 @@ export function DayHoursSheet({
                 checked={limited === option}
                 onChange={() => setLimited(option)}
               />
-              {option ? (restricting ? 'Tylko w tych godzinach' : 'Mogę tylko w tych godzinach') : 'Cały dzień'}
+              <span>
+                {option ? (restricting ? 'Tylko w tych godzinach' : 'Mogę tylko w tych godzinach') : 'Cały dzień'}
+                {option && (
+                  <span className="block text-sm text-ink-muted">
+                    {restricting
+                      ? 'W pozostałych godzinach tego dnia możesz pracować.'
+                      : 'Poza tymi godzinami tego dnia nie dostaniesz zmiany.'}
+                  </span>
+                )}
+              </span>
             </label>
           ))}
         </fieldset>
@@ -68,18 +77,18 @@ export function DayHoursSheet({
               <TimeSelect id="hours-from" label="Od" value={from} onChange={setFrom} asEnd={false} />
               <TimeSelect id="hours-to" label="Do" value={to} onChange={setTo} asEnd />
             </div>
-            <p className="m-0 text-sm text-ink-muted">
-              {empty
-                ? 'Początek i koniec są takie same. Zmień jedną z godzin.'
-                : [
-                    overnight(draft) ? 'Do rana następnego dnia, na przykład na nockę.' : '',
-                    restricting
-                      ? 'W pozostałych godzinach tego dnia możesz pracować.'
-                      : 'Zmiany, która nie mieści się w tych godzinach, tego dnia nie dostaniesz.',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-            </p>
+            {(empty || overnight(draft)) && (
+              <p className={cn('m-0 text-sm', empty ? 'text-cannot' : 'text-ink-muted')}>
+                {empty
+                  ? 'Początek i koniec są takie same. Zmień jedną z godzin.'
+                  : 'Do rana następnego dnia, na przykład na nockę.'}
+              </p>
+            )}
+            {!restricting && !empty && (
+              <p className="m-0 rounded-md border-2 border-cannot bg-cannot-soft px-3 py-2 font-semibold text-cannot">
+                Zmiany spoza godzin {shortTime(from)}–{to === '00:00' ? '24:00' : shortTime(to)} tego dnia nie dostaniesz.
+              </p>
+            )}
           </div>
         )}
         <Button wide disabled={empty} onClick={() => onSave(draft)}>

@@ -13,14 +13,15 @@ import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
-import { addDays, dayAndMonth, parseDate, periodWords, toIsoDate, weekdayGenitive } from '../../lib/dates'
+import { addDays, dayAndMonth, dayTitle, parseDate, periodWords, toIsoDate, weekdayGenitive } from '../../lib/dates'
 import { AvailabilityCalendar } from './AvailabilityCalendar'
 import { DayHoursSheet } from './DayHoursSheet'
 import {
   type AvailabilityState,
   changedDays,
   countStates,
-  type Mark,
+  describeMark,
+  hasHours,
   markOf,
   STATE_LABEL,
   STATES,
@@ -139,9 +140,9 @@ function AvailabilityEditor({
       stroke.current ??= {}
       if (date in stroke.current) return
       const before = markOf(marksRef.current, date)
-      const after: Mark = { state: tool, from: null, to: null }
       stroke.current[date] = before
-      if (!sameMark(before, after)) apply({ [date]: after })
+      // A day that already has this state keeps its hours; a tap on it opens the day instead (see endStroke).
+      if (before.state !== tool) apply({ [date]: { state: tool, from: null, to: null } })
     },
     [tool],
   )
@@ -156,6 +157,12 @@ function AvailabilityEditor({
         previous[date] = touched[date]
         changes[date] = markOf(marksRef.current, date)
       }
+    }
+    const dates = Object.keys(touched)
+    if (dates.length === 1 && Object.keys(changes).length === 0) {
+      // Tapping a day that already shows the chosen state opens it: its hours can be seen and changed.
+      setOpenDay(dates[0])
+      return
     }
     record(previous)
     send(changes)
@@ -229,6 +236,8 @@ function AvailabilityEditor({
         onStroke={endStroke}
         onOpenDay={tool === 'hours' ? setOpenDay : undefined}
       />
+
+      <DaysWithHours marks={marks} dates={dates} editable={editable} onOpen={setOpenDay} />
 
       <p className="m-0 flex flex-wrap gap-x-3.5 gap-y-1 text-sm text-ink-muted" aria-live="polite">
         <span>
@@ -400,5 +409,43 @@ function ToolBar({ tool, onChange }: { tool: Tool; onChange: (tool: Tool) => voi
         ))}
       </div>
     </div>
+  )
+}
+
+/** Days marked with hours, written out, so the hours can be read and changed without hunting in the grid. */
+function DaysWithHours({
+  marks,
+  dates,
+  editable,
+  onOpen,
+}: {
+  marks: Marks
+  dates: string[]
+  editable: boolean
+  onOpen: (date: string) => void
+}) {
+  const withHours = dates.filter((date) => hasHours(markOf(marks, date)))
+  if (withHours.length === 0) return null
+  return (
+    <section aria-labelledby="hours-days" className="grid gap-2">
+      <h2 id="hours-days" className="m-0 text-base font-extrabold">
+        Dni z godzinami
+      </h2>
+      <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
+        {withHours.map((date) => (
+          <li key={date} className="flex items-center justify-between gap-3 border-t border-grid px-3.5 py-1.5 first:border-t-0">
+            <span className="min-w-0">
+              <span className="font-semibold">{dayTitle(parseDate(date))}</span>
+              <span className="block text-sm text-ink-muted">{describeMark(markOf(marks, date))}</span>
+            </span>
+            {editable && (
+              <Button variant="quiet" size="normal" className="px-2" onClick={() => onOpen(date)}>
+                Zmień
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

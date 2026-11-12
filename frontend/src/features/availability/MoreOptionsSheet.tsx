@@ -43,7 +43,8 @@ export function MoreOptionsSheet({
             Powtarzaj co tydzień
           </h3>
           <p className="m-0 text-sm text-ink-muted">
-            Na przykład: we wtorki i czwartki mam zajęcia do końca semestru, więc wtedy nie mogę.
+            Na przykład: we wtorki i czwartki mam zajęcia do końca semestru, więc wtedy nie mogę. Zastąpi to, co jest
+            już zaznaczone w te dni; w razie pomyłki użyj „Cofnij”.
           </p>
           <div role="group" aria-label="Dni tygodnia" className="grid grid-cols-7 gap-1">
             {WEEKDAY_HEADERS.map((name, day) => (
@@ -88,7 +89,7 @@ export function MoreOptionsSheet({
           </h3>
           <p className="m-0 text-sm text-ink-muted">
             Każdy dzień dostanie to, co było zaznaczone w ten sam dzień tygodnia miesiąc wcześniej. Potem możesz
-            poprawić pojedyncze dni.
+            poprawić pojedyncze dni albo wszystko cofnąć przyciskiem „Cofnij”.
           </p>
           <Button variant="secondary" wide disabled={busy} onClick={onCopy}>
             Skopiuj z poprzedniego miesiąca

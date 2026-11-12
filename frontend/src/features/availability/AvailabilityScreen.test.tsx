@@ -72,6 +72,27 @@ describe('AvailabilityScreen', () => {
     })
   })
 
+  it('warns plainly that "chętnie" with hours blocks other shifts that day', async () => {
+    api(availability())
+    renderScreen(<AvailabilityScreen companyId="c1" readOnly={false} />)
+    fireEvent.click(await screen.findByRole('button', { name: /Godziny dnia/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: obojętnie' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Chętnie' }))
+    fireEvent.click(screen.getByRole('radio', { name: /Mogę tylko w tych godzinach/ }))
+    expect(screen.getByText('Zmiany spoza godzin 14:00–22:00 tego dnia nie dostaniesz.')).toBeInTheDocument()
+  })
+
+  it('opens a day with its hours when it is tapped with the state it already has', async () => {
+    api(availability())
+    renderScreen(<AvailabilityScreen companyId="c1" readOnly={false} />)
+    expect(await screen.findByText('Dni z godzinami')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Chętnie' }))
+    fireEvent.click(screen.getByRole('button', { name: /^piątek 4 grudnia: chętnie/ }), { detail: 0 })
+    expect(await screen.findByRole('dialog', { name: 'piątek 4 grudnia' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Od')).toHaveValue('22:00')
+    expect(screen.getByLabelText('Do')).toHaveValue('06:00')
+  })
+
   it('cannot be changed when the company is read-only', async () => {
     api(availability())
     renderScreen(<AvailabilityScreen companyId="c1" readOnly />)
