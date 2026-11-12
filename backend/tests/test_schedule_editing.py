@@ -76,6 +76,7 @@ def test_explanation_lists_who_could_take_the_shift(api, shop, draft):
 def test_manual_change_is_checked_saved_and_scored(api, shop, draft):
     api.login(shop["manager"])
     taken = shift_of(draft, MON)
+    Assignment.objects.filter(pk=taken.pk).update(pinned=True)  # the old person was pinned
     free = free_person(shop, draft, MON)
     change = {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
 

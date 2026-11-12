@@ -152,8 +152,8 @@ def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], u
             assignment.employee_id = employee_id
             assignment.manual = True
             assignment.borrowed = employee_id is not None and home.get(employee_id) != str(assignment.shift.location_id)
-            if employee_id is None:
-                assignment.pinned = False  # a hole cannot be pinned
+            # A new person (or a hole) is not pinned until the manager pins it, as check_changes assumed.
+            assignment.pinned = False
             assignment.save(update_fields=["employee", "manual", "borrowed", "pinned"])
         save_scores(version, result.after)
     return result
