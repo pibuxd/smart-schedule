@@ -111,7 +111,7 @@ def test_flexible_shift_without_hours_stops_the_run_instead_of_hiding_it(shop):
     StaffingRule.objects.create(
         location=shop["location"], weekday=2, shift_type=nameless, position=shop["position"], count=1
     )
-    run = run_generation(request_generation(_ctx(shop), [shop["period"]]).pk, **FAST)
+    run = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST)
 
     assert run.status == GenerationRun.Status.FAILED
     assert "„Bez godzin”" in run.error and "Uzupełnij godziny" in run.error
@@ -243,7 +243,7 @@ def test_generate_saves_a_run_and_defers_the_job_together(api, shop):
     response = generate(api, shop["period"])
 
     assert response.status_code == 202, response.json()
-    body = response.json()
+    [body] = response.json()
     assert body["status"] == "queued" and body["versions"] == []
     run = GenerationRun.objects.get(pk=body["id"])
     job = ProcrastinateJob.objects.get(task_name="scheduling.solve_schedule")
@@ -264,7 +264,7 @@ def test_monthly_generation_limit(api, shop, settings):
     response = generate(api, shop["period"])
 
     assert response.status_code == 429
-    assert "limit 1" in response.json()["detail"]
+    assert "limit to 1 ułożeń" in response.json()["detail"]
 
 
 @pytest.mark.django_db
@@ -279,7 +279,7 @@ def test_read_only_company_and_employees_cannot_generate(api, shop, subscribe):
 
 @pytest.mark.django_db
 def test_other_company_gets_404_on_every_scheduling_endpoint(api, shop, make_company):
-    run = request_generation(_ctx(shop), [shop["period"]])
+    run = request_generation(_ctx(shop), [shop["period"]])[0]
     stranger = make_company("Obca")
     api.login(stranger["manager"])
 
@@ -325,7 +325,7 @@ def test_worker_arranges_the_schedule_and_saves_a_draft_version(api, shop, setti
     settings.SOLVER_WORKERS = 4
     api.login(shop["manager"])
     with transaction.atomic():
-        run_id = generate(api, shop["period"]).json()["id"]
+        run_id = generate(api, shop["period"]).json()[0]["id"]
 
     worker_app = app.with_connector(app.connector.get_worker_connector())
     worker_app.run_worker(queues=["solver"], wait=False, install_signal_handlers=False, listen_notify=False)
@@ -349,7 +349,7 @@ def test_worker_arranges_the_schedule_and_saves_a_draft_version(api, shop, setti
 @pytest.mark.django_db
 def test_failed_generation_gives_the_generation_back(shop):
     StaffingRule.objects.all().delete()
-    run = request_generation(_ctx(shop), [shop["period"]])
+    run = request_generation(_ctx(shop), [shop["period"]])[0]
     assert GenerationUsage.objects.get(company=shop["company"]).count == 1
 
     run = run_generation(run.pk, **FAST)
@@ -370,7 +370,7 @@ def test_impossible_no_exceptions_rule_fails_with_an_explanation(shop):
         for d in range(4)
     )
     RuleSetting.objects.create(location=shop["location"], rule_code="target_hours", position=1, is_hard=True)
-    run = request_generation(_ctx(shop), [shop["period"]])
+    run = request_generation(_ctx(shop), [shop["period"]])[0]
 
     run = run_generation(run.pk, **FAST)
 
@@ -384,7 +384,7 @@ def test_impossible_no_exceptions_rule_fails_with_an_explanation(shop):
 def test_holes_when_people_are_missing(shop):
     for person in shop["people"][1:]:
         person.positions.clear()
-    run = run_generation(request_generation(_ctx(shop), [shop["period"]]).pk, **FAST)
+    run = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST)
 
     version = run.versions.get()
     assert run.status == GenerationRun.Status.SUCCEEDED
@@ -395,7 +395,7 @@ def test_holes_when_people_are_missing(shop):
 
 @pytest.mark.django_db
 def test_stale_runs_are_failed(shop):
-    run = request_generation(_ctx(shop), [shop["period"]])
+    run = request_generation(_ctx(shop), [shop["period"]])[0]
     GenerationRun.objects.filter(pk=run.pk).update(
         status=GenerationRun.Status.RUNNING, started_at=timezone.now() - timedelta(hours=1)
     )
@@ -410,14 +410,14 @@ def test_stale_runs_are_failed(shop):
 @pytest.mark.django_db
 def test_regenerating_a_published_schedule_mid_period_keeps_the_past_and_most_of_the_rest(shop):
     period = shop["period"]
-    first = run_generation(request_generation(_ctx(shop), [period]).pk, **FAST).versions.get()
+    first = run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get()
     ScheduleVersion.objects.filter(pk=first.pk).update(status=ScheduleVersion.Status.PUBLISHED)
     before = dict(Assignment.objects.filter(shift__version=first).values_list("shift__slot_key", "employee"))
     # Ewa cannot work on Friday any more; we are on Wednesday.
     ewa = shop["people"][1]
     AvailabilityDay.objects.create(employee=ewa, date=MON + timedelta(days=4), state="cannot")
 
-    run = run_generation(request_generation(_ctx(shop), [period]).pk, today=MON + timedelta(days=2), **FAST)
+    run = run_generation(request_generation(_ctx(shop), [period])[0].pk, today=MON + timedelta(days=2), **FAST)
 
     second = run.versions.get()
     after = dict(Assignment.objects.filter(shift__version=second).values_list("shift__slot_key", "employee"))
@@ -431,29 +431,48 @@ def test_regenerating_a_published_schedule_mid_period_keeps_the_past_and_most_of
 
 
 @pytest.mark.django_db
-def test_whole_demo_group_in_one_run():
+def test_arrange_all_runs_each_demo_bakery_on_its_own():
     from apps.core.demo_data import BAKERY_COMPANY_ID, create_demo_data
+    from apps.tenancy.context import TenantContext
 
     create_demo_data(today=TODAY)
     periods = list(SchedulePeriod.objects.filter(company_id=BAKERY_COMPANY_ID).select_related("location"))
     manager = Membership.objects.get(company_id=BAKERY_COMPANY_ID, role="owner")
-    from apps.tenancy.context import TenantContext
 
-    run = request_generation(TenantContext(company=manager.company, membership=manager), periods)
-    run = run_generation(run.pk, time_limit_s=8, workers=4, today=TODAY)
+    runs = request_generation(TenantContext(company=manager.company, membership=manager), periods)
 
-    assert run.status == GenerationRun.Status.SUCCEEDED, run.error
-    versions = list(run.versions.all())
-    assert len(versions) == 4
-    built = build_problem(periods, today=TODAY)
-    schedule = {
-        key: str(employee) if employee else None
-        for key, employee in Assignment.objects.filter(shift__version__in=versions).values_list(
-            "shift__slot_key", "employee"
-        )
-    }
-    report = validate(built.problem, schedule)
-    assert report.ok
+    assert len(runs) == 4 and GenerationUsage.objects.get(company_id=BAKERY_COMPANY_ID).count == 4
+    worked = set()
+    for run in runs:
+        run = run_generation(run.pk, time_limit_s=4, workers=4, today=TODAY)
+        assert run.status == GenerationRun.Status.SUCCEEDED, run.error
+        [period] = run.periods.all()
+        assert run.location_id == period.location_id and run.group_id is None
+        version = run.versions.get()
+        schedule = {
+            key: str(employee) if employee else None
+            for key, employee in Assignment.objects.filter(shift__version=version).values_list(
+                "shift__slot_key", "employee"
+            )
+        }
+        report = validate(build_problem([period], today=TODAY).problem, schedule)
+        assert report.ok
+        worked |= {e for e, hours in report.hours.items() if hours > 0}
     # Employment-contract people (one shift lead and one baker per bakery) are in the schedule.
     employment = EmployeeProfile.objects.filter(company_id=BAKERY_COMPANY_ID, contract=Contract.EMPLOYMENT)
-    assert all(report.hours[str(e.id)] > 0 for e in employment)
+    assert {str(e.id) for e in employment} <= worked
+
+
+@pytest.mark.django_db
+def test_too_few_generations_left_for_all_locations(api, shop, settings, make_company):
+    settings.GENERATION_MONTHLY_LIMIT = 1
+    second = SchedulePeriod.objects.create(
+        location=shop["location"], start=MON + timedelta(days=7), end=MON + timedelta(days=13)
+    )
+    api.login(shop["manager"])
+
+    response = generate(api, shop["period"], second)
+
+    assert response.status_code == 429
+    assert "zostało 1, a potrzeba 2" in response.json()["detail"]
+    assert not GenerationRun.objects.exists()

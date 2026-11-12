@@ -1,7 +1,8 @@
 """Generating a schedule: asking for it (API), running it (worker) and saving the result as draft versions.
 
-- `request_generation` checks the manager, the read-only mode and the monthly limit, then saves a queued
-  `GenerationRun` and defers the solver job in one transaction (no job without a run, no run without a job).
+- `request_generation` checks the manager, the read-only mode and the monthly limit, then saves one queued
+  `GenerationRun` per location and defers its solver job in one transaction (no job without a run, no run
+  without a job). Locations are independent, so each is arranged on its own.
 - `run_generation` is what the worker does: build the `Problem`, solve it within the time limit, check the result
   with the independent validator and save one draft `ScheduleVersion` per location. A schedule that breaks a hard
   rule is never saved. It is safe to run twice: only a queued run is started.
@@ -22,7 +23,7 @@ from ninja.errors import HttpError
 
 from apps.billing.models import GenerationUsage
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
-from apps.scheduling.problem_builder import BuildError, BuiltProblem, build_problem, check_periods
+from apps.scheduling.problem_builder import BuildError, BuiltProblem, build_problem
 from apps.tenancy.context import TenantContext
 from apps.tenancy.models import Company
 from engine.scoring import score
@@ -49,12 +50,10 @@ def _month(now=None) -> date:
     return timezone.localdate(now or timezone.now()).replace(day=1)
 
 
-def request_generation(ctx: TenantContext, periods: Sequence[SchedulePeriod]) -> GenerationRun:
-    """Queue a generation for one period, or for the same dates in several locations of one group."""
-    try:
-        check_periods(periods)
-    except BuildError as exc:
-        raise HttpError(400, str(exc)) from exc
+def request_generation(ctx: TenantContext, periods: Sequence[SchedulePeriod]) -> list[GenerationRun]:
+    """Queue one generation per period. Locations are independent: each is arranged on its own, with its own
+    rules and weights, and each run counts toward the monthly limit ("arrange all" = one run per location)."""
+    periods = list({p.pk: p for p in periods}.values())
     for period in periods:
         ctx.require_manager_of(period.location)
     ctx.require_writable()
@@ -66,28 +65,26 @@ def request_generation(ctx: TenantContext, periods: Sequence[SchedulePeriod]) ->
         if busy:
             raise HttpError(409, "Grafik dla tego okresu już się układa. Poczekaj na wynik.")
         usage, _ = ctx.qs(GenerationUsage).get_or_create(company=ctx.company, month=_month())
-        if usage.count >= settings.GENERATION_MONTHLY_LIMIT:
+        limit = settings.GENERATION_MONTHLY_LIMIT
+        if usage.count + len(periods) > limit:
+            left = max(0, limit - usage.count)
             raise HttpError(
                 429,
-                f"W tym miesiącu wykorzystano już limit {settings.GENERATION_MONTHLY_LIMIT} ułożeń grafiku. "
+                f"W tym miesiącu limit to {limit} ułożeń grafiku i zostało {left}, a potrzeba {len(periods)}. "
                 "Nowe będą możliwe od pierwszego dnia kolejnego miesiąca.",
             )
-        usage.count = F("count") + 1
+        usage.count = F("count") + len(periods)
         usage.save(update_fields=["count"])
-
-        first = periods[0].location
-        run = GenerationRun.objects.create(
-            company=ctx.company,
-            location=first if len(periods) == 1 else None,
-            group_id=None if len(periods) == 1 else first.group_id,
-            requested_by=ctx.user,
-        )
-        run.periods.set(periods)
 
         from apps.scheduling.tasks import solve_schedule  # tasks import this module
 
-        solve_schedule.defer(run_id=str(run.pk))
-    return run
+        runs = []
+        for period in periods:
+            run = GenerationRun.objects.create(company=ctx.company, location=period.location, requested_by=ctx.user)
+            run.periods.set([period])
+            solve_schedule.defer(run_id=str(run.pk))
+            runs.append(run)
+    return runs
 
 
 def _give_back_generation(run: GenerationRun) -> None:

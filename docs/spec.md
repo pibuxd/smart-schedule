@@ -36,8 +36,10 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 1. Dane lokalu w formularzach: stanowiska, typy zmian z godzinami (stałe lub dowolne, także przez północ), obsada według stanowisk dla dnia tygodnia i typu zmiany z wyjątkami na daty, okres grafiku (tydzień lub miesiąc), termin dyspozycji, pracownicy (stanowiska, typ umowy, osobiste maksimum i cel godzin). Aplikacja niczego z tego nie zakłada z góry.
 2. Przegląd dyspozycji: siatka pracownicy x dni, lista próśb z interpretacją (menedżer może prośbę odrzucić albo oznaczyć jako ważniejszą lub mniej ważną), lista osób bez zgłoszonej dyspozycji.
 3. Zasady lokalu: gotowa lista z przełącznikami i licznikami; kolejność na liście = ważność; każdą zasadę można oznaczyć "bez wyjątków" (twarda). Przed zapisaniem pokaż skutek zmiany na danych z ostatniego okresu, np. "przez tę zasadę 6 próśb nie zostałoby spełnionych".
-4. Generowanie grafiku dla lokalu lub całej grupy; wynik z oceną i wyjaśnieniami; ręczna edycja (przeciąganie, przypinanie) z walidacją na żywo przez endpoint; publikacja z wersjami.
-5. Podsumowanie godzin w miesiącu z podziałem na lokale, eksport CSV.
+4. Generowanie grafiku osobno dla każdego lokalu (lokale są od siebie niezależne: każdy ma własne zasady i wagi; "ułóż dla wszystkich" uruchamia osobne generowanie dla każdego lokalu). Lokale zależą od siebie tylko wtedy, gdy kierownik tak powie w poleceniu dla asystenta. Wynik z oceną i wyjaśnieniami; ręczna edycja (przeciąganie, przypinanie) z walidacją na żywo przez endpoint; publikacja z wersjami.
+5. Ponowne generowanie układa od nowa wszystko poza zmianami przypiętymi i dniami, które minęły: nieprzypięte ręczne poprawki znikają. Kierownik, który chce coś zmienić w wyniku, pisze polecenie dla asystenta (LLM), a ten zamienia je na zasady i ich ważność.
+6. Okres grafiku: kierownik wpisuje daty okresu i dzień, w którym będzie układał grafik. Może jednym przyciskiem poprosić wszystkich pracowników lokalu o dyspozycje (powiadomienie w aplikacji z okresem i terminem).
+7. Podsumowanie godzin w miesiącu z podziałem na lokale, eksport CSV.
 
 ## Typy umów i reguły
 
@@ -56,7 +58,7 @@ d) Ocena pokazywana menedżerowi to trzy osobne wartości, liczone tym samym wzo
 e) Niezależny walidator w Pythonie (osobny od solvera, pytest z przypadkami granicznymi) sprawdza każdy wariant i ma ostatnie słowo. Ten sam walidator obsługuje endpoint walidacji przy ręcznej edycji.
 f) Stabilność: przy ponownym generowaniu w trakcie okresu kara za każdą zmianę względem opublikowanego grafiku, żeby jedna nieobecność nie przetasowała całego miesiąca. Dni, które minęły, są zamrożone.
 g) Wyjaśnienia: szybkie sprawdzenie bezpośrednich przyczyn (dyspozycyjność, limit godzin, odpoczynek, stanowisko) bez ponownego uruchamiania solvera dla każdej prośby. Głębsza analiza tylko na żądanie menedżera.
-h) LLM (Claude, Anthropic Python SDK, structured outputs) tylko zamienia prośby tekstem na strukturę: typ z zamkniętej listy (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, inne), kogo dotyczy, daty, poziom (bardzo_wazne / wazne / mile_widziane), pewność 0-1, opis jednym zdaniem. Do LLM wysyłaj tylko treść prośby i imiona z danego lokalu. Bez klucza API (zmienna ANTHROPIC_API_KEY) lub przy niskiej pewności prośba trafia do menedżera bez interpretacji.
+h) Kierownik dostosowuje generator poleceniami tekstem do asystenta (LLM): zasady, ich ważność, powiązania między lokalami i poprawki wyniku; asystent zamienia polecenie na ustawienia z katalogu zasad, nigdy nie układa grafiku sam. Docelowo wszystko ma być ustawialne poleceniem. Prośby pracowników LLM zamienia na strukturę: typ z zamkniętej listy (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, inne), kogo dotyczy, daty, poziom (bardzo_wazne / wazne / mile_widziane), pewność 0-1, opis jednym zdaniem. Do LLM wysyłaj tylko treść prośby i imiona z danego lokalu. Bez klucza API (zmienna ANTHROPIC_API_KEY) lub przy niskiej pewności prośba trafia do menedżera bez interpretacji.
 
 ## Logowanie i zaproszenia
 

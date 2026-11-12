@@ -994,17 +994,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenerationRunOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
+                  "items": {
+                    "$ref": "#/components/schemas/GenerationRunOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
                 }
               }
             }
@@ -1060,7 +1054,7 @@
             }
           }
         },
-        "description": "Start arranging a schedule. Answers at once; poll `GET /generation-runs/{id}` for the result.",
+        "description": "Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.",
         "tags": [
           "scheduling"
         ],

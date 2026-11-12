@@ -303,13 +303,8 @@ export const useCreatePeriod = <TError = ErrorOut,
       return useMutation(getCreatePeriodMutationOptions(options), queryClient);
     }
     export type generateScheduleResponse202 = {
-  data: GenerationRunOut
+  data: GenerationRunOut[]
   status: 202
-}
-
-export type generateScheduleResponse400 = {
-  data: ErrorOut
-  status: 400
 }
 
 export type generateScheduleResponse402 = {
@@ -340,7 +335,7 @@ export type generateScheduleResponse429 = {
 export type generateScheduleResponseSuccess = (generateScheduleResponse202) & {
   headers: Headers;
 };
-export type generateScheduleResponseError = (generateScheduleResponse400 | generateScheduleResponse402 | generateScheduleResponse403 | generateScheduleResponse404 | generateScheduleResponse409 | generateScheduleResponse429) & {
+export type generateScheduleResponseError = (generateScheduleResponse402 | generateScheduleResponse403 | generateScheduleResponse404 | generateScheduleResponse409 | generateScheduleResponse429) & {
   headers: Headers;
 };
 
@@ -355,7 +350,7 @@ export const getGenerateScheduleUrl = () => {
 }
 
 /**
- * Start arranging a schedule. Answers at once; poll `GET /generation-runs/{id}` for the result.
+ * Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.
  * @summary Generate Schedule
  */
 export const generateSchedule = async (generateIn: GenerateIn, options?: Parameters<typeof apiFetch>[1]): Promise<generateScheduleResponse> => {
@@ -422,7 +417,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type GenerateScheduleMutationVariables = {data: GenerateIn}
 
     /**
- * Start arranging a schedule. Answers at once; poll `GET /generation-runs/{id}` for the result.
+ * Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.
  * @summary Generate Schedule
  */
 export const useGenerateSchedule = <TError = ErrorOut,

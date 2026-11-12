@@ -41,7 +41,7 @@ class PeriodOut(Schema):
 
 
 class GenerateIn(Schema):
-    # One period, or the periods with the same dates of several locations of one group.
+    # One period, or periods of several locations ("arrange all"): each location gets its own run.
     period_ids: list[UUID] = Field(min_length=1, max_length=50)
 
 
@@ -155,8 +155,7 @@ def create_period(request, location_id: UUID, payload: PeriodIn):
 @router.post(
     "/periods/generate",
     response={
-        202: GenerationRunOut,
-        400: ErrorOut,
+        202: list[GenerationRunOut],
         402: ErrorOut,
         403: ErrorOut,
         404: ErrorOut,
@@ -165,12 +164,12 @@ def create_period(request, location_id: UUID, payload: PeriodIn):
     },
 )
 def generate_schedule(request, payload: GenerateIn):
-    """Start arranging a schedule. Answers at once; poll `GET /generation-runs/{id}` for the result."""
+    """Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`."""
     ids = list(dict.fromkeys(payload.period_ids))
     ctx, first = context_for(request, SchedulePeriod, ids[0])
     periods = [first] + [ctx.get(SchedulePeriod, pk=pk) for pk in ids[1:]]
-    run = request_generation(ctx, periods)
-    return Status(202, _run_out(run))
+    runs = request_generation(ctx, periods)
+    return Status(202, [_run_out(run) for run in runs])
 
 
 @router.get("/generation-runs/{run_id}", response={200: GenerationRunOut, 403: ErrorOut, 404: ErrorOut})
