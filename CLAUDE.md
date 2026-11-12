@@ -44,6 +44,7 @@ uv run python manage.py seed_demo [--reset]              # demo data: 4 bakeries
 DJANGO_DEBUG=1 uv run python manage.py runserver          # API on :8000
 DJANGO_DEBUG=1 uv run python manage.py procrastinate worker
 uv run pytest                                             # tests (need Postgres)
+DJANGO_DEBUG=1 uv run pytest tests/engine                 # engine tests only, no database needed
 uv run ruff check . && uv run ruff format --check .       # lint
 uv run python manage.py makemigrations --check --dry-run
 ```
@@ -84,6 +85,10 @@ cd ../frontend && npm run api:generate
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
 - Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.
+  Each catalog rule needs a `rule_<code>` method in `engine/validator.py` (a test checks it).
+- Engine: the Django layer builds an `engine.problem.Problem`; `engine.validator.validate` checks a schedule and
+  `engine.scoring.score` turns the report into the three numbers. Durations always in UTC, dates in local time.
+  Violation messages are Polish sentences for the manager.
 - Background tasks live in `apps/<app>/tasks.py` (auto-discovered). Solver jobs go to queue `solver`, the rest to `default`.
 - Do not edit generated files: `frontend/src/api/generated/**`, `frontend/src/routeTree.gen.ts`.
 - Frontend calls the API only through the generated hooks; `src/api/http.ts` adds the session cookie and CSRF token.
