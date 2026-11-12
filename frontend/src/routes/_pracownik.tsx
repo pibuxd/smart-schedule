@@ -49,13 +49,13 @@ function EmployeeLayout() {
     <EmployeeContext.Provider value={{ companyId: company.id, readOnly: company.read_only }}>
       <div className="pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0">
         <header className="mx-auto grid max-w-(--column) gap-3 px-4 pt-4">
-          <div className="flex min-w-0 items-center justify-between gap-3 text-sm text-ink-muted">
+          <div className="flex min-w-0 items-center justify-between gap-3 text-base text-ink-muted">
             <span className="min-w-0 truncate">
               {`${me.first_name} ${me.last_name}`.trim() || 'Twoje konto'}
               {me.companies.length > 1 && (
                 <select
                   aria-label="Firma"
-                  className="ml-2 min-h-(--touch) rounded-sm border border-line bg-surface px-2 text-sm"
+                  className="ml-2 min-h-(--touch) rounded-sm border border-line bg-surface px-2 text-base"
                   value={company.id}
                   onChange={(event) => session.chooseCompany(event.target.value)}
                 >
@@ -96,7 +96,7 @@ function EmployeeLayout() {
             <Link
               key={to}
               to={to}
-              className="relative grid min-h-16 place-items-center gap-0.5 py-2 text-sm font-semibold"
+              className="relative grid min-h-16 place-items-center gap-0.5 py-2 text-base font-semibold"
               inactiveProps={{ className: 'text-ink-muted' }}
               activeProps={{
                 className:
