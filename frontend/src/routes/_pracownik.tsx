@@ -49,7 +49,7 @@ function EmployeeLayout() {
     <EmployeeContext.Provider value={{ companyId: company.id, readOnly: company.read_only }}>
       <div className="pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0">
         <header className="mx-auto grid max-w-(--column) gap-3 px-4 pt-4">
-          <div className="flex items-center justify-between gap-3 text-sm text-ink-muted">
+          <div className="flex min-w-0 items-center justify-between gap-3 text-sm text-ink-muted">
             <span className="min-w-0 truncate">
               {`${me.first_name} ${me.last_name}`.trim() || 'Twoje konto'}
               {me.companies.length > 1 && (
@@ -71,7 +71,7 @@ function EmployeeLayout() {
             <button
               type="button"
               onClick={signOut}
-              className="min-h-(--touch) cursor-pointer rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
+              className="min-h-(--touch) shrink-0 cursor-pointer rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
             >
               Wyloguj
             </button>

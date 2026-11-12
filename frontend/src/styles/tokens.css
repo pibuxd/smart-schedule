@@ -34,10 +34,11 @@
   --font-sans: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible', 'Segoe UI', Roboto, system-ui, sans-serif;
 
   --text-*: initial;
-  /* Only for the hours inside a calendar day ("14–22"); every other text is 16 px or more. */
-  --text-cell: 13px;
+  /* Body text is 18 px (spec). Smaller sizes are only for short labels: the hours inside a calendar day
+     ("14–22", also listed full size under the calendar), weekday headers and week labels. */
+  --text-cell: 15px;
   --text-cell--line-height: 1;
-  --text-xs: 14px;
+  --text-xs: 15px;
   --text-xs--line-height: 1.35;
   --text-sm: 16px;
   --text-sm--line-height: 1.4;

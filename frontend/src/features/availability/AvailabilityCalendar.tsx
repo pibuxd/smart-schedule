@@ -131,7 +131,7 @@ function DayCell({
         aria-disabled={disabled || undefined}
         className={cn(
           `avail-${mark.state}`,
-          'grid h-16 w-full min-w-0 cursor-pointer grid-rows-[auto_1fr_auto] justify-items-center rounded-sm border-2 px-0 py-1',
+          'grid h-full min-h-16 w-full min-w-0 cursor-pointer grid-rows-[auto_1fr_auto] justify-items-center rounded-sm border-2 px-0 py-1',
           'transition-colors duration-75',
           disabled && 'cursor-default opacity-75',
         )}
@@ -142,7 +142,7 @@ function DayCell({
         <span className={cn('self-center', mark.state === 'neutral' && 'text-line')}>
           <StateIcon state={mark.state} size={hours ? 16 : 20} />
         </span>
-        {hours && <span className="text-cell font-semibold tabular-nums">{hours}</span>}
+        {hours && <span className="text-center text-cell font-semibold tabular-nums">{hours}</span>}
       </button>
     </div>
   )
