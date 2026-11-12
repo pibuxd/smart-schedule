@@ -7,6 +7,7 @@ Availability can be changed only while the period is collecting availability.
 from datetime import date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
@@ -103,10 +104,6 @@ class MyRequestOut(Schema):
     created_at: datetime
 
 
-def _deadline(period: SchedulePeriod) -> date:
-    return period.start - timedelta(days=period.location.availability_deadline_days)
-
-
 def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
     return AvailabilityPeriodOut(
         id=period.id,
@@ -114,7 +111,7 @@ def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
         start=period.start,
         end=period.end,
         status=period.status,
-        deadline=_deadline(period),
+        deadline=period.deadline,
         editable=period.status == SchedulePeriod.Status.COLLECTING,
     )
 
@@ -331,3 +328,155 @@ def delete_my_request(request, request_id: UUID):
         raise HttpError(409, CLOSED)
     text_request.delete()
     return Status(204, None)
+
+
+# --- The manager's side: who marked what, who has not finished, requests in words ---------------------------
+
+PriorityName = Literal["lower", "normal", "higher"]
+
+
+class GridPeriodOut(Schema):
+    id: UUID
+    location_id: UUID
+    location_name: str
+    start: date
+    end: date
+    status: PeriodStatusName
+    deadline: date
+    requested_at: datetime | None
+
+
+class GridDayOut(AvailabilityDayOut):
+    # Marked or changed after the deadline day (the manager decides whether to take it into account).
+    late: bool
+
+
+class GridEmployeeOut(Schema):
+    id: UUID
+    name: str
+    positions: list[str]
+    submitted_at: datetime | None
+    days: list[GridDayOut]
+    late_days: int
+
+
+class AvailabilityGridOut(Schema):
+    period: GridPeriodOut
+    employees: list[GridEmployeeOut]
+
+
+class ManagerRequestOut(Schema):
+    id: UUID
+    employee_id: UUID
+    employee_name: str
+    text: str
+    status: RequestStatusName
+    # How the assistant understood it (stage 10); None until then.
+    summary: str | None
+    manager_priority: PriorityName
+    manager_rejected: bool
+    created_at: datetime
+
+
+class RequestDecisionIn(Schema):
+    manager_priority: PriorityName | None = None
+    manager_rejected: bool | None = None
+
+
+def _managed_period(request, period_id: UUID) -> tuple[TenantContext, SchedulePeriod]:
+    ctx, period = context_for(request, SchedulePeriod, period_id)
+    ctx.require_manager_of(period.location)
+    return ctx, period
+
+
+def late_after(period: SchedulePeriod) -> datetime:
+    """Changes from this moment on are "after the deadline": the day after the deadline, midnight local time."""
+    tz = ZoneInfo(period.location.timezone)
+    return datetime.combine(period.deadline + timedelta(days=1), time(0), tzinfo=tz)
+
+
+@router.get("/periods/{period_id}/availability", response={200: AvailabilityGridOut, 403: ErrorOut, 404: ErrorOut})
+def availability_grid(request, period_id: UUID):
+    """Employees × days of the period: what each person marked, who finished, what changed after the deadline."""
+    ctx, period = _managed_period(request, period_id)
+    profiles = list(
+        ctx.qs(EmployeeProfile)
+        .filter(home_location=period.location, is_active=True)
+        .select_related("membership__user")
+        .prefetch_related("positions")
+        .order_by("membership__user__last_name", "membership__user__first_name")
+    )
+    days: dict = {p.pk: [] for p in profiles}
+    cutoff = late_after(period)
+    rows = ctx.qs(AvailabilityDay).filter(employee__in=profiles, date__gte=period.start, date__lte=period.end)
+    for row in rows.order_by("date"):
+        days[row.employee_id].append(
+            GridDayOut(
+                date=row.date,
+                state=row.state,
+                from_time=row.from_time,
+                to_time=row.to_time,
+                late=row.updated_at >= cutoff,
+            )
+        )
+    submitted = dict(ctx.qs(AvailabilitySubmission).filter(period=period).values_list("employee_id", "submitted_at"))
+    return AvailabilityGridOut(
+        period=GridPeriodOut(
+            id=period.pk,
+            location_id=period.location_id,
+            location_name=period.location.name,
+            start=period.start,
+            end=period.end,
+            status=period.status,
+            deadline=period.deadline,
+            requested_at=period.availability_requested_at,
+        ),
+        employees=[
+            GridEmployeeOut(
+                id=p.pk,
+                name=p.membership.user.full_name or "Bez imienia",
+                positions=sorted(pos.name for pos in p.positions.all()),
+                submitted_at=submitted.get(p.pk),
+                days=days[p.pk],
+                late_days=sum(1 for d in days[p.pk] if d.late),
+            )
+            for p in profiles
+        ],
+    )
+
+
+def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
+    summary = (row.interpretation or {}).get("summary") if row.status == TextRequest.Status.INTERPRETED else None
+    return ManagerRequestOut(
+        id=row.pk,
+        employee_id=row.employee_id,
+        employee_name=row.employee.membership.user.full_name or "Bez imienia",
+        text=row.text,
+        status=row.status,
+        summary=str(summary) if summary else None,
+        manager_priority=row.manager_priority,
+        manager_rejected=row.manager_rejected,
+        created_at=row.created_at,
+    )
+
+
+@router.get("/periods/{period_id}/requests", response={200: list[ManagerRequestOut], 403: ErrorOut, 404: ErrorOut})
+def period_requests(request, period_id: UUID):
+    """Requests in words for this period, oldest first. Only managers see them."""
+    ctx, period = _managed_period(request, period_id)
+    rows = ctx.qs(TextRequest).filter(period=period).select_related("employee__membership__user")
+    return [_manager_request_out(r) for r in rows.order_by("created_at")]
+
+
+@router.patch("/requests/{request_id}", response={200: ManagerRequestOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut})
+def update_request(request, request_id: UUID, payload: RequestDecisionIn):
+    """The manager rejects a request, or marks it as more or less important than usual."""
+    ctx, row = context_for(request, TextRequest, request_id)
+    ctx.require_manager_of(row.period.location)
+    ctx.require_writable()
+    if payload.manager_priority is not None:
+        row.manager_priority = payload.manager_priority
+    if payload.manager_rejected is not None:
+        row.manager_rejected = payload.manager_rejected
+    row.save(update_fields=["manager_priority", "manager_rejected", "updated_at"])
+    return _manager_request_out(row)

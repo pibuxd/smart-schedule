@@ -16,6 +16,7 @@ from apps.core.schemas import ErrorOut
 from apps.scheduling.generation import request_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
+from apps.staffing.models import EmployeeProfile
 from apps.tenancy.context import context_for
 from apps.tenancy.models import Location
 
@@ -32,6 +33,13 @@ SolverStatus = Literal["", "optimal", "feasible", "timeout_no_solution", "infeas
 class PeriodIn(Schema):
     start: date
     end: date
+    # The day the manager will arrange the schedule = the last day to mark availability.
+    # Left out: the location's default number of days before the start.
+    availability_deadline: date | None = None
+
+
+class PeriodUpdateIn(Schema):
+    availability_deadline: date
 
 
 class PeriodOut(Schema):
@@ -40,8 +48,21 @@ class PeriodOut(Schema):
     start: date
     end: date
     status: PeriodStatus
+    deadline: date
+    # When the employees were last asked for their availability (None: not yet).
+    availability_requested_at: datetime | None
     published_version_id: UUID | None
     latest_version_id: UUID | None
+
+
+class AskAvailabilityIn(Schema):
+    # True: remind only those who have not finished marking yet.
+    only_missing: bool = False
+
+
+class AskAvailabilityOut(Schema):
+    period: PeriodOut
+    notified: int
 
 
 class GenerateIn(Schema):
@@ -95,6 +116,8 @@ def _period_out(period: SchedulePeriod) -> PeriodOut:
         start=period.start,
         end=period.end,
         status=period.status,
+        deadline=period.deadline,
+        availability_requested_at=period.availability_requested_at,
         published_version_id=published,
         latest_version_id=versions[0][0] if versions else None,
     )
@@ -145,15 +168,79 @@ def create_period(request, location_id: UUID, payload: PeriodIn):
         raise HttpError(400, "Koniec okresu nie może być przed jego początkiem.")
     if payload.end - payload.start >= timedelta(days=MAX_PERIOD_DAYS):
         raise HttpError(400, f"Okres grafiku może mieć najwyżej {MAX_PERIOD_DAYS} dni.")
+    if payload.availability_deadline is not None:
+        _check_deadline(payload.availability_deadline, payload.start)
     with transaction.atomic():
         Location.objects.for_company(ctx.company).select_for_update().get(pk=location.pk)
         overlapping = ctx.qs(SchedulePeriod).filter(location=location, start__lte=payload.end, end__gte=payload.start)
         if overlapping.exists():
             raise HttpError(409, "Ten lokal ma już okres grafiku obejmujący część tych dni.")
         period = SchedulePeriod.objects.for_company(ctx.company).create(
-            company=ctx.company, location=location, start=payload.start, end=payload.end
+            company=ctx.company,
+            location=location,
+            start=payload.start,
+            end=payload.end,
+            availability_deadline=payload.availability_deadline,
         )
     return Status(201, _period_out(period))
+
+
+def _check_deadline(deadline: date, start: date) -> None:
+    if deadline > start:
+        raise HttpError(400, "Termin dyspozycji musi być najpóźniej w pierwszym dniu okresu.")
+
+
+@router.patch(
+    "/periods/{uuid:period_id}",
+    response={200: PeriodOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def update_period(request, period_id: UUID, payload: PeriodUpdateIn):
+    """Move the availability deadline (the day the manager will arrange the schedule)."""
+    ctx, period = context_for(request, SchedulePeriod, period_id)
+    ctx.require_manager_of(period.location)
+    ctx.require_writable()
+    _check_deadline(payload.availability_deadline, period.start)
+    period.availability_deadline = payload.availability_deadline
+    period.save(update_fields=["availability_deadline"])
+    return _period_out(period)
+
+
+@router.post(
+    "/periods/{period_id}/ask-availability",
+    response={200: AskAvailabilityOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
+    """ "Poproś o dyspozycje": an in-app notice with the period and the deadline for every active employee of the
+    location (or only those who have not finished). Nothing is arranged automatically: the manager arranges the
+    schedule when the deadline has passed or everyone has answered."""
+    from apps.availability.models import AvailabilitySubmission
+    from apps.notifications.models import Notification
+
+    ctx, period = context_for(request, SchedulePeriod, period_id)
+    ctx.require_manager_of(period.location)
+    ctx.require_writable()
+    if period.status != SchedulePeriod.Status.COLLECTING:
+        raise HttpError(409, "Grafik na ten okres jest już ułożony, więc nie zbieramy dyspozycji.")
+    people = ctx.qs(EmployeeProfile).filter(home_location=period.location, is_active=True)
+    if payload.only_missing:
+        done = ctx.qs(AvailabilitySubmission).filter(period=period).values_list("employee_id", flat=True)
+        people = people.exclude(pk__in=list(done))
+    user_ids = list(people.values_list("membership__user_id", flat=True))
+    note = {
+        "period_id": str(period.pk),
+        "location_name": period.location.name,
+        "start": period.start.isoformat(),
+        "end": period.end.isoformat(),
+        "deadline": period.deadline.isoformat(),
+    }
+    with transaction.atomic():
+        Notification.objects.for_company(ctx.company).bulk_create(
+            Notification(company=ctx.company, user_id=user_id, kind="availability_requested", payload=note)
+            for user_id in user_ids
+        )
+        period.availability_requested_at = timezone.now()
+        period.save(update_fields=["availability_requested_at"])
+    return AskAvailabilityOut(period=_period_out(period), notified=len(user_ids))
 
 
 @router.post(

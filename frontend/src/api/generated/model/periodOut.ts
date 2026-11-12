@@ -12,6 +12,8 @@ export interface PeriodOut {
   start: string;
   end: string;
   status: PeriodOutStatus;
+  deadline: string;
+  availability_requested_at: string | null;
   published_version_id: string | null;
   latest_version_id: string | null;
 }

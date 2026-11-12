@@ -2,6 +2,7 @@ import { createFileRoute, Navigate } from '@tanstack/react-router'
 
 import { ErrorState, Loading } from '../components/ui/status'
 import { useSession } from '../features/auth/session'
+import { isManagerRole } from '../features/manager/ManagerContext'
 
 export const Route = createFileRoute('/')({
   component: StartPage,
@@ -22,5 +23,6 @@ function StartPage() {
     )
   }
   if (session.me.pending_invitations > 0 || !session.company) return <Navigate to="/zaproszenia" replace />
+  if (session.me.companies.some((c) => isManagerRole(c.role))) return <Navigate to="/kierownik" replace />
   return <Navigate to="/grafik" replace />
 }

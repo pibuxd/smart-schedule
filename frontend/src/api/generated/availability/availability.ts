@@ -24,14 +24,17 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AvailabilityGridOut,
   AvailabilityIn,
   ErrorOut,
+  ManagerRequestOut,
   MyAvailabilityOut,
   MyAvailabilityParams,
   MyRequestOut,
   MyRequestsParams,
   PatternIn,
   PeriodRefIn,
+  RequestDecisionIn,
   RequestIn
 } from '../model';
 
@@ -1035,4 +1038,397 @@ export const useDeleteMyRequest = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getDeleteMyRequestMutationOptions(options), queryClient);
+    }
+    export type availabilityGridResponse200 = {
+  data: AvailabilityGridOut
+  status: 200
+}
+
+export type availabilityGridResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type availabilityGridResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type availabilityGridResponseSuccess = (availabilityGridResponse200) & {
+  headers: Headers;
+};
+export type availabilityGridResponseError = (availabilityGridResponse403 | availabilityGridResponse404) & {
+  headers: Headers;
+};
+
+export type availabilityGridResponse = (availabilityGridResponseSuccess | availabilityGridResponseError)
+
+export const getAvailabilityGridUrl = (periodId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}/availability`
+}
+
+/**
+ * Employees × days of the period: what each person marked, who finished, what changed after the deadline.
+ * @summary Availability Grid
+ */
+export const availabilityGrid = async (periodId: string, options?: Parameters<typeof apiFetch>[1]): Promise<availabilityGridResponse> => {
+
+  return apiFetch<availabilityGridResponse>(getAvailabilityGridUrl(periodId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAvailabilityGridQueryKey = (periodId: string,) => {
+    return [
+    `/api/periods/${periodId}/availability`
+    ] as const;
+    }
+
+
+export const getAvailabilityGridQueryOptions = <TData = Awaited<ReturnType<typeof availabilityGrid>>, TError = ErrorOut>(periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof availabilityGrid>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAvailabilityGridQueryKey(periodId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof availabilityGrid>>> = ({ signal }) => availabilityGrid(periodId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: periodId !== null && periodId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof availabilityGrid>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AvailabilityGridQueryResult = NonNullable<Awaited<ReturnType<typeof availabilityGrid>>>
+export type AvailabilityGridQueryError = ErrorOut
+
+
+/**
+ * Employees × days of the period: what each person marked, who finished, what changed after the deadline.
+ * @summary Availability Grid
+ */
+export function useAvailabilityGrid<TData = Awaited<ReturnType<typeof availabilityGrid>>, TError = ErrorOut>(
+ periodId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof availabilityGrid>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof availabilityGrid>>,
+          TError,
+          Awaited<ReturnType<typeof availabilityGrid>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Employees × days of the period: what each person marked, who finished, what changed after the deadline.
+ * @summary Availability Grid
+ */
+export function useAvailabilityGrid<TData = Awaited<ReturnType<typeof availabilityGrid>>, TError = ErrorOut>(
+ periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof availabilityGrid>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof availabilityGrid>>,
+          TError,
+          Awaited<ReturnType<typeof availabilityGrid>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Employees × days of the period: what each person marked, who finished, what changed after the deadline.
+ * @summary Availability Grid
+ */
+export function useAvailabilityGrid<TData = Awaited<ReturnType<typeof availabilityGrid>>, TError = ErrorOut>(
+ periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof availabilityGrid>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Employees × days of the period: what each person marked, who finished, what changed after the deadline.
+ * @summary Availability Grid
+ */
+export function useAvailabilityGrid<TData = Awaited<ReturnType<typeof availabilityGrid>>, TError = ErrorOut>(
+ periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof availabilityGrid>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getAvailabilityGridQueryOptions(periodId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type periodRequestsResponse200 = {
+  data: ManagerRequestOut[]
+  status: 200
+}
+
+export type periodRequestsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type periodRequestsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type periodRequestsResponseSuccess = (periodRequestsResponse200) & {
+  headers: Headers;
+};
+export type periodRequestsResponseError = (periodRequestsResponse403 | periodRequestsResponse404) & {
+  headers: Headers;
+};
+
+export type periodRequestsResponse = (periodRequestsResponseSuccess | periodRequestsResponseError)
+
+export const getPeriodRequestsUrl = (periodId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}/requests`
+}
+
+/**
+ * Requests in words for this period, oldest first. Only managers see them.
+ * @summary Period Requests
+ */
+export const periodRequests = async (periodId: string, options?: Parameters<typeof apiFetch>[1]): Promise<periodRequestsResponse> => {
+
+  return apiFetch<periodRequestsResponse>(getPeriodRequestsUrl(periodId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getPeriodRequestsQueryKey = (periodId: string,) => {
+    return [
+    `/api/periods/${periodId}/requests`
+    ] as const;
+    }
+
+
+export const getPeriodRequestsQueryOptions = <TData = Awaited<ReturnType<typeof periodRequests>>, TError = ErrorOut>(periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof periodRequests>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPeriodRequestsQueryKey(periodId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof periodRequests>>> = ({ signal }) => periodRequests(periodId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: periodId !== null && periodId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof periodRequests>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PeriodRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof periodRequests>>>
+export type PeriodRequestsQueryError = ErrorOut
+
+
+/**
+ * Requests in words for this period, oldest first. Only managers see them.
+ * @summary Period Requests
+ */
+export function usePeriodRequests<TData = Awaited<ReturnType<typeof periodRequests>>, TError = ErrorOut>(
+ periodId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof periodRequests>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof periodRequests>>,
+          TError,
+          Awaited<ReturnType<typeof periodRequests>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Requests in words for this period, oldest first. Only managers see them.
+ * @summary Period Requests
+ */
+export function usePeriodRequests<TData = Awaited<ReturnType<typeof periodRequests>>, TError = ErrorOut>(
+ periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof periodRequests>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof periodRequests>>,
+          TError,
+          Awaited<ReturnType<typeof periodRequests>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Requests in words for this period, oldest first. Only managers see them.
+ * @summary Period Requests
+ */
+export function usePeriodRequests<TData = Awaited<ReturnType<typeof periodRequests>>, TError = ErrorOut>(
+ periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof periodRequests>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Requests in words for this period, oldest first. Only managers see them.
+ * @summary Period Requests
+ */
+export function usePeriodRequests<TData = Awaited<ReturnType<typeof periodRequests>>, TError = ErrorOut>(
+ periodId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof periodRequests>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPeriodRequestsQueryOptions(periodId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type updateRequestResponse200 = {
+  data: ManagerRequestOut
+  status: 200
+}
+
+export type updateRequestResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type updateRequestResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type updateRequestResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type updateRequestResponseSuccess = (updateRequestResponse200) & {
+  headers: Headers;
+};
+export type updateRequestResponseError = (updateRequestResponse402 | updateRequestResponse403 | updateRequestResponse404) & {
+  headers: Headers;
+};
+
+export type updateRequestResponse = (updateRequestResponseSuccess | updateRequestResponseError)
+
+export const getUpdateRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/requests/${requestId}`
+}
+
+/**
+ * The manager rejects a request, or marks it as more or less important than usual.
+ * @summary Update Request
+ */
+export const updateRequest = async (requestId: string,
+    requestDecisionIn: RequestDecisionIn, options?: Parameters<typeof apiFetch>[1]): Promise<updateRequestResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<updateRequestResponse>(getUpdateRequestUrl(requestId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(requestDecisionIn)
+  }
+);}
+
+
+
+
+
+export const getUpdateRequestMutationKey = () => ['updateRequest'] as const;
+
+export const getUpdateRequestMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRequest>>, TError,UpdateRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateRequest>>, TError,UpdateRequestMutationVariables, TContext> => {
+
+const mutationKey = getUpdateRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRequest>>, UpdateRequestMutationVariables> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  updateRequest(requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateRequestMutationResult = NonNullable<Awaited<ReturnType<typeof updateRequest>>>
+    export type UpdateRequestMutationBody = RequestDecisionIn
+    export type UpdateRequestMutationError = ErrorOut
+    export type UpdateRequestMutationVariables = {requestId: string;data: RequestDecisionIn}
+
+    /**
+ * The manager rejects a request, or marks it as more or less important than usual.
+ * @summary Update Request
+ */
+export const useUpdateRequest = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRequest>>, TError,UpdateRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateRequest>>,
+        TError,
+        UpdateRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateRequestMutationOptions(options), queryClient);
     }

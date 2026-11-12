@@ -27,8 +27,15 @@ import type {
   CompanyIn,
   CompanyOut,
   ErrorOut,
+  GroupIn,
+  GroupOut,
   InvitationIn,
   InvitationOut,
+  LocationIn,
+  LocationOut,
+  LocationUpdateIn,
+  ManagerOverviewOut,
+  ManagerOverviewParams,
   MyInvitationOut
 } from '../model';
 
@@ -851,4 +858,653 @@ export const useCancelInvitation = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getCancelInvitationMutationOptions(options), queryClient);
+    }
+    export type managerOverviewResponse200 = {
+  data: ManagerOverviewOut
+  status: 200
+}
+
+export type managerOverviewResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type managerOverviewResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type managerOverviewResponseSuccess = (managerOverviewResponse200) & {
+  headers: Headers;
+};
+export type managerOverviewResponseError = (managerOverviewResponse403 | managerOverviewResponse404) & {
+  headers: Headers;
+};
+
+export type managerOverviewResponse = (managerOverviewResponseSuccess | managerOverviewResponseError)
+
+export const getManagerOverviewUrl = (params: ManagerOverviewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/manager/overview?${stringifiedParams}` : `/api/manager/overview`
+}
+
+/**
+ * The manager's start screen: every location they run, the state of its current period and who is missing.
+ * @summary Manager Overview
+ */
+export const managerOverview = async (params: ManagerOverviewParams, options?: Parameters<typeof apiFetch>[1]): Promise<managerOverviewResponse> => {
+
+  return apiFetch<managerOverviewResponse>(getManagerOverviewUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getManagerOverviewQueryKey = (params?: ManagerOverviewParams,) => {
+    return [
+    `/api/manager/overview`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getManagerOverviewQueryOptions = <TData = Awaited<ReturnType<typeof managerOverview>>, TError = ErrorOut>(params: ManagerOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof managerOverview>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getManagerOverviewQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof managerOverview>>> = ({ signal }) => managerOverview(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof managerOverview>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ManagerOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof managerOverview>>>
+export type ManagerOverviewQueryError = ErrorOut
+
+
+/**
+ * The manager's start screen: every location they run, the state of its current period and who is missing.
+ * @summary Manager Overview
+ */
+export function useManagerOverview<TData = Awaited<ReturnType<typeof managerOverview>>, TError = ErrorOut>(
+ params: ManagerOverviewParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof managerOverview>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof managerOverview>>,
+          TError,
+          Awaited<ReturnType<typeof managerOverview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The manager's start screen: every location they run, the state of its current period and who is missing.
+ * @summary Manager Overview
+ */
+export function useManagerOverview<TData = Awaited<ReturnType<typeof managerOverview>>, TError = ErrorOut>(
+ params: ManagerOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof managerOverview>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof managerOverview>>,
+          TError,
+          Awaited<ReturnType<typeof managerOverview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The manager's start screen: every location they run, the state of its current period and who is missing.
+ * @summary Manager Overview
+ */
+export function useManagerOverview<TData = Awaited<ReturnType<typeof managerOverview>>, TError = ErrorOut>(
+ params: ManagerOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof managerOverview>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The manager's start screen: every location they run, the state of its current period and who is missing.
+ * @summary Manager Overview
+ */
+export function useManagerOverview<TData = Awaited<ReturnType<typeof managerOverview>>, TError = ErrorOut>(
+ params: ManagerOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof managerOverview>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getManagerOverviewQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type createGroupResponse201 = {
+  data: GroupOut
+  status: 201
+}
+
+export type createGroupResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type createGroupResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type createGroupResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type createGroupResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type createGroupResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type createGroupResponseSuccess = (createGroupResponse201) & {
+  headers: Headers;
+};
+export type createGroupResponseError = (createGroupResponse400 | createGroupResponse402 | createGroupResponse403 | createGroupResponse404 | createGroupResponse409) & {
+  headers: Headers;
+};
+
+export type createGroupResponse = (createGroupResponseSuccess | createGroupResponseError)
+
+export const getCreateGroupUrl = () => {
+
+
+
+
+  return `/api/groups`
+}
+
+/**
+ * @summary Create Group
+ */
+export const createGroup = async (groupIn: GroupIn, options?: Parameters<typeof apiFetch>[1]): Promise<createGroupResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<createGroupResponse>(getCreateGroupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(groupIn)
+  }
+);}
+
+
+
+
+
+export const getCreateGroupMutationKey = () => ['createGroup'] as const;
+
+export const getCreateGroupMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroup>>, TError,CreateGroupMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGroup>>, TError,CreateGroupMutationVariables, TContext> => {
+
+const mutationKey = getCreateGroupMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGroup>>, CreateGroupMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGroup(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGroupMutationResult = NonNullable<Awaited<ReturnType<typeof createGroup>>>
+    export type CreateGroupMutationBody = GroupIn
+    export type CreateGroupMutationError = ErrorOut
+    export type CreateGroupMutationVariables = {data: GroupIn}
+
+    /** @summary Create Group */
+export const useCreateGroup = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroup>>, TError,CreateGroupMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createGroup>>,
+        TError,
+        CreateGroupMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateGroupMutationOptions(options), queryClient);
+    }
+    export type createLocationResponse201 = {
+  data: LocationOut
+  status: 201
+}
+
+export type createLocationResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type createLocationResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type createLocationResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type createLocationResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type createLocationResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type createLocationResponseSuccess = (createLocationResponse201) & {
+  headers: Headers;
+};
+export type createLocationResponseError = (createLocationResponse400 | createLocationResponse402 | createLocationResponse403 | createLocationResponse404 | createLocationResponse409) & {
+  headers: Headers;
+};
+
+export type createLocationResponse = (createLocationResponseSuccess | createLocationResponseError)
+
+export const getCreateLocationUrl = () => {
+
+
+
+
+  return `/api/locations`
+}
+
+/**
+ * A new location starts with the good-practice rules switched on (or follows its group's rules).
+ * @summary Create Location
+ */
+export const createLocation = async (locationIn: LocationIn, options?: Parameters<typeof apiFetch>[1]): Promise<createLocationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<createLocationResponse>(getCreateLocationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(locationIn)
+  }
+);}
+
+
+
+
+
+export const getCreateLocationMutationKey = () => ['createLocation'] as const;
+
+export const getCreateLocationMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLocation>>, TError,CreateLocationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLocation>>, TError,CreateLocationMutationVariables, TContext> => {
+
+const mutationKey = getCreateLocationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLocation>>, CreateLocationMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLocation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLocationMutationResult = NonNullable<Awaited<ReturnType<typeof createLocation>>>
+    export type CreateLocationMutationBody = LocationIn
+    export type CreateLocationMutationError = ErrorOut
+    export type CreateLocationMutationVariables = {data: LocationIn}
+
+    /**
+ * A new location starts with the good-practice rules switched on (or follows its group's rules).
+ * @summary Create Location
+ */
+export const useCreateLocation = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLocation>>, TError,CreateLocationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createLocation>>,
+        TError,
+        CreateLocationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateLocationMutationOptions(options), queryClient);
+    }
+    export type locationDetailResponse200 = {
+  data: LocationOut
+  status: 200
+}
+
+export type locationDetailResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type locationDetailResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type locationDetailResponseSuccess = (locationDetailResponse200) & {
+  headers: Headers;
+};
+export type locationDetailResponseError = (locationDetailResponse403 | locationDetailResponse404) & {
+  headers: Headers;
+};
+
+export type locationDetailResponse = (locationDetailResponseSuccess | locationDetailResponseError)
+
+export const getLocationDetailUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}`
+}
+
+/**
+ * @summary Location Detail
+ */
+export const locationDetail = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<locationDetailResponse> => {
+
+  return apiFetch<locationDetailResponse>(getLocationDetailUrl(locationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLocationDetailQueryKey = (locationId: string,) => {
+    return [
+    `/api/locations/${locationId}`
+    ] as const;
+    }
+
+
+export const getLocationDetailQueryOptions = <TData = Awaited<ReturnType<typeof locationDetail>>, TError = ErrorOut>(locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationDetail>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLocationDetailQueryKey(locationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof locationDetail>>> = ({ signal }) => locationDetail(locationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: locationId !== null && locationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof locationDetail>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type LocationDetailQueryResult = NonNullable<Awaited<ReturnType<typeof locationDetail>>>
+export type LocationDetailQueryError = ErrorOut
+
+
+/** @summary Location Detail */
+export function useLocationDetail<TData = Awaited<ReturnType<typeof locationDetail>>, TError = ErrorOut>(
+ locationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationDetail>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof locationDetail>>,
+          TError,
+          Awaited<ReturnType<typeof locationDetail>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Location Detail */
+export function useLocationDetail<TData = Awaited<ReturnType<typeof locationDetail>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationDetail>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof locationDetail>>,
+          TError,
+          Awaited<ReturnType<typeof locationDetail>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Location Detail */
+export function useLocationDetail<TData = Awaited<ReturnType<typeof locationDetail>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationDetail>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Location Detail */
+export function useLocationDetail<TData = Awaited<ReturnType<typeof locationDetail>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationDetail>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getLocationDetailQueryOptions(locationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type updateLocationResponse200 = {
+  data: LocationOut
+  status: 200
+}
+
+export type updateLocationResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type updateLocationResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type updateLocationResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type updateLocationResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type updateLocationResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type updateLocationResponseSuccess = (updateLocationResponse200) & {
+  headers: Headers;
+};
+export type updateLocationResponseError = (updateLocationResponse400 | updateLocationResponse402 | updateLocationResponse403 | updateLocationResponse404 | updateLocationResponse409) & {
+  headers: Headers;
+};
+
+export type updateLocationResponse = (updateLocationResponseSuccess | updateLocationResponseError)
+
+export const getUpdateLocationUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}`
+}
+
+/**
+ * Name, address, group, period length, default deadline; archiving (owner only) instead of deleting.
+ * @summary Update Location
+ */
+export const updateLocation = async (locationId: string,
+    locationUpdateIn: LocationUpdateIn, options?: Parameters<typeof apiFetch>[1]): Promise<updateLocationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<updateLocationResponse>(getUpdateLocationUrl(locationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(locationUpdateIn)
+  }
+);}
+
+
+
+
+
+export const getUpdateLocationMutationKey = () => ['updateLocation'] as const;
+
+export const getUpdateLocationMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLocation>>, TError,UpdateLocationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLocation>>, TError,UpdateLocationMutationVariables, TContext> => {
+
+const mutationKey = getUpdateLocationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLocation>>, UpdateLocationMutationVariables> = (props) => {
+          const {locationId,data} = props ?? {};
+
+          return  updateLocation(locationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLocationMutationResult = NonNullable<Awaited<ReturnType<typeof updateLocation>>>
+    export type UpdateLocationMutationBody = LocationUpdateIn
+    export type UpdateLocationMutationError = ErrorOut
+    export type UpdateLocationMutationVariables = {locationId: string;data: LocationUpdateIn}
+
+    /**
+ * Name, address, group, period length, default deadline; archiving (owner only) instead of deleting.
+ * @summary Update Location
+ */
+export const useUpdateLocation = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLocation>>, TError,UpdateLocationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateLocation>>,
+        TError,
+        UpdateLocationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateLocationMutationOptions(options), queryClient);
     }
