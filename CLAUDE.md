@@ -39,6 +39,7 @@ Backend outside Docker (needs Postgres, e.g. `docker compose up -d db`):
 cd backend
 uv sync
 uv run python manage.py migrate
+uv run python manage.py seed_demo [--reset]              # demo data: 4 bakeries + a separate café
 DJANGO_DEBUG=1 uv run python manage.py runserver          # API on :8000
 DJANGO_DEBUG=1 uv run python manage.py procrastinate worker
 uv run pytest                                             # tests (need Postgres)
@@ -66,8 +67,14 @@ cd ../frontend && npm run api:generate
 
 - API lives under `/api`; every endpoint is in a router of its app (`apps/<app>/api.py`) and added in `config/api.py`.
   OpenAPI operation id = view function name, so name views as the frontend hook should read (`health` → `useHealth`).
-- Tenant isolation (from stage 2): every company-owned table has `company_id`; API code reads data only through
-  the tenant context / `for_company()` querysets. Each new endpoint gets a cross-company access test.
+- Tenant isolation (from stage 2): every company-owned model inherits `apps.tenancy.base.CompanyOwnedModel`
+  (UUID id, `company_id`, `company_from` copies the company from a parent; cross-company links are rejected on save
+  and on m2m add). API code starts with `ctx = tenant_context(request, company_id)` and reads only via
+  `ctx.qs(Model)` / `ctx.get(Model, ...)` (404 for other companies). `tests/test_tenant_guard.py` fails on plain
+  `Model.objects` in `api.py` unless the line has `# tenant-ok: <reason>`. Each new endpoint gets a cross-company test.
+- Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
+  have no password; only the Django admin superuser has one.
+- Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.
 - Background tasks live in `apps/<app>/tasks.py` (auto-discovered). Solver jobs go to queue `solver`, the rest to `default`.
 - Do not edit generated files: `frontend/src/api/generated/**`, `frontend/src/routeTree.gen.ts`.
 - Frontend calls the API only through the generated hooks; `src/api/http.ts` adds the session cookie and CSRF token.

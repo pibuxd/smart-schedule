@@ -38,7 +38,18 @@ INSTALLED_APPS = [
     "ninja",
     "procrastinate.contrib.django",
     "apps.core",
+    "apps.accounts",
+    "apps.tenancy",
+    "apps.billing",
+    "apps.staffing",
+    "apps.scheduling",
+    "apps.availability",
+    "apps.rules",
+    "apps.marketplace",
+    "apps.notifications",
 ]
+
+AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
