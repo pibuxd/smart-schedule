@@ -10,6 +10,7 @@ Every `Violation.message` is a Polish sentence for the manager.
 from __future__ import annotations
 
 import calendar
+import math
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -36,6 +37,10 @@ from engine.problem import (
 LABOR_DAILY_REST = timedelta(hours=11)
 LABOR_WEEKLY_REST = timedelta(hours=35)
 LABOR_MAX_HOURS_PER_DAY = 8.0
+
+# "Wolę nie" days of one person count at full weight up to this many per week of the period; above that the
+# person's total stays the same and each day weighs less (marking every day cannot outweigh colleagues).
+PREFER_NOT_FULL_DAYS_PER_WEEK = 2
 
 # A "no exceptions" target_hours rule allows this relative deviation from the target.
 TARGET_HOURS_HARD_TOLERANCE = 0.10
@@ -105,6 +110,8 @@ class ValidationReport:
     requests: tuple[RequestMeasure, ...]
     stability_changes: tuple[str, ...]  # slot ids whose person differs from the published schedule
     hours: Mapping[str, float] = field(default_factory=dict)  # employee id -> hours in this schedule
+    # Text requests the schedule cannot keep or break (type "other", missing details): left to the manager.
+    unscored_requests: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -156,6 +163,7 @@ class _Checker:
     def __init__(self, problem: Problem, schedule: Schedule) -> None:
         self.p = problem
         self.hard: list[Violation] = []
+        self.unscored: list[str] = []
         self.assignment: dict[str, str | None] = {}
         for slot_id, employee_id in schedule.items():
             if slot_id not in problem.slot_by_id:
@@ -589,27 +597,34 @@ class _Checker:
     def measure_requests(self) -> list[RequestMeasure]:
         p, weights = self.p, self.p.weights
         result: list[RequestMeasure] = []
+        in_period = [e for e in p.availability if p.period_start <= e.date <= p.period_end]
         prefer_days: dict[str, int] = defaultdict(int)
-        for entry in p.availability:
-            if not p.period_start <= entry.date <= p.period_end:
-                continue
+        prefer_not_days: dict[str, int] = defaultdict(int)
+        for entry in in_period:
             if entry.state == AvailabilityState.PREFER:
                 prefer_days[entry.employee] += 1
             elif entry.state == AvailabilityState.PREFER_NOT:
-                worked = any(
-                    s.date == entry.date and p.availability_for(entry.employee, s) == AvailabilityState.PREFER_NOT
-                    for s in self.slots_of.get(entry.employee, ())
+                prefer_not_days[entry.employee] += 1
+        period_days = (p.period_end - p.period_start).days + 1
+        full_weight_days = max(1, math.ceil(period_days * PREFER_NOT_FULL_DAYS_PER_WEEK / 7))
+        for entry in in_period:
+            if entry.state != AvailabilityState.PREFER_NOT:
+                continue
+            worked = any(
+                s.date == entry.date and p.availability_for(entry.employee, s) == AvailabilityState.PREFER_NOT
+                for s in self.slots_of.get(entry.employee, ())
+            )
+            share = min(1.0, full_weight_days / prefer_not_days[entry.employee])
+            result.append(
+                RequestMeasure(
+                    location=p.employee_by_id[entry.employee].home_location,
+                    employee=entry.employee,
+                    kind=RequestKind.PREFER_NOT,
+                    weight=weights.request_weight(RequestLevel.IMPORTANT) * share,
+                    degree=1.0 if worked else 0.0,
+                    date=entry.date,
                 )
-                result.append(
-                    RequestMeasure(
-                        location=p.employee_by_id[entry.employee].home_location,
-                        employee=entry.employee,
-                        kind=RequestKind.PREFER_NOT,
-                        weight=weights.request_weight(RequestLevel.IMPORTANT),
-                        degree=1.0 if worked else 0.0,
-                        date=entry.date,
-                    )
-                )
+            )
         for employee_id, count in sorted(prefer_days.items()):
             slots = self.slots_of.get(employee_id, ())
             worked_days = {s.date for s in slots}
@@ -627,6 +642,7 @@ class _Checker:
         for request in p.requests:
             degree = self.request_degree(request)
             if degree is None:
+                self.unscored.append(request.id)
                 continue
             result.append(
                 RequestMeasure(
@@ -698,6 +714,7 @@ class _Checker:
             requests=tuple(requests),
             stability_changes=changes,
             hours=MappingProxyType(hours),
+            unscored_requests=tuple(self.unscored),
         )
 
 
@@ -714,6 +731,7 @@ __all__ = [
     "LABOR_DAILY_REST",
     "LABOR_MAX_HOURS_PER_DAY",
     "LABOR_WEEKLY_REST",
+    "PREFER_NOT_FULL_DAYS_PER_WEEK",
     "TARGET_HOURS_HARD_TOLERANCE",
     "Code",
     "RequestKind",

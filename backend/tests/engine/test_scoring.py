@@ -57,6 +57,13 @@ def test_hard_rules_and_rules_with_nothing_to_measure_are_not_scored():
     scores = score(p, validate(p, {"late": "anna", "early": "anna"}))
     assert scores.manager_rules == 100.0
     assert scores.hard_violations == 1
+    assert scores.unmeasured_rules == 1  # fair_closings: shown as "nic do oceny", not as kept
+
+
+def test_requests_left_to_the_manager_are_counted_next_to_the_score():
+    p = problem([employee("anna")], [slot("a", MON)], requests=(Request("r", "anna", "other"),))
+    scores = score(p, validate(p, {"a": "anna"}))
+    assert (scores.employee_requests, scores.unscored_requests) == (100.0, 1)
 
 
 def test_requests_score_is_weighted():

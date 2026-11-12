@@ -202,6 +202,16 @@ class TestCalendarRequests:
         assert (item.kind, item.degree, item.weight, item.date) == (RequestKind.PREFER_NOT, 1.0, 3.0, MON)
         assert validate(p, {"b": "anna"}).requests[0].degree == 0.0
 
+    def test_many_prefer_not_days_do_not_outweigh_colleagues(self):
+        # A 14-day period counts 4 "wolę nie" days at full weight per person; 12 days share that same total.
+        slots = [slot(f"d{i}", day(i)) for i in range(14)]
+        availability = tuple(Availability("anna", day(i), "prefer_not") for i in range(12)) + tuple(
+            Availability("ola", day(i), "prefer_not") for i in range(2)
+        )
+        report = validate(problem([employee("anna"), employee("ola")], slots, availability=availability), {})
+        totals = {name: sum(r.weight for r in report.requests if r.employee == name) for name in ("anna", "ola")}
+        assert totals == {"anna": pytest.approx(12.0), "ola": pytest.approx(6.0)}
+
     def test_prefer_days_count_against_days_actually_worked(self):
         availability = tuple(Availability("anna", day(i), "prefer") for i in range(4))
         slots = [slot(f"d{i}", day(i)) for i in range(6)]
@@ -243,7 +253,9 @@ class TestTextRequests:
         assert self.degree(request, {"a1": "anna", "a2": "anna"}) == 1.0
 
     def test_other_requests_are_left_to_the_manager(self):
-        assert self.degree(Request("r", "anna", "other", summary="Chcę mieć wolne w urodziny"), {}) is None
+        request = Request("r", "anna", "other", summary="Chcę mieć wolne w urodziny")
+        assert self.degree(request, {}) is None
+        assert validate(problem(self.people, self.slots, requests=(request,)), {}).unscored_requests == ("r",)
 
     def test_weight_follows_level_and_manager_priority(self):
         request = Request("r", "anna", "hours_limit", max_hours=8, level="bardzo_wazne", manager_priority="lower")

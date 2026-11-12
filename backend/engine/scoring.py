@@ -27,6 +27,9 @@ class Scores:
     employee_requests: float  # 0–100
     stability_changes: int
     hard_violations: int
+    # Shown next to the percentages so 100 % is not read as "everything was checked":
+    unmeasured_rules: int = 0  # soft rules switched on with nothing to measure in this schedule (no closings, …)
+    unscored_requests: int = 0  # text requests left to the manager (type "other")
 
     @property
     def is_complete(self) -> bool:
@@ -76,6 +79,7 @@ def score(problem: Problem, report: ValidationReport, location: str | None = Non
     requests = [(r.weight, r.degree) for r in report.requests if _in(location, r.location)]
     slots = [s for s in problem.slots if _in(location, s.location)]
     ids = {s.id for s in slots}
+    request_by_id = {r.id: r for r in problem.requests}
     hard = [v for v in report.hard if location is None or v.location == location or ids.intersection(v.slots)]
     return Scores(
         holes=sum(1 for slot_id in report.holes if slot_id in ids),
@@ -84,6 +88,12 @@ def score(problem: Problem, report: ValidationReport, location: str | None = Non
         employee_requests=round(_percent(requests), 2),
         stability_changes=sum(1 for slot_id in report.stability_changes if slot_id in ids),
         hard_violations=len(hard),
+        unmeasured_rules=sum(1 for m in report.rules if not m.hard and not m.instances and _in(location, m.location)),
+        unscored_requests=sum(
+            1
+            for request_id in report.unscored_requests
+            if _in(location, problem.employee_by_id[request_by_id[request_id].employee].home_location)
+        ),
     )
 
 
