@@ -82,3 +82,11 @@ def test_command_refuses_to_duplicate_and_resets(db):
         call_command("seed_demo")
     call_command("seed_demo", "--reset")
     assert EmployeeProfile.objects.count() == employees
+
+
+def test_requests_for_the_manager_have_no_interpretation(demo):
+    requests = TextRequest.objects.for_company(BAKERY_COMPANY_ID)
+    assert requests.filter(status=TextRequest.Status.NEEDS_MANAGER).exists()
+    for status in (TextRequest.Status.NEW, TextRequest.Status.NEEDS_MANAGER):
+        assert not requests.filter(status=status, interpretation__isnull=False).exists()
+    assert not requests.filter(status=TextRequest.Status.INTERPRETED, interpretation__isnull=True).exists()
