@@ -556,8 +556,10 @@ def _text_requests(rng: random.Random, employees, period: SchedulePeriod, count:
             priority = TextRequest.ManagerPriority.HIGHER
         elif roll < 0.62:
             priority = TextRequest.ManagerPriority.LOWER
+        # New requests are not interpreted yet; unclear ones (no API key or low confidence) go to the manager
+        # as plain text, without an interpretation (spec, "LLM" section).
         interpretation = None
-        if status != TextRequest.Status.NEW:
+        if status not in (TextRequest.Status.NEW, TextRequest.Status.NEEDS_MANAGER):
             interpretation = {
                 "type": kind,
                 "subject_employee": str(other.id) if "{other}" in template else None,
@@ -565,7 +567,7 @@ def _text_requests(rng: random.Random, employees, period: SchedulePeriod, count:
                 if "{day}" in template
                 else [],
                 "level": level,
-                "confidence": 0.45 if status == TextRequest.Status.NEEDS_MANAGER else round(rng.uniform(0.75, 0.97), 2),
+                "confidence": round(rng.uniform(0.75, 0.97), 2),
                 "summary": text.split(",")[0].rstrip(".") + ".",
             }
         requests.append(
