@@ -282,4 +282,6 @@ def test_company_without_any_code_is_read_only(api, make_company):
     company = make_company("Bez kodu")
     api.login(company["manager"])
 
-    assert invite(api, company["location"]).status_code == 402
+    response = invite(api, company["location"])
+    assert response.status_code == 402
+    assert "nie ma jeszcze kodu" in response.json()["detail"]

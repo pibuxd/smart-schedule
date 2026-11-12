@@ -12,8 +12,11 @@ from apps.billing.codes import hash_code, normalize_code
 from apps.billing.models import AccessCode, CodeAttempt, CodeRedemption, GenerationUsage, Subscription
 from apps.tenancy.models import Company
 
-READ_ONLY_MESSAGE = (
+EXPIRED_MESSAGE = (
     "Dostęp tej firmy wygasł, więc dane można tylko oglądać. Kierownik może wpisać nowy kod w ustawieniach."
+)
+NOT_STARTED_MESSAGE = (
+    "Ta firma nie ma jeszcze kodu dostępu, więc niczego nie można zmieniać. Kierownik wpisuje kod w ustawieniach."
 )
 
 
@@ -27,6 +30,11 @@ class SubscriptionState:
     @property
     def read_only(self) -> bool:
         return not self.is_active
+
+    @property
+    def read_only_message(self) -> str:
+        """Access that never started is not "expired": a new manager must be told to enter a code."""
+        return NOT_STARTED_MESSAGE if self.ends_at is None else EXPIRED_MESSAGE
 
 
 def subscription_state(company_id, now: datetime | None = None) -> SubscriptionState:

@@ -347,3 +347,14 @@ def test_old_login_codes_are_deleted(api, sms_outbox):
 
     assert delete_old_login_codes(0) == 1
     assert list(LoginCode.objects.values_list("phone_e164", flat=True)) == ["+48601700801"]
+
+
+def test_system_check_warns_when_codes_go_to_the_log_outside_development(settings):
+    from apps.accounts.checks import login_codes_must_not_go_to_the_log_in_production as check
+
+    settings.SMS_BACKEND = "apps.accounts.sms.ConsoleSmsSender"
+    settings.DEBUG = False
+    assert [warning.id for warning in check(None)] == ["accounts.W001"]
+
+    settings.DEBUG = True
+    assert check(None) == []

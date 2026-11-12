@@ -71,10 +71,11 @@ class TenantContext:
 
     def require_writable(self) -> None:
         """Refuse changes when the company's access has expired (402, so the frontend can tell it apart)."""
-        from apps.billing.services import READ_ONLY_MESSAGE, subscription_state
+        from apps.billing.services import subscription_state
 
-        if subscription_state(self.company.pk).read_only:
-            raise HttpError(402, READ_ONLY_MESSAGE)
+        state = subscription_state(self.company.pk)
+        if state.read_only:
+            raise HttpError(402, state.read_only_message)
 
 
 def tenant_context(request, company_id: UUID | str) -> TenantContext:
