@@ -51,6 +51,7 @@ class GenerationRun(CompanyOwnedModel):
         OPTIMAL = "optimal", "optymalny"
         FEASIBLE = "feasible", "dopuszczalny"
         TIMEOUT_NO_SOLUTION = "timeout_no_solution", "brak rozwiązania w limicie czasu"
+        INFEASIBLE = "infeasible", "sprzeczne zasady lub przypięcia"
 
     company_from = "location"
 

@@ -42,7 +42,8 @@ uv run python manage.py migrate
 uv run python manage.py seed_demo [--reset]              # demo data: 4 bakeries + a separate café
 # log in: POST /api/auth/request-code, the code is printed by runserver ("SMS to +48…")
 DJANGO_DEBUG=1 uv run python manage.py runserver          # API on :8000
-DJANGO_DEBUG=1 uv run python manage.py procrastinate worker
+DJANGO_DEBUG=1 uv run python manage.py procrastinate worker   # all queues (in Docker: `worker` + `solver`)
+uv run python manage.py generate_schedule --company 6a1e0000-0000-4000-8000-000000000001  # try the generator now
 uv run pytest                                             # tests (need Postgres)
 DJANGO_DEBUG=1 uv run pytest tests/engine                 # engine tests only, no database needed
 uv run ruff check . && uv run ruff format --check .       # lint
@@ -85,9 +86,13 @@ cd ../frontend && npm run api:generate
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
 - Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.
-  Each catalog rule needs a `rule_<code>` method in `engine/validator.py` (a test checks it).
+  Each catalog rule needs a `rule_<code>` method in `engine/validator.py` and a `_rule_<code>` method in
+  `engine/solver.py` (hard: a constraint; soft: a penalty matching the validator's degree), checked by a test.
 - Engine: the Django layer builds an `engine.problem.Problem`; `engine.validator.validate` checks a schedule and
   `engine.scoring.score` turns the report into the three numbers. Durations always in UTC, dates in local time.
+  `engine.solver.solve` (CP-SAT, worker only) builds a schedule; `apps/scheduling/problem_builder.py` reads the
+  database into a `Problem`, `apps/scheduling/generation.py` queues, runs and saves generations. A solver result
+  is saved only if the validator finds no hard violation.
   Violation messages are Polish sentences for the manager.
 - Background tasks live in `apps/<app>/tasks.py` (auto-discovered). Solver jobs go to queue `solver`, the rest to `default`.
 - Do not edit generated files: `frontend/src/api/generated/**`, `frontend/src/routeTree.gen.ts`.

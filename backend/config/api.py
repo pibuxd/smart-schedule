@@ -5,6 +5,7 @@ from ninja.security import django_auth
 from apps.accounts.api import router as accounts_router
 from apps.billing.api import router as billing_router
 from apps.core.api import router as core_router
+from apps.scheduling.api import router as scheduling_router
 from apps.tenancy.api import router as tenancy_router
 
 
@@ -20,6 +21,7 @@ api.add_router("/", core_router)
 api.add_router("/", accounts_router)
 api.add_router("/", tenancy_router)
 api.add_router("/", billing_router)
+api.add_router("/", scheduling_router)
 
 
 @api.exception_handler(AuthenticationError)

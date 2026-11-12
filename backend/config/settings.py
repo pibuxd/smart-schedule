@@ -130,8 +130,9 @@ SUBSCRIPTION_BANNER_DAYS = 7
 # Background jobs (Procrastinate on Postgres).
 PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "tasks"
 
-# Scheduling engine limits (used from stage 5 on).
+# Scheduling engine: time limit of one generation and CPU threads CP-SAT may use for it.
 SOLVER_TIME_LIMIT_S = int(env("SOLVER_TIME_LIMIT_S", "30"))
+SOLVER_WORKERS = int(env("SOLVER_WORKERS", "8"))
 GENERATION_MONTHLY_LIMIT = int(env("GENERATION_MONTHLY_LIMIT", "30"))
 
 LOGGING = {

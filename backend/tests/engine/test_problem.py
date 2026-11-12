@@ -117,6 +117,12 @@ def test_every_catalog_rule_is_measured_by_the_validator():
     assert [r.code for r in RULES if not hasattr(_Checker, f"rule_{r.code}")] == []
 
 
+def test_every_catalog_rule_is_modelled_in_the_solver():
+    from engine.solver import _Builder
+
+    assert [r.code for r in RULES if not hasattr(_Builder, f"_rule_{r.code}")] == []
+
+
 class TestAvailability:
     day = date(2026, 11, 13)
 

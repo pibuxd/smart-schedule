@@ -16,6 +16,7 @@ x-backend-env: &backend-env
   POSTGRES_PORT: "5432"
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   SOLVER_TIME_LIMIT_S: ${SOLVER_TIME_LIMIT_S:-30}
+  SOLVER_WORKERS: ${SOLVER_WORKERS:-8}
   GENERATION_MONTHLY_LIMIT: ${GENERATION_MONTHLY_LIMIT:-30}
 
 services:
@@ -60,8 +61,18 @@ services:
   worker:
     build: ./backend
     environment: *backend-env
-    # Solver jobs are CPU-heavy, so by default only one job runs at a time.
-    command: python manage.py procrastinate worker --concurrency ${WORKER_CONCURRENCY:-1}
+    # Light jobs (housekeeping, later: reading text requests).
+    command: python manage.py procrastinate worker --queues default --concurrency ${WORKER_CONCURRENCY:-2}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  solver:
+    build: ./backend
+    environment: *backend-env
+    # Generating schedules is CPU-heavy: one job at a time by default (at most 2), each up to SOLVER_TIME_LIMIT_S.
+    command: python manage.py procrastinate worker --queues solver --concurrency ${SOLVER_CONCURRENCY:-1}
     depends_on:
       api:
         condition: service_healthy

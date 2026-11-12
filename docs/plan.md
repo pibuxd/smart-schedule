@@ -71,7 +71,7 @@ Kluczowa decyzja: `engine/` nie zna Django. Warstwa `scheduling` buduje z bazy o
 
 - `POST /generate` w jednej transakcji: zapis `GenerationRun(status=queued)` i `procrastinate defer` zadania `solve_schedule(run_id)`.
 - Kolejka `solver` z osobnym workerem o współbieżności 1 (zmienna `SOLVER_CONCURRENCY`, max 2). Kolejka `default` dla interpretacji próśb i drobnych zadań.
-- Limit czasu solvera `SOLVER_TIME_LIMIT_S=30`; zwracamy najlepsze znalezione rozwiązanie, status `optimal` / `feasible` / `timeout_no_solution`.
+- Limit czasu solvera `SOLVER_TIME_LIMIT_S=30`; zwracamy najlepsze znalezione rozwiązanie, status `optimal` / `feasible` / `timeout_no_solution` / `infeasible` (sprzeczne zasady "bez wyjątków" albo przypięcia; z wyjaśnieniem dla menedżera).
 - Frontend odpytuje `GET /generation-runs/{id}` co 1–2 s (bez websocketów w prototypie).
 
 ## 2. Modele danych
@@ -164,7 +164,7 @@ kara = manager_share × Σ_z  w_z × naruszenie_z            (zasady menedżera)
 - `w_z` z miejsca na liście: najwyższa zasada dostaje największą wagę, każda kolejna mniejszą (stały współczynnik `rank_decay`, np. 0,75). Dzięki temu "wszystko najważniejsze" jest niemożliwe z definicji.
 - `w_p` z poziomu prośby (bardzo ważne / ważne / mile widziane) i korekty menedżera (ważniejsza / mniej ważna).
 - Czas dzielony między fazy (np. 40/60 % limitu). Wynik fazy 1 trafia jako podpowiedź do fazy 2.
-- Generowanie dla grupy = jeden model dla wszystkich lokali grupy (wspólne godziny pracownika), ale przypisania tylko do lokalu domowego; pożyczenie do innego lokalu robi menedżer ręcznie.
+- Każdy lokal generujemy osobno (decyzja Piotra z 12.11.2026: lokale są niezależne, każdy z własnymi zasadami i wagami); "Ułóż grafik dla wszystkich" uruchamia osobne generowanie dla każdego lokalu. Przypisania tylko do lokalu domowego; pożyczenie do innego lokalu robi menedżer ręcznie. Opublikowane zmiany tych samych osób w innych lokalach liczą się do odpoczynku i nakładania.
 - Kod przygotowany pod 3 warianty: funkcja `solve(problem, profile, diversity_from=[...])`; drugi i trzeci wariant to inne `manager_share` i ograniczenie min. 15 % różnych przypisań. W tej wersji wołamy ją raz.
 
 Ocena (`scoring.py`, ten sam kod dla każdego wariantu i dla ręcznej edycji): liczba dziur, "zasady menedżera" % i "prośby pracowników" % wg wzoru `100 × (1 − Σ w_i v_i / Σ w_i)`. Grafik z dziurami ma flagę "niekompletny" i nie pokazuje zielonej oceny.
@@ -192,7 +192,7 @@ Zasady
 - `GET /scopes/{type}/{id}/rules` · `PUT /scopes/{type}/{id}/rules` (cała lista z kolejnością) · `POST /scopes/{type}/{id}/rules/preview` (skutek zmiany na ostatnim okresie)
 
 Grafik
-- `GET/POST /locations/{id}/periods` · `POST /periods/generate` (lokal lub grupa) → `GenerationRun`
+- `GET/POST /locations/{id}/periods` · `POST /periods/generate` (jeden lub kilka okresów; osobne `GenerationRun` dla każdego lokalu)
 - `GET /generation-runs/{id}` · `GET /versions/{id}` (zmiany, przypisania, ocena, wyjaśnienia)
 - `POST /versions/{id}/validate` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena) · `PATCH /versions/{id}/assignments` (przeniesienie, przypięcie)
 - `POST /versions/{id}/publish` · `GET /assignments/{id}/explain?deep=false`
@@ -217,7 +217,7 @@ Pracownik (telefon)
 
 Menedżer (komputer)
 1. Rejestracja firmy i kod dostępu (także później w Ustawieniach → Subskrypcja).
-2. Widok zbiorczy grupy (ekran startowy): lokale w wierszach, stan okresu każdego lokalu (zbieranie dyspozycji / szkic / opublikowany), kto nie zgłosił dyspozycji, przycisk "Ułóż grafik dla wszystkich".
+2. Widok zbiorczy grupy (ekran startowy): lokale w wierszach, stan okresu każdego lokalu (zbieranie dyspozycji / szkic / opublikowany), kto nie zgłosił dyspozycji, przycisk "Ułóż grafik dla wszystkich" (osobne generowanie dla każdego lokalu), przycisk "Poproś o dyspozycje" (powiadomienie do pracowników z okresem i terminem).
 3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) z wyjątkami, okres i termin dyspozycji.
 4. Pracownicy: lista, zaproszenia po numerze, stanowiska, umowa, maksimum i cel godzin.
 5. Dyspozycje: siatka pracownicy × dni, lista próśb z interpretacją i akcjami, lista osób bez zgłoszenia.
@@ -265,6 +265,8 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 - Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.
 - Etap 6/7 (z przeglądu etapu 3): na ekranie zaproszeń menedżer widzi podpowiedź "Powiedz tej osobie, żeby zalogowała się tym numerem" (SMS z zaproszeniem nie idzie) oraz informację, że zaproszona osoba pracuje już w innym lokalu firmy i zachowa tamten lokal domowy. Komunikat trybu tylko do odczytu rozróżnia firmę bez kodu od firmy po wygaśnięciu. W trybie tylko do odczytu pracownik nadal widzi swój opublikowany grafik.
 - Etap 7/8 (z przeglądu etapu 4): przy wyniku dla umowy o pracę krótka uwaga, że sprawdzenie Kodeksu pracy jest uproszczone (doba = dzień kalendarzowy, tydzień od poniedziałku) i nie zastępuje oceny prawnej; przy zasadzie "Cel godzin" z "bez wyjątków" napis "do 10 % odchylenia"; zasady bez niczego do oceny pokazane jako "nic do oceny", a prośby "inne" jako "do oceny przez kierownika" obok procentów; zmiany pożyczonych osób widoczne w grafiku lokalu, który je przyjmuje. Do sprawdzenia z pilotem: czy równy podział weekendów ma też wyłapywać osoby bez żadnej zmiany (dziś pomija je, łapie je tylko cel godzin).
+- Decyzje Piotra po przeglądzie etapu 5 (12.11.2026): każdy lokal generujemy osobno, lokale są niezależne, chyba że kierownik w poleceniu powie inaczej; daty okresu wpisuje kierownik, razem z dniem układania grafiku, i może jednym przyciskiem poprosić wszystkich pracowników o dyspozycje (etap 7: przycisk, etap 9: powiadomienie); ponowne generowanie usuwa nieprzypięte ręczne poprawki (etap 8: uprzedzić o tym przy przycisku), a zmiany w wyniku kierownik wprowadza poleceniem do asystenta; generator ma być w pełni ustawialny poleceniami (etap 10 obejmie też polecenia kierownika, nie tylko prośby pracowników).
+- Do sprawdzenia z pilotem: porównanie jakości z grafikami układanymi ręcznie. Etap 7/8: prośby "inne" i przypięcia wyraźnie widoczne na ekranie.
 - Przed wdrożeniem dla prawdziwych użytkowników: bramka SMS (bez niej kody logowania są w logach serwera; `manage.py check` ostrzega: `accounts.W001`), sprawdzenie limitu 20 próśb o kod na adres IP przy wspólnym Wi-Fi w lokalu, decyzja, czy firma bez kodu ma dostać krótki okres próbny zamiast trybu tylko do odczytu.
 
 ## 9. Etap 3: jak to działa i przyjęte założenia
@@ -307,3 +309,24 @@ Założenia:
 11. Ocena: zasady "bez wyjątków" nie wchodzą do procentów (to ograniczenia), tak samo zasady bez niczego do zmierzenia (np. równe zamknięcia, gdy nie ma zmian zamykających); `Scores` podaje ich liczbę (`unmeasured_rules`) oraz liczbę próśb "inne" zostawionych menedżerowi (`unscored_requests`), żeby 100 % nie wyglądało na "wszystko sprawdzone". Waga zasady wynika z miejsca wśród zasad miękkich lokalu: 1, `rank_decay`, `rank_decay²`… Brak pozycji w grupie = 100 %.
 12. `stability_penalty` w profilu wag oznacza punkty skali 0–100 za każdą zmianę opublikowanego przypisania (domyślnie 5).
 13. Pożyczenie osoby do innego lokalu nie jest błędem walidatora (robi je menedżer ręcznie); ograniczenie do lokalu domowego dotyczy tylko generatora.
+
+## 11. Etap 5: generator i przyjęte założenia
+
+- `engine/solver.py`: `solve(problem, time_limit_s, workers, seed, weights=None, diversity_from=())` buduje model CP-SAT z tego samego `Problem` co walidator. Faza 1 minimalizuje dziury (40 % limitu czasu; na danych demo dowód optimum w ok. 1–2 s), faza 2 przy tej liczbie dziur minimalizuje karę z `engine.scoring.penalty`, z podpowiedzią z fazy 1. Każda zasada z katalogu ma metodę `_rule_<kod>`: dla "bez wyjątków" ograniczenie, dla zwykłej kara.
+- Kara w modelu odwzorowuje ocenę walidatora: dokładnie dla dni "wolę nie", próśb tekstem (poza mianownikiem udziału), celu i maksimum godzin, dni z rzędu, osoby odpowiedzialnej na zamknięciu, równego podziału (dzielenie w modelu) i stabilności. Zasady liczone jako udział w zmiennej liczbie miejsc (odpoczynek, ta sama pora w tygodniu, zmiany w tygodniu, stała pora stanowiska) i "chętnie" dzielą przez oszacowanie tej liczby. Menedżer zawsze widzi ocenę z walidatora, nie wartość z modelu.
+- Gdy model nie ma rozwiązania: najpierw walidator sprawdza same przypięcia i dni minione (np. przypięta osoba ma "nie mogę"), potem generator po kolei wyłącza zasady "bez wyjątków" i nazywa te, bez których grafik da się ułożyć (najwyżej 2 s na zasadę i łącznie nie dłużej niż limit czasu generowania).
+- `apps/scheduling/problem_builder.py` czyta bazę do `Problem`, `apps/scheduling/generation.py` przyjmuje zlecenie (API), wykonuje je (worker) i zapisuje szkic, `apps/scheduling/tasks.py` to zadania kolejki. Endpointy: `GET/POST /locations/{id}/periods`, `POST /periods/generate`, `GET /generation-runs/{id}`.
+- Docker Compose ma osobny kontener `solver` (kolejka `solver`, `SOLVER_CONCURRENCY=1`, max 2) obok `worker` (kolejka `default`). `SOLVER_WORKERS` = liczba wątków CP-SAT na jedno generowanie (domyślnie 8).
+- `manage.py generate_schedule --company <id>` albo `--period <id>` układa grafik od razu, bez kolejki i bez liczenia do limitu (do sprawdzania na danych demo). Dane demo (4 piekarnie, miesiąc, razem 1015 zmian, 76 osób), każda piekarnia osobno po 30 s: razem 19 dziur (minimum, wynika z dyspozycji), zasady menedżera ok. 89–91 %, prośby ok. 88–92 %. Przy `SOLVER_CONCURRENCY=1` cztery lokale układają się po kolei, ok. 2 minut; przy 2 ok. minuty.
+
+Założenia:
+1. Sloty powstają z obsady dnia tygodnia, a wyjątek na datę zastępuje ją dla tej pary (zmiana, stanowisko); wyjątek bez godzin zostawia zwykłe godziny. Zmiana "dowolne godziny" bez godzin w obsadzie i w wyjątku zatrzymuje generowanie z komunikatem, co uzupełnić (pominięcie ukryłoby całą nieobsadzoną zmianę, bo nie byłoby nawet dziury; uwaga z przeglądu PR #6).
+2. Każdy lokal generujemy osobno: `POST /periods/generate` z kilkoma okresami zakłada osobne zlecenie dla każdego (każde liczy się do limitu). Lokale mają wtedy własne zasady i profil wag, a okresy mogą mieć różne daty. Silnik nadal umie ułożyć kilka lokali w jednym modelu, na wypadek gdyby kierownik w poleceniu powiązał lokale (etap 10).
+3. Kolejność zasad lokalu: zasady grupy i lokalu w jednej liście według pola "miejsce na liście"; przy tym samym miejscu zasada lokalu jest wyżej; ustawienie lokalu dla tej samej zasady zastępuje ustawienie grupy, a wyłączone zasady wypadają. Profil wag: własny profil lokalu, a bez niego profil grupy, a bez obu wartości domyślne.
+4. Prośby tekstem: tylko zinterpretowane trafiają do generatora jako swój typ; nowe, niejasne ("do decyzji menedżera") i dotyczące osoby spoza grafiku są typu "inne" (liczone jako "do oceny przez kierownika"); odrzucone pomijamy.
+5. Ponowne generowanie, gdy okres ma opublikowaną wersję: dni przed dzisiejszym są zamrożone i biorą zmiany z opublikowanej wersji (także gdy ustawienia obsady się zmieniły); dalsze dni układamy z obecnej obsady z karą za każdą zmianę względem opublikowanej. Przypięcia bierzemy z najnowszej wersji okresu (szkicu albo opublikowanej).
+6. Osoba wyłączona (`is_active = false`) albo pożyczona z innego lokalu zachowuje tylko swoje przypięte i minione zmiany; generator nie daje jej nowych. Opublikowane zmiany tych samych osób w innych okresach i lokalach (7 dni wokół okresu) liczą się do odpoczynku, nakładania i dni z rzędu.
+7. Wynik zapisujemy jako nową wersję szkicu (numer o 1 większy) dla każdego lokalu; okres "zbieranie dyspozycji" przechodzi w "szkic". Historię przypisań (`AssignmentEvent`) zapisujemy dopiero przy publikacji (etap 8), żeby kolejne szkice jej nie zaśmiecały.
+8. Limit generowań liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
+9. Zlecenie, które zostało "w trakcie" ponad 10 minut (albo "w kolejce" ponad 30), zadanie okresowe co 10 minut oznacza jako nieudane, żeby ekran nie czekał w nieskończoność.
+10. Warianty: kod przyjmuje inny profil wag i listę wcześniejszych grafików, od których nowy musi się różnić w min. 15 % przypisań; w tej wersji wołamy go raz.
