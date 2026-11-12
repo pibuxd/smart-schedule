@@ -652,6 +652,8 @@ class _Builder:
                 self.m.add_min_equality(capped, [over, limit])
                 self.add_penalty(weight / limit, capped)
             case RequestType.DAYS_OFF:
+                if not request.dates:  # no dates: left to the manager, as in the validator
+                    return
                 by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
                 for slot, var in own:
                     by_day[slot.date].append(var)

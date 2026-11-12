@@ -304,6 +304,13 @@ def test_keeps_days_off_asked_for_in_text():
     assert result.schedule == {"m0": "ewa", "m1": "anna"}
 
 
+def test_days_off_without_dates_is_left_to_the_manager():
+    p = problem([employee("anna")], [slot("m0", day(0))], requests=[Request("off", "anna", "days_off")])
+    result, report = solved(p)
+    assert result.schedule == {"m0": "anna"}
+    assert report.unscored_requests == ("off",)
+
+
 def test_manager_rules_outweigh_employee_requests():
     # Rest of 11 h (manager rule) against Anna's wish to work the evening and the next morning.
     people = [employee("anna"), employee("ewa")]
