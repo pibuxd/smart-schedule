@@ -71,7 +71,7 @@ Kluczowa decyzja: `engine/` nie zna Django. Warstwa `scheduling` buduje z bazy o
 
 - `POST /generate` w jednej transakcji: zapis `GenerationRun(status=queued)` i `procrastinate defer` zadania `solve_schedule(run_id)`.
 - Kolejka `solver` z osobnym workerem o współbieżności 1 (zmienna `SOLVER_CONCURRENCY`, max 2). Kolejka `default` dla interpretacji próśb i drobnych zadań.
-- Limit czasu solvera `SOLVER_TIME_LIMIT_S=30`; zwracamy najlepsze znalezione rozwiązanie, status `optimal` / `feasible` / `timeout_no_solution`.
+- Limit czasu solvera `SOLVER_TIME_LIMIT_S=30`; zwracamy najlepsze znalezione rozwiązanie, status `optimal` / `feasible` / `timeout_no_solution` / `infeasible` (sprzeczne zasady "bez wyjątków" albo przypięcia; z wyjaśnieniem dla menedżera).
 - Frontend odpytuje `GET /generation-runs/{id}` co 1–2 s (bez websocketów w prototypie).
 
 ## 2. Modele danych
@@ -307,3 +307,24 @@ Założenia:
 11. Ocena: zasady "bez wyjątków" nie wchodzą do procentów (to ograniczenia), tak samo zasady bez niczego do zmierzenia (np. równe zamknięcia, gdy nie ma zmian zamykających); `Scores` podaje ich liczbę (`unmeasured_rules`) oraz liczbę próśb "inne" zostawionych menedżerowi (`unscored_requests`), żeby 100 % nie wyglądało na "wszystko sprawdzone". Waga zasady wynika z miejsca wśród zasad miękkich lokalu: 1, `rank_decay`, `rank_decay²`… Brak pozycji w grupie = 100 %.
 12. `stability_penalty` w profilu wag oznacza punkty skali 0–100 za każdą zmianę opublikowanego przypisania (domyślnie 5).
 13. Pożyczenie osoby do innego lokalu nie jest błędem walidatora (robi je menedżer ręcznie); ograniczenie do lokalu domowego dotyczy tylko generatora.
+
+## 11. Etap 5: generator i przyjęte założenia
+
+- `engine/solver.py`: `solve(problem, time_limit_s, workers, seed, weights=None, diversity_from=())` buduje model CP-SAT z tego samego `Problem` co walidator. Faza 1 minimalizuje dziury (40 % limitu czasu; na danych demo dowód optimum w ok. 1–2 s), faza 2 przy tej liczbie dziur minimalizuje karę z `engine.scoring.penalty`, z podpowiedzią z fazy 1. Każda zasada z katalogu ma metodę `_rule_<kod>`: dla "bez wyjątków" ograniczenie, dla zwykłej kara.
+- Kara w modelu odwzorowuje ocenę walidatora: dokładnie dla dni "wolę nie", próśb tekstem (poza mianownikiem udziału), celu i maksimum godzin, dni z rzędu, osoby odpowiedzialnej na zamknięciu, równego podziału (dzielenie w modelu) i stabilności. Zasady liczone jako udział w zmiennej liczbie miejsc (odpoczynek, ta sama pora w tygodniu, zmiany w tygodniu, stała pora stanowiska) i "chętnie" dzielą przez oszacowanie tej liczby. Menedżer zawsze widzi ocenę z walidatora, nie wartość z modelu.
+- Gdy model nie ma rozwiązania: najpierw walidator sprawdza same przypięcia i dni minione (np. przypięta osoba ma "nie mogę"), potem generator po kolei wyłącza zasady "bez wyjątków" i nazywa te, bez których grafik da się ułożyć.
+- `apps/scheduling/problem_builder.py` czyta bazę do `Problem`, `apps/scheduling/generation.py` przyjmuje zlecenie (API), wykonuje je (worker) i zapisuje szkic, `apps/scheduling/tasks.py` to zadania kolejki. Endpointy: `GET/POST /locations/{id}/periods`, `POST /periods/generate`, `GET /generation-runs/{id}`.
+- Docker Compose ma osobny kontener `solver` (kolejka `solver`, `SOLVER_CONCURRENCY=1`, max 2) obok `worker` (kolejka `default`). `SOLVER_WORKERS` = liczba wątków CP-SAT na jedno generowanie (domyślnie 8).
+- `manage.py generate_schedule --company <id>` albo `--period <id>` układa grafik od razu, bez kolejki i bez liczenia do limitu (do sprawdzania na danych demo). Dane demo (4 piekarnie, miesiąc, 1015 zmian, 76 osób): 30 s, 19 dziur (minimum, wynika z dyspozycji), zasady menedżera ok. 84 %, prośby ok. 87 %.
+
+Założenia:
+1. Sloty powstają z obsady dnia tygodnia, a wyjątek na datę zastępuje ją dla tej pary (zmiana, stanowisko); wyjątek bez godzin zostawia zwykłe godziny. Zmiana "dowolne godziny" bez godzin w obsadzie i w wyjątku jest pomijana z uwagą w wyniku (`scores.notes`).
+2. Generowanie dla grupy wymaga okresów o tych samych datach we wszystkich wybranych lokalach jednej grupy; lokale w różnych strefach czasowych układamy osobno.
+3. Kolejność zasad lokalu: zasady grupy i lokalu w jednej liście według pola "miejsce na liście"; przy tym samym miejscu zasada lokalu jest wyżej; ustawienie lokalu dla tej samej zasady zastępuje ustawienie grupy, a wyłączone zasady wypadają. Profil wag: przy jednym lokalu jego własny, w innym wypadku profil grupy, a bez profilu wartości domyślne.
+4. Prośby tekstem: tylko zinterpretowane trafiają do generatora jako swój typ; nowe, niejasne ("do decyzji menedżera") i dotyczące osoby spoza grafiku są typu "inne" (liczone jako "do oceny przez kierownika"); odrzucone pomijamy.
+5. Ponowne generowanie, gdy okres ma opublikowaną wersję: dni przed dzisiejszym są zamrożone i biorą zmiany z opublikowanej wersji (także gdy ustawienia obsady się zmieniły); dalsze dni układamy z obecnej obsady z karą za każdą zmianę względem opublikowanej. Przypięcia bierzemy z najnowszej wersji okresu (szkicu albo opublikowanej).
+6. Osoba wyłączona (`is_active = false`) albo pożyczona z innego lokalu zachowuje tylko swoje przypięte i minione zmiany; generator nie daje jej nowych. Opublikowane zmiany tych samych osób w innych okresach i lokalach (7 dni wokół okresu) liczą się do odpoczynku, nakładania i dni z rzędu.
+7. Wynik zapisujemy jako nową wersję szkicu (numer o 1 większy) dla każdego lokalu; okres "zbieranie dyspozycji" przechodzi w "szkic". Historię przypisań (`AssignmentEvent`) zapisujemy dopiero przy publikacji (etap 8), żeby kolejne szkice jej nie zaśmiecały.
+8. Limit generowań liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
+9. Zlecenie, które zostało "w trakcie" ponad 10 minut (albo "w kolejce" ponad 30), zadanie okresowe co 10 minut oznacza jako nieudane, żeby ekran nie czekał w nieskończoność.
+10. Warianty: kod przyjmuje inny profil wag i listę wcześniejszych grafików, od których nowy musi się różnić w min. 15 % przypisań; w tej wersji wołamy go raz.

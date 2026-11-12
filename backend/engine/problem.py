@@ -97,6 +97,9 @@ class Employee:
     contract: Contract = Contract.CIVIL
     max_hours_month: float | None = None  # personal maximum (soft rule personal_max_hours)
     target_hours_month: float | None = None  # soft rule target_hours
+    # False for someone switched off (or borrowed from another location) who only keeps the shifts they already
+    # have in this problem (pins, past days): the generator gives them nothing new. The validator ignores it.
+    available: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "positions", frozenset(self.positions))
