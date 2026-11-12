@@ -50,7 +50,7 @@ describe('OverviewScreen', () => {
       </AsManager>,
     )
     expect(await screen.findByText('Wieliczka – Rynek')).toBeInTheDocument()
-    expect(screen.getByText('Wpisali: 1 z 3')).toBeInTheDocument()
+    expect(screen.getByText('Wysłali dyspozycje: 1 z 3')).toBeInTheDocument()
     expect(screen.getByText('Anna Wróbel, Marek Zając')).toBeInTheDocument()
     expect(screen.getByText('Zmiany po terminie: 2 dni')).toBeInTheDocument()
     expect(screen.getByText(/Termin minął. Można układać grafik/)).toBeInTheDocument()
@@ -66,7 +66,7 @@ describe('OverviewScreen', () => {
       </AsManager>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Przypomnij (2)' }))
-    expect(await screen.findByText('Wysłane w aplikacji do: 2 osoby.')).toBeInTheDocument()
+    expect(await screen.findByText(/Zapisane w aplikacji dla: 2 osoby\./)).toBeInTheDocument()
     const post = calls.find((c) => c.method === 'POST')!
     expect(post.url).toBe('/api/periods/p1/ask-availability')
     expect(post.body).toEqual({ only_missing: true })

@@ -117,7 +117,9 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
         </p>
         {scope === 'location' && data.group && (
           <p className="m-0 max-w-[75ch] text-ink-muted">
-            Zasady z grupy „{data.group.name}” obowiązują też tutaj. Zmiana w tym lokalu dotyczy tylko jego.
+            Zasady z grupy „{data.group.name}” obowiązują też tutaj. Zmiana w tym lokalu dotyczy tylko jego. Gdy przesuniesz
+            zasadę albo zmienisz jej ustawienie, ta zasada przestaje iść za grupą (etykieta „zmienione w tym lokalu”).
+            Zasady ustawione dokładnie jak w grupie dalej zmieniają się razem z grupą.
           </p>
         )}
         {scope === 'group' && (
@@ -200,7 +202,8 @@ function PreviewText({ result }: { result: PreviewOut }) {
   }
   return (
     <div className="grid gap-3">
-      <p className="m-0 text-ink-muted">Sprawdziłem ostatni grafik ({result.period}) z nowymi zasadami, bez układania go od nowa.</p>
+      <p className="m-0 text-ink-muted">Sprawdziłem ostatni grafik ({result.period}) z nowymi zasadami, bez układania go od nowa. To nie jest
+        prognoza: przy następnym układaniu grafik może się zmienić bardziej, niż tu widać.</p>
       {result.lines.length === 0 ? (
         <p className="m-0">Ta zmiana nie zmienia oceny ostatniego grafiku.</p>
       ) : (

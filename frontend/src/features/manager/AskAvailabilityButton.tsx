@@ -38,7 +38,7 @@ export function AskAvailabilityButton({
           const { notified } = response.data as AskAvailabilityOut
           setDone(
             notified
-              ? `Wysłane w aplikacji do: ${people(notified)}.`
+              ? `Zapisane w aplikacji dla: ${people(notified)}. Pracownicy zobaczą to powiadomienie w jednej z następnych wersji, więc na razie powiedz im też osobiście.`
               : 'Nie ma komu wysłać: nikt nie jest przypisany do tego lokalu.',
           )
           void queryClient.invalidateQueries()

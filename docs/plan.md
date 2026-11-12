@@ -367,3 +367,5 @@ Założenia:
 7. Pracownika "wyłącza z grafiku" kierownik jego lokalu (`is_active = false`); jego dawne zmiany zostają.
 
 Na etap 8 (dopisane tutaj, nie zrobione w etapie 7): przycisk "Ułóż grafik" przy lokalu, aktywny jako świadoma akcja, z podpowiedzią, gdy termin minął albo wszyscy wpisali (i ostrzeżeniem, ilu osób brakuje); "Ułóż dla wszystkich". Ekran rejestracji firmy i wpisania kodu dostępu (API jest od etapu 3) też nie powstał w etapie 7; do zrobienia razem z etapem 8 albo osobno.
+
+Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że pracownicy zobaczą powiadomienie w jednej z następnych wersji i że na razie trzeba im powiedzieć osobiście; podgląd zasad mówi wprost, że to sprawdzenie ostatniego grafiku, a nie prognoza; ekran zasad lokalu tłumaczy, kiedy zasada przestaje iść za grupą; licznik to "Wysłali dyspozycje" (przycisk "Gotowe"), nie zaznaczone dni. Do sprawdzenia w pilocie: czy kierownik chce móc pominąć zmiany po terminie, czy podgląd na ostatnim grafiku wystarcza, i czy ktoś poza właścicielem musi zakładać lokale i grupy.

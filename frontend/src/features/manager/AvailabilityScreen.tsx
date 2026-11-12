@@ -138,7 +138,10 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
       </section>
 
       {missing.length > 0 && (
-        <Section title={`Jeszcze nie wpisali (${missing.length})`}>
+        <Section
+          title={`Jeszcze nie wysłali (${missing.length})`}
+          description="Liczy się przycisk „Gotowe, wysyłam kierownikowi”. Ktoś mógł już zaznaczyć dni, ale go nie nacisnął."
+        >
           <p className="m-0">{namesList(missing.map((e) => e.name), 12)}</p>
         </Section>
       )}

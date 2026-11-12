@@ -204,7 +204,7 @@ export function Progress({ done, total }: { done: number; total: number }) {
   return (
     <div className="grid gap-1">
       <span className="font-semibold">
-        Wpisali: {done} z {total}
+        Wysłali dyspozycje: {done} z {total}
       </span>
       <div
         role="progressbar"
