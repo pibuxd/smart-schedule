@@ -4,8 +4,8 @@ import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
 import { cn } from '../../lib/cn'
-import { WEEKDAY_HEADERS } from '../../lib/dates'
-import type { AvailabilityState } from './marks'
+import { parseDate, WEEKDAY_HEADERS, weekdayIndex } from '../../lib/dates'
+import { type AvailabilityState, type Marks, marksToReplace, replaceNote } from './marks'
 import { StatePicker } from './StatePicker'
 
 const WEEKDAY_NAMES = ['poniedziałki', 'wtorki', 'środy', 'czwartki', 'piątki', 'soboty', 'niedziele']
@@ -15,6 +15,8 @@ export function MoreOptionsSheet({
   open,
   onOpenChange,
   periodEnd,
+  marks,
+  dates,
   busy,
   error,
   onRepeat,
@@ -23,6 +25,9 @@ export function MoreOptionsSheet({
   open: boolean
   onOpenChange: (open: boolean) => void
   periodEnd: string
+  /** Current marks and the period's days, to say how many marked days an action replaces. */
+  marks: Marks
+  dates: string[]
   busy: boolean
   error: string | null
   onRepeat: (weekdays: number[], state: AvailabilityState, until: string) => void
@@ -31,6 +36,10 @@ export function MoreOptionsSheet({
   const [weekdays, setWeekdays] = useState<number[]>([])
   const [state, setState] = useState<AvailabilityState>('cannot')
   const [until, setUntil] = useState(periodEnd)
+
+  const repeatDates = dates.filter((date) => date <= until && weekdays.includes(weekdayIndex(parseDate(date))))
+  const repeatNote = replaceNote(marksToReplace(marks, repeatDates, { state, from: null, to: null }))
+  const copyNote = replaceNote(marksToReplace(marks, dates))
 
   const toggle = (day: number) =>
     setWeekdays((days) => (days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort()))
@@ -77,6 +86,7 @@ export function MoreOptionsSheet({
               className="min-h-(--touch-main) rounded-md border-2 border-ink bg-surface px-3 text-lg"
             />
           </div>
+          {repeatNote && <p className="m-0 font-semibold text-prefer-not">{repeatNote}</p>}
           <Button wide disabled={busy || weekdays.length === 0 || !until} onClick={() => onRepeat(weekdays, state, until)}>
             {weekdays.length === 0
               ? 'Wybierz dni tygodnia'
@@ -91,6 +101,7 @@ export function MoreOptionsSheet({
             Każdy dzień dostanie to, co było zaznaczone w ten sam dzień tygodnia miesiąc wcześniej. Potem możesz
             poprawić pojedyncze dni albo wszystko cofnąć przyciskiem „Cofnij”.
           </p>
+          {copyNote && <p className="m-0 font-semibold text-prefer-not">{copyNote}</p>}
           <Button variant="secondary" wide disabled={busy} onClick={onCopy}>
             Skopiuj z poprzedniego miesiąca
           </Button>

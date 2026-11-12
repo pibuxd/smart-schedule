@@ -77,3 +77,21 @@ export function countStates(marks: Marks, dates: string[]): Record<AvailabilityS
   for (const date of dates) counts[markOf(marks, date).state] += 1
   return counts
 }
+
+/** Days among `dates` that already carry a mark and would end up different (for the overwrite note). */
+export function marksToReplace(marks: Marks, dates: string[], next?: Mark): number {
+  return dates.filter((date) => {
+    const mark = markOf(marks, date)
+    const marked = mark.state !== 'neutral' || hasHours(mark)
+    return marked && (next === undefined || !sameMark(mark, next))
+  }).length
+}
+
+/** "Zastąpi 3 zaznaczone dni w tym miesiącu." or null when nothing is replaced. */
+export function replaceNote(count: number): string | null {
+  if (count === 0) return null
+  const tens = count % 100
+  const few = count % 10 >= 2 && count % 10 <= 4 && (tens < 12 || tens > 14)
+  const words = count === 1 ? 'zaznaczony dzień' : few ? 'zaznaczone dni' : 'zaznaczonych dni'
+  return `Zastąpi ${count} ${words} w tym miesiącu.`
+}

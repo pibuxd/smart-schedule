@@ -335,6 +335,8 @@ function AvailabilityEditor({
           setMoreError(null)
         }}
         periodEnd={period.end}
+        marks={marks}
+        dates={dates}
         busy={repeat.isPending || copy.isPending}
         error={moreError}
         onRepeat={(weekdays, state, until) =>
