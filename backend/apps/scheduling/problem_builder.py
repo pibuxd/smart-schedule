@@ -2,8 +2,9 @@
 
 Everything company-specific is resolved here, so the engine only sees plain data:
 
-- slots from the weekly staffing table and the date exceptions (days that have passed keep the shifts of the
-  published version, so a later change of settings does not rewrite history);
+- slots from the weekly staffing table and the date exceptions; a flexible shift without hours stops the run
+  (days that have passed keep the shifts of the published version, so a later change of settings does not
+  rewrite history);
 - active employees of the locations, plus anyone already in a pinned or past slot;
 - rules of the location group with the location's own changes on top, in one list ordered by importance;
 - text requests: interpreted ones as their type, unread or unclear ones as "other" (left to the manager);
@@ -220,9 +221,12 @@ class _Reader:
                         )
                     )
                     self.sources[key] = SlotSource(str(location.id), str(shift_type_id), str(position_id))
-        for name in sorted(missing_hours):
-            self.notes.append(
-                f"Zmiana „{name}” w lokalu {location.name} nie ma ustawionych godzin, więc jej pominięto."
+        if missing_hours:
+            # Skipping these would hide a whole unstaffed shift (no slot, so no hole): stop and say what to fix.
+            names = ", ".join(f"„{name}”" for name in sorted(missing_hours))
+            raise BuildError(
+                f"W lokalu {location.name} zmiana {names} ma dowolne godziny, ale w obsadzie nie ustawiono, "
+                "od której do której. Uzupełnij godziny w ustawieniach lokalu i ułóż grafik ponownie."
             )
         return slots
 

@@ -77,8 +77,6 @@ def test_slots_come_from_staffing_with_exceptions_and_flexible_hours(shop):
         start_time=time(4),
         end_time=time(9),
     )
-    nameless = ShiftType.objects.create(location=location, name="Bez godzin", kind=ShiftType.Kind.FLEXIBLE)
-    StaffingRule.objects.create(location=location, weekday=2, shift_type=nameless, position=seller, count=1)
     StaffingException.objects.create(
         location=location, date=MON, shift_type=shop["shift_type"], position=seller, count=0
     )
@@ -102,10 +100,22 @@ def test_slots_come_from_staffing_with_exceptions_and_flexible_hours(shop):
     assert (delivery.start.hour, delivery.end.hour) == (4, 9)
     thursday = [s for s in slots.values() if s.date == MON + timedelta(days=3)]
     assert len(thursday) == 3 and {(s.start.hour, s.end.hour) for s in thursday} == {(7, 15)}
-    assert any("Bez godzin" in note for note in built.notes)
     assert len(slots) == 3 + 2 + 3 + 2 + 1 + 1  # Tue 2+1, Wed 2, Thu 3, Fri 2, Sat 1, Sun 1
     assert {s.location for s in slots.values()} == {str(location.id)}
     assert company.id == shop["period"].company_id
+
+
+@pytest.mark.django_db
+def test_flexible_shift_without_hours_stops_the_run_instead_of_hiding_it(shop):
+    nameless = ShiftType.objects.create(location=shop["location"], name="Bez godzin", kind=ShiftType.Kind.FLEXIBLE)
+    StaffingRule.objects.create(
+        location=shop["location"], weekday=2, shift_type=nameless, position=shop["position"], count=1
+    )
+    run = run_generation(request_generation(_ctx(shop), [shop["period"]]).pk, **FAST)
+
+    assert run.status == GenerationRun.Status.FAILED
+    assert "„Bez godzin”" in run.error and "Uzupełnij godziny" in run.error
+    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
 
 
 @pytest.mark.django_db

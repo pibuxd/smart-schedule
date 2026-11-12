@@ -723,16 +723,22 @@ def _fixed_conflicts(problem: Problem, fixed: Mapping[str, str | None]) -> list[
     return list(dict.fromkeys(messages))
 
 
-def _diagnose(problem: Problem, workers: int, seed: int) -> list[str]:
-    """Name the "no exceptions" rules that make the schedule impossible (each one tried switched off)."""
+def _diagnose(problem: Problem, workers: int, seed: int, budget_s: float) -> list[str]:
+    """Name the "no exceptions" rules that make the schedule impossible (each one tried switched off).
+
+    Takes at most about `budget_s` in total, so a location with many such rules does not wait much longer."""
+    deadline = clock.monotonic() + budget_s
     hard = [(loc, r.code) for loc in problem.locations for r in problem.rules_for(loc) if r.hard]
     culprits = []
     for key in hard:
+        left = deadline - clock.monotonic()
+        if left <= 0:
+            break
         builder = _Builder(problem, relaxed_rules=frozenset({key}))
-        status = _solver(DIAGNOSIS_TIME_S, workers, seed).solve(builder.m)
+        status = _solver(min(DIAGNOSIS_TIME_S, left), workers, seed).solve(builder.m)
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             culprits.append(key)
-    if not culprits and hard:
+    if not culprits and hard and clock.monotonic() < deadline:
         builder = _Builder(problem, relaxed_rules=frozenset(hard))
         status = _solver(DIAGNOSIS_TIME_S, workers, seed).solve(builder.m)
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -782,7 +788,10 @@ def solve(
     status = first.solve(builder.m)
     if status == cp_model.INFEASIBLE:
         return SolveResult(
-            SolveStatus.INFEASIBLE, None, time_ms=elapsed_ms(), messages=tuple(_diagnose(problem, workers, seed))
+            SolveStatus.INFEASIBLE,
+            None,
+            time_ms=elapsed_ms(),
+            messages=tuple(_diagnose(problem, workers, seed, budget_s=time_limit_s)),
         )
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return SolveResult(
