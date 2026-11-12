@@ -1,0 +1,36 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+  &rsaquo; <a href="{% url 'admin:billing_accesscode_changelist' %}">Kody dostępu</a>
+  &rsaquo; Nowe kody
+</div>
+{% endblock %}
+
+{% block content %}
+{% if codes %}
+  <h1>Nowe kody ({{ codes|length }})</h1>
+  <p><strong>Skopiuj je teraz.</strong> Kody są pokazywane tylko raz: w bazie zostaje wyłącznie ich skrót.</p>
+  <textarea readonly rows="{{ codes|length|add:1 }}" cols="24" style="font-family: monospace; font-size: 1.1rem">{% for code in codes %}{{ code }}
+{% endfor %}</textarea>
+  <p>Każdy kod: {{ days }} dni dostępu, maks. użyć: {{ max_uses }}{% if valid_until %}, ważny do {{ valid_until }}{% endif %}{% if note %}, notatka: {{ note }}{% endif %}.</p>
+  <p><a class="button" href="{% url 'admin:billing_accesscode_changelist' %}">Wróć do listy kodów</a></p>
+{% else %}
+  <h1>Wygeneruj kody dostępu</h1>
+  <form method="post">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row">
+          {{ field.errors }}
+          {{ field.label_tag }} {{ field }}
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="Wygeneruj"></div>
+  </form>
+{% endif %}
+{% endblock %}

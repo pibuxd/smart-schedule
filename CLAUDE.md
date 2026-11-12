@@ -40,6 +40,7 @@ cd backend
 uv sync
 uv run python manage.py migrate
 uv run python manage.py seed_demo [--reset]              # demo data: 4 bakeries + a separate café
+# log in: POST /api/auth/request-code, the code is printed by runserver ("SMS to +48…")
 DJANGO_DEBUG=1 uv run python manage.py runserver          # API on :8000
 DJANGO_DEBUG=1 uv run python manage.py procrastinate worker
 uv run pytest                                             # tests (need Postgres)
@@ -72,6 +73,14 @@ cd ../frontend && npm run api:generate
   and on m2m add). API code starts with `ctx = tenant_context(request, company_id)` and reads only via
   `ctx.qs(Model)` / `ctx.get(Model, ...)` (404 for other companies). `tests/test_tenant_guard.py` fails on plain
   `Model.objects` in `api.py` unless the line has `# tenant-ok: <reason>`. Each new endpoint gets a cross-company test.
+- Auth: every endpoint needs a session (`auth=django_auth` is the API default, CSRF included); only `health`,
+  `auth/*` and `GET /me` use `auth=None`. Endpoints addressed by an object id start with
+  `ctx, obj = context_for(request, Model, id)`. Every endpoint that changes company data calls
+  `ctx.require_writable()` (402 when the company's access has expired) and the right `ctx.require_manager*()`.
+- Errors are `HttpError(status, "<Polish sentence for the user>")` → `{"detail": ...}` (`apps.core.schemas.ErrorOut`).
+  When a failure must leave a trace (attempt counters), raise after the `transaction.atomic()` block, not inside.
+- Login codes: `apps/accounts/login.py`; SMS goes through `settings.SMS_BACKEND` (console by default; tests use
+  the `sms_outbox` fixture). Rate limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`.
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
 - Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.

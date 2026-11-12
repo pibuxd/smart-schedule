@@ -5,6 +5,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from apps.tenancy.base import UUIDModel
 
@@ -68,9 +69,19 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
         super().clean()
         self.phone_e164 = normalize_phone(self.phone_e164)
 
+    def _get_session_auth_hash(self, secret=None):
+        # The phone number is the identity. When the superadmin changes it, every existing session of
+        # this account stops working, so whoever still holds the old phone or an old device is logged out.
+        return salted_hmac(
+            "apps.accounts.User.session_auth_hash",
+            f"{self.password}|{self.phone_e164}",
+            secret=secret,
+            algorithm="sha256",
+        ).hexdigest()
+
 
 class LoginCode(UUIDModel):
-    """One SMS login code. Only the hash is stored (logic in stage 3)."""
+    """One SMS login code. Only the hash is stored (logic in `apps/accounts/login.py`)."""
 
     phone_e164 = models.CharField(max_length=16, db_index=True)
     code_hash = models.CharField(max_length=128)

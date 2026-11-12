@@ -88,7 +88,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `LocationGroup` | name | opcjonalna |
 | `Location` | name, address, group (nullable), timezone (Europe/Warsaw), schedule_period (week/month), availability_deadline_days | |
 | `Membership` | user, company, role (owner/manager/employee), locations (M2M dla menedżera) | unikalne (user, company) |
-| `Invitation` | location, phone, role, status (pending/accepted/declined/cancelled), invited_by, decided_at | częściowy indeks unikalny (location, phone) WHERE status='pending' |
+| `Invitation` | location, phone, first_name, last_name (opcjonalne), role, status (pending/accepted/declined/cancelled), invited_by, decided_at | częściowy indeks unikalny (location, phone) WHERE status='pending' |
 
 ### Subskrypcja
 
@@ -174,14 +174,14 @@ Walidator ma ostatnie słowo: wynik solvera, który nie przejdzie walidatora, ni
 ## 4. Endpointy (Django Ninja, prefiks `/api`)
 
 Logowanie i konto
-- `POST /auth/request-code` (phone) · `POST /auth/verify-code` (phone, code) · `POST /auth/logout` · `GET /me`
+- `POST /auth/request-code` (phone, purpose: login/register) · `POST /auth/verify-code` (phone, code) · `POST /auth/logout` · `GET /me` (ustawia też ciasteczko CSRF) · `PATCH /me` (imię i nazwisko)
 - `GET /me/invitations` · `POST /invitations/{id}/accept` · `POST /invitations/{id}/decline`
 - `POST /companies` (rejestracja menedżera: nazwa firmy, opcjonalnie kod) · `GET /companies/{id}/subscription` · `POST /companies/{id}/subscription/redeem`
 
 Ustawienia (menedżer)
 - `GET/POST /groups`, `GET/POST/PATCH /locations`
 - `GET/POST/PATCH/DELETE /locations/{id}/positions`, `/shift-types`, `/staffing-rules`, `/staffing-exceptions`
-- `GET/PATCH /locations/{id}/employees`, `POST /locations/{id}/invitations`, `POST /invitations/{id}/cancel`
+- `GET/PATCH /locations/{id}/employees`, `GET/POST /locations/{id}/invitations`, `POST /invitations/{id}/cancel`
 
 Dyspozycyjność i prośby
 - `GET /me/availability?period=` · `PUT /me/availability` (lista dni) · `POST /me/availability/pattern` · `POST /me/availability/copy-previous`
@@ -263,3 +263,24 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 - Usuwanie a historia (od etapu 2 pilnuje tego baza, `on_delete=RESTRICT`): nie da się usunąć pojedynczo lokalu z okresami grafiku, okresu z wersjami, stanowiska użytego w zmianach ani pracownika z przypisaniami. Usunięcie całej firmy (tylko superadmin, np. firma testowa) nadal usuwa wszystko. Etap 7: pracownika wyłącza się przez `is_active = false`, a lokal archiwizuje (nowe pole przy ekranach), zamiast usuwać.
 - Etap 7: lista zasad lokalu pokazuje, które zasady są dziedziczone z grupy, a które zmienione lub wyłączone w lokalu.
 - Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.
+- Etap 6/7 (z przeglądu etapu 3): na ekranie zaproszeń menedżer widzi podpowiedź "Powiedz tej osobie, żeby zalogowała się tym numerem" (SMS z zaproszeniem nie idzie) oraz informację, że zaproszona osoba pracuje już w innym lokalu firmy i zachowa tamten lokal domowy. Komunikat trybu tylko do odczytu rozróżnia firmę bez kodu od firmy po wygaśnięciu. W trybie tylko do odczytu pracownik nadal widzi swój opublikowany grafik.
+- Przed wdrożeniem dla prawdziwych użytkowników: bramka SMS (bez niej kody logowania są w logach serwera; `manage.py check` ostrzega: `accounts.W001`), sprawdzenie limitu 20 próśb o kod na adres IP przy wspólnym Wi-Fi w lokalu, decyzja, czy firma bez kodu ma dostać krótki okres próbny zamiast trybu tylko do odczytu.
+
+## 9. Etap 3: jak to działa i przyjęte założenia
+
+- Logowanie: `apps/accounts/login.py`. Kod 6 cyfr z `secrets`, w bazie skrót HMAC (klucz z `SECRET_KEY`), 5 minut, 5 prób na kod. Limity liczone z tabeli `LoginCode` pod blokadą na numer i na adres IP (`pg_advisory_xact_lock`), więc dwa równoległe żądania nie ominą limitu. Konto powstaje przy pierwszym poprawnym kodzie.
+- Wysyłka: `settings.SMS_BACKEND` (ścieżka do klasy z metodą `send`). Domyślnie `ConsoleSmsSender` wypisuje SMS w logu serwera. Prawdziwa bramka to nowa klasa i zmienna środowiskowa.
+- Adres IP klienta: za Caddym z nagłówka `X-Forwarded-For` (`DJANGO_NUM_PROXIES=1` w Docker Compose), bez proxy z połączenia.
+- Wszystkie endpointy wymagają sesji (domyślne `auth=django_auth` w `config/api.py`, ze sprawdzaniem CSRF), poza `health`, `auth/*` i `GET /me`. Endpointy logowania sprawdzają CSRF same.
+- Endpointy adresowane samym id obiektu (`/locations/{id}/…`, `/invitations/{id}/cancel`) ustalają firmę z obiektu przez `context_for(request, Model, id)`; obca firma dostaje 404.
+- Tryb tylko do odczytu: `ctx.require_writable()` w każdym endpoincie zmieniającym dane firmy (402). Stan subskrypcji liczy `apps/billing/services.py::subscription_state`.
+- Kody dostępu: admin → Kody dostępu → Dodaj otwiera stronę generowania partii (1–100 kodów); kody widać raz.
+- Stare kody logowania usuwa codzienne zadanie okresowe workera (`accounts.delete_old_login_codes`).
+
+Założenia:
+1. Ekrany logowania, zaproszeń i subskrypcji powstają w etapie 6 (po akceptacji kierunku wizualnego); etap 3 dostarcza API, testy i wygenerowanego klienta.
+2. Osoba, która już pracuje w innym lokalu tej samej firmy i przyjmie zaproszenie pracownika do kolejnego, zachowuje dotychczasowy lokal domowy.
+3. Zaproszenie na rolę menedżera przyjęte przez pracownika podnosi rolę do menedżera i zostawia profil pracownika.
+4. Odpowiedź na zaproszenie (akceptacja, odrzucenie) działa także wtedy, gdy firma jest w trybie tylko do odczytu; nowych zaproszeń wysłać wtedy nie można.
+5. Stan subskrypcji i kody widzi właściciel i menedżer firmy; pracownik widzi tylko, czy firma jest w trybie tylko do odczytu (`GET /me`).
+6. `ConsoleSmsSender` zostaje domyślny także poza trybem deweloperskim, dopóki nie ma bramki; kody logowania są wtedy w logach serwera, więc przed wdrożeniem dla prawdziwych użytkowników trzeba podłączyć bramkę.

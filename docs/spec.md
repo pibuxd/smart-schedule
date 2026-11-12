@@ -64,6 +64,10 @@ h) LLM (Claude, Anthropic Python SDK, structured outputs) tylko zamienia prośby
 - Kody wysyłamy tylko na numery +48, które mają konto albo oczekujące zaproszenie, oraz przy rejestracji nowego menedżera. Limity: kilka kodów na numer na godzinę i limit na adres IP.
 - Lokalnie kod wypisywany w konsoli. Prawdziwa bramka SMS (np. SMSAPI.pl) za wymienialnym interfejsem, dopiero przy wdrożeniu.
 - Menedżer zaprasza pracownika po numerze telefonu: wiersz w tabeli invitations ze statusem (oczekuje / przyjęte / odrzucone / anulowane), unikalne oczekujące zaproszenie na parę (placówka, numer). SMS z zaproszeniem NIE jest wysyłany. Pracownik po zalogowaniu widzi zaproszenie: Akceptuj / Odrzuć; akceptacja w jednej transakcji. Kto ma już konto, widzi nowe zaproszenie od razu.
+- Limity dokładnie: kolejny kod najwcześniej po 60 s, najwyżej 5 kodów na numer na godzinę i 20 próśb o kod z jednego adresu IP na godzinę (liczą się też prośby dla nieznanych numerów). Nowy kod unieważnia poprzedni. W bazie jest tylko skrót kodu.
+- Nieznany numer przy logowaniu dostaje jasną odpowiedź ("Nie znamy tego numeru. Poproś kierownika o zaproszenie…"), a nie udawane wysłanie kodu: dla osób niechętnych technologii czekanie na SMS, który nie przyjdzie, jest gorsze niż ryzyko, że ktoś sprawdzi, czy numer ma konto (to ryzyko ogranicza limit na adres IP).
+- Zapraszając, menedżer może od razu wpisać imię i nazwisko; trafiają na konto przy akceptacji, jeśli konto nie ma jeszcze imienia. Pracownika zaprasza menedżer lokalu, menedżera zaprasza tylko właściciel firmy. Akceptacja zaproszenia pracownika tworzy członkostwo w firmie i profil pracownika z tym lokalem jako domowym (umowa zlecenie, do zmiany przez menedżera).
+- Zmiana numeru telefonu: robi ją superadmin w panelu. Konto, członkostwa i historia zostają; wszystkie sesje tego konta wygasają i trzeba zalogować się nowym numerem. Zaproszenia oczekujące na stary numer menedżer wysyła ponownie. Numery spoza Polski: poza prototypem.
 - Poza kodami logowania nic nie wysyłamy SMS-em ani e-mailem. Powiadomienia tylko w aplikacji.
 
 ## Dostęp i subskrypcja (bez płatności online, bez Stripe)
@@ -73,6 +77,8 @@ h) LLM (Claude, Anthropic Python SDK, structured outputs) tylko zamienia prośby
 - Kod wpisuje kierownik przy zakładaniu firmy albo później w ustawieniach. Subskrypcja dotyczy całej firmy; pracownicy niczego nie wpisują.
 - Tabela subscriptions niezależna od dostawcy płatności: firma, status (aktywna / wygasła), data końca, źródło ("kod", w przyszłości "stripe"). Kolejny kod przedłuża dostęp od daty końca, nie od dnia wpisania.
 - 7 dni przed końcem baner w panelu kierownika. Po wygaśnięciu tryb tylko do odczytu: grafik widoczny, bez edycji i generowania. Danych nie usuwamy.
+- Tryb tylko do odczytu obejmuje też firmę założoną bez kodu. Każda zmiana danych firmy jest wtedy odrzucana (HTTP 402 z komunikatem po polsku); wyjątki: wpisanie kodu oraz odpowiedź zaproszonej osoby na zaproszenie.
+- Limit prób wpisania kodu: 5 błędnych na konto i 20 na adres IP w ciągu godziny. Kod ma 12 znaków, pokazywany w grupach po 4 (ABCD-EFGH-JKMN); spacje i myślniki nie mają znaczenia. Jeden kod można użyć w danej firmie tylko raz. Kody widać w całości tylko raz, zaraz po wygenerowaniu; w bazie jest skrót i pierwsze 4 znaki.
 - Limit generowań grafiku na firmę (roboczo 30 na miesiąc), także w okresie darmowym.
 
 ## Stos

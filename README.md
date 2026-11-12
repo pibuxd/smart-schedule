@@ -28,6 +28,13 @@ docker compose exec api python manage.py seed_demo            # raz
 docker compose exec api python manage.py seed_demo --reset    # usuń i utwórz od nowa
 ```
 
+Logowanie (od etapu 3; ekrany powstaną w etapie 6, na razie jest samo API, opis pod http://localhost:8080/api/docs):
+aplikacja prosi o kod na numer telefonu, a kod zamiast SMS-em trafia do logu serwera
+(`docker compose logs api | grep "SMS to"`). Numer menedżera danych przykładowych wypisuje `seed_demo`.
+
+Kody na darmowy dostęp tworzy superadmin: panel administratora → Kody dostępu → Dodaj. Kody widać w całości tylko raz,
+zaraz po wygenerowaniu. Firma bez aktywnego kodu działa w trybie tylko do odczytu.
+
 Jeśli baza powstała jeszcze na etapie 1, usuń ją raz (`docker compose down -v`), bo od etapu 2 aplikacja ma własny model
 użytkownika (logowanie numerem telefonu).
 
@@ -35,5 +42,8 @@ użytkownika (logowanie numerem telefonu).
 
 Lista będzie uzupełniana w kolejnych etapach.
 
+- SMS-y z kodem logowania nie są wysyłane: kod jest wypisywany w logu serwera. Bramka SMS to osobna klasa
+  (`SMS_BACKEND`) do podłączenia przy wdrożeniu.
+- Bez płatności online: dostęp dają kody generowane w panelu administratora.
 - Izolacja firm jest w warstwie aplikacji (filtr po firmie i testy), bez Row Level Security w Postgresie.
 - Wszystko działa lokalnie; wdrożenie na serwer VPS to późniejszy krok (ten sam `docker-compose.yml`, inna wartość `SITE_ADDRESS`).
