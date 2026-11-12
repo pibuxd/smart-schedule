@@ -63,8 +63,8 @@ Kluczowa decyzja: `engine/` nie zna Django. Warstwa `scheduling` buduje z bazy o
 
 - Każda tabela z danymi firmy ma kolumnę `company_id` (NOT NULL, FK, indeks), także tabele podrzędne (np. `Assignment`), żeby filtr nie zależał od złączeń.
 - Wszystkie endpointy firmowe przechodzą przez jedną zależność `tenant_context(request)`, która z sesji i członkostw ustala firmę i role, i zwraca querysety już ograniczone (`Model.objects.for_company(company)`). Zwykły `Model.objects` w kodzie API jest blokowany testem (grep w CI) poza wyznaczonymi miejscami.
-- Klucze obce między tabelami tej samej firmy dodatkowo sprawdzane w `clean()`/serwisach (np. stanowisko z innej firmy nie może trafić do pracownika).
-- Test izolacji: dwie firmy w danych przykładowych; dla każdego endpointu z listy próba odczytu i zapisu obiektu drugiej firmy musi dać 404.
+- Klucze obce między tabelami tej samej firmy sprawdzane przy każdym zapisie (`CompanyOwnedModel.save()`/`clean()`), a powiązania wiele-do-wielu sygnałem `m2m_changed` (np. stanowisko z innej firmy nie może trafić do pracownika). `company` uzupełnia się z rodzica (np. z lokalu).
+- Test izolacji: dwie firmy w danych przykładowych; dla każdego endpointu z listy próba odczytu i zapisu obiektu drugiej firmy musi dać 404. Od etapu 2 testy sprawdzają też, że każda tabela firmowa ma `company_id` i że `api.py` nie używa `Model.objects` bez `for_company()` (wyjątek oznaczony komentarzem `# tenant-ok: powód`).
 - Row Level Security w Postgresie świadomie odkładamy (więcej pracy z migracjami i workerem); można dodać przed wdrożeniem.
 
 ### Kolejka i generator
@@ -106,7 +106,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 |---|---|---|
 | `Position` | location, name | np. Sprzedawca, Piekarz, Kierownik zmiany |
 | `ShiftType` | location, name, start_time, end_time, kind (fixed/flexible), is_closing | koniec przed początkiem = przez północ |
-| `StaffingRule` | location, weekday, shift_type, position, count | unikalne (location, weekday, shift_type, position) |
+| `StaffingRule` | location, weekday, shift_type, position, count, start/end (tylko dla zmian z dowolnymi godzinami) | unikalne (location, weekday, shift_type, position) |
 | `StaffingException` | location, date, shift_type, position, count, start/end (opcjonalnie inne godziny) | np. Wigilia, dzień bez obsady (count=0) |
 | `EmployeeProfile` | membership, home_location, positions (M2M), contract (civil/employment), max_hours_month, target_hours_month, is_active | zlecenie domyślne |
 
@@ -134,10 +134,10 @@ Katalog zasad w kodzie (`engine/rules_catalog.py`), np.: min. 11 h między zmian
 |---|---|---|
 | `SchedulePeriod` | location, start, end, status (collecting/draft/published) | |
 | `ScheduleVersion` | period, number, status (draft/published/superseded), created_by, from_run, scores (JSON), is_complete | publikacja = nowa wersja, stare zostają |
-| `Shift` | version, location, date, shift_type, position, start_at, end_at | slot obsady; godziny skopiowane, żeby zmiana ustawień nie psuła starych grafików |
-| `Assignment` | shift, employee (nullable = dziura), pinned, borrowed (z innego lokalu) | |
-| `AssignmentEvent` | shift_key, from_employee, to_employee, reason (generated/manual/offer/swap), at, by | historia; podstawa pod późniejsze zamiany |
-| `GenerationRun` | scope (location/group), period(s), status, started/finished, solver_status, time_ms, result_version, error | |
+| `Shift` | version, location, date, shift_type, position, start_at, end_at, slot_key | slot obsady na jedną osobę; godziny skopiowane, żeby zmiana ustawień nie psuła starych grafików; `slot_key` (data, zmiana, stanowisko, numer miejsca) jest stały między wersjami |
+| `Assignment` | shift (jeden do jednego), employee (nullable = dziura), pinned, borrowed (z innego lokalu) | dziura nie może być przypięta |
+| `AssignmentEvent` | location, period, slot_key, from_employee, to_employee, reason (generated/manual/offer/swap), at, by | historia; podstawa pod późniejsze zamiany |
+| `GenerationRun` | scope (location/group), period(s), status, started/finished, solver_status, time_ms, error | wynik: wersje z `ScheduleVersion.from_run` (generowanie dla grupy daje po jednej wersji na lokal) |
 
 ### Oddawanie zmian i powiadomienia
 
@@ -257,3 +257,9 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 8. Odświeżanie wyniku generowania przez odpytywanie co 1–2 s, bez websocketów.
 9. CI na GitHub Actions (ruff, pytest, eslint, typecheck, build) to część stosu narzędzi, nie aplikacji; dodam w etapie 1, jeśli się zgadzasz.
 10. Row Level Security w Postgresie odłożone; izolacja w warstwie aplikacji z testami.
+
+## 8. Uwagi na kolejne etapy (z przeglądu etapu 2)
+
+- Usuwanie a historia (od etapu 2 pilnuje tego baza, `on_delete=RESTRICT`): nie da się usunąć pojedynczo lokalu z okresami grafiku, okresu z wersjami, stanowiska użytego w zmianach ani pracownika z przypisaniami. Usunięcie całej firmy (tylko superadmin, np. firma testowa) nadal usuwa wszystko. Etap 7: pracownika wyłącza się przez `is_active = false`, a lokal archiwizuje (nowe pole przy ekranach), zamiast usuwać.
+- Etap 7: lista zasad lokalu pokazuje, które zasady są dziedziczone z grupy, a które zmienione lub wyłączone w lokalu.
+- Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.
