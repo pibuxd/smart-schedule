@@ -1,0 +1,86 @@
+# Local run of the whole stack: `docker compose up --build`, then open http://localhost:8080
+# The same file is meant for a single VPS later (set SITE_ADDRESS and real secrets in .env).
+
+x-backend-env: &backend-env
+  DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
+  DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080}
+  POSTGRES_DB: ${POSTGRES_DB:-grafikomat}
+  POSTGRES_USER: ${POSTGRES_USER:-grafikomat}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  SOLVER_TIME_LIMIT_S: ${SOLVER_TIME_LIMIT_S:-30}
+  GENERATION_MONTHLY_LIMIT: ${GENERATION_MONTHLY_LIMIT:-30}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-grafikomat}
+      POSTGRES_USER: ${POSTGRES_USER:-grafikomat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Only on this machine, so tests and `manage.py` can run outside Docker.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    environment: *backend-env
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"
+    volumes:
+      - django-static:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    environment: *backend-env
+    # Solver jobs are CPU-heavy, so by default only one job runs at a time.
+    command: python manage.py procrastinate worker --concurrency ${WORKER_CONCURRENCY:-1}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.caddy
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:8080}
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    volumes:
+      - django-static:/srv/django-static:ro
+      - caddy-data:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  django-static:
+  caddy-data:

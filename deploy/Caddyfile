@@ -1,0 +1,20 @@
+# One domain: the SPA at /, the API at /api, Django static files (admin) at /static.
+# Locally SITE_ADDRESS is ":8080" (plain HTTP). On the VPS set it to the domain and Caddy gets HTTPS itself.
+{$SITE_ADDRESS::8080} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle_path /static/* {
+		root * /srv/django-static
+		file_server
+	}
+
+	handle {
+		root * /srv/app
+		try_files {path} /index.html
+		file_server
+	}
+}
