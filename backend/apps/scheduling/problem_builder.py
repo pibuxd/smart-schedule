@@ -26,6 +26,7 @@ from django.utils import timezone
 from apps.availability.models import AvailabilityDay, TextRequest
 from apps.rules.models import RuleSetting
 from apps.rules.models import WeightProfile as WeightProfileModel
+from apps.rules.services import merge, rule_configs
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
 from apps.tenancy.models import Location
@@ -303,23 +304,9 @@ class _Reader:
     def rules(self) -> list[RuleConfig]:
         result = []
         for location in self.locations:
-            settings_by_code: dict[str, tuple[int, int, RuleSetting]] = {}
-            if location.group_id:
-                for s in self.qs(RuleSetting).filter(group_id=location.group_id):
-                    settings_by_code[s.rule_code] = (s.position, 1, s)
-            for s in self.qs(RuleSetting).filter(location=location):
-                settings_by_code[s.rule_code] = (s.position, 0, s)  # the location's own setting wins
-            ordered = sorted((v for v in settings_by_code.values() if v[2].enabled), key=lambda v: (v[0], v[1]))
-            for rank, (_, _, setting) in enumerate(ordered, start=1):
-                result.append(
-                    RuleConfig(
-                        code=setting.rule_code,
-                        location=str(location.id),
-                        rank=rank,
-                        hard=setting.is_hard,
-                        params=setting.params or {},
-                    )
-                )
+            group_rows = self.qs(RuleSetting).filter(group_id=location.group_id) if location.group_id else []
+            rows = merge(group_rows, self.qs(RuleSetting).filter(location=location))
+            result += rule_configs(str(location.id), rows)
         return result
 
     def requests(self, employee_ids: set[str]) -> list[Request]:
@@ -418,10 +405,44 @@ class _Reader:
         return BuiltProblem(problem=problem, periods=self.periods, sources=self.sources, notes=self.notes)
 
 
+class _VersionReader(_Reader):
+    """The slots and people of one saved version, as they were (not as the settings say today)."""
+
+    def __init__(self, version: ScheduleVersion) -> None:
+        # No frozen days: the version is read as a whole.
+        super().__init__([version.period], today=version.period.start)
+        self.version = version
+
+    def slots(self) -> list[Slot]:
+        by_day = self._published_slots(self.version)
+        return [slot for day in sorted(by_day) for slot in by_day[day]]
+
+    def employees(self, referenced: set[str]) -> list[Employee]:
+        in_version = self.qs(Assignment).filter(shift__version=self.version, employee__isnull=False)
+        return super().employees(referenced | {str(e) for e in in_version.values_list("employee", flat=True)})
+
+
+def build_problem_for_version(version: ScheduleVersion) -> tuple[BuiltProblem, dict[str, str | None]]:
+    """A saved version described for the engine, with its schedule (slot id -> employee id or None)."""
+    version = ScheduleVersion.objects.select_related("period__location").get(pk=version.pk)
+    reader = _VersionReader(version)
+    built = reader.build()
+    schedule = reader.assignments(version, {s.id for s in built.problem.slots})
+    return built, schedule
+
+
 def build_problem(periods: Sequence[SchedulePeriod], today: date | None = None) -> BuiltProblem:
     """Describe `periods` (one location, or the same dates in every location of a group) for the engine."""
     periods = list(SchedulePeriod.objects.filter(pk__in=[p.pk for p in periods]).select_related("location"))
     return _Reader(sorted(periods, key=lambda p: p.location.name), today).build()
 
 
-__all__ = ["BuildError", "BuiltProblem", "SlotSource", "build_problem", "check_periods", "slot_key"]
+__all__ = [
+    "BuildError",
+    "BuiltProblem",
+    "SlotSource",
+    "build_problem",
+    "build_problem_for_version",
+    "check_periods",
+    "slot_key",
+]

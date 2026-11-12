@@ -69,6 +69,8 @@
   --touch-main: 56px;
   /* Readable column for the employee screens on a computer. */
   --column: 560px;
+  /* Page width of the manager's panel (computer first). */
+  --wide: 1240px;
 }
 
 @layer base {

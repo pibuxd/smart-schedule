@@ -11,10 +11,19 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PracownikRouteImport } from './routes/_pracownik'
+import { Route as KierownikRouteImport } from './routes/kierownik'
 import { Route as LogowanieRouteImport } from './routes/logowanie'
 import { Route as ZaproszeniaRouteImport } from './routes/zaproszenia'
 import { Route as PracownikGrafikRouteImport } from './routes/_pracownik/grafik'
 import { Route as PracownikKiedyMogeRouteImport } from './routes/_pracownik/kiedy-moge'
+import { Route as KierownikIndexRouteImport } from './routes/kierownik/index'
+import { Route as KierownikLokalLocationIdRouteImport } from './routes/kierownik/lokal.$locationId'
+import { Route as KierownikGrupaGroupIdZasadyRouteImport } from './routes/kierownik/grupa.$groupId/zasady'
+import { Route as KierownikLokalLocationIdIndexRouteImport } from './routes/kierownik/lokal.$locationId/index'
+import { Route as KierownikLokalLocationIdDyspozycjeRouteImport } from './routes/kierownik/lokal.$locationId/dyspozycje'
+import { Route as KierownikLokalLocationIdPracownicyRouteImport } from './routes/kierownik/lokal.$locationId/pracownicy'
+import { Route as KierownikLokalLocationIdUstawieniaRouteImport } from './routes/kierownik/lokal.$locationId/ustawienia'
+import { Route as KierownikLokalLocationIdZasadyRouteImport } from './routes/kierownik/lokal.$locationId/zasady'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,6 +32,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const PracownikRoute = PracownikRouteImport.update({
   id: '/_pracownik',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KierownikRoute = KierownikRouteImport.update({
+  id: '/kierownik',
+  path: '/kierownik',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogowanieRoute = LogowanieRouteImport.update({
@@ -45,13 +59,69 @@ const PracownikKiedyMogeRoute = PracownikKiedyMogeRouteImport.update({
   path: '/kiedy-moge',
   getParentRoute: () => PracownikRoute,
 } as any)
+const KierownikIndexRoute = KierownikIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => KierownikRoute,
+} as any)
+const KierownikLokalLocationIdRoute =
+  KierownikLokalLocationIdRouteImport.update({
+    id: '/lokal/$locationId',
+    path: '/lokal/$locationId',
+    getParentRoute: () => KierownikRoute,
+  } as any)
+const KierownikGrupaGroupIdZasadyRoute =
+  KierownikGrupaGroupIdZasadyRouteImport.update({
+    id: '/grupa/$groupId/zasady',
+    path: '/grupa/$groupId/zasady',
+    getParentRoute: () => KierownikRoute,
+  } as any)
+const KierownikLokalLocationIdIndexRoute =
+  KierownikLokalLocationIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => KierownikLokalLocationIdRoute,
+  } as any)
+const KierownikLokalLocationIdDyspozycjeRoute =
+  KierownikLokalLocationIdDyspozycjeRouteImport.update({
+    id: '/dyspozycje',
+    path: '/dyspozycje',
+    getParentRoute: () => KierownikLokalLocationIdRoute,
+  } as any)
+const KierownikLokalLocationIdPracownicyRoute =
+  KierownikLokalLocationIdPracownicyRouteImport.update({
+    id: '/pracownicy',
+    path: '/pracownicy',
+    getParentRoute: () => KierownikLokalLocationIdRoute,
+  } as any)
+const KierownikLokalLocationIdUstawieniaRoute =
+  KierownikLokalLocationIdUstawieniaRouteImport.update({
+    id: '/ustawienia',
+    path: '/ustawienia',
+    getParentRoute: () => KierownikLokalLocationIdRoute,
+  } as any)
+const KierownikLokalLocationIdZasadyRoute =
+  KierownikLokalLocationIdZasadyRouteImport.update({
+    id: '/zasady',
+    path: '/zasady',
+    getParentRoute: () => KierownikLokalLocationIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/kierownik': typeof KierownikRouteWithChildren
   '/logowanie': typeof LogowanieRoute
   '/zaproszenia': typeof ZaproszeniaRoute
   '/grafik': typeof PracownikGrafikRoute
   '/kiedy-moge': typeof PracownikKiedyMogeRoute
+  '/kierownik/': typeof KierownikIndexRoute
+  '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
+  '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
+  '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
+  '/kierownik/lokal/$locationId/pracownicy': typeof KierownikLokalLocationIdPracownicyRoute
+  '/kierownik/lokal/$locationId/ustawienia': typeof KierownikLokalLocationIdUstawieniaRoute
+  '/kierownik/lokal/$locationId/zasady': typeof KierownikLokalLocationIdZasadyRoute
+  '/kierownik/lokal/$locationId/': typeof KierownikLokalLocationIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -59,34 +129,86 @@ export interface FileRoutesByTo {
   '/zaproszenia': typeof ZaproszeniaRoute
   '/grafik': typeof PracownikGrafikRoute
   '/kiedy-moge': typeof PracownikKiedyMogeRoute
+  '/kierownik': typeof KierownikIndexRoute
+  '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
+  '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
+  '/kierownik/lokal/$locationId/pracownicy': typeof KierownikLokalLocationIdPracownicyRoute
+  '/kierownik/lokal/$locationId/ustawienia': typeof KierownikLokalLocationIdUstawieniaRoute
+  '/kierownik/lokal/$locationId/zasady': typeof KierownikLokalLocationIdZasadyRoute
+  '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_pracownik': typeof PracownikRouteWithChildren
+  '/kierownik': typeof KierownikRouteWithChildren
   '/logowanie': typeof LogowanieRoute
   '/zaproszenia': typeof ZaproszeniaRoute
   '/_pracownik/grafik': typeof PracownikGrafikRoute
   '/_pracownik/kiedy-moge': typeof PracownikKiedyMogeRoute
+  '/kierownik/': typeof KierownikIndexRoute
+  '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
+  '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
+  '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
+  '/kierownik/lokal/$locationId/pracownicy': typeof KierownikLokalLocationIdPracownicyRoute
+  '/kierownik/lokal/$locationId/ustawienia': typeof KierownikLokalLocationIdUstawieniaRoute
+  '/kierownik/lokal/$locationId/zasady': typeof KierownikLokalLocationIdZasadyRoute
+  '/kierownik/lokal/$locationId/': typeof KierownikLokalLocationIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/logowanie' | '/zaproszenia' | '/grafik' | '/kiedy-moge'
+  fullPaths:
+    | '/'
+    | '/kierownik'
+    | '/logowanie'
+    | '/zaproszenia'
+    | '/grafik'
+    | '/kiedy-moge'
+    | '/kierownik/'
+    | '/kierownik/lokal/$locationId'
+    | '/kierownik/grupa/$groupId/zasady'
+    | '/kierownik/lokal/$locationId/dyspozycje'
+    | '/kierownik/lokal/$locationId/pracownicy'
+    | '/kierownik/lokal/$locationId/ustawienia'
+    | '/kierownik/lokal/$locationId/zasady'
+    | '/kierownik/lokal/$locationId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/logowanie' | '/zaproszenia' | '/grafik' | '/kiedy-moge'
+  to:
+    | '/'
+    | '/logowanie'
+    | '/zaproszenia'
+    | '/grafik'
+    | '/kiedy-moge'
+    | '/kierownik'
+    | '/kierownik/grupa/$groupId/zasady'
+    | '/kierownik/lokal/$locationId/dyspozycje'
+    | '/kierownik/lokal/$locationId/pracownicy'
+    | '/kierownik/lokal/$locationId/ustawienia'
+    | '/kierownik/lokal/$locationId/zasady'
+    | '/kierownik/lokal/$locationId'
   id:
     | '__root__'
     | '/'
     | '/_pracownik'
+    | '/kierownik'
     | '/logowanie'
     | '/zaproszenia'
     | '/_pracownik/grafik'
     | '/_pracownik/kiedy-moge'
+    | '/kierownik/'
+    | '/kierownik/lokal/$locationId'
+    | '/kierownik/grupa/$groupId/zasady'
+    | '/kierownik/lokal/$locationId/dyspozycje'
+    | '/kierownik/lokal/$locationId/pracownicy'
+    | '/kierownik/lokal/$locationId/ustawienia'
+    | '/kierownik/lokal/$locationId/zasady'
+    | '/kierownik/lokal/$locationId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PracownikRoute: typeof PracownikRouteWithChildren
+  KierownikRoute: typeof KierownikRouteWithChildren
   LogowanieRoute: typeof LogowanieRoute
   ZaproszeniaRoute: typeof ZaproszeniaRoute
 }
@@ -105,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof PracownikRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kierownik': {
+      id: '/kierownik'
+      path: '/kierownik'
+      fullPath: '/kierownik'
+      preLoaderRoute: typeof KierownikRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logowanie': {
@@ -135,6 +264,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PracownikKiedyMogeRouteImport
       parentRoute: typeof PracownikRoute
     }
+    '/kierownik/': {
+      id: '/kierownik/'
+      path: '/'
+      fullPath: '/kierownik/'
+      preLoaderRoute: typeof KierownikIndexRouteImport
+      parentRoute: typeof KierownikRoute
+    }
+    '/kierownik/lokal/$locationId': {
+      id: '/kierownik/lokal/$locationId'
+      path: '/lokal/$locationId'
+      fullPath: '/kierownik/lokal/$locationId'
+      preLoaderRoute: typeof KierownikLokalLocationIdRouteImport
+      parentRoute: typeof KierownikRoute
+    }
+    '/kierownik/grupa/$groupId/zasady': {
+      id: '/kierownik/grupa/$groupId/zasady'
+      path: '/grupa/$groupId/zasady'
+      fullPath: '/kierownik/grupa/$groupId/zasady'
+      preLoaderRoute: typeof KierownikGrupaGroupIdZasadyRouteImport
+      parentRoute: typeof KierownikRoute
+    }
+    '/kierownik/lokal/$locationId/': {
+      id: '/kierownik/lokal/$locationId/'
+      path: '/'
+      fullPath: '/kierownik/lokal/$locationId/'
+      preLoaderRoute: typeof KierownikLokalLocationIdIndexRouteImport
+      parentRoute: typeof KierownikLokalLocationIdRoute
+    }
+    '/kierownik/lokal/$locationId/dyspozycje': {
+      id: '/kierownik/lokal/$locationId/dyspozycje'
+      path: '/dyspozycje'
+      fullPath: '/kierownik/lokal/$locationId/dyspozycje'
+      preLoaderRoute: typeof KierownikLokalLocationIdDyspozycjeRouteImport
+      parentRoute: typeof KierownikLokalLocationIdRoute
+    }
+    '/kierownik/lokal/$locationId/pracownicy': {
+      id: '/kierownik/lokal/$locationId/pracownicy'
+      path: '/pracownicy'
+      fullPath: '/kierownik/lokal/$locationId/pracownicy'
+      preLoaderRoute: typeof KierownikLokalLocationIdPracownicyRouteImport
+      parentRoute: typeof KierownikLokalLocationIdRoute
+    }
+    '/kierownik/lokal/$locationId/ustawienia': {
+      id: '/kierownik/lokal/$locationId/ustawienia'
+      path: '/ustawienia'
+      fullPath: '/kierownik/lokal/$locationId/ustawienia'
+      preLoaderRoute: typeof KierownikLokalLocationIdUstawieniaRouteImport
+      parentRoute: typeof KierownikLokalLocationIdRoute
+    }
+    '/kierownik/lokal/$locationId/zasady': {
+      id: '/kierownik/lokal/$locationId/zasady'
+      path: '/zasady'
+      fullPath: '/kierownik/lokal/$locationId/zasady'
+      preLoaderRoute: typeof KierownikLokalLocationIdZasadyRouteImport
+      parentRoute: typeof KierownikLokalLocationIdRoute
+    }
   }
 }
 
@@ -152,9 +337,51 @@ const PracownikRouteWithChildren = PracownikRoute._addFileChildren(
   PracownikRouteChildren,
 )
 
+interface KierownikLokalLocationIdRouteChildren {
+  KierownikLokalLocationIdDyspozycjeRoute: typeof KierownikLokalLocationIdDyspozycjeRoute
+  KierownikLokalLocationIdPracownicyRoute: typeof KierownikLokalLocationIdPracownicyRoute
+  KierownikLokalLocationIdUstawieniaRoute: typeof KierownikLokalLocationIdUstawieniaRoute
+  KierownikLokalLocationIdZasadyRoute: typeof KierownikLokalLocationIdZasadyRoute
+  KierownikLokalLocationIdIndexRoute: typeof KierownikLokalLocationIdIndexRoute
+}
+
+const KierownikLokalLocationIdRouteChildren: KierownikLokalLocationIdRouteChildren =
+  {
+    KierownikLokalLocationIdDyspozycjeRoute:
+      KierownikLokalLocationIdDyspozycjeRoute,
+    KierownikLokalLocationIdPracownicyRoute:
+      KierownikLokalLocationIdPracownicyRoute,
+    KierownikLokalLocationIdUstawieniaRoute:
+      KierownikLokalLocationIdUstawieniaRoute,
+    KierownikLokalLocationIdZasadyRoute: KierownikLokalLocationIdZasadyRoute,
+    KierownikLokalLocationIdIndexRoute: KierownikLokalLocationIdIndexRoute,
+  }
+
+const KierownikLokalLocationIdRouteWithChildren =
+  KierownikLokalLocationIdRoute._addFileChildren(
+    KierownikLokalLocationIdRouteChildren,
+  )
+
+interface KierownikRouteChildren {
+  KierownikIndexRoute: typeof KierownikIndexRoute
+  KierownikLokalLocationIdRoute: typeof KierownikLokalLocationIdRouteWithChildren
+  KierownikGrupaGroupIdZasadyRoute: typeof KierownikGrupaGroupIdZasadyRoute
+}
+
+const KierownikRouteChildren: KierownikRouteChildren = {
+  KierownikIndexRoute: KierownikIndexRoute,
+  KierownikLokalLocationIdRoute: KierownikLokalLocationIdRouteWithChildren,
+  KierownikGrupaGroupIdZasadyRoute: KierownikGrupaGroupIdZasadyRoute,
+}
+
+const KierownikRouteWithChildren = KierownikRoute._addFileChildren(
+  KierownikRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PracownikRoute: PracownikRouteWithChildren,
+  KierownikRoute: KierownikRouteWithChildren,
   LogowanieRoute: LogowanieRoute,
   ZaproszeniaRoute: ZaproszeniaRoute,
 }

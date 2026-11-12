@@ -56,6 +56,8 @@ def request_generation(ctx: TenantContext, periods: Sequence[SchedulePeriod]) ->
     periods = list({p.pk: p for p in periods}.values())
     for period in periods:
         ctx.require_manager_of(period.location)
+        if period.location.archived_at is not None:
+            raise HttpError(409, f"Lokal {period.location.name} jest w archiwum. Przywróć go, żeby ułożyć grafik.")
     ctx.require_writable()
 
     with transaction.atomic():

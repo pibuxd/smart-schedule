@@ -6,6 +6,7 @@ import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { EmployeeContext } from '../features/auth/EmployeeContext'
 import { useSession } from '../features/auth/session'
+import { isManagerRole } from '../features/manager/ManagerContext'
 
 export const Route = createFileRoute('/_pracownik')({
   component: EmployeeLayout,
@@ -76,6 +77,14 @@ function EmployeeLayout() {
               Wyloguj
             </button>
           </div>
+          {isManagerRole(company.role) && (
+            <Link
+              to="/kierownik"
+              className="rounded-md border-2 border-accent bg-surface px-3.5 py-2.5 font-semibold text-accent"
+            >
+              Przejdź do panelu kierownika
+            </Link>
+          )}
           {me.pending_invitations > 0 && (
             <Link
               to="/zaproszenia"

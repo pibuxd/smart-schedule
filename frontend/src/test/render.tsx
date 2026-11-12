@@ -15,7 +15,18 @@ export function renderScreen(ui: ReactNode) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   const root = createRootRoute()
   const page = createRoute({ getParentRoute: () => root, path: '/', component: () => <>{ui}</> })
-  const other = ['/kiedy-moge', '/grafik', '/zaproszenia', '/logowanie'].map((path) =>
+  const other = [
+    '/kiedy-moge',
+    '/grafik',
+    '/zaproszenia',
+    '/logowanie',
+    '/kierownik',
+    '/kierownik/grupa/$groupId/zasady',
+    '/kierownik/lokal/$locationId/dyspozycje',
+    '/kierownik/lokal/$locationId/pracownicy',
+    '/kierownik/lokal/$locationId/ustawienia',
+    '/kierownik/lokal/$locationId/zasady',
+  ].map((path) =>
     createRoute({ getParentRoute: () => root, path, component: () => null }),
   )
   const router = createRouter({

@@ -24,13 +24,16 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AskAvailabilityIn,
+  AskAvailabilityOut,
   ErrorOut,
   GenerateIn,
   GenerationRunOut,
   MyScheduleOut,
   MyScheduleParams,
   PeriodIn,
-  PeriodOut
+  PeriodOut,
+  PeriodUpdateIn
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -303,6 +306,263 @@ export const useCreatePeriod = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getCreatePeriodMutationOptions(options), queryClient);
+    }
+    export type updatePeriodResponse200 = {
+  data: PeriodOut
+  status: 200
+}
+
+export type updatePeriodResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type updatePeriodResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type updatePeriodResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type updatePeriodResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type updatePeriodResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type updatePeriodResponseSuccess = (updatePeriodResponse200) & {
+  headers: Headers;
+};
+export type updatePeriodResponseError = (updatePeriodResponse400 | updatePeriodResponse402 | updatePeriodResponse403 | updatePeriodResponse404 | updatePeriodResponse409) & {
+  headers: Headers;
+};
+
+export type updatePeriodResponse = (updatePeriodResponseSuccess | updatePeriodResponseError)
+
+export const getUpdatePeriodUrl = (periodId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}`
+}
+
+/**
+ * Move the availability deadline (the day the manager will arrange the schedule).
+ * @summary Update Period
+ */
+export const updatePeriod = async (periodId: string,
+    periodUpdateIn: PeriodUpdateIn, options?: Parameters<typeof apiFetch>[1]): Promise<updatePeriodResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<updatePeriodResponse>(getUpdatePeriodUrl(periodId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(periodUpdateIn)
+  }
+);}
+
+
+
+
+
+export const getUpdatePeriodMutationKey = () => ['updatePeriod'] as const;
+
+export const getUpdatePeriodMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePeriod>>, TError,UpdatePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePeriod>>, TError,UpdatePeriodMutationVariables, TContext> => {
+
+const mutationKey = getUpdatePeriodMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePeriod>>, UpdatePeriodMutationVariables> = (props) => {
+          const {periodId,data} = props ?? {};
+
+          return  updatePeriod(periodId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePeriodMutationResult = NonNullable<Awaited<ReturnType<typeof updatePeriod>>>
+    export type UpdatePeriodMutationBody = PeriodUpdateIn
+    export type UpdatePeriodMutationError = ErrorOut
+    export type UpdatePeriodMutationVariables = {periodId: string;data: PeriodUpdateIn}
+
+    /**
+ * Move the availability deadline (the day the manager will arrange the schedule).
+ * @summary Update Period
+ */
+export const useUpdatePeriod = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePeriod>>, TError,UpdatePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updatePeriod>>,
+        TError,
+        UpdatePeriodMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdatePeriodMutationOptions(options), queryClient);
+    }
+    export type askForAvailabilityResponse200 = {
+  data: AskAvailabilityOut
+  status: 200
+}
+
+export type askForAvailabilityResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type askForAvailabilityResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type askForAvailabilityResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type askForAvailabilityResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type askForAvailabilityResponseSuccess = (askForAvailabilityResponse200) & {
+  headers: Headers;
+};
+export type askForAvailabilityResponseError = (askForAvailabilityResponse402 | askForAvailabilityResponse403 | askForAvailabilityResponse404 | askForAvailabilityResponse409) & {
+  headers: Headers;
+};
+
+export type askForAvailabilityResponse = (askForAvailabilityResponseSuccess | askForAvailabilityResponseError)
+
+export const getAskForAvailabilityUrl = (periodId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}/ask-availability`
+}
+
+/**
+ * "Poproś o dyspozycje": an in-app notice with the period and the deadline for every active employee of the
+ * location (or only those who have not finished). Nothing is arranged automatically: the manager arranges the
+ * schedule when the deadline has passed or everyone has answered.
+ * @summary Ask For Availability
+ */
+export const askForAvailability = async (periodId: string,
+    askAvailabilityIn: AskAvailabilityIn, options?: Parameters<typeof apiFetch>[1]): Promise<askForAvailabilityResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<askForAvailabilityResponse>(getAskForAvailabilityUrl(periodId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(askAvailabilityIn)
+  }
+);}
+
+
+
+
+
+export const getAskForAvailabilityMutationKey = () => ['askForAvailability'] as const;
+
+export const getAskForAvailabilityMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof askForAvailability>>, TError,AskForAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof askForAvailability>>, TError,AskForAvailabilityMutationVariables, TContext> => {
+
+const mutationKey = getAskForAvailabilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof askForAvailability>>, AskForAvailabilityMutationVariables> = (props) => {
+          const {periodId,data} = props ?? {};
+
+          return  askForAvailability(periodId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AskForAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof askForAvailability>>>
+    export type AskForAvailabilityMutationBody = AskAvailabilityIn
+    export type AskForAvailabilityMutationError = ErrorOut
+    export type AskForAvailabilityMutationVariables = {periodId: string;data: AskAvailabilityIn}
+
+    /**
+ * "Poproś o dyspozycje": an in-app notice with the period and the deadline for every active employee of the
+ * location (or only those who have not finished). Nothing is arranged automatically: the manager arranges the
+ * schedule when the deadline has passed or everyone has answered.
+ * @summary Ask For Availability
+ */
+export const useAskForAvailability = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof askForAvailability>>, TError,AskForAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof askForAvailability>>,
+        TError,
+        AskForAvailabilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAskForAvailabilityMutationOptions(options), queryClient);
     }
     export type generateScheduleResponse202 = {
   data: GenerationRunOut[]

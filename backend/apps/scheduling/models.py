@@ -1,5 +1,7 @@
 """Schedule periods, versions, shifts (slots), assignments, their history, and generation runs."""
 
+from datetime import date, timedelta
+
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
@@ -24,6 +26,11 @@ class SchedulePeriod(CompanyOwnedModel):
     start = models.DateField("od")
     end = models.DateField("do")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.COLLECTING)
+    # The day the manager plans to arrange the schedule = the last day to mark availability.
+    # Empty: the location's default (`availability_deadline_days` before the start).
+    availability_deadline = models.DateField("termin dyspozycji", null=True, blank=True)
+    # When the manager last pressed "Poproś o dyspozycje" (each press notifies the employees again).
+    availability_requested_at = models.DateTimeField("prośba o dyspozycje", null=True, blank=True)
 
     class Meta:
         verbose_name = "okres grafiku"
@@ -36,6 +43,13 @@ class SchedulePeriod(CompanyOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.location}: {self.start:%d.%m}–{self.end:%d.%m.%Y}"
+
+    @property
+    def deadline(self) -> date:
+        """Last day to mark availability: set by the manager, or the location's default."""
+        if self.availability_deadline is not None:
+            return self.availability_deadline
+        return self.start - timedelta(days=self.location.availability_deadline_days)
 
 
 class GenerationRun(CompanyOwnedModel):

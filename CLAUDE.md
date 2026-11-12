@@ -105,5 +105,9 @@ cd ../frontend && npm run api:generate
 - Frontend layout: screens in `src/features/<area>/`, shadcn/ui-style building blocks in `src/components/ui/`
   (`Button`, `Sheet`, `Loading`/`ErrorState`/`EmptyState`), route files in `src/routes/` only wire them up.
   Employee screens get the company from `useEmployee()`; component tests use `renderScreen` and `mockApi` from `src/test/render.tsx`.
+  Manager screens live in `src/features/manager/` under `/kierownik` and get the company from `useManager()`
+  (tests wrap them in `AsManager` from `features/manager/test-utils.tsx`).
+- Schedules are arranged only when the manager asks (after the availability deadline or once everyone has answered);
+  never add jobs that generate schedules on a timer or by themselves.
 - To see "Mój grafik" on demo data: `generate_schedule --period <id> --publish` (publishing from the UI is stage 8).
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

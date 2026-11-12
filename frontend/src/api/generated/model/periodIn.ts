@@ -8,4 +8,5 @@
 export interface PeriodIn {
   start: string;
   end: string;
+  availability_deadline?: string | null;
 }

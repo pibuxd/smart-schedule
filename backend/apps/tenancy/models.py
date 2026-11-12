@@ -54,6 +54,8 @@ class Location(CompanyOwnedModel):
         "okres grafiku", max_length=8, choices=SchedulePeriodKind.choices, default=SchedulePeriodKind.MONTH
     )
     availability_deadline_days = models.PositiveSmallIntegerField("termin dyspozycji (dni przed okresem)", default=7)
+    # An archived location keeps its history but drops out of the manager's lists and of generation.
+    archived_at = models.DateTimeField("zarchiwizowany", null=True, blank=True)
 
     class Meta:
         verbose_name = "lokal"
