@@ -6,6 +6,7 @@ from apps.accounts.api import router as accounts_router
 from apps.availability.api import router as availability_router
 from apps.billing.api import router as billing_router
 from apps.core.api import router as core_router
+from apps.reports.api import router as reports_router
 from apps.rules.api import router as rules_router
 from apps.scheduling.api import router as scheduling_router
 from apps.staffing.api import router as staffing_router
@@ -28,6 +29,7 @@ api.add_router("/", scheduling_router)
 api.add_router("/", availability_router)
 api.add_router("/", staffing_router)
 api.add_router("/", rules_router)
+api.add_router("/", reports_router)
 
 
 @api.exception_handler(AuthenticationError)

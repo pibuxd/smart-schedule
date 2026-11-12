@@ -10,11 +10,13 @@ from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.accounts.login import parse_phone
+from apps.billing.models import Subscription
 from apps.billing.services import (
     CodeRejected,
     check_code_attempt_limit,
     record_code_attempt,
     redeem_code,
+    start_trial,
 )
 from apps.core.http import client_ip
 from apps.core.schemas import ErrorOut
@@ -32,7 +34,8 @@ class CompanyIn(Schema):
     name: str = Field(min_length=1, max_length=200)
     first_name: str = Field("", max_length=80)
     last_name: str = Field("", max_length=120)
-    # Optional free-access code; without it the company starts read-only until a code is entered.
+    # Optional free-access code; without it the company gets a trial (the person's first company only),
+    # and after that it is read-only until a code is entered.
     code: str = Field("", max_length=40)
 
 
@@ -41,6 +44,8 @@ class CompanyOut(Schema):
     name: str
     read_only: bool
     subscription_ends_at: datetime | None
+    # True when access comes from the free trial (no code entered).
+    trial: bool
 
 
 class MyInvitationOut(Schema):
@@ -116,8 +121,7 @@ def create_company(request, payload: CompanyIn):
         with transaction.atomic():
             company = Company.objects.create(name=name, created_by=user)  # tenant-ok: a new company
             Membership.objects.create(company=company, user=user, role=Role.OWNER)  # tenant-ok: its first member
-            if code:
-                subscription = redeem_code(company, user, code)
+            subscription = redeem_code(company, user, code) if code else start_trial(company, user)
             changed = []
             if payload.first_name.strip() and not user.first_name:
                 user.first_name = payload.first_name.strip()
@@ -138,6 +142,7 @@ def create_company(request, payload: CompanyIn):
         name=company.name,
         read_only=subscription is None,
         subscription_ends_at=subscription.ends_at if subscription else None,
+        trial=subscription is not None and subscription.source == Subscription.Source.TRIAL,
     )
     return Status(201, out)
 
@@ -260,6 +265,12 @@ class PeriodSummaryOut(Schema):
     submitted: int
     missing: list[str]
     late_days: int
+    # The newest schedule version (None: not arranged yet), a generation in progress, and manual changes that
+    # arranging again would drop.
+    latest_version_id: UUID | None
+    latest_version_status: Literal["draft", "published", "superseded"] | None
+    active_run_id: UUID | None
+    manual_changes: int
 
 
 class LocationSummaryOut(LocationOut):
@@ -274,6 +285,8 @@ class SubscriptionSummaryOut(Schema):
     # Why it is read-only, in words for the manager ("" when it is not).
     read_only_message: str
     never_started: bool
+    # Access comes from the free trial (no code entered yet).
+    trial: bool
     days_left: int
     expiring_soon: bool
 
@@ -304,7 +317,9 @@ def _location_out(location: Location) -> LocationOut:
 def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | None:
     from apps.availability.api import late_after
     from apps.availability.models import AvailabilityDay, AvailabilitySubmission
-    from apps.scheduling.models import SchedulePeriod
+    from apps.scheduling.editing import latest_version, manual_changes
+    from apps.scheduling.generation import ACTIVE
+    from apps.scheduling.models import GenerationRun, SchedulePeriod
     from apps.staffing.models import EmployeeProfile
 
     periods = ctx.qs(SchedulePeriod).filter(location=location).select_related("location")
@@ -317,6 +332,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
         .select_related("membership__user")
         .order_by("membership__user__last_name", "membership__user__first_name")
     )
+    latest = latest_version(period)
     done = set(ctx.qs(AvailabilitySubmission).filter(period=period).values_list("employee_id", flat=True))
     late = (
         ctx.qs(AvailabilityDay)
@@ -333,6 +349,14 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
         submitted=sum(1 for p in people if p.pk in done),
         missing=[p.membership.user.full_name or "Bez imienia" for p in people if p.pk not in done],
         late_days=late,
+        latest_version_id=latest.pk if latest else None,
+        latest_version_status=latest.status if latest else None,
+        active_run_id=ctx.qs(GenerationRun)
+        .filter(periods=period, status__in=ACTIVE)
+        .order_by("-created_at")
+        .values_list("pk", flat=True)
+        .first(),
+        manual_changes=manual_changes(latest),
     )
 
 
@@ -370,6 +394,7 @@ def manager_overview(request, company_id: UUID):
             read_only=state.read_only,
             read_only_message=state.read_only_message if state.read_only else "",
             never_started=state.ends_at is None,
+            trial=state.trial,
             days_left=state.days_left,
             expiring_soon=state.expiring_soon,
         ),

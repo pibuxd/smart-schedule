@@ -15,6 +15,9 @@ from apps.tenancy.models import Company
 EXPIRED_MESSAGE = (
     "Dostęp tej firmy wygasł, więc dane można tylko oglądać. Kierownik może wpisać nowy kod w ustawieniach."
 )
+TRIAL_ENDED_MESSAGE = (
+    "Okres próbny tej firmy minął, więc dane można tylko oglądać. Kierownik może wpisać kod dostępu w ustawieniach."
+)
 NOT_STARTED_MESSAGE = (
     "Ta firma nie ma jeszcze kodu dostępu, więc niczego nie można zmieniać. Kierownik wpisuje kod w ustawieniach."
 )
@@ -26,6 +29,8 @@ class SubscriptionState:
     is_active: bool
     days_left: int
     expiring_soon: bool
+    # True while (or after) the company uses the free trial and has not entered a code yet.
+    trial: bool = False
 
     @property
     def read_only(self) -> bool:
@@ -34,17 +39,38 @@ class SubscriptionState:
     @property
     def read_only_message(self) -> str:
         """Access that never started is not "expired": a new manager must be told to enter a code."""
-        return NOT_STARTED_MESSAGE if self.ends_at is None else EXPIRED_MESSAGE
+        if self.ends_at is None:
+            return NOT_STARTED_MESSAGE
+        return TRIAL_ENDED_MESSAGE if self.trial else EXPIRED_MESSAGE
 
 
 def subscription_state(company_id, now: datetime | None = None) -> SubscriptionState:
     """A company without a subscription row (registered without a code) is read-only, like an expired one."""
     now = now or timezone.now()
-    ends_at = Subscription.objects.for_company(company_id).values_list("ends_at", flat=True).first()
+    row = Subscription.objects.for_company(company_id).values_list("ends_at", "source").first()
+    ends_at, source = row if row else (None, "")
+    trial = source == Subscription.Source.TRIAL
     if ends_at is None or ends_at <= now:
-        return SubscriptionState(ends_at=ends_at, is_active=False, days_left=0, expiring_soon=False)
+        return SubscriptionState(ends_at=ends_at, is_active=False, days_left=0, expiring_soon=False, trial=trial)
     days_left = ceil((ends_at - now) / timedelta(days=1))
-    return SubscriptionState(ends_at, True, days_left, days_left <= settings.SUBSCRIPTION_BANNER_DAYS)
+    return SubscriptionState(ends_at, True, days_left, days_left <= settings.SUBSCRIPTION_BANNER_DAYS, trial)
+
+
+def start_trial(company: Company, user, now: datetime | None = None) -> Subscription | None:
+    """Full access for `TRIAL_DAYS` for a company registered without a code (decision of 12.11.2026).
+
+    Only the first company a person registers gets it, so registering again does not give endless free access.
+    Call it inside the transaction that creates the company. Returns None when no trial is given.
+    """
+    if settings.TRIAL_DAYS <= 0:
+        return None
+    earlier = Company.objects.filter(created_by=user).exclude(pk=company.pk)  # tenant-ok: the person's own companies
+    if earlier.exists():
+        return None
+    now = now or timezone.now()
+    return Subscription.objects.create(
+        company=company, ends_at=now + timedelta(days=settings.TRIAL_DAYS), source=Subscription.Source.TRIAL
+    )
 
 
 def generations_used_this_month(company_id, now: datetime | None = None) -> int:

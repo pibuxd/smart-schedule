@@ -1,6 +1,7 @@
 export * from './auth/auth';
 export * from './availability/availability';
 export * from './billing/billing';
+export * from './reports/reports';
 export * from './rules/rules';
 export * from './scheduling/scheduling';
 export * from './staffing/staffing';

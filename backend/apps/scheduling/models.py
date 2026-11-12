@@ -171,6 +171,8 @@ class Assignment(CompanyOwnedModel):
     )
     pinned = models.BooleanField("przypięte", default=False)
     borrowed = models.BooleanField("z innego lokalu", default=False)
+    # Set by the manager by hand (not by the generator). Arranging again drops such changes unless pinned.
+    manual = models.BooleanField("ręczna zmiana", default=False)
 
     class Meta:
         verbose_name = "przypisanie"

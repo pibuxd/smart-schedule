@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.availability",
     "apps.rules",
     "apps.marketplace",
+    "apps.reports",
     "apps.notifications",
 ]
 
@@ -126,6 +127,8 @@ LOGIN_CODES_PER_IP_PER_HOUR = int(env("LOGIN_CODES_PER_IP_PER_HOUR", "20"))
 ACCESS_CODE_FAILURES_PER_USER_PER_HOUR = int(env("ACCESS_CODE_FAILURES_PER_USER_PER_HOUR", "5"))
 ACCESS_CODE_FAILURES_PER_IP_PER_HOUR = int(env("ACCESS_CODE_FAILURES_PER_IP_PER_HOUR", "20"))
 SUBSCRIPTION_BANNER_DAYS = 7
+# A company registered without a code gets this many days of full access (once per person who registers).
+TRIAL_DAYS = int(env("TRIAL_DAYS", "14"))
 
 # Background jobs (Procrastinate on Postgres).
 PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "tasks"

@@ -1759,6 +1759,559 @@
         ]
       }
     },
+    "/api/versions/{version_id}": {
+      "get": {
+        "operationId": "schedule_version",
+        "summary": "Schedule Version",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One version of a location's schedule: the grid, the three scores, rules, unmet requests and history.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/shifts/{shift_id}/explain": {
+      "get": {
+        "operationId": "explain_shift",
+        "summary": "Explain Shift",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftExplanationOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Why this shift has its person (or nobody), and what each person with the position would change.\nQuick checks with the validator, no solver; the same list is the manual editor's choice of people.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/check": {
+      "post": {
+        "operationId": "check_schedule_changes",
+        "summary": "Check Schedule Changes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Validate a manual change before saving it (e.g. while dragging): new problems and the new scores.",
+        "tags": [
+          "scheduling"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/assignments": {
+      "patch": {
+        "operationId": "change_assignments",
+        "summary": "Change Assignments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.",
+        "tags": [
+          "scheduling"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/shifts/{shift_id}/pin": {
+      "post": {
+        "operationId": "pin_shift",
+        "summary": "Pin Shift",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionShiftOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Pin (or unpin) the person on a shift: arranging the schedule again keeps pinned people in place.",
+        "tags": [
+          "scheduling"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/draft": {
+      "post": {
+        "operationId": "start_correcting",
+        "summary": "Start Correcting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionSummaryOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Correct a published schedule: a new draft copy (or the newest draft, if there already is one).",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/publish": {
+      "post": {
+        "operationId": "publish_schedule",
+        "summary": "Publish Schedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionSummaryOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Publish the newest draft: employees see it in \"Mój grafik\"; the previous version stays as history.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/me/availability": {
       "get": {
         "operationId": "my_availability",
@@ -3781,6 +4334,163 @@
           }
         ]
       }
+    },
+    "/api/reports/hours": {
+      "get": {
+        "operationId": "hours_report",
+        "summary": "Hours Report",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursReportOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Hours of published shifts in a month, per person and location (the locations this manager runs).",
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reports/hours.csv": {
+      "get": {
+        "operationId": "hours_report_csv",
+        "summary": "Hours Report Csv",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The same report as a CSV file (semicolons and decimal commas, so a Polish spreadsheet opens it as is).",
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -4007,13 +4717,18 @@
               }
             ],
             "title": "Subscription Ends At"
+          },
+          "trial": {
+            "title": "Trial",
+            "type": "boolean"
           }
         },
         "required": [
           "id",
           "name",
           "read_only",
-          "subscription_ends_at"
+          "subscription_ends_at",
+          "trial"
         ],
         "title": "CompanyOut",
         "type": "object"
@@ -4498,6 +5213,50 @@
           "late_days": {
             "title": "Late Days",
             "type": "integer"
+          },
+          "latest_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version Id"
+          },
+          "latest_version_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "published",
+                  "superseded"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version Status"
+          },
+          "active_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Run Id"
+          },
+          "manual_changes": {
+            "title": "Manual Changes",
+            "type": "integer"
           }
         },
         "required": [
@@ -4509,7 +5268,11 @@
           "availability_requested_at",
           "submitted",
           "missing",
-          "late_days"
+          "late_days",
+          "latest_version_id",
+          "latest_version_status",
+          "active_run_id",
+          "manual_changes"
         ],
         "title": "PeriodSummaryOut",
         "type": "object"
@@ -4528,6 +5291,10 @@
             "title": "Never Started",
             "type": "boolean"
           },
+          "trial": {
+            "title": "Trial",
+            "type": "boolean"
+          },
           "days_left": {
             "title": "Days Left",
             "type": "integer"
@@ -4541,6 +5308,7 @@
           "read_only",
           "read_only_message",
           "never_started",
+          "trial",
           "days_left",
           "expiring_soon"
         ],
@@ -4735,6 +5503,10 @@
             "title": "Expiring Soon",
             "type": "boolean"
           },
+          "trial": {
+            "title": "Trial",
+            "type": "boolean"
+          },
           "generations_used": {
             "title": "Generations Used",
             "type": "integer"
@@ -4750,6 +5522,7 @@
           "ends_at",
           "days_left",
           "expiring_soon",
+          "trial",
           "generations_used",
           "generations_limit"
         ],
@@ -4842,6 +5615,38 @@
               }
             ],
             "title": "Latest Version Id"
+          },
+          "latest_version_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "published",
+                  "superseded"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version Status"
+          },
+          "active_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Run Id"
+          },
+          "manual_changes": {
+            "title": "Manual Changes",
+            "type": "integer"
           }
         },
         "required": [
@@ -4853,7 +5658,10 @@
           "deadline",
           "availability_requested_at",
           "published_version_id",
-          "latest_version_id"
+          "latest_version_id",
+          "latest_version_status",
+          "active_run_id",
+          "manual_changes"
         ],
         "title": "PeriodOut",
         "type": "object"
@@ -5280,6 +6088,718 @@
           "coworkers"
         ],
         "title": "MyShiftOut",
+        "type": "object"
+      },
+      "PositionNameOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PositionNameOut",
+        "type": "object"
+      },
+      "RuleResultOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "hard": {
+            "title": "Hard",
+            "type": "boolean"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent"
+          },
+          "broken": {
+            "title": "Broken",
+            "type": "integer"
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "hard",
+          "percent",
+          "broken",
+          "examples"
+        ],
+        "title": "RuleResultOut",
+        "type": "object"
+      },
+      "UnmetRequestOut": {
+        "properties": {
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "prefer_not",
+              "prefer",
+              "unscored"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "percent_kept": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent Kept"
+          }
+        },
+        "required": [
+          "employee_name",
+          "text",
+          "kind",
+          "percent_kept"
+        ],
+        "title": "UnmetRequestOut",
+        "type": "object"
+      },
+      "VersionEmployeeOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Position Ids",
+            "type": "array"
+          },
+          "contract": {
+            "enum": [
+              "civil",
+              "employment"
+            ],
+            "title": "Contract",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "shifts": {
+            "title": "Shifts",
+            "type": "integer"
+          },
+          "target_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Hours"
+          },
+          "max_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Hours"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "position_ids",
+          "contract",
+          "hours",
+          "shifts",
+          "target_hours",
+          "max_hours",
+          "active"
+        ],
+        "title": "VersionEmployeeOut",
+        "type": "object"
+      },
+      "VersionOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "published",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "period": {
+            "$ref": "#/components/schemas/PeriodOut"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "scores": {
+            "$ref": "#/components/schemas/ScoresOut"
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/VersionShiftOut"
+            },
+            "title": "Shifts",
+            "type": "array"
+          },
+          "employees": {
+            "items": {
+              "$ref": "#/components/schemas/VersionEmployeeOut"
+            },
+            "title": "Employees",
+            "type": "array"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/PositionNameOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "hard_problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hard Problems",
+            "type": "array"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleResultOut"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "unmet_requests": {
+            "items": {
+              "$ref": "#/components/schemas/UnmetRequestOut"
+            },
+            "title": "Unmet Requests",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/VersionSummaryOut"
+            },
+            "title": "History",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "created_at",
+          "published_at",
+          "editable",
+          "period",
+          "location_id",
+          "location_name",
+          "scores",
+          "shifts",
+          "employees",
+          "positions",
+          "hard_problems",
+          "rules",
+          "unmet_requests",
+          "notes",
+          "history"
+        ],
+        "title": "VersionOut",
+        "type": "object"
+      },
+      "VersionShiftOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "shift_type_name": {
+            "title": "Shift Type Name",
+            "type": "string"
+          },
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          },
+          "position_name": {
+            "title": "Position Name",
+            "type": "string"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "manual": {
+            "title": "Manual",
+            "type": "boolean"
+          },
+          "borrowed": {
+            "title": "Borrowed",
+            "type": "boolean"
+          },
+          "wish": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cannot",
+                  "prefer_not",
+                  "neutral",
+                  "prefer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wish"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "past": {
+            "title": "Past",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "start_time",
+          "end_time",
+          "hours",
+          "shift_type_name",
+          "position_id",
+          "position_name",
+          "employee_id",
+          "employee_name",
+          "pinned",
+          "manual",
+          "borrowed",
+          "wish",
+          "problems",
+          "past"
+        ],
+        "title": "VersionShiftOut",
+        "type": "object"
+      },
+      "VersionSummaryOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "published",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "generated": {
+            "title": "Generated",
+            "type": "boolean"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "created_at",
+          "published_at",
+          "generated",
+          "created_by_name"
+        ],
+        "title": "VersionSummaryOut",
+        "type": "object"
+      },
+      "CandidateOut": {
+        "properties": {
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          },
+          "possible": {
+            "title": "Possible",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "wish": {
+            "enum": [
+              "cannot",
+              "prefer_not",
+              "neutral",
+              "prefer"
+            ],
+            "title": "Wish",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "target_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Hours"
+          },
+          "max_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Hours"
+          },
+          "holes": {
+            "title": "Holes",
+            "type": "integer"
+          },
+          "manager_rules": {
+            "title": "Manager Rules",
+            "type": "number"
+          },
+          "employee_requests": {
+            "title": "Employee Requests",
+            "type": "number"
+          }
+        },
+        "required": [
+          "employee_id",
+          "name",
+          "current",
+          "possible",
+          "problems",
+          "notes",
+          "wish",
+          "hours",
+          "target_hours",
+          "max_hours",
+          "holes",
+          "manager_rules",
+          "employee_requests"
+        ],
+        "title": "CandidateOut",
+        "type": "object"
+      },
+      "ShiftExplanationOut": {
+        "properties": {
+          "shift": {
+            "$ref": "#/components/schemas/VersionShiftOut"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateOut"
+            },
+            "title": "Candidates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "shift",
+          "summary",
+          "candidates"
+        ],
+        "title": "ShiftExplanationOut",
+        "type": "object"
+      },
+      "CheckOut": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ScoresOut"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ScoresOut"
+          }
+        },
+        "required": [
+          "ok",
+          "problems",
+          "warnings",
+          "before",
+          "after"
+        ],
+        "title": "CheckOut",
+        "type": "object"
+      },
+      "ChangeIn": {
+        "properties": {
+          "shift_id": {
+            "format": "uuid",
+            "title": "Shift Id",
+            "type": "string"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          }
+        },
+        "required": [
+          "shift_id"
+        ],
+        "title": "ChangeIn",
+        "type": "object"
+      },
+      "ChangesIn": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeIn"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Changes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "changes"
+        ],
+        "title": "ChangesIn",
+        "type": "object"
+      },
+      "PinIn": {
+        "properties": {
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pinned"
+        ],
+        "title": "PinIn",
         "type": "object"
       },
       "AvailabilityDayOut": {
@@ -6820,6 +8340,125 @@
           "manager_rules_after"
         ],
         "title": "PreviewOut",
+        "type": "object"
+      },
+      "EmployeeHoursOut": {
+        "properties": {
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "home_location_name": {
+            "title": "Home Location Name",
+            "type": "string"
+          },
+          "contract": {
+            "title": "Contract",
+            "type": "string"
+          },
+          "shifts": {
+            "title": "Shifts",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          },
+          "by_location": {
+            "items": {
+              "$ref": "#/components/schemas/LocationHoursOut"
+            },
+            "title": "By Location",
+            "type": "array"
+          }
+        },
+        "required": [
+          "employee_id",
+          "name",
+          "home_location_name",
+          "contract",
+          "shifts",
+          "total",
+          "by_location"
+        ],
+        "title": "EmployeeHoursOut",
+        "type": "object"
+      },
+      "HoursReportOut": {
+        "properties": {
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/LocationColumnOut"
+            },
+            "title": "Locations",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeHoursOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          }
+        },
+        "required": [
+          "month",
+          "locations",
+          "rows",
+          "total"
+        ],
+        "title": "HoursReportOut",
+        "type": "object"
+      },
+      "LocationColumnOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "LocationColumnOut",
+        "type": "object"
+      },
+      "LocationHoursOut": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          }
+        },
+        "required": [
+          "location_id",
+          "hours"
+        ],
+        "title": "LocationHoursOut",
         "type": "object"
       }
     },

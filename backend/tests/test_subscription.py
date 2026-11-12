@@ -219,6 +219,7 @@ def test_company_without_a_code_is_read_only_and_keeps_its_data(api, make_compan
         "ends_at": None,
         "days_left": 0,
         "expiring_soon": False,
+        "trial": False,
         "generations_used": 0,
         "generations_limit": 30,
     }
@@ -279,15 +280,47 @@ def test_manager_registers_a_company_with_a_code(api):
     ]
 
 
-def test_company_registered_without_a_code_is_read_only(api):
+def test_company_registered_without_a_code_gets_a_trial(api):
     api.login(User.objects.create_user("+48603500600"))
 
     response = api.post("/api/companies", {"name": "Kawiarnia Rano"})
 
     assert response.status_code == 201
+    body = response.json()
+    assert body["read_only"] is False
+    assert body["trial"] is True
+    subscription = Subscription.objects.get(company_id=body["id"])
+    assert subscription.source == Subscription.Source.TRIAL
+    assert close_to(subscription.ends_at, timezone.now() + 14 * DAY)
+    state = api.get(f"/api/companies/{body['id']}/subscription").json()
+    assert state["trial"] is True and state["days_left"] == 14
+
+
+def test_only_the_first_company_of_a_person_gets_a_trial(api):
+    api.login(User.objects.create_user("+48603500600"))
+    api.post("/api/companies", {"name": "Kawiarnia Rano"})
+
+    response = api.post("/api/companies", {"name": "Kawiarnia Wieczór"})
+
     assert response.json()["read_only"] is True
+    assert response.json()["trial"] is False
     assert response.json()["subscription_ends_at"] is None
-    assert not Subscription.objects.exists()
+
+
+def test_after_the_trial_the_company_is_read_only_until_a_code(api):
+    user = User.objects.create_user("+48603500600")
+    api.login(user)
+    company_id = api.post("/api/companies", {"name": "Kawiarnia Rano"}).json()["id"]
+    Subscription.objects.filter(company_id=company_id).update(ends_at=timezone.now() - DAY)
+
+    blocked = api.post("/api/locations", {"company_id": company_id, "name": "Rynek"})
+    assert blocked.status_code == 402
+    assert "Okres próbny" in blocked.json()["detail"]
+
+    redeemed = api.post(f"/api/companies/{company_id}/subscription/redeem", {"code": make_code(days=30)})
+    assert redeemed.status_code == 200
+    assert redeemed.json()["trial"] is False
+    assert redeemed.json()["days_left"] == 30
 
 
 def test_wrong_code_at_registration_creates_nothing_but_counts_the_attempt(api):
