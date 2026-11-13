@@ -8,6 +8,7 @@ Stan: prototyp w budowie (etap 2 z 10: modele danych i dane przykładowe).
 - Wymagania: [docs/spec.md](docs/spec.md)
 - Plan techniczny i etapy: [docs/plan.md](docs/plan.md)
 - Komendy i konwencje dla programistów: [CLAUDE.md](CLAUDE.md)
+- Wdrożenie na serwer VPS: [docs/deploy.md](docs/deploy.md)
 
 ## Uruchomienie lokalne
 
@@ -46,4 +47,4 @@ Lista będzie uzupełniana w kolejnych etapach.
   (`SMS_BACKEND`) do podłączenia przy wdrożeniu.
 - Bez płatności online: dostęp dają kody generowane w panelu administratora.
 - Izolacja firm jest w warstwie aplikacji (filtr po firmie i testy), bez Row Level Security w Postgresie.
-- Wszystko działa lokalnie; wdrożenie na serwer VPS to późniejszy krok (ten sam `docker-compose.yml`, inna wartość `SITE_ADDRESS`).
+- Wdrożenie to jeden serwer VPS z Dockerem, bez zapasowego serwera; kopie bazy leżą na tym samym serwerze (zob. [docs/deploy.md](docs/deploy.md)).
