@@ -50,7 +50,8 @@ RULES: tuple[RuleDefinition, ...] = (
     RuleDefinition(
         code="experience_mix",
         label="Początkujący z doświadczonymi",
-        description="Na zmianie co najmniej tylu doświadczonych, ilu początkujących. Stopień ustawiasz przy pracowniku.",
+        description="Na zmianie co najmniej tylu doświadczonych, ilu początkujących. "
+        "Stopień ustawiasz przy pracowniku.",
         params={"position": None},
         good_practice=True,
     ),
