@@ -419,14 +419,14 @@ Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę 
 Decyzja Piotra po przeglądzie UX: usuwamy typ umowy (zlecenie / umowa o pracę) i wbudowane, zawsze twarde ograniczenia umowy o pracę. Aplikacja w to nie ingeruje; kierownik ustawia wszystko w zasadach.
 
 - `EmployeeProfile.contract` usunięte (migracja `staffing`), znika z API (`EmployeeOut`, `EmployeeIn`), panelu admina, danych demo, ekranu "Pracownicy" i silnika (`Employee.contract`, `Contract`, kody `labor_*`, `check_labor_law`, `_labor_law`).
-- Dwie nowe zasady w `engine/rules_catalog.py`, domyślnie wyłączone, miękkie albo "bez wyjątków" jak każda inna:
+- Dwie nowe zasady w `engine/rules_catalog.py`, miękkie albo "bez wyjątków" jak każda inna (od 13.11.2026 dobra praktyka, patrz założenie 2):
   - `max_hours_per_day` "Godziny pracy w ciągu dnia", parametr `max_hours` (8): łączny czas zmian zaczynających się danego dnia kalendarzowego (także zmian spoza grafiku) nie przekracza limitu. Stopień złamania = dni ponad limit / dni pracy.
   - `min_weekly_rest` "Wolne w tygodniu", parametr `rest_hours` (35): w każdym tygodniu (pon. 00:00 – pon. 00:00 czasu lokalnego), w którym osoba ma zmianę z grafiku, ma tyle godzin wolnego bez przerwy. Stopień złamania = tygodnie bez takiej przerwy / tygodnie pracy.
 - Trzecie ograniczenie z Kodeksu (11 h odpoczynku) już jest w katalogu jako "Odpoczynek między zmianami" (dobra praktyka, domyślnie włączona i miękka); kierownik może ją oznaczyć "bez wyjątków".
 
 Założenia:
 1. Zasady dotyczą wszystkich osób lokalu, bo zasady są ustawiane per lokal. Kto chce limitów tylko dla wybranych osób, napisze to prośbą tekstem (etap 10).
-2. Istniejące dane: kolumna `contract` jest po prostu usuwana; lokale, które miały osoby na umowie o pracę, nie dostają automatycznie włączonych nowych zasad (decyzję zostawiamy kierownikowi).
+2. Istniejące dane: kolumna `contract` jest po prostu usuwana. Decyzja Piotra po merge'u (13.11.2026): obie zasady są dobrą praktyką, więc nowe lokale zaczynają z nimi włączonymi (miękkie), a migracja `rules.0004` dopisuje je na koniec listy w istniejących grupach i lokalach bez grupy (jak `experience_mix`). Nie da się ich włączyć tylko tam, gdzie była umowa o pracę, bo tej informacji już nie ma.
 3. Nazwy parametrów (`max_hours`, `rest_hours`) różnią się od `hours` z "Odpoczynku między zmianami", bo ekran zasad podpisuje pola po nazwie parametru.
 
 ## 18. Etap 9: oddawanie zmian, powiadomienia, historia przypisań

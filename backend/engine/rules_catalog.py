@@ -99,15 +99,15 @@ RULES: tuple[RuleDefinition, ...] = (
             "Nie więcej niż tyle godzin pracy w zmianach zaczynających się tego samego dnia "
             "(nocna zmiana liczy się w całości do dnia, w którym się zaczyna)."
         ),
-        default_enabled=False,
         params={"max_hours": 8},
+        good_practice=True,
     ),
     RuleDefinition(
         code="min_weekly_rest",
         label="Wolne w tygodniu",
         description="W każdym tygodniu (od poniedziałku) co najmniej tyle godzin wolnego bez przerwy.",
-        default_enabled=False,
         params={"rest_hours": 35},
+        good_practice=True,
     ),
 )
 

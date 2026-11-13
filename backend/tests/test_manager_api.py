@@ -72,6 +72,8 @@ class TestOverviewAndLocations:
             "fair_weekends",
             "fair_closings",
             "experience_mix",
+            "max_hours_per_day",
+            "min_weekly_rest",
         ]
         again = api.post("/api/locations", {"company_id": str(shop["company"].pk), "name": "Skawina"})
         assert again.status_code == 409
