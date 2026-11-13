@@ -26,6 +26,8 @@ import type {
 import type {
   AskAvailabilityIn,
   AskAvailabilityOut,
+  ChangesIn,
+  CheckOut,
   ErrorOut,
   GenerateIn,
   GenerationRunOut,
@@ -33,7 +35,12 @@ import type {
   MyScheduleParams,
   PeriodIn,
   PeriodOut,
-  PeriodUpdateIn
+  PeriodUpdateIn,
+  PinIn,
+  ShiftExplanationOut,
+  VersionOut,
+  VersionShiftOut,
+  VersionSummaryOut
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -955,3 +962,877 @@ export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TE
 
 
 
+export type scheduleVersionResponse200 = {
+  data: VersionOut
+  status: 200
+}
+
+export type scheduleVersionResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type scheduleVersionResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type scheduleVersionResponseSuccess = (scheduleVersionResponse200) & {
+  headers: Headers;
+};
+export type scheduleVersionResponseError = (scheduleVersionResponse403 | scheduleVersionResponse404) & {
+  headers: Headers;
+};
+
+export type scheduleVersionResponse = (scheduleVersionResponseSuccess | scheduleVersionResponseError)
+
+export const getScheduleVersionUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}`
+}
+
+/**
+ * One version of a location's schedule: the grid, the three scores, rules, unmet requests and history.
+ * @summary Schedule Version
+ */
+export const scheduleVersion = async (versionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<scheduleVersionResponse> => {
+
+  return apiFetch<scheduleVersionResponse>(getScheduleVersionUrl(versionId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getScheduleVersionQueryKey = (versionId: string,) => {
+    return [
+    `/api/versions/${versionId}`
+    ] as const;
+    }
+
+
+export const getScheduleVersionQueryOptions = <TData = Awaited<ReturnType<typeof scheduleVersion>>, TError = ErrorOut>(versionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scheduleVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getScheduleVersionQueryKey(versionId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof scheduleVersion>>> = ({ signal }) => scheduleVersion(versionId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: versionId !== null && versionId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof scheduleVersion>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ScheduleVersionQueryResult = NonNullable<Awaited<ReturnType<typeof scheduleVersion>>>
+export type ScheduleVersionQueryError = ErrorOut
+
+
+/**
+ * One version of a location's schedule: the grid, the three scores, rules, unmet requests and history.
+ * @summary Schedule Version
+ */
+export function useScheduleVersion<TData = Awaited<ReturnType<typeof scheduleVersion>>, TError = ErrorOut>(
+ versionId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof scheduleVersion>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof scheduleVersion>>,
+          TError,
+          Awaited<ReturnType<typeof scheduleVersion>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * One version of a location's schedule: the grid, the three scores, rules, unmet requests and history.
+ * @summary Schedule Version
+ */
+export function useScheduleVersion<TData = Awaited<ReturnType<typeof scheduleVersion>>, TError = ErrorOut>(
+ versionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scheduleVersion>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof scheduleVersion>>,
+          TError,
+          Awaited<ReturnType<typeof scheduleVersion>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * One version of a location's schedule: the grid, the three scores, rules, unmet requests and history.
+ * @summary Schedule Version
+ */
+export function useScheduleVersion<TData = Awaited<ReturnType<typeof scheduleVersion>>, TError = ErrorOut>(
+ versionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scheduleVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * One version of a location's schedule: the grid, the three scores, rules, unmet requests and history.
+ * @summary Schedule Version
+ */
+export function useScheduleVersion<TData = Awaited<ReturnType<typeof scheduleVersion>>, TError = ErrorOut>(
+ versionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scheduleVersion>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getScheduleVersionQueryOptions(versionId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type explainShiftResponse200 = {
+  data: ShiftExplanationOut
+  status: 200
+}
+
+export type explainShiftResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type explainShiftResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type explainShiftResponseSuccess = (explainShiftResponse200) & {
+  headers: Headers;
+};
+export type explainShiftResponseError = (explainShiftResponse403 | explainShiftResponse404) & {
+  headers: Headers;
+};
+
+export type explainShiftResponse = (explainShiftResponseSuccess | explainShiftResponseError)
+
+export const getExplainShiftUrl = (versionId: string,
+    shiftId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/shifts/${shiftId}/explain`
+}
+
+/**
+ * Why this shift has its person (or nobody), and what each person with the position would change.
+ * Quick checks with the validator, no solver; the same list is the manual editor's choice of people.
+ * @summary Explain Shift
+ */
+export const explainShift = async (versionId: string,
+    shiftId: string, options?: Parameters<typeof apiFetch>[1]): Promise<explainShiftResponse> => {
+
+  return apiFetch<explainShiftResponse>(getExplainShiftUrl(versionId,shiftId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExplainShiftQueryKey = (versionId: string,
+    shiftId: string,) => {
+    return [
+    `/api/versions/${versionId}/shifts/${shiftId}/explain`
+    ] as const;
+    }
+
+
+export const getExplainShiftQueryOptions = <TData = Awaited<ReturnType<typeof explainShift>>, TError = ErrorOut>(versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof explainShift>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExplainShiftQueryKey(versionId,shiftId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof explainShift>>> = ({ signal }) => explainShift(versionId,shiftId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: versionId !== null && versionId !== undefined && shiftId !== null && shiftId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof explainShift>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ExplainShiftQueryResult = NonNullable<Awaited<ReturnType<typeof explainShift>>>
+export type ExplainShiftQueryError = ErrorOut
+
+
+/**
+ * Why this shift has its person (or nobody), and what each person with the position would change.
+ * Quick checks with the validator, no solver; the same list is the manual editor's choice of people.
+ * @summary Explain Shift
+ */
+export function useExplainShift<TData = Awaited<ReturnType<typeof explainShift>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof explainShift>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof explainShift>>,
+          TError,
+          Awaited<ReturnType<typeof explainShift>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Why this shift has its person (or nobody), and what each person with the position would change.
+ * Quick checks with the validator, no solver; the same list is the manual editor's choice of people.
+ * @summary Explain Shift
+ */
+export function useExplainShift<TData = Awaited<ReturnType<typeof explainShift>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof explainShift>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof explainShift>>,
+          TError,
+          Awaited<ReturnType<typeof explainShift>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Why this shift has its person (or nobody), and what each person with the position would change.
+ * Quick checks with the validator, no solver; the same list is the manual editor's choice of people.
+ * @summary Explain Shift
+ */
+export function useExplainShift<TData = Awaited<ReturnType<typeof explainShift>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof explainShift>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Why this shift has its person (or nobody), and what each person with the position would change.
+ * Quick checks with the validator, no solver; the same list is the manual editor's choice of people.
+ * @summary Explain Shift
+ */
+export function useExplainShift<TData = Awaited<ReturnType<typeof explainShift>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof explainShift>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getExplainShiftQueryOptions(versionId,shiftId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type checkScheduleChangesResponse200 = {
+  data: CheckOut
+  status: 200
+}
+
+export type checkScheduleChangesResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type checkScheduleChangesResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type checkScheduleChangesResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type checkScheduleChangesResponseSuccess = (checkScheduleChangesResponse200) & {
+  headers: Headers;
+};
+export type checkScheduleChangesResponseError = (checkScheduleChangesResponse403 | checkScheduleChangesResponse404 | checkScheduleChangesResponse409) & {
+  headers: Headers;
+};
+
+export type checkScheduleChangesResponse = (checkScheduleChangesResponseSuccess | checkScheduleChangesResponseError)
+
+export const getCheckScheduleChangesUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/check`
+}
+
+/**
+ * Validate a manual change before saving it (e.g. while dragging): new problems and the new scores.
+ * @summary Check Schedule Changes
+ */
+export const checkScheduleChanges = async (versionId: string,
+    changesIn: ChangesIn, options?: Parameters<typeof apiFetch>[1]): Promise<checkScheduleChangesResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<checkScheduleChangesResponse>(getCheckScheduleChangesUrl(versionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changesIn)
+  }
+);}
+
+
+
+
+
+export const getCheckScheduleChangesMutationKey = () => ['checkScheduleChanges'] as const;
+
+export const getCheckScheduleChangesMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkScheduleChanges>>, TError,CheckScheduleChangesMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkScheduleChanges>>, TError,CheckScheduleChangesMutationVariables, TContext> => {
+
+const mutationKey = getCheckScheduleChangesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkScheduleChanges>>, CheckScheduleChangesMutationVariables> = (props) => {
+          const {versionId,data} = props ?? {};
+
+          return  checkScheduleChanges(versionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckScheduleChangesMutationResult = NonNullable<Awaited<ReturnType<typeof checkScheduleChanges>>>
+    export type CheckScheduleChangesMutationBody = ChangesIn
+    export type CheckScheduleChangesMutationError = ErrorOut
+    export type CheckScheduleChangesMutationVariables = {versionId: string;data: ChangesIn}
+
+    /**
+ * Validate a manual change before saving it (e.g. while dragging): new problems and the new scores.
+ * @summary Check Schedule Changes
+ */
+export const useCheckScheduleChanges = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkScheduleChanges>>, TError,CheckScheduleChangesMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof checkScheduleChanges>>,
+        TError,
+        CheckScheduleChangesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCheckScheduleChangesMutationOptions(options), queryClient);
+    }
+    export type changeAssignmentsResponse200 = {
+  data: CheckOut
+  status: 200
+}
+
+export type changeAssignmentsResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type changeAssignmentsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type changeAssignmentsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type changeAssignmentsResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type changeAssignmentsResponseSuccess = (changeAssignmentsResponse200) & {
+  headers: Headers;
+};
+export type changeAssignmentsResponseError = (changeAssignmentsResponse402 | changeAssignmentsResponse403 | changeAssignmentsResponse404 | changeAssignmentsResponse409) & {
+  headers: Headers;
+};
+
+export type changeAssignmentsResponse = (changeAssignmentsResponseSuccess | changeAssignmentsResponseError)
+
+export const getChangeAssignmentsUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/assignments`
+}
+
+/**
+ * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
+ * @summary Change Assignments
+ */
+export const changeAssignments = async (versionId: string,
+    changesIn: ChangesIn, options?: Parameters<typeof apiFetch>[1]): Promise<changeAssignmentsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<changeAssignmentsResponse>(getChangeAssignmentsUrl(versionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changesIn)
+  }
+);}
+
+
+
+
+
+export const getChangeAssignmentsMutationKey = () => ['changeAssignments'] as const;
+
+export const getChangeAssignmentsMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeAssignments>>, TError,ChangeAssignmentsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changeAssignments>>, TError,ChangeAssignmentsMutationVariables, TContext> => {
+
+const mutationKey = getChangeAssignmentsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeAssignments>>, ChangeAssignmentsMutationVariables> = (props) => {
+          const {versionId,data} = props ?? {};
+
+          return  changeAssignments(versionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeAssignmentsMutationResult = NonNullable<Awaited<ReturnType<typeof changeAssignments>>>
+    export type ChangeAssignmentsMutationBody = ChangesIn
+    export type ChangeAssignmentsMutationError = ErrorOut
+    export type ChangeAssignmentsMutationVariables = {versionId: string;data: ChangesIn}
+
+    /**
+ * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
+ * @summary Change Assignments
+ */
+export const useChangeAssignments = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeAssignments>>, TError,ChangeAssignmentsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof changeAssignments>>,
+        TError,
+        ChangeAssignmentsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getChangeAssignmentsMutationOptions(options), queryClient);
+    }
+    export type pinShiftResponse200 = {
+  data: VersionShiftOut
+  status: 200
+}
+
+export type pinShiftResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type pinShiftResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type pinShiftResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type pinShiftResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type pinShiftResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type pinShiftResponseSuccess = (pinShiftResponse200) & {
+  headers: Headers;
+};
+export type pinShiftResponseError = (pinShiftResponse400 | pinShiftResponse402 | pinShiftResponse403 | pinShiftResponse404 | pinShiftResponse409) & {
+  headers: Headers;
+};
+
+export type pinShiftResponse = (pinShiftResponseSuccess | pinShiftResponseError)
+
+export const getPinShiftUrl = (versionId: string,
+    shiftId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/shifts/${shiftId}/pin`
+}
+
+/**
+ * Pin (or unpin) the person on a shift: arranging the schedule again keeps pinned people in place.
+ * @summary Pin Shift
+ */
+export const pinShift = async (versionId: string,
+    shiftId: string,
+    pinIn: PinIn, options?: Parameters<typeof apiFetch>[1]): Promise<pinShiftResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<pinShiftResponse>(getPinShiftUrl(versionId,shiftId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(pinIn)
+  }
+);}
+
+
+
+
+
+export const getPinShiftMutationKey = () => ['pinShift'] as const;
+
+export const getPinShiftMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pinShift>>, TError,PinShiftMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pinShift>>, TError,PinShiftMutationVariables, TContext> => {
+
+const mutationKey = getPinShiftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pinShift>>, PinShiftMutationVariables> = (props) => {
+          const {versionId,shiftId,data} = props ?? {};
+
+          return  pinShift(versionId,shiftId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PinShiftMutationResult = NonNullable<Awaited<ReturnType<typeof pinShift>>>
+    export type PinShiftMutationBody = PinIn
+    export type PinShiftMutationError = ErrorOut
+    export type PinShiftMutationVariables = {versionId: string;shiftId: string;data: PinIn}
+
+    /**
+ * Pin (or unpin) the person on a shift: arranging the schedule again keeps pinned people in place.
+ * @summary Pin Shift
+ */
+export const usePinShift = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pinShift>>, TError,PinShiftMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof pinShift>>,
+        TError,
+        PinShiftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPinShiftMutationOptions(options), queryClient);
+    }
+    export type startCorrectingResponse201 = {
+  data: VersionSummaryOut
+  status: 201
+}
+
+export type startCorrectingResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type startCorrectingResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type startCorrectingResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type startCorrectingResponseSuccess = (startCorrectingResponse201) & {
+  headers: Headers;
+};
+export type startCorrectingResponseError = (startCorrectingResponse402 | startCorrectingResponse403 | startCorrectingResponse404) & {
+  headers: Headers;
+};
+
+export type startCorrectingResponse = (startCorrectingResponseSuccess | startCorrectingResponseError)
+
+export const getStartCorrectingUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/draft`
+}
+
+/**
+ * Correct a published schedule: a new draft copy (or the newest draft, if there already is one).
+ * @summary Start Correcting
+ */
+export const startCorrecting = async (versionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<startCorrectingResponse> => {
+
+  return apiFetch<startCorrectingResponse>(getStartCorrectingUrl(versionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getStartCorrectingMutationKey = () => ['startCorrecting'] as const;
+
+export const getStartCorrectingMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startCorrecting>>, TError,StartCorrectingMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startCorrecting>>, TError,StartCorrectingMutationVariables, TContext> => {
+
+const mutationKey = getStartCorrectingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startCorrecting>>, StartCorrectingMutationVariables> = (props) => {
+          const {versionId} = props ?? {};
+
+          return  startCorrecting(versionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartCorrectingMutationResult = NonNullable<Awaited<ReturnType<typeof startCorrecting>>>
+
+    export type StartCorrectingMutationError = ErrorOut
+    export type StartCorrectingMutationVariables = {versionId: string}
+
+    /**
+ * Correct a published schedule: a new draft copy (or the newest draft, if there already is one).
+ * @summary Start Correcting
+ */
+export const useStartCorrecting = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startCorrecting>>, TError,StartCorrectingMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof startCorrecting>>,
+        TError,
+        StartCorrectingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getStartCorrectingMutationOptions(options), queryClient);
+    }
+    export type publishScheduleResponse200 = {
+  data: VersionSummaryOut
+  status: 200
+}
+
+export type publishScheduleResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type publishScheduleResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type publishScheduleResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type publishScheduleResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type publishScheduleResponseSuccess = (publishScheduleResponse200) & {
+  headers: Headers;
+};
+export type publishScheduleResponseError = (publishScheduleResponse402 | publishScheduleResponse403 | publishScheduleResponse404 | publishScheduleResponse409) & {
+  headers: Headers;
+};
+
+export type publishScheduleResponse = (publishScheduleResponseSuccess | publishScheduleResponseError)
+
+export const getPublishScheduleUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/publish`
+}
+
+/**
+ * Publish the newest draft: employees see it in "Mój grafik"; the previous version stays as history.
+ * @summary Publish Schedule
+ */
+export const publishSchedule = async (versionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<publishScheduleResponse> => {
+
+  return apiFetch<publishScheduleResponse>(getPublishScheduleUrl(versionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getPublishScheduleMutationKey = () => ['publishSchedule'] as const;
+
+export const getPublishScheduleMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishSchedule>>, TError,PublishScheduleMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishSchedule>>, TError,PublishScheduleMutationVariables, TContext> => {
+
+const mutationKey = getPublishScheduleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishSchedule>>, PublishScheduleMutationVariables> = (props) => {
+          const {versionId} = props ?? {};
+
+          return  publishSchedule(versionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof publishSchedule>>>
+
+    export type PublishScheduleMutationError = ErrorOut
+    export type PublishScheduleMutationVariables = {versionId: string}
+
+    /**
+ * Publish the newest draft: employees see it in "Mój grafik"; the previous version stays as history.
+ * @summary Publish Schedule
+ */
+export const usePublishSchedule = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishSchedule>>, TError,PublishScheduleMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof publishSchedule>>,
+        TError,
+        PublishScheduleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPublishScheduleMutationOptions(options), queryClient);
+    }

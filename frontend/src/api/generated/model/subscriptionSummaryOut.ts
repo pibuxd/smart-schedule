@@ -9,6 +9,7 @@ export interface SubscriptionSummaryOut {
   read_only: boolean;
   read_only_message: string;
   never_started: boolean;
+  trial: boolean;
   days_left: number;
   expiring_soon: boolean;
 }

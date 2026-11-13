@@ -411,6 +411,7 @@ class _VersionReader(_Reader):
         # No frozen days: the version is read as a whole.
         super().__init__([version.period], today=version.period.start)
         self.version = version
+        self.latest = {version.period_id: version}  # pins of this version, not of a newer one
 
     def slots(self) -> list[Slot]:
         by_day = self._published_slots(self.version)

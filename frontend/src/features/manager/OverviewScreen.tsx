@@ -10,8 +10,10 @@ import { SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { AskAvailabilityButton } from './AskAvailabilityButton'
 import { useManager } from './ManagerContext'
+import { arrangeTarget } from './periods'
 import { daysUntil, deadlineWords, namesList, PERIOD_STATUS, people, periodTitle, shortDay } from './words'
 
 /** The manager's start screen: every location in one list, where its availability collection stands. */
@@ -29,6 +31,10 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
     )
   }
   const data = overview.data.data as ManagerOverviewOut
+  // "Ułóż dla wszystkich": locations still collecting or with a draft, not being arranged right now.
+  const arrangeAll = data.locations
+    .filter((l) => l.period && l.period.status !== 'published' && !l.period.active_run_id)
+    .map((l) => arrangeTarget(l, today))
   const byGroup = new Map<string, { name: string; id: string | null; locations: LocationSummaryOut[] }>()
   for (const location of data.locations) {
     const key = location.group_id ?? ''
@@ -46,12 +52,22 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
             dyspozycje.
           </p>
         </div>
-        {role === 'owner' && (
-          <Button variant="secondary" size="normal" onClick={() => setAdding(true)} disabled={data.subscription.read_only}>
-            <Plus aria-hidden="true" size={20} />
-            Nowy lokal
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {arrangeAll.length > 1 && (
+            <ArrangeButton
+              targets={arrangeAll}
+              label="Ułóż dla wszystkich"
+              variant="secondary"
+              disabled={data.subscription.read_only}
+            />
+          )}
+          {role === 'owner' && (
+            <Button variant="secondary" size="normal" onClick={() => setAdding(true)} disabled={data.subscription.read_only}>
+              <Plus aria-hidden="true" size={20} />
+              Nowy lokal
+            </Button>
+          )}
+        </div>
       </div>
 
       {data.locations.length === 0 && (
@@ -168,9 +184,22 @@ function LocationRow({ location, today, readOnly }: { location: LocationSummaryO
             {ready && <span className="font-semibold text-accent">{ready.text}</span>}
           </>
         )}
+        {period?.active_run_id && <RunProgress runId={period.active_run_id} locationId={location.id} compact />}
+        {period && !period.active_run_id && period.latest_version_status === 'draft' && (
+          <span className="text-sm">
+            <Tag tone="warn">Szkic czeka na publikację</Tag>
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap content-start items-start gap-2 lg:grid lg:justify-items-end">
+        {period && !period.active_run_id && (
+          <ArrangeButton
+            targets={[arrangeTarget(location, today)]}
+            variant={ready || period.status !== 'collecting' ? 'primary' : 'secondary'}
+            disabled={readOnly}
+          />
+        )}
         {period?.status === 'collecting' && (
           <AskAvailabilityButton
             periodId={period.id}
@@ -180,6 +209,11 @@ function LocationRow({ location, today, readOnly }: { location: LocationSummaryO
           />
         )}
         <div className="flex flex-wrap gap-x-1 lg:justify-end">
+          {period?.latest_version_id && (
+            <Link to="/kierownik/lokal/$locationId/grafik" params={{ locationId: location.id }} className={linkClass}>
+              Grafik
+            </Link>
+          )}
           <Link to="/kierownik/lokal/$locationId/dyspozycje" params={{ locationId: location.id }} className={linkClass}>
             Dyspozycje
           </Link>

@@ -1,3 +1,4 @@
+import type { SubscriptionOut } from '../../api/generated/model'
 import { dayAndMonth, parseDate, periodWords, toIsoDate, weekdayShort } from '../../lib/dates'
 
 export const PERIOD_STATUS: Record<string, string> = {
@@ -47,3 +48,24 @@ export function people(n: number): string {
   return `${n} ${last >= 2 && last <= 4 && !teen ? 'osoby' : 'osób'}`
 }
 
+/** "1 zmiana", "3 zmiany", "5 zmian" */
+export function shifts(n: number): string {
+  if (n === 1) return '1 zmiana'
+  const last = n % 10
+  const teen = n % 100 >= 12 && n % 100 <= 14
+  return `${n} ${last >= 2 && last <= 4 && !teen ? 'zmiany' : 'zmian'}`
+}
+
+/** "1 zmiana bez obsady", "3 zmiany bez obsady" */
+export const holesWords = (n: number) => `${shifts(n)} bez obsady`
+
+/** "Okres próbny: zostało 9 dni" */
+export function statusWords(data: Pick<SubscriptionOut, 'read_only' | 'trial' | 'days_left'>): string {
+  if (data.read_only) return 'Tylko do oglądania'
+  if (data.trial) return `Okres próbny: ${daysWords(data.days_left)}`
+  return `Dostęp aktywny: ${daysWords(data.days_left)}`
+}
+
+function daysWords(days: number): string {
+  return days === 1 ? 'został 1 dzień' : `zostało ${days} dni`
+}

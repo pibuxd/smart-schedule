@@ -10,4 +10,5 @@ export interface CompanyOut {
   name: string;
   read_only: boolean;
   subscription_ends_at: string | null;
+  trial: boolean;
 }

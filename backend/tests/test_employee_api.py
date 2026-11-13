@@ -294,12 +294,13 @@ class TestMySchedule:
 
 
 def test_publish_helper_supersedes_the_previous_version(shop):
-    from apps.scheduling.management.commands.generate_schedule import publish_version
+    from apps.scheduling.editing import publish
 
     period = shop["period"]
     old = ScheduleVersion.objects.create(period=period, number=1, status=ScheduleVersion.Status.PUBLISHED)
     new = ScheduleVersion.objects.create(period=period, number=2)
-    publish_version(new)
+    publish(new, None)
+    new.refresh_from_db()
     old.refresh_from_db()
     period.refresh_from_db()
     assert (old.status, new.status, period.status) == ("superseded", "published", "published")
