@@ -6,6 +6,8 @@ from apps.accounts.api import router as accounts_router
 from apps.availability.api import router as availability_router
 from apps.billing.api import router as billing_router
 from apps.core.api import router as core_router
+from apps.marketplace.api import router as marketplace_router
+from apps.notifications.api import router as notifications_router
 from apps.reports.api import router as reports_router
 from apps.rules.api import router as rules_router
 from apps.scheduling.api import router as scheduling_router
@@ -30,6 +32,8 @@ api.add_router("/", availability_router)
 api.add_router("/", staffing_router)
 api.add_router("/", rules_router)
 api.add_router("/", reports_router)
+api.add_router("/", marketplace_router)
+api.add_router("/", notifications_router)
 
 
 @api.exception_handler(AuthenticationError)

@@ -6,8 +6,8 @@
   Only the newest version of a period can be edited, and only while it is a draft; days that have passed cannot.
 - `start_draft`: editing a published schedule starts a new draft copy (publishing makes it the published one).
 - `publish`: the draft becomes the published version, the previous one is kept as history, the history of
-  assignments (`AssignmentEvent`) gets one row for every slot whose person changed, and the employees of the
-  location get an in-app notice.
+  assignments (`AssignmentEvent`) gets one row for every slot whose person changed, open offers of given-away
+  shifts follow the slot (or end, when the giver lost it), and the employees of the location get an in-app notice.
 """
 
 from __future__ import annotations
@@ -265,6 +265,9 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
         version.save(update_fields=["status", "published_at"])
         period.status = SchedulePeriod.Status.PUBLISHED
         period.save(update_fields=["status"])
+        from apps.marketplace.services import refresh_after_publish
+
+        refresh_after_publish(version, previous)
         if notify:
             _notify_published(version, first=previous is None)
     return version

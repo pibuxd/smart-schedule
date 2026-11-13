@@ -316,6 +316,9 @@ class MyShiftOut(Schema):
     # True when the shift is in another location than my home one.
     away: bool
     coworkers: list[str]
+    # "Oddaj zmianę": my active offer of this shift (open = nobody yet, claimed = waiting for the manager).
+    offer_id: UUID | None = None
+    offer_status: Literal["open", "claimed"] | None = None
 
 
 class MonthHoursOut(Schema):
@@ -363,6 +366,15 @@ def my_schedule(request, company_id: UUID):
         for other in same_days:
             others[(other.shift.location_id, other.shift.date)].append(other)
 
+    from apps.marketplace.models import ShiftOffer
+    from apps.marketplace.services import ACTIVE
+
+    offers = {
+        assignment_id: (pk, status)
+        for pk, assignment_id, status in ctx.qs(ShiftOffer)
+        .filter(assignment__in=[a.pk for a in upcoming], status__in=ACTIVE)
+        .values_list("pk", "assignment_id", "status")
+    }
     shifts = []
     for assignment in upcoming:
         shift = assignment.shift
@@ -388,6 +400,8 @@ def my_schedule(request, company_id: UUID):
                 shift_type_name=shift.shift_type.name if shift.shift_type else "",
                 away=shift.location_id != profile.home_location_id,
                 coworkers=names,
+                offer_id=offers.get(assignment.pk, (None, None))[0],
+                offer_status=offers.get(assignment.pk, (None, None))[1],
             )
         )
 
@@ -521,10 +535,45 @@ class CandidateOut(Schema):
     employee_requests: float
 
 
+class SlotEventOut(Schema):
+    at: datetime
+    reason: Literal["generated", "manual", "offer", "swap"]
+    # Empty name: nobody (an unfilled shift).
+    from_name: str
+    to_name: str
+    by_name: str
+
+
 class ShiftExplanationOut(Schema):
     shift: VersionShiftOut
     summary: str
     candidates: list[CandidateOut]
+    # Who held this shift before, newest first (published changes, given-away shifts).
+    history: list[SlotEventOut]
+
+
+def _slot_history(ctx, shift: Shift) -> list[SlotEventOut]:
+    from apps.scheduling.models import AssignmentEvent
+
+    def name(profile) -> str:
+        return profile.membership.user.full_name if profile else ""
+
+    rows = (
+        ctx.qs(AssignmentEvent)
+        .filter(period_id=shift.version.period_id, slot_key=shift.slot_key)
+        .select_related("from_employee__membership__user", "to_employee__membership__user", "by")
+        .order_by("-at")[:20]
+    )
+    return [
+        SlotEventOut(
+            at=e.at,
+            reason=e.reason,
+            from_name=name(e.from_employee),
+            to_name=name(e.to_employee),
+            by_name=e.by.full_name if e.by else "",
+        )
+        for e in rows
+    ]
 
 
 class ChangeIn(Schema):
@@ -791,6 +840,7 @@ def explain_shift(request, version_id: UUID, shift_id: UUID):
             )
             for c in explanation.candidates
         ],
+        history=_slot_history(ctx, shift),
     )
 
 
