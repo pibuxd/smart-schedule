@@ -141,11 +141,6 @@ class StaffingException(CompanyOwnedModel):
         return f"{self.date}: {self.shift_type.name} – {self.position.name} × {self.count}"
 
 
-class Contract(models.TextChoices):
-    CIVIL = "civil", "umowa zlecenie"
-    EMPLOYMENT = "employment", "umowa o pracę"
-
-
 class Experience(models.IntegerChoices):
     """Set by the manager, never shown to the employee; used by the rule experience_mix."""
 
@@ -164,7 +159,6 @@ class EmployeeProfile(CompanyOwnedModel):
         Location, on_delete=models.RESTRICT, related_name="employees", verbose_name="lokal domowy"
     )
     positions = models.ManyToManyField(Position, blank=True, related_name="employees", verbose_name="stanowiska")
-    contract = models.CharField("umowa", max_length=16, choices=Contract.choices, default=Contract.CIVIL)
     experience = models.PositiveSmallIntegerField(
         "stopień doświadczenia", choices=Experience.choices, default=Experience.SKILLED
     )

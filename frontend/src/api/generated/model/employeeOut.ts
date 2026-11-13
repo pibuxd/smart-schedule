@@ -4,7 +4,6 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
-import type { EmployeeOutContract } from './employeeOutContract';
 import type { EmployeeOutExperience } from './employeeOutExperience';
 
 export interface EmployeeOut {
@@ -13,7 +12,6 @@ export interface EmployeeOut {
   last_name: string;
   phone: string;
   position_ids: string[];
-  contract: EmployeeOutContract;
   experience: EmployeeOutExperience;
   max_hours_month: number | null;
   target_hours_month: number | null;

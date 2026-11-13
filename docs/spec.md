@@ -26,7 +26,7 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 ## Pracownik (najpierw telefon)
 
 1. Mój grafik: data, lokal, godziny, stanowisko; kto jest ze mną na zmianie.
-2. Dyspozycyjność wyłącznie ręcznie w kalendarzu, bez LLM. W kalendarzu są tylko dwa stany: nie mogę / chętnie; dzień bez zaznaczenia znaczy "mogę" (decyzja Piotra z 13.11.2026: "wolę nie" i "obojętnie" usunięte, takie życzenia pracownik pisze jako prośbę tekstem, np. "wolałbym mieć wolne 5 grudnia", a LLM zamienia ją na typ wolne_dni). Zaznaczanie "pędzlem" (decyzja Piotra z 12.11.2026): pracownik wybiera na dole ekranu stan (nie mogę, chętnie albo gumkę "wyczyść", która zdejmuje zaznaczenie i godziny), który zaznacza, a potem stuka w dzień albo przeciąga po kilku dniach naraz; nie trzeba pamiętać kolejności stanów. Zapis automatyczny, "Cofnij" cofa ostatni ruch. Stuknięcie w dzień, który ma już wybrany stan, albo narzędzie "Godziny dnia" otwiera ten dzień; pod kalendarzem jest lista dni z godzinami z przyciskiem "Zmień". Można tam wybrać godziny (prośba Piotra z 12.11.2026: umowa zlecenie daje pełną elastyczność): przy "chętnie" i na dniu bez zaznaczenia znaczą "mogę tylko w tych godzinach" (zmiana spoza nich tego dnia liczy się jak "nie mogę"), przy "nie mogę" znaczą "nie w tych godzinach"; koniec przed początkiem to godziny do rana następnego dnia (nocka). Opcje: "powtarzaj co tydzień do [data]" (studentom plan zmienia się co semestr) i "skopiuj z poprzedniego miesiąca". Widoczny termin zgłoszenia. Po terminie pracownik nadal może poprawiać dyspozycje, aż kierownik ułoży grafik; dni zmienione po terminie kierownik widzi w siatce ze znakiem "po terminie" (decyzja Piotra z 12.11.2026, zamiast twardego zamknięcia).
+2. Dyspozycyjność wyłącznie ręcznie w kalendarzu, bez LLM. W kalendarzu są tylko dwa stany: nie mogę / chętnie; dzień bez zaznaczenia znaczy "mogę" (decyzja Piotra z 13.11.2026: "wolę nie" i "obojętnie" usunięte, takie życzenia pracownik pisze jako prośbę tekstem, np. "wolałbym mieć wolne 5 grudnia", a LLM zamienia ją na typ wolne_dni). Zaznaczanie "pędzlem" (decyzja Piotra z 12.11.2026): pracownik wybiera na dole ekranu stan (nie mogę, chętnie albo gumkę "wyczyść", która zdejmuje zaznaczenie i godziny), który zaznacza, a potem stuka w dzień albo przeciąga po kilku dniach naraz; nie trzeba pamiętać kolejności stanów. Zapis automatyczny, "Cofnij" cofa ostatni ruch. Stuknięcie w dzień, który ma już wybrany stan, albo narzędzie "Godziny dnia" otwiera ten dzień; pod kalendarzem jest lista dni z godzinami z przyciskiem "Zmień". Można tam wybrać godziny (prośba Piotra z 12.11.2026: pracownicy są elastyczni i zaznaczają godziny, w których mogą): przy "chętnie" i na dniu bez zaznaczenia znaczą "mogę tylko w tych godzinach" (zmiana spoza nich tego dnia liczy się jak "nie mogę"), przy "nie mogę" znaczą "nie w tych godzinach"; koniec przed początkiem to godziny do rana następnego dnia (nocka). Opcje: "powtarzaj co tydzień do [data]" (studentom plan zmienia się co semestr) i "skopiuj z poprzedniego miesiąca". Widoczny termin zgłoszenia. Po terminie pracownik nadal może poprawiać dyspozycje, aż kierownik ułoży grafik; dni zmienione po terminie kierownik widzi w siatce ze znakiem "po terminie" (decyzja Piotra z 12.11.2026, zamiast twardego zamknięcia).
 3. Prośby tekstem tylko dla spraw spoza kalendarza, np. "nie chcę zmiany z osobą X". Pracownik widzi, jak system zrozumiał prośbę, i może poprawić. Prośby widzi tylko menedżer.
 4. Po publikacji pracownik widzi tylko swój grafik na najbliższy okres i sumę godzin. Nie widzi, czy jego prośby zostały spełnione, ani powodów.
 5. Oddanie zmiany: "oddaj zmianę" -> powiadomienie w aplikacji dla osób ze wszystkich lokali firmy, które zaznaczyły wtedy dyspozycyjność, mają właściwe stanowisko i nie złamią twardych reguł -> "biorę" -> menedżer zatwierdza. Zapisuj historię przypisań zmiany, żeby później łatwo dodać zamiany zmian między dwiema osobami. Do zatwierdzenia zmiana należy do osoby, która ją oddaje. Po zatwierdzeniu zmiana od razu przechodzi w opublikowanym grafiku (bez nowej wersji: ślad zostaje w historii przypisań, z osobą, która zatwierdziła), jest przypięta, żeby ponowne układanie nie cofnęło uzgodnienia, a wszyscy zainteresowani dostają powiadomienie.
@@ -34,7 +34,7 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 
 ## Menedżer (najpierw komputer)
 
-1. Dane lokalu w formularzach: stanowiska, typy zmian z godzinami (stałe lub dowolne, także przez północ), obsada według stanowisk dla dnia tygodnia i typu zmiany z wyjątkami na daty, okres grafiku (tydzień lub miesiąc), termin dyspozycji, pracownicy (stanowiska, typ umowy, stopień doświadczenia, osobiste maksimum i cel godzin). Aplikacja niczego z tego nie zakłada z góry.
+1. Dane lokalu w formularzach: stanowiska, typy zmian z godzinami (stałe lub dowolne, także przez północ), obsada według stanowisk dla dnia tygodnia i typu zmiany z wyjątkami na daty, okres grafiku (tydzień lub miesiąc), termin dyspozycji, pracownicy (stanowiska, stopień doświadczenia, osobiste maksimum i cel godzin). Aplikacja niczego z tego nie zakłada z góry.
    Stopień doświadczenia (decyzja Piotra z 13.11.2026): kierownik daje każdej osobie na liście pracowników jedną z trzech etykiet: początkujący, samodzielny (domyślna) albo doświadczony. Pracownik nigdy nie widzi swojego stopnia. Generator używa go w zasadzie "Początkujący z doświadczonymi", żeby na zmianie nie było wielu niedoświadczonych osób naraz. Pomysł na później: podpowiedź stopnia z przepracowanych godzin.
 2. Przegląd dyspozycji: siatka pracownicy x dni, lista próśb z interpretacją (menedżer może prośbę odrzucić albo oznaczyć jako ważniejszą lub mniej ważną), lista osób bez zgłoszonej dyspozycji.
 3. Zasady lokalu: gotowa lista z przełącznikami i licznikami; kolejność na liście = ważność; każdą zasadę można oznaczyć "bez wyjątków" (twarda). Przed zapisaniem pokaż skutek zmiany na danych z ostatniego okresu, np. "przez tę zasadę 6 próśb nie zostałoby spełnionych".
@@ -44,13 +44,14 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
    Grafik powstaje wyłącznie na świadome polecenie kierownika, gdy minie termin albo gdy wszyscy wpiszą dyspozycje (Piotr, 12.11.2026: ludzie zwlekają do ostatniej chwili, więc grafik ma sens dopiero przy komplecie danych). Aplikacja nie układa grafiku sama, okresowo ani automatycznie; może jedynie podpowiedzieć, że przyszła pora.
 7. Podsumowanie godzin w miesiącu z podziałem na lokale, eksport CSV.
 
-## Typy umów i reguły
+## Reguły (bez typu umowy)
 
-Każda osoba ma typ umowy: zlecenie (prawie wszyscy, domyślne) albo umowa o pracę (pojedyncze osoby, np. kierownik).
-- Zlecenie: twarde są tylko "nie mogę", właściwe stanowisko, brak nakładających się zmian, zmiany przypięte ręcznie i zasady menedżera "bez wyjątków".
-- Umowa o pracę: dodatkowo twarde 11 h odpoczynku na dobę, 35 h na tydzień, max 8 h na dobę. Okres rozliczeniowy i doba pracownicza w kolejnej wersji.
-- Limity prawne zawsze twarde. Osobiste maksimum i cel godzin ustawione przez menedżera są miękkie.
-- Zasady dobrej praktyki: miękkie, włączone domyślnie, menedżer może każdą wyłączyć albo zamienić na twardą: min. 11 h między zmianami, max 6 dni pracy z rzędu, równy podział weekendów i zmian zamykających, początkujący z doświadczonymi (na każdej zmianie co najmniej tylu doświadczonych, ilu początkujących; można zawęzić do jednego stanowiska).
+Decyzja Piotra z 13.11.2026: aplikacja nie zna typu umowy i nie wbudowuje ograniczeń umowy o pracę ani Kodeksu pracy. Nie ingeruje w to; kierownik sam ustawia wszystko w zasadach lokalu i może pisać prośby tekstem (np. "doświadczony kelner zawsze z niedoświadczonym").
+- Zawsze twarde są tylko: "nie mogę", właściwe stanowisko, brak nakładających się zmian, zmiany przypięte ręcznie, dni, które minęły, i zasady kierownika oznaczone "bez wyjątków".
+- Osobiste maksimum i cel godzin ustawione przez kierownika są miękkie, chyba że kierownik oznaczy zasadę "bez wyjątków".
+- Zasady dobrej praktyki: miękkie, włączone domyślnie, kierownik może każdą wyłączyć albo zamienić na twardą: min. 11 h między zmianami, max 6 dni pracy z rzędu, równy podział weekendów i zmian zamykających.
+- W katalogu są też zasady, które kierownik może włączyć, jeśli chce pilnować czasu pracy: "Godziny pracy w ciągu dnia" (domyślnie najwyżej 8 h) i "Wolne w tygodniu" (domyślnie co najmniej 35 h bez przerwy). Domyślnie wyłączone; dotyczą wszystkich osób lokalu. Odpoczynek dobowy to istniejąca zasada "Odpoczynek między zmianami".
+- Odpowiedzialność za zgodność grafiku z prawem pracy spoczywa na kierowniku; aplikacja tego nie sprawdza.
 
 ## Generator (najważniejsza część)
 
@@ -71,7 +72,7 @@ h) Kierownik dostosowuje generator poleceniami tekstem do asystenta (LLM): zasad
 - Menedżer zaprasza pracownika po numerze telefonu: wiersz w tabeli invitations ze statusem (oczekuje / przyjęte / odrzucone / anulowane), unikalne oczekujące zaproszenie na parę (placówka, numer). SMS z zaproszeniem NIE jest wysyłany. Pracownik po zalogowaniu widzi zaproszenie: Akceptuj / Odrzuć; akceptacja w jednej transakcji. Kto ma już konto, widzi nowe zaproszenie od razu.
 - Limity dokładnie: kolejny kod najwcześniej po 60 s, najwyżej 5 kodów na numer na godzinę i 20 próśb o kod z jednego adresu IP na godzinę (liczą się też prośby dla nieznanych numerów). Nowy kod unieważnia poprzedni. W bazie jest tylko skrót kodu.
 - Nieznany numer przy logowaniu dostaje jasną odpowiedź ("Nie znamy tego numeru. Poproś kierownika o zaproszenie…"), a nie udawane wysłanie kodu: dla osób niechętnych technologii czekanie na SMS, który nie przyjdzie, jest gorsze niż ryzyko, że ktoś sprawdzi, czy numer ma konto (to ryzyko ogranicza limit na adres IP).
-- Zapraszając, menedżer może od razu wpisać imię i nazwisko; trafiają na konto przy akceptacji, jeśli konto nie ma jeszcze imienia. Pracownika zaprasza menedżer lokalu, menedżera zaprasza tylko właściciel firmy. Akceptacja zaproszenia pracownika tworzy członkostwo w firmie i profil pracownika z tym lokalem jako domowym (umowa zlecenie, do zmiany przez menedżera).
+- Zapraszając, menedżer może od razu wpisać imię i nazwisko; trafiają na konto przy akceptacji, jeśli konto nie ma jeszcze imienia. Pracownika zaprasza menedżer lokalu, menedżera zaprasza tylko właściciel firmy. Akceptacja zaproszenia pracownika tworzy członkostwo w firmie i profil pracownika z tym lokalem jako domowym.
 - Zmiana numeru telefonu: robi ją superadmin w panelu. Konto, członkostwa i historia zostają; wszystkie sesje tego konta wygasają i trzeba zalogować się nowym numerem. Zaproszenia oczekujące na stary numer menedżer wysyła ponownie. Numery spoza Polski: poza prototypem.
 - Poza kodami logowania nic nie wysyłamy SMS-em ani e-mailem. Powiadomienia tylko w aplikacji.
 
@@ -106,7 +107,7 @@ h) Kierownik dostosowuje generator poleceniami tekstem do asystenta (LLM): zasad
 
 ## Dane przykładowe
 
-Firma z 4 piekarniami w jednej grupie i jednym menedżerem, 15-25 pracowników na lokal (większość na zleceniu, pojedyncze osoby na umowie o pracę), dyspozycyjność na kolejny miesiąc, 20-30 próśb tekstem i kilka zasad menedżera, w tym sprzeczne ze sobą. Druga, osobna firma do sprawdzenia izolacji danych.
+Firma z 4 piekarniami w jednej grupie i jednym menedżerem, 15-25 pracowników na lokal, dyspozycyjność na kolejny miesiąc, 20-30 próśb tekstem i kilka zasad menedżera, w tym sprzeczne ze sobą. Druga, osobna firma do sprawdzenia izolacji danych.
 
 ## Poza pierwszą wersją
 
@@ -126,7 +127,7 @@ Trzy warianty grafiku, zamiany zmian, wnioski urlopowe, zadania na zmianie, kosz
    8) generowanie, ocena, wyjaśnienia, ręczna edycja, publikacja;
    9) oddawanie zmiany i powiadomienia w aplikacji;
    10) interpretacja próśb przez LLM.
-3. Testy obowiązkowe: walidator dla obu typów umów; generator nie łamie twardych reguł; limit czasu działa; stabilność przy ponownym generowaniu; izolacja firm; logowanie i limity kodów; kody subskrypcji.
+3. Testy obowiązkowe: walidator twardych reguł i zasad czasu pracy z katalogu (odpoczynek, godziny w ciągu dnia, wolne w tygodniu); generator nie łamie twardych reguł; limit czasu działa; stabilność przy ponownym generowaniu; izolacja firm; logowanie i limity kodów; kody subskrypcji.
 4. Na końcu README z instrukcją uruchomienia i listą uproszczeń prototypu.
 
 Jeśli coś jest niejasne, przyjmij rozsądne założenie, zapisz je i kontynuuj.

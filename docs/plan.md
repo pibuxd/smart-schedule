@@ -108,7 +108,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `ShiftType` | location, name, start_time, end_time, kind (fixed/flexible), is_closing | koniec przed początkiem = przez północ |
 | `StaffingRule` | location, weekday, shift_type, position, count, start/end (tylko dla zmian z dowolnymi godzinami) | unikalne (location, weekday, shift_type, position) |
 | `StaffingException` | location, date, shift_type, position, count, start/end (opcjonalnie inne godziny) | np. Wigilia, dzień bez obsady (count=0) |
-| `EmployeeProfile` | membership, home_location, positions (M2M), contract (civil/employment), experience (1 początkujący / 2 samodzielny / 3 doświadczony), max_hours_month, target_hours_month, is_active | zlecenie domyślne, stopień 2; stopnia nie widzi pracownik |
+| `EmployeeProfile` | membership, home_location, positions (M2M), experience (1 początkujący / 2 samodzielny / 3 doświadczony), max_hours_month, target_hours_month, is_active | zlecenie domyślne, stopień 2; stopnia nie widzi pracownik |
 
 ### Dyspozycyjność i prośby
 
@@ -151,7 +151,7 @@ Katalog zasad w kodzie (`engine/rules_catalog.py`), np.: min. 11 h między zmian
 
 Zmienne: `x[e, s] ∈ {0,1}` dla pracownika `e` i slotu `s` (zmiana × stanowisko × kolejne miejsce), tylko dla par dopuszczalnych (właściwe stanowisko, lokal domowy, brak "nie mogę"). `u[s]` = slot nieobsadzony.
 
-Twarde: każdy slot ma jedną osobę albo `u[s]=1`; brak nakładających się zmian; przypięte przypisania; dni minione zamrożone; zasady "bez wyjątków"; dla umowy o pracę dodatkowo 11 h odpoczynku, max 8 h na dobę, 35 h odpoczynku tygodniowego.
+Twarde: każdy slot ma jedną osobę albo `u[s]=1`; brak nakładających się zmian; przypięte przypisania; dni minione zamrożone; zasady "bez wyjątków" (w tym, jeśli kierownik je włączy, "Godziny pracy w ciągu dnia" i "Wolne w tygodniu"). Typu umowy ani wbudowanych limitów Kodeksu pracy nie ma (decyzja Piotra z 13.11.2026).
 
 Cel w dwóch fazach (leksykograficznie): faza 1 minimalizuje `Σ u[s]`, faza 2 przy tej liczbie dziur minimalizuje karę:
 
@@ -220,7 +220,7 @@ Menedżer (komputer)
 1. Rejestracja firmy i kod dostępu (także później w Ustawieniach → Subskrypcja).
 2. Widok zbiorczy grupy (ekran startowy): lokale w wierszach, stan okresu każdego lokalu (zbieranie dyspozycji / szkic / opublikowany), kto nie zgłosił dyspozycji, przycisk "Ułóż grafik dla wszystkich" (osobne generowanie dla każdego lokalu), przycisk "Poproś o dyspozycje" (powiadomienie do pracowników z okresem i terminem).
 3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) z wyjątkami, okres i termin dyspozycji.
-4. Pracownicy: lista, zaproszenia po numerze, stanowiska, umowa, maksimum i cel godzin.
+4. Pracownicy: lista, zaproszenia po numerze, stanowiska, maksimum i cel godzin.
 5. Dyspozycje: siatka pracownicy × dni, lista próśb z interpretacją i akcjami, lista osób bez zgłoszenia.
 6. Zasady: jedna lista do przeciągania, przełącznik włącz/wyłącz, "bez wyjątków", parametry, podgląd skutku przed zapisaniem.
 7. Grafik: siatka dni × zmiany, trzy wartości oceny, dziury wyraźnie oznaczone, przeciąganie i przypinanie z walidacją na żywo, wyjaśnienia po kliknięciu, publikacja i historia wersji.
@@ -253,7 +253,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 3. Generator przypisuje ludzi tylko do ich lokalu domowego; praca w innym lokalu tylko ręcznie albo przez wzięcie oddanej zmiany.
 4. Zmiany typu "dowolne godziny" generator traktuje jak sloty z godzinami ustawionymi w obsadzie lub wyjątku na dany dzień; menedżer może też dodać zmianę z dowolnymi godzinami ręcznie.
 5. Tydzień zaczyna się w poniedziałek, strefa czasowa Europe/Warsaw, godziny zmian liczone w czasie lokalnym z uwzględnieniem zmiany czasu.
-6. Menedżer też może mieć profil pracownika (np. kierownik na umowie o pracę w grafiku).
+6. Menedżer też może mieć profil pracownika (np. kierownik, który sam stoi na zmianach).
 7. Rejestracja firmy możliwa bez kodu; firma dostaje wtedy 30 dni okresu próbnego (decyzja Piotra z 12.11.2026, 13.11.2026 wydłużone z 14 dni; zob. sekcja 14), potem jest tylko do odczytu, dopóki nie wpisze kodu.
 8. Odświeżanie wyniku generowania przez odpytywanie co 1–2 s, bez websocketów.
 9. CI na GitHub Actions (ruff, pytest, eslint, typecheck, build) to część stosu narzędzi, nie aplikacji; dodam w etapie 1, jeśli się zgadzasz.
@@ -265,7 +265,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 - Etap 7 (zrobione): lista zasad lokalu pokazuje, które zasady są dziedziczone z grupy, a które zmienione lub wyłączone w lokalu.
 - Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.
 - Etap 6/7 (z przeglądu etapu 3): na ekranie zaproszeń menedżer widzi podpowiedź "Powiedz tej osobie, żeby zalogowała się tym numerem" (SMS z zaproszeniem nie idzie) oraz informację, że zaproszona osoba pracuje już w innym lokalu firmy i zachowa tamten lokal domowy. Komunikat trybu tylko do odczytu rozróżnia firmę bez kodu od firmy po wygaśnięciu. W trybie tylko do odczytu pracownik nadal widzi swój opublikowany grafik.
-- Etap 7/8 (z przeglądu etapu 4): przy wyniku dla umowy o pracę krótka uwaga, że sprawdzenie Kodeksu pracy jest uproszczone (doba = dzień kalendarzowy, tydzień od poniedziałku) i nie zastępuje oceny prawnej; przy zasadzie "Cel godzin" z "bez wyjątków" napis "do 10 % odchylenia"; zasady bez niczego do oceny pokazane jako "nic do oceny", a prośby "inne" jako "do oceny przez kierownika" obok procentów; zmiany pożyczonych osób widoczne w grafiku lokalu, który je przyjmuje. Do sprawdzenia z pilotem: czy równy podział weekendów ma też wyłapywać osoby bez żadnej zmiany (dziś pomija je, łapie je tylko cel godzin).
+- Etap 7/8 (z przeglądu etapu 4): ~~przy wyniku dla umowy o pracę uwaga o uproszczonym Kodeksie pracy~~ (nieaktualne: typ umowy usunięty 13.11.2026); przy zasadzie "Cel godzin" z "bez wyjątków" napis "do 10 % odchylenia"; zasady bez niczego do oceny pokazane jako "nic do oceny", a prośby "inne" jako "do oceny przez kierownika" obok procentów; zmiany pożyczonych osób widoczne w grafiku lokalu, który je przyjmuje. Do sprawdzenia z pilotem: czy równy podział weekendów ma też wyłapywać osoby bez żadnej zmiany (dziś pomija je, łapie je tylko cel godzin).
 - Decyzje Piotra po przeglądzie etapu 5 (12.11.2026): każdy lokal generujemy osobno, lokale są niezależne, chyba że kierownik w poleceniu powie inaczej; daty okresu wpisuje kierownik, razem z dniem układania grafiku, i może jednym przyciskiem poprosić wszystkich pracowników o dyspozycje (etap 7: przycisk, etap 9: powiadomienie); ponowne generowanie usuwa nieprzypięte ręczne poprawki (etap 8: uprzedzić o tym przy przycisku), a zmiany w wyniku kierownik wprowadza poleceniem do asystenta; generator ma być w pełni ustawialny poleceniami (etap 10 obejmie też polecenia kierownika, nie tylko prośby pracowników).
 - Do sprawdzenia z pilotem (z przeglądu etapu 6): czy pracownicy rozumieją, że "chętnie" z godzinami blokuje inne zmiany tego dnia (krótki test z 3–5 osobami); kierownik nie chce twardego zamknięcia dyspozycji w terminie, tylko oznaczenia "zmienione po terminie" w siatce (decyzja Piotra z 12.11.2026, zrobione w etapie 7).
 - Do sprawdzenia z pilotem: porównanie jakości z grafikami układanymi ręcznie. Etap 7/8: prośby "inne" i przypięcia wyraźnie widoczne na ekranie.
@@ -299,8 +299,8 @@ Założenia:
 
 Założenia:
 1. Czas: zmiana należy do dnia, w którym się zaczyna (także nocna). Długości i przerwy liczone w czasie rzeczywistym (UTC), więc nocka 22–06 w noc zmiany czasu trwa 7 h (marzec) albo 9 h (październik). Godzina, której nie ma (02:30 w marcu), przesuwa się na 03:30; godzina podwójna (02:30 w październiku) to jej pierwsze wystąpienie.
-2. Umowa o pracę, uproszczenia zgodne ze spec (doba pracownicza i okres rozliczeniowy później): 11 h odpoczynku między końcem zmiany a początkiem następnej (dokładnie 11 h wystarcza, 10 h 59 min nie); najwyżej 8 h łącznie w zmianach zaczynających się danego dnia kalendarzowego; 35 h nieprzerwanego wolnego w każdym tygodniu kalendarzowym (pon. 00:00 – pon. 00:00 czasu lokalnego), sprawdzane w tygodniach, w których osoba ma zmianę z tego grafiku.
-3. Zmiany stykające się (06–14 i 14–22) nie nachodzą na siebie; dla zlecenia to poprawny grafik, dla umowy o pracę łamie 11 h odpoczynku i 8 h na dobę.
+2. (Nieaktualne od 13.11.2026: typ umowy usunięty, te same sprawdzenia są teraz zasadami z katalogu, patrz "Bez typu umowy i Kodeksu pracy".) Umowa o pracę, uproszczenia zgodne ze spec (doba pracownicza i okres rozliczeniowy później): 11 h odpoczynku między końcem zmiany a początkiem następnej (dokładnie 11 h wystarcza, 10 h 59 min nie); najwyżej 8 h łącznie w zmianach zaczynających się danego dnia kalendarzowego; 35 h nieprzerwanego wolnego w każdym tygodniu kalendarzowym (pon. 00:00 – pon. 00:00 czasu lokalnego), sprawdzane w tygodniach, w których osoba ma zmianę z tego grafiku.
+3. Zmiany stykające się (06–14 i 14–22) nie nachodzą na siebie; to poprawny grafik, chyba że kierownik włączy zasady odpoczynku lub godzin w ciągu dnia.
 4. Zmiany spoza okresu (poprzedni okres, inny lokal) przekazuje warstwa Django jako `ExternalShift`; liczą się do nakładania, odpoczynku, 8 h na dobę i dni z rzędu, nie do godzin miesięcznych.
 5. Dyspozycyjność: wpis bez godzin dotyczy każdej zmiany zaczynającej się tego dnia. Wpis z godzinami: "nie mogę" dotyczy zmian nachodzących na ten zakres (styk się nie liczy), "chętnie" i dzień bez zaznaczenia z godzinami tylko zmian mieszczących się w zakresie.
 6. Prośby z kalendarza (od 13.11.2026 bez "wolę nie", które przeszło do próśb tekstem jako wolne_dni): dni "chętnie" jednej osoby to jedna pozycja o wadze "mile widziane", liczona jako udział dni pracy przypadających na dni "chętnie" (spośród tylu dni, ile się da). Osoba bez zmian nie łamie "chętnie".
@@ -354,7 +354,7 @@ Założenia:
 ## 13. Etap 7: ekrany menedżera
 
 - Zasada produktowa (Piotr, 12.11.2026, spec.md punkt 6 menedżera): grafik powstaje tylko na świadome polecenie kierownika, po terminie dyspozycji albo przy komplecie. W kodzie nic nie układa grafiku samo; zadania okresowe workera to tylko sprzątanie kodów logowania i oznaczanie zawieszonych generowań jako nieudane.
-- Ekrany (`frontend/src/features/manager/`, trasy `/kierownik/...`): "Lokale" (start kierownika: każdy lokal z okresem, terminem, paskiem "wpisali X z Y", listą osób bez dyspozycji, liczbą dni zmienionych po terminie, przyciskiem "Poproś o dyspozycje" / "Przypomnij (N)" i napisem "Można układać grafik", gdy termin minął albo wszyscy wpisali; archiwum lokali), a w lokalu karty "Dyspozycje" (okres i termin, siatka pracownicy × dni z godzinami i znakiem zegara przy zmianach po terminie, prośby tekstem z decyzją kierownika), "Pracownicy" (stanowiska, umowa, cel i maksimum godzin, wyłączenie z grafiku, zaproszenia), "Ustawienia lokalu" (dane lokalu, stanowiska, zmiany i godziny, tabela obsady, wyjątki na daty, archiwizacja) i "Zasady" (jedna lista do przeciągania albo strzałkami, przełącznik, "bez wyjątków", parametry, "z grupy" / "zmienione w tym lokalu", podgląd skutku przed zapisem). Zasady grupy: `/kierownik/grupa/{id}/zasady`.
+- Ekrany (`frontend/src/features/manager/`, trasy `/kierownik/...`): "Lokale" (start kierownika: każdy lokal z okresem, terminem, paskiem "wpisali X z Y", listą osób bez dyspozycji, liczbą dni zmienionych po terminie, przyciskiem "Poproś o dyspozycje" / "Przypomnij (N)" i napisem "Można układać grafik", gdy termin minął albo wszyscy wpisali; archiwum lokali), a w lokalu karty "Dyspozycje" (okres i termin, siatka pracownicy × dni z godzinami i znakiem zegara przy zmianach po terminie, prośby tekstem z decyzją kierownika), "Pracownicy" (stanowiska, cel i maksimum godzin, wyłączenie z grafiku, zaproszenia), "Ustawienia lokalu" (dane lokalu, stanowiska, zmiany i godziny, tabela obsady, wyjątki na daty, archiwizacja) i "Zasady" (jedna lista do przeciągania albo strzałkami, przełącznik, "bez wyjątków", parametry, "z grupy" / "zmienione w tym lokalu", podgląd skutku przed zapisem). Zasady grupy: `/kierownik/grupa/{id}/zasady`.
 - Nowe pola: `Location.archived_at`, `SchedulePeriod.availability_deadline` (dzień układania = ostatni dzień dyspozycji; puste = `availability_deadline_days` lokalu) i `SchedulePeriod.availability_requested_at`.
 - Nowe endpointy: `GET /manager/overview?company_id=`, `POST /groups`, `POST /locations`, `GET/PATCH /locations/{id}` (także `archived`), `GET /locations/{id}/setup`, `POST /locations/{id}/positions`, `PATCH/DELETE /positions/{id}`, `POST /locations/{id}/shift-types`, `PATCH/DELETE /shift-types/{id}`, `PUT /locations/{id}/staffing` (cała tabela tygodnia), `POST /locations/{id}/staffing-exceptions`, `DELETE /staffing-exceptions/{id}`, `GET /locations/{id}/employees`, `PATCH /employees/{id}`, `PATCH /periods/{id}` (termin), `POST /periods/{id}/ask-availability`, `GET /periods/{id}/availability`, `GET /periods/{id}/requests`, `PATCH /requests/{id}`, `GET/PUT /scopes/{location|group}/{id}/rules`, `POST /scopes/{location|group}/{id}/rules/preview`.
 
@@ -379,7 +379,7 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 - Nowe pole `Assignment.manual` (ręczna zmiana). Nowy moduł `engine/explain.py` (bez Django): dla każdej osoby ze stanowiskiem sprawdza walidatorem grafik z tą osobą na zmianie, więc wyjaśnienie zgadza się z walidatorem. `apps/scheduling/editing.py`: sprawdzanie i zapis ręcznych zmian, przypinanie, poprawka opublikowanego grafiku, publikacja. Raport godzin: `apps/reports`.
 
 Założenia:
-1. Ręcznie można zmieniać tylko najnowszy szkic okresu (jedyny wyjątek od etapu 9: zatwierdzona oddana zmiana przechodzi w opublikowanej wersji w miejscu, z wpisem w historii przypisań; zob. sekcja 17, punkt 4). Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
+1. Ręcznie można zmieniać tylko najnowszy szkic okresu (jedyny wyjątek od etapu 9: zatwierdzona oddana zmiana przechodzi w opublikowanej wersji w miejscu, z wpisem w historii przypisań; zob. sekcja 18, punkt 4). Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
 2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmiana zostawiona bez obsady nie może być przypięta.
 3. W edytorze można wpisać tylko osoby z lokalu (z danym stanowiskiem); pożyczanie z innych lokali zostaje dla oddawania zmian (etap 9).
 4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły. Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
@@ -414,7 +414,22 @@ Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę 
 6. Dane przykładowe: w każdym lokalu kilka osób początkujących i kilka doświadczonych.
 7. Na później (pomysł Piotra): podpowiedź stopnia z liczby przepracowanych godzin.
 
-## 17. Etap 9: oddawanie zmian, powiadomienia, historia przypisań
+## 17. Bez typu umowy i Kodeksu pracy (13.11.2026)
+
+Decyzja Piotra po przeglądzie UX: usuwamy typ umowy (zlecenie / umowa o pracę) i wbudowane, zawsze twarde ograniczenia umowy o pracę. Aplikacja w to nie ingeruje; kierownik ustawia wszystko w zasadach.
+
+- `EmployeeProfile.contract` usunięte (migracja `staffing`), znika z API (`EmployeeOut`, `EmployeeIn`), panelu admina, danych demo, ekranu "Pracownicy" i silnika (`Employee.contract`, `Contract`, kody `labor_*`, `check_labor_law`, `_labor_law`).
+- Dwie nowe zasady w `engine/rules_catalog.py`, domyślnie wyłączone, miękkie albo "bez wyjątków" jak każda inna:
+  - `max_hours_per_day` "Godziny pracy w ciągu dnia", parametr `max_hours` (8): łączny czas zmian zaczynających się danego dnia kalendarzowego (także zmian spoza grafiku) nie przekracza limitu. Stopień złamania = dni ponad limit / dni pracy.
+  - `min_weekly_rest` "Wolne w tygodniu", parametr `rest_hours` (35): w każdym tygodniu (pon. 00:00 – pon. 00:00 czasu lokalnego), w którym osoba ma zmianę z grafiku, ma tyle godzin wolnego bez przerwy. Stopień złamania = tygodnie bez takiej przerwy / tygodnie pracy.
+- Trzecie ograniczenie z Kodeksu (11 h odpoczynku) już jest w katalogu jako "Odpoczynek między zmianami" (dobra praktyka, domyślnie włączona i miękka); kierownik może ją oznaczyć "bez wyjątków".
+
+Założenia:
+1. Zasady dotyczą wszystkich osób lokalu, bo zasady są ustawiane per lokal. Kto chce limitów tylko dla wybranych osób, napisze to prośbą tekstem (etap 10).
+2. Istniejące dane: kolumna `contract` jest po prostu usuwana; lokale, które miały osoby na umowie o pracę, nie dostają automatycznie włączonych nowych zasad (decyzję zostawiamy kierownikowi).
+3. Nazwy parametrów (`max_hours`, `rest_hours`) różnią się od `hours` z "Odpoczynku między zmianami", bo ekran zasad podpisuje pola po nazwie parametru.
+
+## 18. Etap 9: oddawanie zmian, powiadomienia, historia przypisań
 
 - Logika: `apps/marketplace/services.py` (oddanie, "Biorę", wycofanie, zatwierdzenie, odrzucenie, oddania po nowej publikacji), `apps/notifications/services.py` (zapis powiadomień i polskie zdania budowane przy odczycie z rodzaju i danych, więc poprawka tekstu działa też dla starych powiadomień).
 - Ekrany: w "Mój grafik" przycisk "Oddaj" przy każdej zmianie (arkusz z wyjaśnieniem, że do decyzji kierownika to nadal moja zmiana, i "Zostaję na tej zmianie"), sekcja "Zmiany do wzięcia" z "Biorę" / "Jednak nie biorę"; trzecia zakładka "Powiadomienia" z licznikiem nowych (`/powiadomienia`); u kierownika "Oddane zmiany" (`/kierownik/oddane-zmiany`) z licznikiem chętnych w nagłówku; w arkuszu zmiany na karcie "Grafik" "Historia tej zmiany".
@@ -433,4 +448,3 @@ Założenia:
 10. Gdy zmianę bierze osoba z innego lokalu, kierownicy jej lokalu domowego (jeśli nie prowadzą też lokalu ze zmianą) dostają powiadomienie po zatwierdzeniu. Panel kierownika ma w nagłówku link "Powiadomienia" z licznikiem nowych.
 
 Po przeglądzie Prelinta (PR #13), do sprawdzenia w pilocie: czy powiadomienie do całej firmy (w danych demo jedna zmiana trafiła do 34 osób) nie jest za głośne i czy nie lepiej najpierw lokal domowy, a po kilku godzinach reszta; czy nazwy stanowisk w lokalach naprawdę się pokrywają (jeśli nie, potrzebne jawne powiązanie stanowisk); czy potrzebne jest przypomnienie oddającemu i kierownikowi na dzień przed zmianą bez chętnych (dziś tylko powiadomienie przy oddaniu).
-

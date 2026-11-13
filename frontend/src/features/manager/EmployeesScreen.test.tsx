@@ -11,7 +11,6 @@ const person = (id: string, first: string, experience: 1 | 2 | 3) => ({
   last_name: 'Nowak',
   phone: '+48600100001',
   position_ids: ['p1'],
-  contract: 'civil',
   experience,
   max_hours_month: null,
   target_hours_month: null,

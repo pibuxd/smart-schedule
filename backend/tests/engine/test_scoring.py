@@ -116,11 +116,7 @@ def test_a_month_for_four_bakeries_is_checked_quickly():
     from engine.rules_catalog import RULES
 
     locations = [f"loc-{i}" for i in range(4)]
-    people = [
-        employee(f"{loc}-e{i}", home=loc, contract="employment" if i == 0 else "civil", target_hours_month=120)
-        for loc in locations
-        for i in range(20)
-    ]
+    people = [employee(f"{loc}-e{i}", home=loc, target_hours_month=120) for loc in locations for i in range(20)]
     slots, schedule = [], {}
     start = date(2026, 11, 1)
     for loc in locations:

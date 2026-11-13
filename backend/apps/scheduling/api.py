@@ -424,11 +424,6 @@ def my_schedule(request, company_id: UUID):
 VersionStatus = Literal["draft", "published", "superseded"]
 Wish = Literal["cannot", "neutral", "prefer"]
 
-EMPLOYMENT_NOTE = (
-    "Sprawdzenie Kodeksu pracy dla umów o pracę jest uproszczone (doba = dzień kalendarzowy, tydzień od "
-    "poniedziałku) i nie zastępuje oceny prawnej."
-)
-
 
 class VersionShiftOut(Schema):
     id: UUID  # the shift (slot)
@@ -455,7 +450,6 @@ class VersionEmployeeOut(Schema):
     id: UUID
     name: str
     position_ids: list[UUID]
-    contract: Literal["civil", "employment"]
     hours: float
     shifts: int
     target_hours: float | None
@@ -753,7 +747,6 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
             id=e.id,
             name=e.name,
             position_ids=sorted(e.positions),
-            contract=e.contract.value if hasattr(e.contract, "value") else e.contract,
             hours=round(hours.get(e.id, 0.0), 2),
             shifts=shift_count[e.id],
             target_hours=e.target_hours_month,
@@ -764,8 +757,6 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
         if e.home_location == location_id or shift_count[e.id]
     ]
     notes = list((version.scores or {}).get("notes", []))
-    if any(e.contract == "employment" for e in employees):
-        notes.append(EMPLOYMENT_NOTE)
     position_ids = {str(s.position) for s in problem.slots}
     return VersionOut(
         id=version.id,

@@ -10,7 +10,6 @@ export interface EmployeeHoursOut {
   employee_id: string;
   name: string;
   home_location_name: string;
-  contract: string;
   shifts: number;
   total: number;
   by_location: LocationHoursOut[];

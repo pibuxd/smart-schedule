@@ -118,7 +118,7 @@ def test_never_gives_one_person_two_overlapping_shifts():
         slot("c", day(0), "14:00", "22:00"),
     ]
     result, _ = solved(problem([employee("anna")], slots))
-    # Touching shifts (06–14, 14–22) are fine for a civil contract; the 10–18 overlaps both.
+    # Touching shifts (06–14, 14–22) are fine; the 10–18 overlaps both.
     assert result.schedule == {"a": "anna", "b": None, "c": "anna"}
 
 
@@ -133,43 +133,79 @@ def test_external_shifts_count_for_overlaps():
     assert result.schedule == {"m0": None}
 
 
-# ----------------------------------------------------------------- employment contract
+# ----------------------------------------------------------------- work-time rules (no built-in labour law)
 
 
-def test_employment_contract_gets_11_hours_rest_and_8_hours_a_day():
-    # Touching 06–14 and 14–22 would be fine for a civil contract, not for an employment one.
+def test_no_work_time_limits_without_rules():
+    slots = [slot(f"m{d}", day(d), "08:00", "16:00") for d in range(7)]
+    slots += [slot("a0", day(0), "16:00", "22:00", shift_type="a")]
+    result, _ = solved(problem([employee("anna")], slots))
+    assert result.holes == 0
+
+
+def test_hard_rest_and_daily_hours_rules():
+    # Touching 06–14 and 14–22 are fine without rules; with them only one of them can be worked.
     slots = [slot("m0", day(0), "06:00", "14:00"), slot("a0", day(0), "14:00", "22:00"), slot("m1", day(1))]
-    p = problem([employee("kasia", contract="employment")], slots)
-    result, _ = solved(p)
+    rules = [
+        RuleConfig("min_rest_between_shifts", LOC, rank=1, hard=True),
+        RuleConfig("max_hours_per_day", LOC, rank=2, hard=True),
+    ]
+    result, report = solved(problem([employee("kasia")], slots, rules=rules))
+    assert report.ok
     assert result.holes == 1
     assert result.schedule["m0"] == "kasia"
     assert result.schedule["m1"] == "kasia"
 
 
-def test_employment_contract_rest_counts_external_shifts():
+def test_hard_daily_hours_rule_alone():
+    slots = [slot("m0", day(0), "06:00", "12:00"), slot("a0", day(0), "13:00", "19:00", shift_type="a")]
+    rules = [RuleConfig("max_hours_per_day", LOC, rank=1, hard=True, params={"max_hours": 10})]
+    result, report = solved(problem([employee("kasia")], slots, rules=rules))
+    assert report.ok and result.holes == 1
+
+
+def test_hard_rest_rule_counts_external_shifts():
     start, end = shift_bounds(day(0) - timedelta(days=1), time(14), time(22))
     p = problem(
-        [employee("kasia", contract="employment")],
+        [employee("kasia")],
         [slot("m0", day(0), "06:00", "14:00"), slot("a0", day(0), "14:00", "22:00", shift_type="a")],
         external_shifts=[ExternalShift("kasia", day(0) - timedelta(days=1), start, end)],
+        rules=[RuleConfig("min_rest_between_shifts", LOC, rank=1, hard=True)],
     )
     result, _ = solved(p)
     # 22:00 → 06:00 is only 8 h of rest; 22:00 → 14:00 is 16 h.
     assert result.schedule == {"m0": None, "a0": "kasia"}
 
 
-def test_employment_contract_gets_35_hours_weekly_rest():
-    # Two people needed every day, 7 days: one employment-contract person cannot work all 7 days of the week.
+def test_hard_weekly_rest_rule():
+    # One person, a shift every day: with 35 h weekly rest one day must stay empty.
     slots = [slot(f"m{d}", day(d), "08:00", "16:00") for d in range(7)]
-    p = problem([employee("kasia", contract="employment")], slots)
-    result, _ = solved(p)
+    rules = [RuleConfig("min_weekly_rest", LOC, rank=1, hard=True)]
+    result, report = solved(problem([employee("kasia")], slots, rules=rules))
+    assert report.ok
     assert result.holes == 1  # six days work: the free day plus nights give 35 h+
 
 
-def test_civil_contract_has_no_labour_law_limits():
+def test_soft_weekly_rest_rule_prefers_the_rested_person():
+    # Anna already works Mon–Sat; Sunday goes to Ewa, so both keep 35 h free in the week.
     slots = [slot(f"m{d}", day(d), "08:00", "16:00") for d in range(7)]
-    result, _ = solved(problem([employee("anna")], slots))
+    pins = {f"m{d}": "anna" for d in range(6)}
+    p = problem(
+        [employee("anna"), employee("ewa")],
+        slots,
+        pinned=pins,
+        rules=[RuleConfig("min_weekly_rest", LOC, rank=1)],
+    )
+    result, _ = solved(p)
+    assert result.schedule["m6"] == "ewa"
+
+
+def test_soft_daily_hours_rule_spreads_long_days():
+    slots = [slot("m0", day(0), "06:00", "12:00"), slot("a0", day(0), "13:00", "19:00", shift_type="a")]
+    p = problem([employee("anna"), employee("ewa")], slots, rules=[RuleConfig("max_hours_per_day", LOC, rank=1)])
+    result, _ = solved(p)
     assert result.holes == 0
+    assert result.schedule["m0"] != result.schedule["a0"]
 
 
 # ----------------------------------------------------------------- pins, past days, impossible settings
@@ -412,6 +448,8 @@ HARD_SAFE_RULES = [
     ("personal_max_hours", {}),
     ("same_shift_type_in_week", {}),
     ("max_shifts_per_week", {"shifts": 4}),
+    ("max_hours_per_day", {"max_hours": 8}),
+    ("min_weekly_rest", {"rest_hours": 35}),
     ("experience_mix", {}),
 ]
 
@@ -425,7 +463,6 @@ def random_problem(seed: int):
             employee(
                 f"e{i}",
                 positions=tuple(rng.sample([SALES, BAKER], rng.choice([1, 1, 2]))),
-                contract=rng.choice(["civil", "civil", "employment"]),
                 max_hours_month=rng.choice([None, 60, 120]),
                 target_hours_month=rng.choice([None, 40, 80]),
                 home=rng.choice([LOC, LOC, "loc-2"]),
