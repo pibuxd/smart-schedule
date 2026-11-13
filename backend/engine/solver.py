@@ -150,8 +150,9 @@ class _Builder:
             self.externals[ext.employee].append(ext)
         self.baseline = validate(problem, {})  # schedule-independent request weights
         self.share = problem.weights.manager_share
+        self.instruction_points = 0.0  # set by _rule_points: points per unit of a manager instruction's weight
         self.rule_points = self._rule_points()
-        request_total = sum(r.weight for r in self.baseline.requests)
+        request_total = sum(r.weight for r in self.baseline.requests if not r.by_manager)
         self.request_points = (1 - self.share) * 100 / request_total if request_total else 0.0
 
         self._variables()
@@ -298,8 +299,11 @@ class _Builder:
             soft = [r for r in self.p.rules_for(location) if not r.hard]
             for place, rule in enumerate(soft, start=1):
                 weights[(location, rule.code)] = self.p.weights.rule_weight(place)
-        total = sum(weights.values())
-        return {key: self.share * 100 * w / total for key, w in weights.items()} if total else {}
+        total = sum(weights.values()) + sum(r.weight for r in self.baseline.requests if r.by_manager)
+        if not total:
+            return {}
+        self.instruction_points = self.share * 100 / total
+        return {key: self.share * 100 * w / total for key, w in weights.items()}
 
     def employees_of(self, location: str) -> list[Employee]:
         return [e for e in self.p.employees if e.home_location == location]
@@ -608,11 +612,12 @@ class _Builder:
     # ----------------------------------------------------------------- employee requests
 
     def _requests(self) -> None:
-        p, points = self.p, self.request_points
-        if not points:
-            return
+        p = self.p
         requests = {r.id: r for r in p.requests}
         for measure in self.baseline.requests:
+            points = self.instruction_points if measure.by_manager else self.request_points
+            if not points:
+                continue
             employee_id = measure.employee
             mine = self.x_of_emp.get(employee_id, ())
             weight = measure.weight * points

@@ -190,7 +190,7 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
         <PeopleHours data={data} />
         <div className="grid content-start gap-6">
           <RulesList data={data} />
-          <UnmetRequests data={data} />
+          <UnmetRequests data={data} locationId={data.location_id} />
           {data.notes.length > 0 && (
             <section className="grid gap-2">
               <h2 className="m-0 text-lg font-extrabold">Uwagi</h2>
@@ -739,11 +739,31 @@ function RulesList({ data }: { data: VersionOut }) {
   )
 }
 
-function UnmetRequests({ data }: { data: VersionOut }) {
-  const scored = data.unmet_requests.filter((r) => r.kind !== 'unscored')
+function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: string }) {
+  const orders = data.unmet_requests.filter((r) => r.kind === 'instruction')
+  const scored = data.unmet_requests.filter((r) => r.kind !== 'unscored' && r.kind !== 'instruction')
   const yours = data.unmet_requests.filter((r) => r.kind === 'unscored')
   return (
     <section className="grid gap-2">
+      <p className="m-0 rounded-sm border border-line bg-surface px-3 py-2">
+        Chcesz coś zmienić w tym, jak układa się grafik?{' '}
+        <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
+          Napisz polecenie asystentowi
+        </Link>
+        , a potem ułóż grafik od nowa.
+      </p>
+      {orders.length > 0 && (
+        <>
+          <h2 className="m-0 text-lg font-extrabold">Twoje polecenia, których nie udało się spełnić w całości</h2>
+          <ul className="m-0 grid list-none gap-1 p-0">
+            {orders.map((r, i) => (
+              <li key={`o${i}`} className="rounded-sm border border-prefer-not bg-prefer-not-soft px-3 py-2">
+                {r.text}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <h2 className="m-0 text-lg font-extrabold">Niespełnione prośby</h2>
       {scored.length === 0 ? (
         <p className="m-0 text-ink-muted">Grafik spełnia wszystkie prośby, które da się sprawdzić.</p>

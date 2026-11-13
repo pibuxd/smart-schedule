@@ -23,6 +23,8 @@ from zoneinfo import ZoneInfo
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.assistant import readings
+from apps.assistant.models import ManagerInstruction
 from apps.availability.models import AvailabilityDay, TextRequest
 from apps.rules.models import RuleSetting
 from apps.rules.models import WeightProfile as WeightProfileModel
@@ -334,12 +336,9 @@ class _Reader:
             if kind in (RequestType.AVOID_PERSON, RequestType.PREFER_PERSON) and subject is None:
                 kind = RequestType.OTHER
             level = data.get("level")
-            dates = set()
-            for value in data.get("dates") or []:
-                try:
-                    dates.add(date.fromisoformat(str(value)))
-                except ValueError:
-                    continue
+            dates = readings.dates_in(data, self.start, self.end)
+            if readings.has_days(data) and not dates:
+                continue  # about days outside this period: nothing to keep here
             max_hours = data.get("max_hours")
             result.append(
                 Request(
@@ -354,6 +353,50 @@ class _Reader:
                     avoid=bool(data.get("avoid", False)),
                     max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
                     summary=str(data.get("summary") or row.text[:200]),
+                )
+            )
+        return result + self.instructions(employee_ids)
+
+    def instructions(self, employee_ids: set[str]) -> list[Request]:
+        """The manager's instructions about people: scored with the manager's rules, ranked by their place."""
+        rows = (
+            self.qs(ManagerInstruction)
+            .filter(location__in=self.locations)
+            .select_related("employee__membership__user")
+            .order_by("location_id", "position", "created_at")
+        )
+        people = self.qs(EmployeeProfile).filter(pk__in=employee_ids).select_related("membership__user")
+        names = {str(e.pk): _employee_name(e) for e in people}
+        shift_names = {str(s.pk): s.name for s in self.qs(ShiftType).filter(location__in=self.locations)}
+        result, places = [], {}
+        for row in rows:
+            data = row.data or {}
+            employee_id = str(row.employee_id)
+            kind = REQUEST_TYPES.get(str(data.get("type")))
+            subject = str(data["subject_employee"]) if data.get("subject_employee") else None
+            dates = readings.dates_in(data, self.start, self.end)
+            if (
+                kind in (None, RequestType.OTHER)
+                or employee_id not in employee_ids
+                or (subject is not None and subject not in employee_ids)
+                or (readings.has_days(data) and not dates)
+            ):
+                continue
+            places[row.location_id] = places.get(row.location_id, 0) + 1
+            max_hours = data.get("max_hours")
+            result.append(
+                Request(
+                    id=f"instruction:{row.pk}",
+                    employee=employee_id,
+                    type=kind,
+                    dates=frozenset(dates),
+                    subject_employee=subject,
+                    shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
+                    avoid=bool(data.get("avoid", False)),
+                    max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+                    summary=readings.describe(data, names.get(employee_id, "?"), names, shift_names),
+                    by_manager=True,
+                    rank=places[row.location_id],
                 )
             )
         return result

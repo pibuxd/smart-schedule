@@ -360,6 +360,12 @@ function RequestsSection({ periodId }: { periodId: string }) {
   )
 }
 
+function requestNote(request: ManagerRequestOut): string {
+  if (request.summary) return `Jak to zrozumiał asystent: ${request.summary} Generator weźmie to pod uwagę.`
+  if (request.status === 'new') return 'Asystent właśnie czyta tę prośbę.'
+  return 'Tej prośby asystent nie umiał zamienić na coś, co generator sprawdzi sam. Przeczytaj ją i, jeśli chcesz ją spełnić, popraw grafik ręcznie albo napisz polecenie asystentowi w „Zasadach”.'
+}
+
 function RequestCard({ request }: { request: ManagerRequestOut }) {
   const update = useUpdateRequest()
   const queryClient = useQueryClient()
@@ -374,11 +380,10 @@ function RequestCard({ request }: { request: ManagerRequestOut }) {
         {rejected && <Tag tone="bad">Odrzucona</Tag>}
       </div>
       <p className={rejected ? 'm-0 text-ink-muted line-through' : 'm-0'}>„{request.text}”</p>
-      <p className="m-0 text-sm text-ink-muted">
-        {request.summary
-          ? `Jak to zrozumiał asystent: ${request.summary}`
-          : 'Asystent jeszcze tej prośby nie przeczytał, więc generator jej nie uwzględni. Jeśli chcesz ją spełnić, popraw grafik sam.'}
-      </p>
+      <p className="m-0 text-sm text-ink-muted">{requestNote(request)}</p>
+      {request.employee_corrected && request.status !== 'new' && (
+        <p className="m-0 text-sm text-ink-muted">Pracownik poprawił tę prośbę po tym, jak przeczytał ją asystent.</p>
+      )}
       {!rejected && (
         <fieldset className="m-0 flex flex-wrap gap-1 border-0 p-0" disabled={readOnly || update.isPending}>
           <legend className="sr-only">Ważność prośby</legend>

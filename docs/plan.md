@@ -117,7 +117,9 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `AvailabilityDay` | employee, date, state (cannot/neutral/prefer; neutral = dzień bez zaznaczenia, potrzebny tylko dla godzin "mogę tylko w tych godzinach"), from_time, to_time (opcjonalne), source (manual/pattern/copy) | unikalne (employee, date); brak wiersza = brak zgłoszenia |
 | `AvailabilityPattern` | employee, weekday, state, from/to, repeat_until | "powtarzaj co tydzień do [data]"; rozwijany do `AvailabilityDay` przy zapisie |
 | `AvailabilitySubmission` | employee, period, submitted_at | do listy "kto nie zgłosił" |
-| `TextRequest` | employee, period, text, status (new/interpreted/needs_manager/rejected), interpretation (JSON), employee_corrected, manager_priority (lower/normal/higher), manager_rejected | interpretacja: type, subject_employee, dates, level, confidence, summary |
+| `TextRequest` | employee, period, text, status (new/interpreted/needs_manager/rejected), interpretation (JSON), employee_corrected, manager_priority (lower/normal/higher), manager_rejected | interpretacja: type, subject_employee, shift_type, avoid, max_hours, dates, weekdays, level, confidence, summary |
+| `ManagerInstruction` | location, employee, data (JSON jak interpretacja prośby), position (kolejność), source_text, created_by | polecenie kierownika o osobie, przyjęte z planu asystenta (etap 10) |
+| `AssistantCommand` | location, text, status (queued/ready/unavailable/failed/applied/dismissed), plan (JSON), created_by, decided_at | polecenie kierownika dla asystenta i sprawdzony plan do akceptacji |
 
 ### Zasady
 
@@ -463,3 +465,25 @@ Założenia:
 3. Wdrożenie nowej wersji jest automatyczne (decyzja Piotra z 13.11.2026: „chcę, żeby wszystko szło samo”): serwer co 5 minut sprawdza gałąź `main` i sam uruchamia `deploy/update.sh` (`deploy/auto-update.sh` z crona). Serwer pobiera kod sam, więc w GitHubie nie ma klucza do serwera. Każdy merge do `main` trafia od razu na serwis; przed pilotażem wrócić do ręcznego wdrażania albo osobnej gałęzi.
 4. Kopie bazy leżą na tym samym serwerze; kopia poza serwerem to osobny krok przed pilotażem.
 5. `SOLVER_WORKERS=2` na serwerze (2 rdzenie), limit 30 s bez zmian.
+
+## 20. Etap 10: asystent (Claude) i przyjęte założenia
+
+Co powstało:
+
+- `apps/assistant/`: `llm.py` (jedyny moduł, który woła Claude: Anthropic Python SDK, `messages.parse` ze schematem Pydantic, model z `ANTHROPIC_MODEL`, domyślnie `claude-opus-5-5`), `readings.py` (wspólna struktura "jedno życzenie o jednej osobie": sprawdzanie, daty i dni tygodnia, zdanie po polsku), `services.py` (co wysyłamy, jak sprawdzamy odpowiedź, zapis), `tasks.py` (kolejka `default`), `api.py`, modele `ManagerInstruction` i `AssistantCommand`.
+- Prośby pracowników: `POST /me/requests` zapisuje prośbę i zleca zadanie `assistant.interpret_text_request` w jednej transakcji. Worker pyta Claude i zapisuje interpretację tylko wtedy, gdy typ, osoba, zmiana i dni dają się sprawdzić na danych lokalu, a pewność jest co najmniej `ASSISTANT_MIN_CONFIDENCE` (0,6). W każdym innym przypadku (także błąd sieci, limit, odmowa) prośba ma status "do decyzji menedżera" bez interpretacji i w generatorze jest typu "inne". `PATCH /me/requests/{id}`: nowa treść (czytana od nowa) albo `understood: false` ("nie o to mi chodziło").
+- Polecenia kierownika: `POST /locations/{id}/assistant-commands` (zapis + zadanie `assistant.plan_assistant_command`), `GET /assistant-commands/{id}` (odpytywanie co 1,5 s), `POST /assistant-commands/{id}/apply`, `POST /assistant-commands/{id}/dismiss`, `GET /locations/{id}/instructions`, `PUT /locations/{id}/instructions/order`, `DELETE /instructions/{id}`. Plan jest sprawdzany przez `services.check_plan`: wszystko, czego nie ma w lokalu, wypada z notatką; zdania dla kierownika układa aplikacja; zmiany zasad przechodzą przez ten sam kod co ekran "Zasady" (`save_rules`) i ten sam podgląd skutku.
+- Silnik: `Request.by_manager` i `rank`. Polecenia kierownika o osobach trafiają do `Problem` jako prośby z `by_manager=True`; ich waga to `rule_weight(miejsce)` i liczą się do oceny "zasady menedżera" oraz do części `manager_share` w celu solvera. `WeightProfile.level_weights["employee_budget"]` (12 = jedna "bardzo ważna" + jedna "ważna"): suma wag próśb tekstem jednej osoby jest skalowana w dół do budżetu.
+- Ekrany: "Zasady" lokalu zaczynają się od "Powiedz asystentowi, co zmienić" (pole, plan z "Zatwierdź zmiany" / "Odrzuć", lista "Twoje polecenia o osobach" ze strzałkami i "Usuń"); "Kiedy mogę" pokazuje pod prośbą "Tak to zrozumieliśmy: …" z "Nie o to mi chodziło"; "Dyspozycje" kierownika pokazują interpretację; "Grafik" pokazuje osobno niespełnione polecenia kierownika i odsyła do asystenta.
+- Testy: atrapa funkcji `llm.read_request` / `llm.plan_command`, a sama ścieżka SDK na sztucznym transporcie HTTP (bez sieci i bez klucza).
+
+Założenia:
+
+1. Jedna prośba = jedna sprawa. Tekst z kilkoma życzeniami naraz asystent oznacza jako "inne" i czyta go kierownik.
+2. Asystent kierownika działa na poziomie lokalu (ludzie należą do lokalu). Zasady grupy ustawia się ręcznie na ekranie zasad grupy. Powiązanie lokali poleceniem ("ułóż te dwa razem") zostaje na później; silnik to umie, ale nie ma jeszcze na to ustawienia.
+3. Polecenia o osobach są miękkie (generator nie zostawi przez nie zmiany bez obsady). "Bez wyjątków" mają tylko zasady z katalogu.
+4. Polecenia o osobach mają własną kolejność, osobną od listy zasad: polecenie na miejscu k waży tyle, co zasada na miejscu k. Jedna wspólna lista zasad i poleceń to możliwy następny krok.
+5. Polecenie z samymi datami, które minęły, zostaje na liście z etykietą "minęło" i nie wpływa na grafik; kierownik je usuwa.
+6. Limity: `ASSISTANT_COMMANDS_MONTHLY_LIMIT` (200 poleceń na firmę w miesiącu) i `TEXT_REQUESTS_PER_PERIOD` (10 próśb jednej osoby na okres). Tryb tylko do odczytu blokuje polecenia jak każdą zmianę.
+7. Nie włączamy automatycznego przełączania na inny model po odmowie; odmowa lub ucięta odpowiedź to po prostu "do decyzji menedżera" / "asystent nie dał rady".
+8. Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie.

@@ -27,6 +27,7 @@ import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
+import { AssistantPanel } from './Assistant'
 import { useManager } from './ManagerContext'
 
 type Scope = 'location' | 'group'
@@ -64,7 +65,13 @@ export function RulesScreen({ scope, scopeId }: { scope: Scope; scopeId: string 
     )
   }
   const data = rules.data.data as RulesOut
-  return <RulesEditor key={JSON.stringify(data.items)} data={data} scope={scope} scopeId={scopeId} />
+  // The assistant's panel stays mounted while the list below is rebuilt after its plan is accepted.
+  return (
+    <div className="grid gap-8">
+      {scope === 'location' && <AssistantPanel locationId={scopeId} />}
+      <RulesEditor key={JSON.stringify(data.items)} data={data} scope={scope} scopeId={scopeId} />
+    </div>
+  )
 }
 
 function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; scopeId: string }) {

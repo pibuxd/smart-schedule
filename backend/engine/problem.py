@@ -206,6 +206,10 @@ class Request:
     avoid: bool = False  # shift_type: True = "not this shift type", False = "only this shift type"
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
     summary: str = ""
+    # True for a manager's instruction about `employee` ("Ania nie z Kasią"). It counts with the manager's
+    # rules, not with employee requests; `rank` is its place on the manager's list (1 = most important).
+    by_manager: bool = False
+    rank: int = 1
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", RequestType(self.type))
@@ -242,7 +246,16 @@ class RuleConfig:
 
 def default_level_weights() -> dict[str, float]:
     """Same defaults as `apps.rules.models.default_level_weights` (kept in sync by a test)."""
-    return {"bardzo_wazne": 9.0, "wazne": 3.0, "mile_widziane": 1.0, "manager_higher": 2.0, "manager_lower": 0.5}
+    return {
+        "bardzo_wazne": 9.0,
+        "wazne": 3.0,
+        "mile_widziane": 1.0,
+        "manager_higher": 2.0,
+        "manager_lower": 0.5,
+        # One person's text requests weigh at most this much together (one "bardzo ważne" plus one "ważne"):
+        # someone who calls everything very important only spreads the same voice thinner.
+        "employee_budget": 12.0,
+    }
 
 
 @dataclass(frozen=True)
@@ -271,6 +284,15 @@ class WeightProfile:
         elif priority == ManagerPriority.LOWER:
             weight *= self.level_weights["manager_lower"]
         return weight
+
+    def request_scales(self, levels_by_employee: Mapping[str, list[RequestLevel]]) -> dict[str, float]:
+        """employee -> factor (0–1] that keeps the sum of their request weights within `employee_budget`."""
+        budget = self.level_weights["employee_budget"]
+        scales = {}
+        for employee, levels in levels_by_employee.items():
+            total = sum(self.level_weights[str(level)] for level in levels)
+            scales[employee] = min(1.0, budget / total) if total > 0 and budget > 0 else 1.0
+        return scales
 
 
 @dataclass(frozen=True)

@@ -86,6 +86,7 @@ class RequestMeasure:
     degree: float
     request_id: str | None = None
     date: date | None = None
+    by_manager: bool = False  # a manager's instruction: scored with the manager's rules
 
 
 @dataclass(frozen=True)
@@ -625,19 +626,32 @@ class _Checker:
                     degree=1 - len(hits) / possible if possible else 0.0,
                 )
             )
+        scored: list[tuple[Request, float]] = []
         for request in p.requests:
             degree = self.request_degree(request)
             if degree is None:
                 self.unscored.append(request.id)
                 continue
+            scored.append((request, degree))
+        levels: dict[str, list[RequestLevel]] = defaultdict(list)
+        for request, _ in scored:
+            if not request.by_manager:
+                levels[request.employee].append(request.level)
+        scales = weights.request_scales(levels)
+        for request, degree in scored:
+            if request.by_manager:
+                weight = weights.rule_weight(request.rank)
+            else:
+                weight = weights.request_weight(request.level, request.manager_priority) * scales[request.employee]
             result.append(
                 RequestMeasure(
                     location=p.employee_by_id[request.employee].home_location,
                     employee=request.employee,
                     kind=RequestKind.TEXT,
-                    weight=weights.request_weight(request.level, request.manager_priority),
+                    weight=weight,
                     degree=min(1.0, max(0.0, degree)),
                     request_id=request.id,
+                    by_manager=request.by_manager,
                 )
             )
         return result

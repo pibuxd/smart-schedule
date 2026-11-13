@@ -3,6 +3,7 @@ from ninja.errors import AuthenticationError
 from ninja.security import django_auth
 
 from apps.accounts.api import router as accounts_router
+from apps.assistant.api import router as assistant_router
 from apps.availability.api import router as availability_router
 from apps.billing.api import router as billing_router
 from apps.core.api import router as core_router
@@ -34,6 +35,7 @@ api.add_router("/", rules_router)
 api.add_router("/", reports_router)
 api.add_router("/", marketplace_router)
 api.add_router("/", notifications_router)
+api.add_router("/", assistant_router)
 
 
 @api.exception_handler(AuthenticationError)
