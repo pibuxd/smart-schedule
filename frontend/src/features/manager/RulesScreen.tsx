@@ -133,9 +133,10 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
           </p>
         )}
         <p className="m-0 max-w-[75ch] text-sm text-ink-muted">
-          Grafikomat sam nie sprawdza Kodeksu pracy i za zgodność grafiku z prawem odpowiadasz Ty. Jeśli chcesz pilnować
-          czasu pracy, włącz „Odpoczynek między zmianami”, „Godziny pracy w ciągu dnia” i „Wolne w tygodniu” i zaznacz
-          „Bez wyjątków”. Dotyczą wszystkich osób w lokalu.
+          Grafikomat nie sprawdza Kodeksu pracy i za zgodność grafiku z prawem odpowiadasz Ty. Czasu pracy pilnują
+          zasady „Odpoczynek między zmianami”, „Godziny pracy w ciągu dnia” i „Wolne w tygodniu”: są włączone, ale
+          można je złamać, gdy brakuje ludzi. Zaznacz „Bez wyjątków”, żeby nigdy ich nie łamać. Dotyczą wszystkich osób
+          w lokalu.
         </p>
       </div>
 

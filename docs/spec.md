@@ -49,7 +49,7 @@ Decyzja Piotra z 13.11.2026: aplikacja nie zna typu umowy i nie wbudowuje ograni
 - Zawsze twarde są tylko: "nie mogę", właściwe stanowisko, brak nakładających się zmian, zmiany przypięte ręcznie, dni, które minęły, i zasady kierownika oznaczone "bez wyjątków".
 - Osobiste maksimum i cel godzin ustawione przez kierownika są miękkie, chyba że kierownik oznaczy zasadę "bez wyjątków".
 - Zasady dobrej praktyki: miękkie, włączone domyślnie, kierownik może każdą wyłączyć albo zamienić na twardą: min. 11 h między zmianami, max 6 dni pracy z rzędu, równy podział weekendów i zmian zamykających.
-- W katalogu są też zasady, które kierownik może włączyć, jeśli chce pilnować czasu pracy: "Godziny pracy w ciągu dnia" (domyślnie najwyżej 8 h) i "Wolne w tygodniu" (domyślnie co najmniej 35 h bez przerwy). Domyślnie wyłączone; dotyczą wszystkich osób lokalu. Odpoczynek dobowy to istniejąca zasada "Odpoczynek między zmianami".
+- Zasady czasu pracy w katalogu: "Godziny pracy w ciągu dnia" (domyślnie najwyżej 8 h) i "Wolne w tygodniu" (domyślnie co najmniej 35 h bez przerwy). Decyzja Piotra z 13.11.2026: są dobrą praktyką, czyli włączone jako miękkie w nowych i istniejących lokalach; kierownik może je wyłączyć albo oznaczyć "bez wyjątków". Dotyczą wszystkich osób lokalu. Odpoczynek dobowy to zasada "Odpoczynek między zmianami".
 - Odpowiedzialność za zgodność grafiku z prawem pracy spoczywa na kierowniku; aplikacja tego nie sprawdza.
 
 ## Generator (najważniejsza część)

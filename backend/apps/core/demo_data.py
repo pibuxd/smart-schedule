@@ -616,6 +616,8 @@ def _bakery_rules(group: LocationGroup, locations: list[Location]) -> None:
         ("same_shift_type_in_week", {}, False),
         ("personal_max_hours", {}, False),
         ("experience_mix", {}, False),
+        ("max_hours_per_day", {}, False),
+        ("min_weekly_rest", {}, False),
     ]
     RuleSetting.objects.bulk_create(
         RuleSetting(company_id=group.company_id, group=group, rule_code=code, params=params, is_hard=hard, position=i)
