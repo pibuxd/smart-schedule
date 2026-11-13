@@ -28,7 +28,14 @@ from apps.rules.models import RuleSetting
 from apps.rules.models import WeightProfile as WeightProfileModel
 from apps.rules.services import merge, rule_configs
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
-from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
+from apps.staffing.models import (
+    EmployeeProfile,
+    Position,
+    PositionExperience,
+    ShiftType,
+    StaffingException,
+    StaffingRule,
+)
 from apps.tenancy.models import Location
 from engine.problem import (
     Availability,
@@ -181,24 +188,35 @@ class _Reader:
 
     def _staffing_slots(self, location: Location, skip_days: set[date]) -> list[Slot]:
         shift_types = {st.id: st for st in self.qs(ShiftType).filter(location=location)}
-        weekly: dict[int, dict[tuple, tuple[int, time | None, time | None]]] = defaultdict(dict)
+        # (count, start, end, how many of them experienced)
+        weekly: dict[int, dict[tuple, tuple[int, time | None, time | None, int]]] = defaultdict(dict)
         for rule in self.qs(StaffingRule).filter(location=location):
-            weekly[rule.weekday][(rule.shift_type_id, rule.position_id)] = (rule.count, rule.start_time, rule.end_time)
-        exceptions: dict[date, dict[tuple, tuple[int, time | None, time | None]]] = defaultdict(dict)
+            weekly[rule.weekday][(rule.shift_type_id, rule.position_id)] = (
+                rule.count,
+                rule.start_time,
+                rule.end_time,
+                rule.experienced,
+            )
+        exceptions: dict[date, dict[tuple, tuple[int, time | None, time | None, int]]] = defaultdict(dict)
         for exc in self.qs(StaffingException).filter(location=location, date__range=(self.start, self.end)):
-            exceptions[exc.date][(exc.shift_type_id, exc.position_id)] = (exc.count, exc.start_time, exc.end_time)
+            exceptions[exc.date][(exc.shift_type_id, exc.position_id)] = (
+                exc.count,
+                exc.start_time,
+                exc.end_time,
+                exc.experienced,
+            )
 
         slots, missing_hours = [], set()
         for day in _days(self.start, self.end):
             if day in skip_days:
                 continue
             demand = dict(weekly.get(day.weekday(), {}))
-            for key, (count, start, end) in exceptions.get(day, {}).items():
+            for key, (count, start, end, experienced) in exceptions.get(day, {}).items():
                 base = demand.get(key)
                 if start is None and base is not None:  # an exception without hours keeps the usual hours
                     start, end = base[1], base[2]
-                demand[key] = (count, start, end)
-            for (shift_type_id, position_id), (count, start, end) in sorted(demand.items(), key=str):
+                demand[key] = (count, start, end, experienced)
+            for (shift_type_id, position_id), (count, start, end, experienced) in sorted(demand.items(), key=str):
                 if not count:
                     continue
                 shift_type = shift_types[shift_type_id]
@@ -220,6 +238,7 @@ class _Reader:
                             end=finish,
                             shift_name=shift_type.name,
                             is_closing=shift_type.is_closing,
+                            needs_experienced=place <= experienced,
                         )
                     )
                     self.sources[key] = SlotSource(str(location.id), str(shift_type_id), str(position_id))
@@ -266,6 +285,20 @@ class _Reader:
             positions[profile_id].add(str(position_id))
             if profile_id in away:
                 positions[profile_id] |= here.get(name.casefold(), set())
+        # Levels set for single positions; a person from another location carries the level to the positions
+        # of the same name here, like the positions themselves.
+        levels: dict = defaultdict(dict)
+        for profile_id, position_id, name, level in (
+            self.qs(PositionExperience)
+            .filter(employee_id__in=ids)
+            .values_list("employee_id", "position_id", "position__name", "level")
+        ):
+            if str(position_id) not in positions[profile_id]:
+                continue  # a level left over for a position the person no longer has
+            levels[profile_id][str(position_id)] = level
+            if profile_id in away:
+                for twin in here.get(name.casefold(), set()):
+                    levels[profile_id][twin] = level
         return [
             Employee(
                 id=str(p.pk),
@@ -275,6 +308,7 @@ class _Reader:
                 max_hours_month=p.max_hours_month,
                 target_hours_month=p.target_hours_month,
                 experience=p.experience,
+                experience_by_position=levels[p.pk],
                 available=p.is_active and p.home_location_id in self.location_ids,
             )
             for p in rows

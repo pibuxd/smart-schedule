@@ -3,6 +3,7 @@
 import itertools
 import random
 import time as clock
+from dataclasses import replace
 from datetime import date, time, timedelta
 
 import pytest
@@ -436,6 +437,28 @@ def test_experience_mix_can_count_one_position_only():
     assert solved(whole_shift)[0].schedule == {"s": "nowa", "b": "piekarz"}
     # Counting sellers only, the experienced baker does not help: the beginner may not sell alone.
     assert solved(sales_only)[0].schedule == {"s": None, "b": "piekarz"}
+
+
+def test_staffing_puts_an_experienced_person_on_every_shift_that_asks_for_one():
+    people = [employee("stara", experience=3), employee("ola"), employee("nowa", experience=1), employee("ula")]
+    slots = [replace(s, needs_experienced=s.id.endswith("1")) for s in week(5, places=2, closing=False)]
+    assert any(s.needs_experienced for s in slots)
+    p = problem(people, slots)
+    result, report = solved(p)
+    assert report.ok
+    for group in p.experienced_groups:
+        team = {result.schedule[s.id] for s in group}
+        # The only experienced person works it, or her place stays empty; nobody else takes it.
+        assert "stara" in team or None in team
+
+
+def test_staffing_leaves_a_hole_rather_than_a_less_experienced_person():
+    slots = [replace(slot("s", MON), needs_experienced=True)]
+    p = problem([employee("ola"), employee("nowa", experience=1)], slots)
+    result, report = solved(p)
+    assert result.schedule == {"s": None} and report.ok
+    oven = employee("jan", experience=1, experience_by_position={SALES: 3})
+    assert solved(problem([employee("ola"), oven], slots))[0].schedule == {"s": "jan"}
 
 
 # ----------------------------------------------------------------- hard rules never broken (random problems)

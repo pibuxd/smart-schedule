@@ -16,7 +16,14 @@ from apps.rules.models import RuleSetting, WeightProfile
 from apps.scheduling.generation import fail_stale_runs, request_generation, run_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuildError, build_problem, slot_key
-from apps.staffing.models import EmployeeProfile, ShiftType, StaffingException, StaffingRule
+from apps.staffing.models import (
+    EmployeeProfile,
+    Position,
+    PositionExperience,
+    ShiftType,
+    StaffingException,
+    StaffingRule,
+)
 from apps.tenancy.models import LocationGroup, Membership
 from engine.problem import RequestType
 from engine.validator import validate
@@ -103,6 +110,36 @@ def test_slots_come_from_staffing_with_exceptions_and_flexible_hours(shop):
     assert len(slots) == 3 + 2 + 3 + 2 + 1 + 1  # Tue 2+1, Wed 2, Thu 3, Fri 2, Sat 1, Sun 1
     assert {s.location for s in slots.values()} == {str(location.id)}
     assert company.id == shop["period"].company_id
+
+
+@pytest.mark.django_db
+def test_experienced_staffing_and_levels_per_position_reach_the_problem(shop):
+    location, seller = shop["location"], shop["position"]
+    baker = Position.objects.create(location=location, name="Piekarz")
+    StaffingRule.objects.filter(location=location, weekday=0).update(experienced=1)
+    StaffingException.objects.create(
+        location=location,
+        date=MON + timedelta(days=1),
+        shift_type=shop["shift_type"],
+        position=seller,
+        count=3,
+        experienced=2,
+    )
+    ewa = shop["people"][1]
+    ewa.positions.add(baker)
+    EmployeeProfile.objects.filter(pk=ewa.pk).update(experience=3)
+    PositionExperience.objects.create(employee=ewa, position=baker, level=1)
+    # A level left behind for a position the person no longer has is ignored.
+    PositionExperience.objects.create(employee=shop["people"][2], position=baker, level=3)
+
+    problem = build_problem([shop["period"]], today=TODAY).problem
+    marked = lambda day: sorted(s.needs_experienced for s in problem.slots if s.date == day)  # noqa: E731
+    assert marked(MON) == [False, True]
+    assert marked(MON + timedelta(days=1)) == [False, True, True]  # the exception has its own number
+    assert marked(MON + timedelta(days=2)) == [False, False]
+    person = problem.employee_by_id[str(ewa.pk)]
+    assert person.level(str(seller.pk)) == 3 and person.level(str(baker.pk)) == 1
+    assert dict(problem.employee_by_id[str(shop["people"][2].pk)].experience_by_position) == {}
 
 
 @pytest.mark.django_db

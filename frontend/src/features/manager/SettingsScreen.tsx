@@ -424,6 +424,15 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
     }
     return result
   })
+  // "Of these, experienced": one number per row (shift and position), used on every day that has people.
+  const [experienced, setExperienced] = useState<Counts>(() => {
+    const result: Counts = {}
+    for (const c of setup.staffing) {
+      const key = rowKey(c.shift_type_id, c.position_id)
+      if (c.experienced > Number(result[key] ?? 0)) result[key] = String(c.experienced)
+    }
+    return result
+  })
   const [saved, setSaved] = useState(false)
 
   if (setup.shift_types.length === 0 || setup.positions.length === 0) {
@@ -461,6 +470,7 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
             shift_type_id: st.id,
             position_id: pos.id,
             count,
+            experienced: Math.min(count, Number(experienced[rowKey(st.id, pos.id)] || 0)),
             start_time: flex?.start || null,
             end_time: flex?.end || null,
           })
@@ -481,7 +491,7 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
   return (
     <Section
       title="Obsada"
-      description="Ilu ludzi z danym stanowiskiem potrzeba na każdej zmianie w każdy dzień tygodnia. Puste pole = nikt."
+      description="Ilu ludzi z danym stanowiskiem potrzeba na każdej zmianie w każdy dzień tygodnia. Puste pole = nikt. „W tym doświadczonych” mówi, ilu z nich musi mieć stopień „doświadczony” na tym stanowisku, np. na zamknięciu 2 osoby, w tym 1 doświadczona. Grafik nie postawi tam nikogo mniej doświadczonego; gdy takiej osoby zabraknie, zostawi wolne miejsce."
     >
       <div className="overflow-x-auto rounded-md border border-line bg-surface" tabIndex={0} aria-label="Tabela obsady">
         <table className="w-full border-separate border-spacing-0">
@@ -510,6 +520,24 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
                       {st.name} <span className="font-normal text-ink-muted tabular-nums">{shiftHours(st)}</span>
                     </span>
                     <span className="block text-sm">{pos.name}</span>
+                    <label className="mt-1 flex items-center gap-2 text-sm">
+                      w tym doświadczonych
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={50}
+                        placeholder="0"
+                        aria-label={`${st.name}, ${pos.name}: w tym doświadczonych`}
+                        className={`${inputClass} w-14 px-1 text-center tabular-nums`}
+                        value={experienced[rowKey(st.id, pos.id)] ?? ''}
+                        onChange={(e) => {
+                          setSaved(false)
+                          setExperienced((now) => ({ ...now, [rowKey(st.id, pos.id)]: e.target.value }))
+                        }}
+                        disabled={readOnly}
+                      />
+                    </label>
                     {st.kind === 'flexible' && (
                       <span className="mt-1 flex items-center gap-1 text-sm">
                         <input
@@ -578,6 +606,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
   const [shift, setShift] = useState(setup.shift_types[0]?.id ?? '')
   const [position, setPosition] = useState(setup.positions[0]?.id ?? '')
   const [count, setCount] = useState('0')
+  const [experiencedCount, setExperiencedCount] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [note, setNote] = useState('')
@@ -586,6 +615,14 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
   const refresh = () => void queryClient.invalidateQueries()
 
   if (setup.shift_types.length === 0 || setup.positions.length === 0) return null
+
+  // Left empty, the exception keeps what the weekday usually asks for, so the requirement does not vanish
+  // on the very day the manager adds more people.
+  const weekday = date ? (parseDate(date).getDay() + 6) % 7 : null
+  const usual =
+    setup.staffing.find((c) => c.weekday === weekday && c.shift_type_id === shift && c.position_id === position)
+      ?.experienced ?? 0
+  const experiencedNow = experiencedCount === '' ? Math.min(Number(count), usual) : Number(experiencedCount)
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -597,6 +634,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
           shift_type_id: shift,
           position_id: position,
           count: Number(count),
+          experienced: experiencedNow,
           start_time: start || null,
           end_time: end || null,
           note,
@@ -614,7 +652,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
   }
   const describe = (e: StaffingExceptionOut) => {
     const who = `${shiftName.get(e.shift_type_id) ?? 'Zmiana'}, ${positionName.get(e.position_id) ?? 'stanowisko'}`
-    const what = e.count === 0 ? 'nikt' : `${e.count} os.`
+    const what = e.count === 0 ? 'nikt' : `${e.count} os.${e.experienced ? `, w tym ${e.experienced} dośw.` : ''}`
     const hours = e.start_time && e.end_time ? `, ${shortTime(hhmm(e.start_time))}–${shortTime(hhmm(e.end_time))}` : ''
     return `${who}: ${what}${hours}`
   }
@@ -656,6 +694,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
           ))}
         </SelectField>
         <TextField label="Liczba osób" type="number" inputMode="numeric" min={0} max={50} value={count} onChange={(e) => setCount(e.target.value)} required />
+        <TextField label="W tym doświadczonych" type="number" inputMode="numeric" min={0} max={50} placeholder={String(experiencedNow)} value={experiencedCount} onChange={(e) => setExperiencedCount(e.target.value)} hint={usual > 0 ? `Puste = jak zwykle w ten dzień (${experiencedNow}).` : undefined} />
         <TextField label="Inne godziny: od (nieobowiązkowo)" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
         <TextField label="do" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
         <TextField label="Powód (nieobowiązkowo)" className="sm:col-span-2" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="np. Wigilia" />

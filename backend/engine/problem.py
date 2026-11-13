@@ -99,12 +99,19 @@ class Employee:
     target_hours_month: float | None = None  # soft rule target_hours
     # Experience level set by the manager (rule experience_mix); the employee never sees it.
     experience: int = SKILLED
+    # Levels that differ from `experience` on single positions (position id -> level).
+    experience_by_position: Mapping[str, int] = field(default_factory=dict)
     # False for someone switched off (or borrowed from another location) who only keeps the shifts they already
     # have in this problem (pins, past days): the generator gives them nothing new. The validator ignores it.
     available: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "positions", frozenset(self.positions))
+        object.__setattr__(self, "experience_by_position", _freeze(self.experience_by_position))
+
+    def level(self, position: str) -> int:
+        """The experience level that counts when this person works `position`."""
+        return self.experience_by_position.get(position, self.experience)
 
 
 @dataclass(frozen=True)
@@ -120,6 +127,9 @@ class Slot:
     end: datetime
     shift_name: str = ""
     is_closing: bool = False
+    # The staffing asks for an experienced person here. Counted per group (see `experienced_groups`): of the
+    # slots of one location, day, shift type and position, as many people must be experienced as slots are marked.
+    needs_experienced: bool = False
 
     def __post_init__(self) -> None:
         _require_aware(self.start, f"Slot {self.id} start")
@@ -351,6 +361,14 @@ class Problem:
     @cached_property
     def locations(self) -> tuple[str, ...]:
         return tuple(sorted({s.location for s in self.slots} | {e.home_location for e in self.employees}))
+
+    @cached_property
+    def experienced_groups(self) -> tuple[tuple[Slot, ...], ...]:
+        """Slots of one location, day, shift type and position where the staffing asks for experienced people."""
+        groups: dict[tuple[str, date, str, str], list[Slot]] = {}
+        for slot in self.slots:
+            groups.setdefault((slot.location, slot.date, slot.shift_type, slot.position), []).append(slot)
+        return tuple(tuple(g) for g in groups.values() if any(s.needs_experienced for s in g))
 
     def rules_for(self, location: str) -> tuple[RuleConfig, ...]:
         return tuple(sorted((r for r in self.rules if r.location == location), key=lambda r: r.rank))

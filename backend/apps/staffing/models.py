@@ -85,6 +85,8 @@ class StaffingRule(CompanyOwnedModel):
     shift_type = models.ForeignKey(ShiftType, on_delete=models.CASCADE, related_name="staffing_rules")
     position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name="staffing_rules")
     count = models.PositiveSmallIntegerField("liczba osób")
+    # How many of `count` must be experienced on this position (hard, like the position itself).
+    experienced = models.PositiveSmallIntegerField("w tym doświadczonych", default=0)
     start_time = models.TimeField("początek (dowolne godziny)", null=True, blank=True)
     end_time = models.TimeField("koniec (dowolne godziny)", null=True, blank=True)
 
@@ -97,6 +99,9 @@ class StaffingRule(CompanyOwnedModel):
                 fields=["location", "weekday", "shift_type", "position"], name="staffing_rule_unique_slot"
             ),
             models.CheckConstraint(condition=WEEKDAY_RANGE, name="staffing_rule_weekday_range"),
+            models.CheckConstraint(
+                condition=Q(experienced__lte=models.F("count")), name="staffing_rule_experienced_le_count"
+            ),
             models.CheckConstraint(
                 condition=Q(start_time__isnull=True, end_time__isnull=True)
                 | Q(start_time__isnull=False, end_time__isnull=False),
@@ -118,6 +123,7 @@ class StaffingException(CompanyOwnedModel):
     shift_type = models.ForeignKey(ShiftType, on_delete=models.CASCADE, related_name="staffing_exceptions")
     position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name="staffing_exceptions")
     count = models.PositiveSmallIntegerField("liczba osób")
+    experienced = models.PositiveSmallIntegerField("w tym doświadczonych", default=0)
     start_time = models.TimeField("inny początek", null=True, blank=True)
     end_time = models.TimeField("inny koniec", null=True, blank=True)
     note = models.CharField("powód", max_length=200, blank=True)
@@ -129,6 +135,9 @@ class StaffingException(CompanyOwnedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["location", "date", "shift_type", "position"], name="staffing_exception_unique_slot"
+            ),
+            models.CheckConstraint(
+                condition=Q(experienced__lte=models.F("count")), name="staffing_exception_experienced_le_count"
             ),
             models.CheckConstraint(
                 condition=Q(start_time__isnull=True, end_time__isnull=True)
@@ -181,3 +190,25 @@ class EmployeeProfile(CompanyOwnedModel):
 
     def __str__(self) -> str:
         return str(self.membership.user)
+
+
+class PositionExperience(CompanyOwnedModel):
+    """A level on one position that differs from the person's default (`EmployeeProfile.experience`):
+    someone experienced at the oven can be a beginner at the till. Rows equal to the default are not kept."""
+
+    company_from = "employee"
+
+    employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name="position_levels")
+    position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name="employee_levels")
+    level = models.PositiveSmallIntegerField("stopień na stanowisku", choices=Experience.choices)
+
+    class Meta:
+        verbose_name = "stopień na stanowisku"
+        verbose_name_plural = "stopnie na stanowiskach"
+        constraints = [
+            models.UniqueConstraint(fields=["employee", "position"], name="position_experience_unique"),
+            models.CheckConstraint(condition=Q(level__gte=1, level__lte=3), name="position_experience_level"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee}: {self.position.name} – {self.get_level_display()}"
