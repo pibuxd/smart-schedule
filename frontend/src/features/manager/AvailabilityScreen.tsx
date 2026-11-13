@@ -377,7 +377,7 @@ function RequestCard({ request }: { request: ManagerRequestOut }) {
       <p className="m-0 text-sm text-ink-muted">
         {request.summary
           ? `Jak to zrozumiał asystent: ${request.summary}`
-          : 'Asystent jeszcze tej prośby nie przeczytał, więc przy układaniu grafiku zostaje do Twojej oceny.'}
+          : 'Asystent jeszcze tej prośby nie przeczytał, więc generator jej nie uwzględni. Jeśli chcesz ją spełnić, popraw grafik sam.'}
       </p>
       {!rejected && (
         <fieldset className="m-0 flex flex-wrap gap-1 border-0 p-0" disabled={readOnly || update.isPending}>
