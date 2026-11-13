@@ -28,6 +28,8 @@ export function renderScreen(ui: ReactNode) {
     '/kierownik/lokal/$locationId/zasady',
     '/kierownik/lokal/$locationId/grafik',
     '/kierownik/godziny',
+    '/kierownik/oddane-zmiany',
+    '/powiadomienia',
     '/kierownik/dostep',
     '/rejestracja',
   ].map((path) =>

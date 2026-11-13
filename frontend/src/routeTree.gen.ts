@@ -17,9 +17,11 @@ import { Route as RejestracjaRouteImport } from './routes/rejestracja'
 import { Route as ZaproszeniaRouteImport } from './routes/zaproszenia'
 import { Route as PracownikGrafikRouteImport } from './routes/_pracownik/grafik'
 import { Route as PracownikKiedyMogeRouteImport } from './routes/_pracownik/kiedy-moge'
+import { Route as PracownikPowiadomieniaRouteImport } from './routes/_pracownik/powiadomienia'
 import { Route as KierownikIndexRouteImport } from './routes/kierownik/index'
 import { Route as KierownikDostepRouteImport } from './routes/kierownik/dostep'
 import { Route as KierownikGodzinyRouteImport } from './routes/kierownik/godziny'
+import { Route as KierownikOddaneZmianyRouteImport } from './routes/kierownik/oddane-zmiany'
 import { Route as KierownikLokalLocationIdRouteImport } from './routes/kierownik/lokal.$locationId'
 import { Route as KierownikGrupaGroupIdZasadyRouteImport } from './routes/kierownik/grupa.$groupId/zasady'
 import { Route as KierownikLokalLocationIdIndexRouteImport } from './routes/kierownik/lokal.$locationId/index'
@@ -68,6 +70,11 @@ const PracownikKiedyMogeRoute = PracownikKiedyMogeRouteImport.update({
   path: '/kiedy-moge',
   getParentRoute: () => PracownikRoute,
 } as any)
+const PracownikPowiadomieniaRoute = PracownikPowiadomieniaRouteImport.update({
+  id: '/powiadomienia',
+  path: '/powiadomienia',
+  getParentRoute: () => PracownikRoute,
+} as any)
 const KierownikIndexRoute = KierownikIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -81,6 +88,11 @@ const KierownikDostepRoute = KierownikDostepRouteImport.update({
 const KierownikGodzinyRoute = KierownikGodzinyRouteImport.update({
   id: '/godziny',
   path: '/godziny',
+  getParentRoute: () => KierownikRoute,
+} as any)
+const KierownikOddaneZmianyRoute = KierownikOddaneZmianyRouteImport.update({
+  id: '/oddane-zmiany',
+  path: '/oddane-zmiany',
   getParentRoute: () => KierownikRoute,
 } as any)
 const KierownikLokalLocationIdRoute =
@@ -140,8 +152,10 @@ export interface FileRoutesByFullPath {
   '/zaproszenia': typeof ZaproszeniaRoute
   '/grafik': typeof PracownikGrafikRoute
   '/kiedy-moge': typeof PracownikKiedyMogeRoute
+  '/powiadomienia': typeof PracownikPowiadomieniaRoute
   '/kierownik/dostep': typeof KierownikDostepRoute
   '/kierownik/godziny': typeof KierownikGodzinyRoute
+  '/kierownik/oddane-zmiany': typeof KierownikOddaneZmianyRoute
   '/kierownik/': typeof KierownikIndexRoute
   '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
@@ -159,8 +173,10 @@ export interface FileRoutesByTo {
   '/zaproszenia': typeof ZaproszeniaRoute
   '/grafik': typeof PracownikGrafikRoute
   '/kiedy-moge': typeof PracownikKiedyMogeRoute
+  '/powiadomienia': typeof PracownikPowiadomieniaRoute
   '/kierownik/dostep': typeof KierownikDostepRoute
   '/kierownik/godziny': typeof KierownikGodzinyRoute
+  '/kierownik/oddane-zmiany': typeof KierownikOddaneZmianyRoute
   '/kierownik': typeof KierownikIndexRoute
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
   '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
@@ -180,8 +196,10 @@ export interface FileRoutesById {
   '/zaproszenia': typeof ZaproszeniaRoute
   '/_pracownik/grafik': typeof PracownikGrafikRoute
   '/_pracownik/kiedy-moge': typeof PracownikKiedyMogeRoute
+  '/_pracownik/powiadomienia': typeof PracownikPowiadomieniaRoute
   '/kierownik/dostep': typeof KierownikDostepRoute
   '/kierownik/godziny': typeof KierownikGodzinyRoute
+  '/kierownik/oddane-zmiany': typeof KierownikOddaneZmianyRoute
   '/kierownik/': typeof KierownikIndexRoute
   '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
@@ -202,8 +220,10 @@ export interface FileRouteTypes {
     | '/zaproszenia'
     | '/grafik'
     | '/kiedy-moge'
+    | '/powiadomienia'
     | '/kierownik/dostep'
     | '/kierownik/godziny'
+    | '/kierownik/oddane-zmiany'
     | '/kierownik/'
     | '/kierownik/lokal/$locationId'
     | '/kierownik/grupa/$groupId/zasady'
@@ -221,8 +241,10 @@ export interface FileRouteTypes {
     | '/zaproszenia'
     | '/grafik'
     | '/kiedy-moge'
+    | '/powiadomienia'
     | '/kierownik/dostep'
     | '/kierownik/godziny'
+    | '/kierownik/oddane-zmiany'
     | '/kierownik'
     | '/kierownik/grupa/$groupId/zasady'
     | '/kierownik/lokal/$locationId/dyspozycje'
@@ -241,8 +263,10 @@ export interface FileRouteTypes {
     | '/zaproszenia'
     | '/_pracownik/grafik'
     | '/_pracownik/kiedy-moge'
+    | '/_pracownik/powiadomienia'
     | '/kierownik/dostep'
     | '/kierownik/godziny'
+    | '/kierownik/oddane-zmiany'
     | '/kierownik/'
     | '/kierownik/lokal/$locationId'
     | '/kierownik/grupa/$groupId/zasady'
@@ -321,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PracownikKiedyMogeRouteImport
       parentRoute: typeof PracownikRoute
     }
+    '/_pracownik/powiadomienia': {
+      id: '/_pracownik/powiadomienia'
+      path: '/powiadomienia'
+      fullPath: '/powiadomienia'
+      preLoaderRoute: typeof PracownikPowiadomieniaRouteImport
+      parentRoute: typeof PracownikRoute
+    }
     '/kierownik/': {
       id: '/kierownik/'
       path: '/'
@@ -340,6 +371,13 @@ declare module '@tanstack/react-router' {
       path: '/godziny'
       fullPath: '/kierownik/godziny'
       preLoaderRoute: typeof KierownikGodzinyRouteImport
+      parentRoute: typeof KierownikRoute
+    }
+    '/kierownik/oddane-zmiany': {
+      id: '/kierownik/oddane-zmiany'
+      path: '/oddane-zmiany'
+      fullPath: '/kierownik/oddane-zmiany'
+      preLoaderRoute: typeof KierownikOddaneZmianyRouteImport
       parentRoute: typeof KierownikRoute
     }
     '/kierownik/lokal/$locationId': {
@@ -404,11 +442,13 @@ declare module '@tanstack/react-router' {
 interface PracownikRouteChildren {
   PracownikGrafikRoute: typeof PracownikGrafikRoute
   PracownikKiedyMogeRoute: typeof PracownikKiedyMogeRoute
+  PracownikPowiadomieniaRoute: typeof PracownikPowiadomieniaRoute
 }
 
 const PracownikRouteChildren: PracownikRouteChildren = {
   PracownikGrafikRoute: PracownikGrafikRoute,
   PracownikKiedyMogeRoute: PracownikKiedyMogeRoute,
+  PracownikPowiadomieniaRoute: PracownikPowiadomieniaRoute,
 }
 
 const PracownikRouteWithChildren = PracownikRoute._addFileChildren(
@@ -445,6 +485,7 @@ const KierownikLokalLocationIdRouteWithChildren =
 interface KierownikRouteChildren {
   KierownikDostepRoute: typeof KierownikDostepRoute
   KierownikGodzinyRoute: typeof KierownikGodzinyRoute
+  KierownikOddaneZmianyRoute: typeof KierownikOddaneZmianyRoute
   KierownikIndexRoute: typeof KierownikIndexRoute
   KierownikLokalLocationIdRoute: typeof KierownikLokalLocationIdRouteWithChildren
   KierownikGrupaGroupIdZasadyRoute: typeof KierownikGrupaGroupIdZasadyRoute
@@ -453,6 +494,7 @@ interface KierownikRouteChildren {
 const KierownikRouteChildren: KierownikRouteChildren = {
   KierownikDostepRoute: KierownikDostepRoute,
   KierownikGodzinyRoute: KierownikGodzinyRoute,
+  KierownikOddaneZmianyRoute: KierownikOddaneZmianyRoute,
   KierownikIndexRoute: KierownikIndexRoute,
   KierownikLokalLocationIdRoute: KierownikLokalLocationIdRouteWithChildren,
   KierownikGrupaGroupIdZasadyRoute: KierownikGrupaGroupIdZasadyRoute,

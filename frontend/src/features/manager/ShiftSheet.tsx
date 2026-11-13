@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Pin, PinOff } from 'lucide-react'
 
-import type { CandidateOut, ShiftExplanationOut, VersionShiftOut } from '../../api/generated/model'
+import type { CandidateOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
 import { useChangeAssignments, useExplainShift, usePinShift } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
@@ -172,8 +172,45 @@ function ShiftDetails({
           </ul>
         </details>
       )}
+      <SlotHistory events={data.history} />
     </div>
   )
+}
+
+const REASON_LABEL: Record<SlotEventOut['reason'], string> = {
+  generated: 'ułożone przez generator',
+  manual: 'zmiana ręczna',
+  offer: 'oddana zmiana',
+  swap: 'zamiana',
+}
+
+/** Who held this shift before: published changes and given-away shifts, newest first. */
+function SlotHistory({ events }: { events: SlotEventOut[] }) {
+  if (events.length === 0) return null
+  return (
+    <details className="rounded-md border border-line bg-surface px-3 py-2">
+      <summary className="min-h-(--touch) cursor-pointer content-center font-semibold">
+        Historia tej zmiany ({events.length})
+      </summary>
+      <ol className="m-0 mt-2 grid list-none gap-2 p-0">
+        {events.map((event) => (
+          <li key={`${event.at}-${event.to_name}`} className="grid gap-0.5 border-t border-grid pt-2 first:border-t-0">
+            <span>
+              {event.from_name || 'nikt'} → <b>{event.to_name || 'bez obsady'}</b>
+            </span>
+            <span className="text-sm text-ink-muted">
+              {REASON_LABEL[event.reason]}, {dateTimeText(event.at)}
+              {event.by_name ? `, ${event.by_name}` : ''}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </details>
+  )
+}
+
+function dateTimeText(iso: string): string {
+  return new Date(iso).toLocaleString('pl-PL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function CandidateLine({ candidate }: { candidate: CandidateOut }) {

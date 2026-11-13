@@ -323,13 +323,13 @@ function PublishSheet({ data, open, onOpenChange }: { data: VersionOut; open: bo
         </p>
         {data.changed_people.length > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
-            Ta poprawka zmienia zmiany tych osób: {data.changed_people.join(', ')}. Daj im znać, bo mogły już
-            zaplanować czas według poprzedniej wersji.
+            Ta poprawka zmienia zmiany tych osób: {data.changed_people.join(', ')}. Dostaną powiadomienie, ale
+            warto im też powiedzieć, bo mogły już zaplanować czas według poprzedniej wersji.
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Powiadomienia w aplikacji pojawią się w jednej z następnych wersji. Na razie powiedz pracownikom, że grafik
-          jest gotowy.
+          Pracownicy lokalu dostaną powiadomienie w aplikacji. SMS-ów ani e-maili nie wysyłamy, więc kto rzadko
+          zagląda do Grafikomatu, może potrzebować też słowa od Ciebie.
         </p>
         {holes > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2">

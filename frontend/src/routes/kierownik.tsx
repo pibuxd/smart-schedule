@@ -7,6 +7,7 @@ import { Wordmark } from '../components/Wordmark'
 import { useSession } from '../features/auth/session'
 import { AccessBanner } from '../features/manager/AccessBanner'
 import { isManagerRole, ManagerContext } from '../features/manager/ManagerContext'
+import { useWaitingClaims } from '../features/manager/waiting-claims'
 
 export const Route = createFileRoute('/kierownik')({
   component: ManagerLayout,
@@ -68,6 +69,7 @@ function ManagerLayout() {
             ) : (
               <span className="font-semibold text-ink">{company.name}</span>
             )}
+            <OffersLink companyId={company.id} />
             <Link
               to="/kierownik/godziny"
               className="inline-flex min-h-(--touch) items-center rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
@@ -101,5 +103,23 @@ function ManagerLayout() {
         <Outlet />
       </main>
     </ManagerContext.Provider>
+  )
+}
+
+/** "Oddane zmiany", with the number of volunteers waiting for a decision. */
+function OffersLink({ companyId }: { companyId: string }) {
+  const waiting = useWaitingClaims(companyId)
+  return (
+    <Link
+      to="/kierownik/oddane-zmiany"
+      className="inline-flex min-h-(--touch) items-center gap-1.5 rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
+    >
+      Oddane zmiany
+      {waiting > 0 && (
+        <span className="rounded-full bg-accent px-2 text-sm text-accent-ink no-underline" aria-label={`czeka: ${waiting}`}>
+          {waiting}
+        </span>
+      )}
+    </Link>
   )
 }
