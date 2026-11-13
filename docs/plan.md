@@ -199,8 +199,9 @@ Grafik
 - `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin, współpracownicy na zmianie)
 
 Oddawanie zmian i powiadomienia
-- `POST /me/assignments/{id}/offer` · `GET /me/offers/available` · `POST /offers/{id}/claim` · `POST /claims/{id}/approve|reject`
-- `GET /me/notifications` · `POST /me/notifications/read`
+- `POST /me/shifts/{assignment_id}/offer` · `POST /offers/{id}/cancel` · `GET /me/offers?company_id=` · `POST /offers/{id}/claim` · `POST /claims/{id}/withdraw`
+- `GET /manager/offers?company_id=` · `POST /claims/{id}/approve` · `POST /claims/{id}/reject`
+- `GET /me/notifications?company_id=` · `POST /me/notifications/read`
 
 Raporty
 - `GET /reports/hours?company_id=&month=` · `GET /reports/hours.csv?company_id=&month=`
@@ -378,7 +379,7 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 - Nowe pole `Assignment.manual` (ręczna zmiana). Nowy moduł `engine/explain.py` (bez Django): dla każdej osoby ze stanowiskiem sprawdza walidatorem grafik z tą osobą na zmianie, więc wyjaśnienie zgadza się z walidatorem. `apps/scheduling/editing.py`: sprawdzanie i zapis ręcznych zmian, przypinanie, poprawka opublikowanego grafiku, publikacja. Raport godzin: `apps/reports`.
 
 Założenia:
-1. Ręcznie można zmieniać tylko najnowszy szkic okresu. Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
+1. Ręcznie można zmieniać tylko najnowszy szkic okresu (jedyny wyjątek od etapu 9: zatwierdzona oddana zmiana przechodzi w opublikowanej wersji w miejscu, z wpisem w historii przypisań; zob. sekcja 18, punkt 4). Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
 2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmiana zostawiona bez obsady nie może być przypięta.
 3. W edytorze można wpisać tylko osoby z lokalu (z danym stanowiskiem); pożyczanie z innych lokali zostaje dla oddawania zmian (etap 9).
 4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły. Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
@@ -387,7 +388,7 @@ Założenia:
 7. Raport godzin liczy tylko opublikowane zmiany w lokalach, którymi zarządza kierownik, w podanym miesiącu kalendarzowym (zmiana należy do dnia, w którym się zaczyna). CSV: średniki, przecinek dziesiętny, BOM, żeby Excel otworzył polskie znaki.
 
 
-Po przeglądzie Prelinta (PR #10): nad siatką jest pasek "Ręczne poprawki bez przypięcia: N" z przyciskiem "Przypnij poprawki", bo ponowne układanie je usuwa; arkusz publikacji mówi, że powiadomień w aplikacji jeszcze nie ma (trzeba powiedzieć pracownikom), a przy poprawce opublikowanego grafiku wymienia osoby, których zmiany się zmieniają (`VersionOut.changed_people`); ekran "Godziny" mówi, że to plan z opublikowanych grafików w lokalach kierownika, a nie ewidencja czasu pracy, i oznacza osobę, która w tym miesiącu pracuje też w lokalach, których kierownik nie prowadzi (suma niepełna; w CSV kolumna "Uwagi"). Ręczna zmiana osoby zawsze zdejmuje przypięcie. Link "Załóż firmę" zostaje w pustym stanie zaproszeń, bo to jedyna droga do rejestracji dla zalogowanej osoby bez firmy (np. kierownika, który najpierw się zalogował). Do sprawdzenia w pilocie: czy kierownik oczekuje, że ręczne poprawki zostają domyślnie, i czy potrzebuje obejścia „nie mogę” po rozmowie z pracownikiem.
+Po przeglądzie Prelinta (PR #10): nad siatką jest pasek "Ręczne poprawki bez przypięcia: N" z przyciskiem "Przypnij poprawki", bo ponowne układanie je usuwa; arkusz publikacji mówi, że powiadomień w aplikacji jeszcze nie ma (trzeba powiedzieć pracownikom), a przy poprawce opublikowanego grafiku wymienia osoby, których zmiany się zmieniają (`VersionOut.changed_people`); ekran "Godziny" mówi, że to plan z opublikowanych grafików w lokalach kierownika, a nie ewidencja czasu pracy, i oznacza osobę, która w tym miesiącu pracuje też w lokalach, których kierownik nie prowadzi (suma niepełna; w CSV kolumna "Uwagi"). Ręczna zmiana osoby w edytorze zawsze zdejmuje przypięcie (wyjątek od etapu 9: zatwierdzona oddana zmiana jest przypięta, bo to uzgodnienie trzech osób, a nie poprawka kierownika do przemyślenia). Link "Załóż firmę" zostaje w pustym stanie zaproszeń, bo to jedyna droga do rejestracji dla zalogowanej osoby bez firmy (np. kierownika, który najpierw się zalogował). Do sprawdzenia w pilocie: czy kierownik oczekuje, że ręczne poprawki zostają domyślnie, i czy potrzebuje obejścia „nie mogę” po rozmowie z pracownikiem.
 
 ## 15. Zmiana z 13.11.2026: w kalendarzu tylko "nie mogę" i "chętnie"
 
@@ -427,3 +428,23 @@ Założenia:
 1. Zasady dotyczą wszystkich osób lokalu, bo zasady są ustawiane per lokal. Kto chce limitów tylko dla wybranych osób, napisze to prośbą tekstem (etap 10).
 2. Istniejące dane: kolumna `contract` jest po prostu usuwana; lokale, które miały osoby na umowie o pracę, nie dostają automatycznie włączonych nowych zasad (decyzję zostawiamy kierownikowi).
 3. Nazwy parametrów (`max_hours`, `rest_hours`) różnią się od `hours` z "Odpoczynku między zmianami", bo ekran zasad podpisuje pola po nazwie parametru.
+
+## 18. Etap 9: oddawanie zmian, powiadomienia, historia przypisań
+
+- Logika: `apps/marketplace/services.py` (oddanie, "Biorę", wycofanie, zatwierdzenie, odrzucenie, oddania po nowej publikacji), `apps/notifications/services.py` (zapis powiadomień i polskie zdania budowane przy odczycie z rodzaju i danych, więc poprawka tekstu działa też dla starych powiadomień).
+- Ekrany: w "Mój grafik" przycisk "Oddaj" przy każdej zmianie (arkusz z wyjaśnieniem, że do decyzji kierownika to nadal moja zmiana, i "Zostaję na tej zmianie"), sekcja "Zmiany do wzięcia" z "Biorę" / "Jednak nie biorę"; trzecia zakładka "Powiadomienia" z licznikiem nowych (`/powiadomienia`); u kierownika "Oddane zmiany" (`/kierownik/oddane-zmiany`) z licznikiem chętnych w nagłówku; w arkuszu zmiany na karcie "Grafik" "Historia tej zmiany".
+- Licznik i listy odświeżają się co minutę (bez websocketów, jak w założeniu 8 z sekcji 7).
+
+Założenia:
+1. Kto dostaje powiadomienie o oddanej zmianie: każda aktywna osoba firmy (z każdego lokalu) poza oddającym, która ma stanowisko o tej samej nazwie (stanowiska są per lokal, więc "Sprzedawca" w Wieliczce i "sprzedawca" w Skawinie to to samo; wielkość liter bez znaczenia) i dla której walidator nie znajduje nowego twardego problemu po wpisaniu jej na tę zmianę w opublikowanym grafiku: "nie mogę", inna zmiana w tym czasie (także w innym lokalu), zasady "bez wyjątków". Od PR #11 dzień bez zaznaczenia znaczy "mogę", więc "zaznaczyły dyspozycyjność" rozumiem jako "nie zaznaczyły nie mogę".
+2. Sprawdzenie powtarza się przy "Biorę", na liście kierownika (przy każdym chętnym widać powód, dla którego już nie może) i przy zatwierdzeniu, bo grafik i kalendarz mogą się zmienić. "Zmiany do wzięcia" pokazują tylko oddania, które dana osoba może wziąć teraz.
+3. Oddać można tylko własną zmianę z opublikowanego grafiku, która się jeszcze nie zaczęła. Oddanie zaczętej zmiany wygasa samo. Kierownik decyduje o chętnych w lokalach, którymi zarządza (właściciel o wszystkich); powiadomienie "ktoś chce wziąć" dostają właściciele i kierownicy tego lokalu.
+4. Zatwierdzenie zmienia przypisanie w opublikowanej wersji w miejscu (bez nowej wersji; nowa wersja na każde oddanie zastąpiłaby albo zdublowała szkic, który kierownik może właśnie poprawiać, a zmianę i tak zapisuje historia przypisań), oznacza je jako ręczne i przypięte (ponowne układanie nie cofnie uzgodnionej zamiany; przypięcie potwierdził Piotr 13.11.2026) i "z innego lokalu", gdy biorący jest spoza lokalu. Jeśli okres ma nowszy szkic i ta osoba nadal jest w nim na tej zmianie, szkic też się zmienia. Historia: `AssignmentEvent` z powodem "oddana zmiana" i osobą, która zatwierdziła. Pozostali chętni dostają odmowę.
+5. Osoba pożyczona z innego lokalu "ma" stanowisko lokalu, jeśli ma stanowisko o tej samej nazwie (`problem_builder`), więc grafik z taką osobą przechodzi walidator i daje się opublikować.
+6. Nowa publikacja okresu: otwarte oddania idą za zmianą, jeśli oddający nadal na niej jest; w przeciwnym razie wygasają, a oddający i chętni dostają powiadomienie.
+7. Otwarcie "Powiadomień" oznacza pokazane jako przeczytane; do następnego odświeżenia zostają oznaczone "Nowe". Oznaczanie działa też w trybie tylko do odczytu (dopisane do wyjątków w spec.md: inaczej licznik nowych nie dałby się wyzerować); oddawanie i branie zmian nie działa.
+8. Pełne zamiany dwóch osób (`AssignmentEvent.Reason.SWAP`) nadal na później; model oddań i historia ich nie blokują.
+9. Kierownicy lokalu dostają powiadomienie już przy oddaniu zmiany (z liczbą osób, które mogą ją wziąć; przy zerze wprost, że oddający nadal ma tę zmianę), żeby oddanie bez chętnych nie czekało po cichu do dnia zmiany.
+10. Gdy zmianę bierze osoba z innego lokalu, kierownicy jej lokalu domowego (jeśli nie prowadzą też lokalu ze zmianą) dostają powiadomienie po zatwierdzeniu. Panel kierownika ma w nagłówku link "Powiadomienia" z licznikiem nowych.
+
+Po przeglądzie Prelinta (PR #13), do sprawdzenia w pilocie: czy powiadomienie do całej firmy (w danych demo jedna zmiana trafiła do 34 osób) nie jest za głośne i czy nie lepiej najpierw lokal domowy, a po kilku godzinach reszta; czy nazwy stanowisk w lokalach naprawdę się pokrywają (jeśli nie, potrzebne jawne powiązanie stanowisk); czy potrzebne jest przypomnienie oddającemu i kierownikowi na dzień przed zmianą bez chętnych (dziś tylko powiadomienie przy oddaniu).

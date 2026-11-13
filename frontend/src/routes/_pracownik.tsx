@@ -1,12 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, Navigate, Outlet, useNavigate } from '@tanstack/react-router'
-import { CalendarCheck, CalendarDays } from 'lucide-react'
+import { Bell, CalendarCheck, CalendarDays } from 'lucide-react'
 
 import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { EmployeeContext } from '../features/auth/EmployeeContext'
 import { useSession } from '../features/auth/session'
 import { isManagerRole } from '../features/manager/ManagerContext'
+import { useUnreadNotifications } from '../features/notifications/unread'
 
 export const Route = createFileRoute('/_pracownik')({
   component: EmployeeLayout,
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/_pracownik')({
 const TABS = [
   { to: '/grafik', label: 'Mój grafik', Icon: CalendarDays },
   { to: '/kiedy-moge', label: 'Kiedy mogę', Icon: CalendarCheck },
+  { to: '/powiadomienia', label: 'Powiadomienia', Icon: Bell },
 ] as const
 
 /** The employee's two screens with tabs: at the bottom on a phone (thumb reach), at the top on a computer. */
@@ -97,7 +99,7 @@ function EmployeeLayout() {
         <nav
           aria-label="Ekrany"
           className={
-            'fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 border-t border-line bg-surface ' +
+            'fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-line bg-surface ' +
             'pb-[env(safe-area-inset-bottom)] md:static md:mx-auto md:mt-4 md:max-w-(--column) md:rounded-md md:border'
           }
         >
@@ -113,7 +115,10 @@ function EmployeeLayout() {
                 'aria-current': 'page',
               }}
             >
-              <Icon aria-hidden="true" size={26} />
+              <span className="relative">
+                <Icon aria-hidden="true" size={26} />
+                {to === '/powiadomienia' && <UnreadBadge companyId={company.id} />}
+              </span>
               {label}
             </Link>
           ))}
@@ -123,5 +128,19 @@ function EmployeeLayout() {
         </main>
       </div>
     </EmployeeContext.Provider>
+  )
+}
+
+/** Number of new notifications on the bell (red-free: accent colour, plus the number itself). */
+function UnreadBadge({ companyId }: { companyId: string }) {
+  const unread = useUnreadNotifications(companyId)
+  if (unread === 0) return null
+  return (
+    <span
+      aria-label={`nowe: ${unread}`}
+      className="absolute -top-1.5 -right-3 min-w-6 rounded-full bg-accent px-1.5 text-center text-sm leading-6 text-accent-ink"
+    >
+      {unread > 9 ? '9+' : unread}
+    </span>
   )
 }

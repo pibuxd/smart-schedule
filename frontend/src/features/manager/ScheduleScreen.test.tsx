@@ -129,6 +129,9 @@ const explanation = {
       employee_requests: 80,
     },
   ],
+  history: [
+    { at: '2026-11-20T10:00:00+01:00', reason: 'offer', from_name: 'Ola Kos', to_name: '', by_name: 'Piotr' },
+  ],
 }
 
 function api(overrides: Record<string, unknown> = {}) {
@@ -175,6 +178,8 @@ describe('ScheduleScreen', () => {
     const sheet = await screen.findByRole('dialog')
     expect(await within(sheet).findByText('Tę zmianę może wziąć 1 osoba z listy niżej.')).toBeInTheDocument()
     expect(within(sheet).getByText(/Marek Zając ma zaznaczone „nie mogę”/)).toBeInTheDocument()
+    expect(within(sheet).getByText('Historia tej zmiany (1)')).toBeInTheDocument()
+    expect(within(sheet).getByText(/oddana zmiana/)).toBeInTheDocument()
     fireEvent.click(within(sheet).getByRole('button', { name: 'Wpisz: Anna Wróbel' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     expect(calls.find((c) => c.method === 'PATCH')!).toMatchObject({

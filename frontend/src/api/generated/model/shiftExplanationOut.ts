@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CandidateOut } from './candidateOut';
+import type { SlotEventOut } from './slotEventOut';
 import type { VersionShiftOut } from './versionShiftOut';
 
 export interface ShiftExplanationOut {
   shift: VersionShiftOut;
   summary: string;
   candidates: CandidateOut[];
+  history: SlotEventOut[];
 }

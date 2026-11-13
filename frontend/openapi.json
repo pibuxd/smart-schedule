@@ -4491,6 +4491,626 @@
           }
         ]
       }
+    },
+    "/api/me/shifts/{assignment_id}/offer": {
+      "post": {
+        "operationId": "offer_my_shift",
+        "summary": "Offer My Shift",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferMadeOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "'Oddaj zmianę': everyone who could take my shift gets an in-app notification. It stays mine until the\nmanager approves someone.",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/offers/{offer_id}/cancel": {
+      "post": {
+        "operationId": "cancel_my_offer",
+        "summary": "Cancel My Offer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Offer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferMadeOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The giver keeps the shift after all.",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/me/offers": {
+      "get": {
+        "operationId": "available_offers",
+        "summary": "Available Offers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AvailableOfferOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "'Zmiany do wzięcia': shifts given away in the company that I can take now (or already said 'Biorę' to).",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/offers/{offer_id}/claim": {
+      "post": {
+        "operationId": "claim_offer",
+        "summary": "Claim Offer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Offer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailableOfferOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "'Biorę': the managers of the location decide; the shift is not mine until they approve.",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/claims/{claim_id}/withdraw": {
+      "post": {
+        "operationId": "withdraw_my_claim",
+        "summary": "Withdraw My Claim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Claim Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/manager/offers": {
+      "get": {
+        "operationId": "manager_offers",
+        "summary": "Manager Offers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerOffersOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "'Oddane zmiany' in my locations: open ones, those waiting for my decision, and the last two weeks.",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/claims/{claim_id}/approve": {
+      "post": {
+        "operationId": "approve_claim",
+        "summary": "Approve Claim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Claim Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferMadeOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The volunteer gets the shift in the published schedule (checked by the validator again).",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/claims/{claim_id}/reject": {
+      "post": {
+        "operationId": "reject_claim",
+        "summary": "Reject Claim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Claim Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/me/notifications": {
+      "get": {
+        "operationId": "my_notifications",
+        "summary": "My Notifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "My newest notifications, newest first, and how many I have not seen. Works in read-only mode.",
+        "tags": [
+          "notifications"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/me/notifications/read": {
+      "post": {
+        "operationId": "mark_notifications_read",
+        "summary": "Mark Notifications Read",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Mark my notifications as seen (not company data, so allowed in read-only mode too).",
+        "tags": [
+          "notifications"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -6076,6 +6696,33 @@
             },
             "title": "Coworkers",
             "type": "array"
+          },
+          "offer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Id"
+          },
+          "offer_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "claimed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Status"
           }
         },
         "required": [
@@ -6699,14 +7346,62 @@
             },
             "title": "Candidates",
             "type": "array"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/SlotEventOut"
+            },
+            "title": "History",
+            "type": "array"
           }
         },
         "required": [
           "shift",
           "summary",
-          "candidates"
+          "candidates",
+          "history"
         ],
         "title": "ShiftExplanationOut",
+        "type": "object"
+      },
+      "SlotEventOut": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "generated",
+              "manual",
+              "offer",
+              "swap"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "from_name": {
+            "title": "From Name",
+            "type": "string"
+          },
+          "to_name": {
+            "title": "To Name",
+            "type": "string"
+          },
+          "by_name": {
+            "title": "By Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "reason",
+          "from_name",
+          "to_name",
+          "by_name"
+        ],
+        "title": "SlotEventOut",
         "type": "object"
       },
       "CheckOut": {
@@ -8458,6 +9153,383 @@
           "hours"
         ],
         "title": "LocationHoursOut",
+        "type": "object"
+      },
+      "OfferMadeOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "claimed",
+              "approved",
+              "rejected",
+              "cancelled",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "notified": {
+            "title": "Notified",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "notified"
+        ],
+        "title": "OfferMadeOut",
+        "type": "object"
+      },
+      "AvailableOfferOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "shift": {
+            "$ref": "#/components/schemas/OfferShiftOut"
+          },
+          "offered_by_name": {
+            "title": "Offered By Name",
+            "type": "string"
+          },
+          "away": {
+            "title": "Away",
+            "type": "boolean"
+          },
+          "my_claim_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Claim Id"
+          },
+          "my_claim_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "withdrawn"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Claim Status"
+          }
+        },
+        "required": [
+          "id",
+          "shift",
+          "offered_by_name",
+          "away",
+          "my_claim_id",
+          "my_claim_status"
+        ],
+        "title": "AvailableOfferOut",
+        "type": "object"
+      },
+      "OfferShiftOut": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "position_name": {
+            "title": "Position Name",
+            "type": "string"
+          },
+          "shift_type_name": {
+            "title": "Shift Type Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "start_time",
+          "end_time",
+          "hours",
+          "location_id",
+          "location_name",
+          "position_name",
+          "shift_type_name"
+        ],
+        "title": "OfferShiftOut",
+        "type": "object"
+      },
+      "ClaimOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "home_location_name": {
+            "title": "Home Location Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "employee_id",
+          "name",
+          "home_location_name",
+          "status",
+          "created_at",
+          "problems"
+        ],
+        "title": "ClaimOut",
+        "type": "object"
+      },
+      "ManagerOfferOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "claimed",
+              "approved",
+              "rejected",
+              "cancelled",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "shift": {
+            "$ref": "#/components/schemas/OfferShiftOut"
+          },
+          "offered_by_name": {
+            "title": "Offered By Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimOut"
+            },
+            "title": "Claims",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "shift",
+          "offered_by_name",
+          "created_at",
+          "decided_at",
+          "claims"
+        ],
+        "title": "ManagerOfferOut",
+        "type": "object"
+      },
+      "ManagerOffersOut": {
+        "properties": {
+          "offers": {
+            "items": {
+              "$ref": "#/components/schemas/ManagerOfferOut"
+            },
+            "title": "Offers",
+            "type": "array"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "offers",
+          "waiting"
+        ],
+        "title": "ManagerOffersOut",
+        "type": "object"
+      },
+      "NotificationOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "link": {
+            "enum": [
+              "schedule",
+              "availability",
+              "offers",
+              "none"
+            ],
+            "title": "Link",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "read": {
+            "title": "Read",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "link",
+          "created_at",
+          "read"
+        ],
+        "title": "NotificationOut",
+        "type": "object"
+      },
+      "NotificationsOut": {
+        "properties": {
+          "notifications": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationOut"
+            },
+            "title": "Notifications",
+            "type": "array"
+          },
+          "unread": {
+            "title": "Unread",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "notifications",
+          "unread"
+        ],
+        "title": "NotificationsOut",
+        "type": "object"
+      },
+      "MarkReadIn": {
+        "properties": {
+          "company_id": {
+            "format": "uuid",
+            "title": "Company Id",
+            "type": "string"
+          },
+          "ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ids"
+          }
+        },
+        "required": [
+          "company_id"
+        ],
+        "title": "MarkReadIn",
         "type": "object"
       }
     },

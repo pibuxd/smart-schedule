@@ -7,7 +7,6 @@ import type { AskAvailabilityOut } from '../../api/generated/model'
 import { Button } from '../../components/ui/button'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
-import { people } from './words'
 
 /**
  * "Poproś o dyspozycje" (everyone) or "Przypomnij" (only those who have not finished): an in-app notice with the
@@ -38,7 +37,7 @@ export function AskAvailabilityButton({
           const { notified } = response.data as AskAvailabilityOut
           setDone(
             notified
-              ? `Zapisane w aplikacji dla: ${people(notified)}. Pracownicy zobaczą to powiadomienie w jednej z następnych wersji, więc na razie powiedz im też osobiście.`
+              ? `Powiadomienie w aplikacji wysłane (osób: ${notified}). Pracownicy zobaczą je w „Powiadomieniach”, gdy otworzą Grafikomat.`
               : 'Nie ma komu wysłać: nikt nie jest przypisany do tego lokalu.',
           )
           void queryClient.invalidateQueries()

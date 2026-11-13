@@ -70,7 +70,7 @@ describe('OverviewScreen', () => {
       </AsManager>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Przypomnij (2)' }))
-    expect(await screen.findByText(/Zapisane w aplikacji dla: 2 osoby\./)).toBeInTheDocument()
+    expect(await screen.findByText(/Powiadomienie w aplikacji wysłane \(osób: 2\)/)).toBeInTheDocument()
     const post = calls.find((c) => c.method === 'POST')!
     expect(post.url).toBe('/api/periods/p1/ask-availability')
     expect(post.body).toEqual({ only_missing: true })

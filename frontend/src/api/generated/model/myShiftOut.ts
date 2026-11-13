@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { MyShiftOutOfferStatus } from './myShiftOutOfferStatus';
 
 export interface MyShiftOut {
   id: string;
@@ -18,4 +19,6 @@ export interface MyShiftOut {
   shift_type_name: string;
   away: boolean;
   coworkers: string[];
+  offer_id?: string | null;
+  offer_status?: MyShiftOutOfferStatus;
 }

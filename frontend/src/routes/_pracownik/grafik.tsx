@@ -8,11 +8,11 @@ export const Route = createFileRoute('/_pracownik/grafik')({
 })
 
 function MySchedulePage() {
-  const { companyId } = useEmployee()
+  const { companyId, readOnly } = useEmployee()
   return (
     <div className="grid gap-4">
       <h1 className="m-0 text-xl font-extrabold">Mój grafik</h1>
-      <MyScheduleScreen companyId={companyId} />
+      <MyScheduleScreen companyId={companyId} readOnly={readOnly} />
     </div>
   )
 }

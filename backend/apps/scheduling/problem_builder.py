@@ -253,11 +253,19 @@ class _Reader:
             .order_by("pk")
         )
         ids = [p.pk for p in rows]
+        # A person from another location (borrowed, or taking a given-away shift) counts as having a position
+        # here when one of their own positions has the same name (positions are per location).
+        here = defaultdict(set)
+        for pk, name in self.qs(Position).filter(location__in=self.location_ids).values_list("pk", "name"):
+            here[name.casefold()].add(str(pk))
+        away = {p.pk for p in rows if p.home_location_id not in self.location_ids}
         positions: dict = defaultdict(set)
-        for profile_id, position_id in EmployeeProfile.positions.through.objects.filter(
+        for profile_id, position_id, name in EmployeeProfile.positions.through.objects.filter(
             employeeprofile_id__in=ids
-        ).values_list("employeeprofile_id", "position_id"):
+        ).values_list("employeeprofile_id", "position_id", "position__name"):
             positions[profile_id].add(str(position_id))
+            if profile_id in away:
+                positions[profile_id] |= here.get(name.casefold(), set())
         return [
             Employee(
                 id=str(p.pk),
@@ -409,10 +417,11 @@ class _Reader:
 class _VersionReader(_Reader):
     """The slots and people of one saved version, as they were (not as the settings say today)."""
 
-    def __init__(self, version: ScheduleVersion) -> None:
+    def __init__(self, version: ScheduleVersion, extra_employees: Sequence[str] = ()) -> None:
         # No frozen days: the version is read as a whole.
         super().__init__([version.period], today=version.period.start)
         self.version = version
+        self.extra_employees = {str(e) for e in extra_employees}
         self.latest = {version.period_id: version}  # pins of this version, not of a newer one
 
     def slots(self) -> list[Slot]:
@@ -421,13 +430,18 @@ class _VersionReader(_Reader):
 
     def employees(self, referenced: set[str]) -> list[Employee]:
         in_version = self.qs(Assignment).filter(shift__version=self.version, employee__isnull=False)
-        return super().employees(referenced | {str(e) for e in in_version.values_list("employee", flat=True)})
+        in_version = {str(e) for e in in_version.values_list("employee", flat=True)}
+        return super().employees(referenced | in_version | self.extra_employees)
 
 
-def build_problem_for_version(version: ScheduleVersion) -> tuple[BuiltProblem, dict[str, str | None]]:
-    """A saved version described for the engine, with its schedule (slot id -> employee id or None)."""
+def build_problem_for_version(
+    version: ScheduleVersion, extra_employees: Sequence[str] = ()
+) -> tuple[BuiltProblem, dict[str, str | None]]:
+    """A saved version described for the engine, with its schedule (slot id -> employee id or None).
+    `extra_employees`: people from anywhere in the company to check as candidates (e.g. for a given-away shift),
+    with their calendar and their published shifts elsewhere."""
     version = ScheduleVersion.objects.select_related("period__location").get(pk=version.pk)
-    reader = _VersionReader(version)
+    reader = _VersionReader(version, extra_employees)
     built = reader.build()
     schedule = reader.assignments(version, {s.id for s in built.problem.slots})
     return built, schedule
