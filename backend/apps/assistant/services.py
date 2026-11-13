@@ -49,11 +49,17 @@ def _people(location: Location, exclude_id=None) -> dict[str, str]:
 
 
 def _shift_types(location: Location) -> list[ShiftType]:
-    return list(ShiftType.objects.for_company(location.company_id).filter(location=location).order_by("start_time"))
+    rows = ShiftType.objects.for_company(location.company_id).filter(location=location)
+    return list(rows.order_by("start_time", "name"))
 
 
 def _shift_lines(shift_types: list[ShiftType]) -> str:
-    return ", ".join(f"{s.name} ({s.start_time:%H:%M}–{s.end_time:%H:%M})" for s in shift_types) or "(brak)"
+    def hours(shift: ShiftType) -> str:
+        if shift.start_time is None or shift.end_time is None:
+            return "dowolne godziny"
+        return f"{shift.start_time:%H:%M}–{shift.end_time:%H:%M}"
+
+    return ", ".join(f"{s.name} ({hours(s)})" for s in shift_types) or "(brak)"
 
 
 def _today_line(today: date) -> str:
@@ -102,10 +108,12 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         context, people, shift_types = request_context(row, today)
         try:
             reading = llm.read_request(row.text, context)
+            status, interpretation = _checked_request(reading, row.period, people, shift_types)
         except llm.AssistantError as exc:
             logger.warning("request %s left to the manager: %s", row.pk, exc)
-        else:
-            status, interpretation = _checked_request(reading, row.period, people, shift_types)
+        except Exception:
+            # Whatever goes wrong, the request must not stay "being read" forever: the manager reads it.
+            logger.exception("request %s left to the manager after an unexpected error", row.pk)
     updated = TextRequest.objects.for_company(row.company_id).filter(
         pk=row.pk, status=TextRequest.Status.NEW, text=row.text
     )
@@ -240,14 +248,16 @@ def run_command(command_id: str, today: date | None = None) -> str:
     if command is None or command.status != AssistantCommand.Status.QUEUED:
         return "skipped"
     today = today or timezone.localdate()
-    sc = rules_scope(_SystemContext(command.company), command.location)
     status, plan = AssistantCommand.Status.FAILED, None
     try:
+        sc = rules_scope(_SystemContext(command.company), command.location)
         answer = llm.plan_command(command.text, command_context(command.location, sc, today))
+        status, plan = AssistantCommand.Status.READY, check_plan(command.location, sc, answer)
     except llm.AssistantError as exc:
         logger.warning("assistant command %s failed: %s", command.pk, exc)
-    else:
-        status, plan = AssistantCommand.Status.READY, check_plan(command.location, sc, answer)
+    except Exception:
+        # Whatever goes wrong, the manager must get an answer instead of waiting forever.
+        logger.exception("assistant command %s failed with an unexpected error", command.pk)
     AssistantCommand.objects.for_company(command.company_id).filter(
         pk=command.pk, status=AssistantCommand.Status.QUEUED
     ).update(status=status, plan=plan)

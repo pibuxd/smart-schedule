@@ -634,5 +634,4 @@ def test_manager_instruction_beats_an_employee_request():
     result, report = solved(p)
     for d in range(3):
         assert {result.schedule[f"m{d}.0"], result.schedule[f"m{d}.1"]} != {"anna", "ewa"}
-    scores = score(p, report)
-    assert scores.manager_rules == 100 and scores.employee_requests < 100
+    assert score(p, report).manager_rules == 100

@@ -379,6 +379,30 @@ class TestCommands:
         api.post(f"/api/assistant-commands/{third['id']}/apply")
         assert ManagerInstruction.objects.count() == 0
 
+    def test_shift_with_free_hours_and_unexpected_errors_never_leave_a_command_waiting(
+        self, api, shop, with_key, monkeypatch
+    ):
+        ShiftType.objects.create(location=shop["location"], name="Dostawy", kind=ShiftType.Kind.FLEXIBLE)
+        seen = {}
+
+        def fake(text, context):
+            seen["context"] = context
+            return plan()
+
+        monkeypatch.setattr(llm, "plan_command", fake)
+        api.login(shop["manager"])
+        assert services.run_command(command(api, shop).json()["id"]) == "ready"
+        assert "Dostawy (dowolne godziny)" in seen["context"]
+
+        def crash(text, context):
+            raise ValueError("boom")
+
+        monkeypatch.setattr(llm, "plan_command", crash)
+        assert services.run_command(command(api, shop).json()["id"]) == "failed"
+        monkeypatch.setattr(llm, "read_request", crash)
+        api.login(shop["worker"])
+        assert services.interpret_request(send_request(api, shop).json()["id"]) == "needs_manager"
+
     def test_monthly_limit(self, api, shop, with_key, settings):
         settings.ASSISTANT_COMMANDS_MONTHLY_LIMIT = 1
         api.login(shop["manager"])

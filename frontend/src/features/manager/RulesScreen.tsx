@@ -65,7 +65,13 @@ export function RulesScreen({ scope, scopeId }: { scope: Scope; scopeId: string 
     )
   }
   const data = rules.data.data as RulesOut
-  return <RulesEditor key={JSON.stringify(data.items)} data={data} scope={scope} scopeId={scopeId} />
+  // The assistant's panel stays mounted while the list below is rebuilt after its plan is accepted.
+  return (
+    <div className="grid gap-8">
+      {scope === 'location' && <AssistantPanel locationId={scopeId} />}
+      <RulesEditor key={JSON.stringify(data.items)} data={data} scope={scope} scopeId={scopeId} />
+    </div>
+  )
 }
 
 function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; scopeId: string }) {
@@ -113,7 +119,6 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
 
   return (
     <div className="grid gap-5">
-      {scope === 'location' && <AssistantPanel locationId={scopeId} />}
       <div className="grid gap-2">
         <h2 className="m-0 text-xl font-extrabold">
           {scope === 'group' ? `Zasady wspólne: ${data.name}` : 'Zasady lokalu'}
