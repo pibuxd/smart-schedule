@@ -13,7 +13,8 @@ from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
-from apps.scheduling.generation import request_generation
+from apps.scheduling.editing import manual_changes
+from apps.scheduling.generation import ACTIVE, request_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
 from apps.staffing.models import EmployeeProfile
@@ -53,6 +54,13 @@ class PeriodOut(Schema):
     availability_requested_at: datetime | None
     published_version_id: UUID | None
     latest_version_id: UUID | None
+    latest_version_status: Literal["draft", "published", "superseded"] | None
+    # A generation queued or running for this period (the screen keeps polling it after a reload).
+    active_run_id: UUID | None
+    # Manual changes in the newest version that arranging again would drop (they are not pinned).
+    manual_changes: int
+    # Active employees of the location who have not sent their availability ("Gotowe") for this period.
+    missing_availability: int
 
 
 class AskAvailabilityIn(Schema):
@@ -110,6 +118,8 @@ class GenerationRunOut(Schema):
 def _period_out(period: SchedulePeriod) -> PeriodOut:
     versions = list(period.versions.order_by("-number").values_list("id", "status"))
     published = next((pk for pk, status in versions if status == ScheduleVersion.Status.PUBLISHED), None)
+    latest = period.versions.order_by("-number").first()
+    active = period.generation_runs.filter(status__in=ACTIVE).order_by("-created_at").values_list("id", flat=True)
     return PeriodOut(
         id=period.id,
         location_id=period.location_id,
@@ -120,7 +130,21 @@ def _period_out(period: SchedulePeriod) -> PeriodOut:
         availability_requested_at=period.availability_requested_at,
         published_version_id=published,
         latest_version_id=versions[0][0] if versions else None,
+        latest_version_status=versions[0][1] if versions else None,
+        active_run_id=active.first(),
+        manual_changes=manual_changes(latest),
+        missing_availability=_missing_availability(period),
     )
+
+
+def _missing_availability(period: SchedulePeriod) -> int:
+    from apps.availability.models import AvailabilitySubmission
+
+    done = AvailabilitySubmission.objects.for_company(period.company_id).filter(period=period).values("employee")
+    people = EmployeeProfile.objects.for_company(period.company_id).filter(
+        home_location=period.location_id, is_active=True
+    )
+    return people.exclude(pk__in=done).count()
 
 
 def _run_out(run: GenerationRun) -> GenerationRunOut:
@@ -379,3 +403,480 @@ def my_schedule(request, company_id: UUID):
         shifts=shifts,
         months=[MonthHoursOut(month=m, hours=round(h, 2)) for m, h in totals.items()],
     )
+
+
+# --- The manager's schedule: a version, explanations, manual changes, publishing ----------------------------
+
+VersionStatus = Literal["draft", "published", "superseded"]
+Wish = Literal["cannot", "prefer_not", "neutral", "prefer"]
+
+EMPLOYMENT_NOTE = (
+    "Sprawdzenie Kodeksu pracy dla umów o pracę jest uproszczone (doba = dzień kalendarzowy, tydzień od "
+    "poniedziałku) i nie zastępuje oceny prawnej."
+)
+
+
+class VersionShiftOut(Schema):
+    id: UUID  # the shift (slot)
+    date: date
+    start_time: str
+    end_time: str
+    hours: float
+    shift_type_name: str
+    position_id: UUID
+    position_name: str
+    employee_id: UUID | None
+    employee_name: str
+    pinned: bool
+    manual: bool
+    borrowed: bool
+    # The person's calendar mark for this shift ("wolę nie" shows on the grid); None for a hole.
+    wish: Wish | None
+    # Hard problems on this shift (Polish sentences); a valid schedule has none.
+    problems: list[str]
+    past: bool
+
+
+class VersionEmployeeOut(Schema):
+    id: UUID
+    name: str
+    position_ids: list[UUID]
+    contract: Literal["civil", "employment"]
+    hours: float
+    shifts: int
+    target_hours: float | None
+    max_hours: float | None
+    active: bool
+
+
+class RuleResultOut(Schema):
+    code: str
+    label: str
+    hard: bool
+    # 0–100 how well it is kept; None: nothing to measure in this schedule.
+    percent: float | None
+    broken: int
+    examples: list[str]
+
+
+class UnmetRequestOut(Schema):
+    employee_name: str
+    text: str
+    # "text" (written request), "prefer_not" (a "wolę nie" day), "prefer" ("chętnie" days), "unscored" (left to you)
+    kind: Literal["text", "prefer_not", "prefer", "unscored"]
+    percent_kept: float | None
+
+
+class VersionSummaryOut(Schema):
+    id: UUID
+    number: int
+    status: VersionStatus
+    created_at: datetime
+    published_at: datetime | None
+    generated: bool
+    created_by_name: str
+
+
+class PositionNameOut(Schema):
+    id: UUID
+    name: str
+
+
+class VersionOut(Schema):
+    id: UUID
+    number: int
+    status: VersionStatus
+    created_at: datetime
+    published_at: datetime | None
+    editable: bool
+    period: PeriodOut
+    location_id: UUID
+    location_name: str
+    scores: ScoresOut
+    shifts: list[VersionShiftOut]
+    employees: list[VersionEmployeeOut]
+    positions: list[PositionNameOut]
+    hard_problems: list[str]
+    rules: list[RuleResultOut]
+    unmet_requests: list[UnmetRequestOut]
+    notes: list[str]
+    history: list[VersionSummaryOut]
+    # A correction of a published schedule: people whose shifts would change on publishing.
+    changed_people: list[str]
+
+
+class CandidateOut(Schema):
+    employee_id: UUID
+    name: str
+    current: bool
+    possible: bool
+    problems: list[str]
+    notes: list[str]
+    wish: Wish
+    hours: float
+    target_hours: float | None
+    max_hours: float | None
+    holes: int
+    manager_rules: float
+    employee_requests: float
+
+
+class ShiftExplanationOut(Schema):
+    shift: VersionShiftOut
+    summary: str
+    candidates: list[CandidateOut]
+
+
+class ChangeIn(Schema):
+    shift_id: UUID
+    # None: leave the shift empty.
+    employee_id: UUID | None = None
+
+
+class ChangesIn(Schema):
+    changes: list[ChangeIn] = Field(min_length=1, max_length=20)
+
+
+class CheckOut(Schema):
+    ok: bool
+    problems: list[str]
+    warnings: list[str]
+    before: ScoresOut
+    after: ScoresOut
+
+
+class PinIn(Schema):
+    pinned: bool
+
+
+def _scores_out(scores) -> ScoresOut:
+    return ScoresOut(**{**scores.as_dict(), "notes": []})
+
+
+def _version_context(request, version_id: UUID):
+    ctx, version = context_for(request, ScheduleVersion, version_id)
+    ctx.require_manager_of(version.period.location)
+    return ctx, version
+
+
+def _local_times(shift_start: datetime, shift_end: datetime, tz: ZoneInfo) -> tuple[str, str]:
+    return f"{shift_start.astimezone(tz):%H:%M}", f"{shift_end.astimezone(tz):%H:%M}"
+
+
+def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
+    """slot key -> the shift as the grid shows it."""
+    from engine.problem import AvailabilityState
+
+    problem = loaded.problem
+    tz = problem.tz
+    names = {e.id: e.name for e in problem.employees}
+    problems_by_slot: dict[str, list[str]] = defaultdict(list)
+    for violation in loaded.report.hard:
+        for slot_id in violation.slots:
+            problems_by_slot[slot_id].append(violation.message)
+    rows = {}
+    shifts = (
+        Shift.objects.for_company(loaded.version.company_id)
+        .filter(version=loaded.version)
+        .select_related("assignment", "position", "shift_type")
+        .order_by("date", "start_at", "position__name", "slot_key")
+    )
+    for shift in shifts:
+        assignment = shift.assignment
+        employee_id = str(assignment.employee_id) if assignment.employee_id else None
+        slot = problem.slot_by_id.get(shift.slot_key)
+        wish = None
+        if employee_id and slot is not None and employee_id in problem.employee_by_id:
+            wish = AvailabilityState(problem.availability_for(employee_id, slot)).value
+        start, end = _local_times(shift.start_at, shift.end_at, tz)
+        rows[shift.slot_key] = VersionShiftOut(
+            id=shift.id,
+            date=shift.date,
+            start_time=start,
+            end_time=end,
+            hours=_hours(shift),
+            shift_type_name=shift.shift_type.name if shift.shift_type else "",
+            position_id=shift.position_id,
+            position_name=shift.position.name,
+            employee_id=assignment.employee_id,
+            employee_name=names.get(employee_id, "") if employee_id else "",
+            pinned=assignment.pinned,
+            manual=assignment.manual,
+            borrowed=assignment.borrowed,
+            wish=wish,
+            problems=problems_by_slot.get(shift.slot_key, []),
+            past=shift.date < today,
+        )
+    return rows
+
+
+def _rule_results(loaded) -> list[RuleResultOut]:
+    from engine.rules_catalog import RULES_BY_CODE
+
+    results = []
+    location = loaded.location_id
+    for measure in sorted(loaded.report.rules, key=lambda m: m.rank):
+        if measure.location != location:
+            continue
+        label = RULES_BY_CODE[measure.code].label
+        if measure.code == "target_hours" and measure.hard:
+            label += " (do 10 % odchylenia)"
+        results.append(
+            RuleResultOut(
+                code=measure.code,
+                label=label,
+                hard=measure.hard,
+                percent=round(100 * (1 - measure.degree), 1) if measure.instances else None,
+                broken=len(measure.violations),
+                examples=[v.message for v in measure.violations[:3]],
+            )
+        )
+    return results
+
+
+def _unmet_requests(loaded) -> list[UnmetRequestOut]:
+    from engine.scoring import unmet_requests
+    from engine.validator import RequestKind
+
+    problem = loaded.problem
+    names = {e.id: e.name for e in problem.employees}
+    requests = {r.id: r for r in problem.requests}
+    result = []
+    for measure in unmet_requests(loaded.report, location=loaded.location_id)[:30]:
+        kept = round(100 * (1 - measure.degree), 1)
+        if measure.kind == RequestKind.TEXT:
+            text = requests[measure.request_id].summary
+        elif measure.kind == RequestKind.PREFER_NOT:
+            text = f"Zaznaczył(a) „wolę nie” {measure.date:%d.%m}, a ma tego dnia zmianę."
+        else:
+            share = f"{kept:g}".replace(".", ",")
+            text = f"Dni „chętnie”: dostał(a) zmiany w {share} % z nich (tyle, ile się dało)."
+        result.append(
+            UnmetRequestOut(
+                employee_name=names[measure.employee], text=text, kind=measure.kind.value, percent_kept=kept
+            )
+        )
+    for request_id in loaded.report.unscored_requests:
+        request = requests[request_id]
+        if problem.employee_by_id[request.employee].home_location != loaded.location_id:
+            continue
+        result.append(
+            UnmetRequestOut(
+                employee_name=names[request.employee], text=request.summary, kind="unscored", percent_kept=None
+            )
+        )
+    return result
+
+
+def _history(version: ScheduleVersion) -> list[VersionSummaryOut]:
+    rows = (
+        ScheduleVersion.objects.for_company(version.company_id)
+        .filter(period=version.period_id)
+        .select_related("created_by")
+        .order_by("-number")
+    )
+    return [
+        VersionSummaryOut(
+            id=v.id,
+            number=v.number,
+            status=v.status,
+            created_at=v.created_at,
+            published_at=v.published_at,
+            generated=v.from_run_id is not None,
+            created_by_name=v.created_by.full_name if v.created_by else "",
+        )
+        for v in rows
+    ]
+
+
+def _version_out(ctx, loaded, today: date) -> VersionOut:
+    from apps.billing.services import subscription_state
+    from apps.scheduling.editing import changed_people, is_editable
+
+    version, problem = loaded.version, loaded.problem
+    period = version.period
+    hours = loaded.report.hours
+    shift_count: dict[str, int] = defaultdict(int)
+    for employee_id in loaded.schedule.values():
+        if employee_id:
+            shift_count[employee_id] += 1
+    location_id = loaded.location_id
+    employees = [
+        VersionEmployeeOut(
+            id=e.id,
+            name=e.name,
+            position_ids=sorted(e.positions),
+            contract=e.contract.value if hasattr(e.contract, "value") else e.contract,
+            hours=round(hours.get(e.id, 0.0), 2),
+            shifts=shift_count[e.id],
+            target_hours=e.target_hours_month,
+            max_hours=e.max_hours_month,
+            active=e.available,
+        )
+        for e in sorted(problem.employees, key=lambda e: e.name)
+        if e.home_location == location_id or shift_count[e.id]
+    ]
+    notes = list((version.scores or {}).get("notes", []))
+    if any(e.contract == "employment" for e in employees):
+        notes.append(EMPLOYMENT_NOTE)
+    position_ids = {str(s.position) for s in problem.slots}
+    return VersionOut(
+        id=version.id,
+        number=version.number,
+        status=version.status,
+        created_at=version.created_at,
+        published_at=version.published_at,
+        editable=is_editable(version) and not subscription_state(ctx.company.pk).read_only,
+        period=_period_out(period),
+        location_id=period.location_id,
+        location_name=period.location.name,
+        scores=_scores_out(loaded.scores),
+        shifts=list(_shift_rows(loaded, today).values()),
+        employees=employees,
+        positions=sorted(
+            (PositionNameOut(id=pk, name=name) for pk, name in problem.position_names.items() if pk in position_ids),
+            key=lambda p: p.name,
+        ),
+        hard_problems=[v.message for v in loaded.report.hard],
+        rules=_rule_results(loaded),
+        unmet_requests=_unmet_requests(loaded),
+        notes=notes,
+        history=_history(version),
+        changed_people=changed_people(loaded),
+    )
+
+
+@router.get("/versions/{version_id}", response={200: VersionOut, 403: ErrorOut, 404: ErrorOut})
+def schedule_version(request, version_id: UUID):
+    """One version of a location's schedule: the grid, the three scores, rules, unmet requests and history."""
+    from apps.scheduling.editing import load_version
+
+    ctx, version = _version_context(request, version_id)
+    return _version_out(ctx, load_version(version), timezone.localdate())
+
+
+@router.get(
+    "/versions/{version_id}/shifts/{shift_id}/explain",
+    response={200: ShiftExplanationOut, 403: ErrorOut, 404: ErrorOut},
+)
+def explain_shift(request, version_id: UUID, shift_id: UUID):
+    """Why this shift has its person (or nobody), and what each person with the position would change.
+    Quick checks with the validator, no solver; the same list is the manual editor's choice of people."""
+    from apps.scheduling.editing import load_version
+    from engine.explain import explain_slot
+
+    ctx, version = _version_context(request, version_id)
+    shift = ctx.get(Shift, pk=shift_id, version=version)
+    loaded = load_version(version)
+    explanation = explain_slot(loaded.problem, loaded.schedule, shift.slot_key, base=loaded.report)
+    row = _shift_rows(loaded, timezone.localdate())[shift.slot_key]
+    return ShiftExplanationOut(
+        shift=row,
+        summary=explanation.summary,
+        candidates=[
+            CandidateOut(
+                employee_id=c.employee,
+                name=c.name,
+                current=c.current,
+                possible=c.possible,
+                problems=list(c.blocked),
+                notes=list(c.notes),
+                wish=c.wish.value,
+                hours=c.hours,
+                target_hours=c.target_hours,
+                max_hours=c.max_hours,
+                holes=c.scores.holes,
+                manager_rules=c.scores.manager_rules,
+                employee_requests=c.scores.employee_requests,
+            )
+            for c in explanation.candidates
+        ],
+    )
+
+
+def _changes(ctx, payload: ChangesIn) -> dict[str, str | None]:
+    changes: dict[str, str | None] = {}
+    for change in payload.changes:
+        if change.employee_id is not None:
+            ctx.get(EmployeeProfile, pk=change.employee_id)  # 404 for another company's person
+        changes[str(change.shift_id)] = str(change.employee_id) if change.employee_id else None
+    return changes
+
+
+def _check_out(result) -> CheckOut:
+    return CheckOut(
+        ok=result.ok,
+        problems=result.problems,
+        warnings=result.warnings,
+        before=_scores_out(result.before),
+        after=_scores_out(result.after),
+    )
+
+
+@router.post(
+    "/versions/{version_id}/check",
+    response={200: CheckOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
+    """Validate a manual change before saving it (e.g. while dragging): new problems and the new scores."""
+    from apps.scheduling.editing import check_changes, load_version
+
+    ctx, version = _version_context(request, version_id)
+    result, _ = check_changes(load_version(version), _changes(ctx, payload))
+    return _check_out(result)
+
+
+@router.patch(
+    "/versions/{version_id}/assignments",
+    response={200: CheckOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def change_assignments(request, version_id: UUID, payload: ChangesIn):
+    """Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule."""
+    from apps.scheduling.editing import apply_changes
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    return _check_out(apply_changes(version, _changes(ctx, payload), ctx.user))
+
+
+@router.post(
+    "/versions/{version_id}/shifts/{shift_id}/pin",
+    response={200: VersionShiftOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def pin_shift(request, version_id: UUID, shift_id: UUID, payload: PinIn):
+    """Pin (or unpin) the person on a shift: arranging the schedule again keeps pinned people in place."""
+    from apps.scheduling.editing import load_version, set_pinned
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    shift = ctx.get(Shift, pk=shift_id, version=version)
+    set_pinned(version, str(shift.pk), payload.pinned)
+    return _shift_rows(load_version(version), timezone.localdate())[shift.slot_key]
+
+
+@router.post(
+    "/versions/{version_id}/draft",
+    response={201: VersionSummaryOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
+)
+def start_correcting(request, version_id: UUID):
+    """Correct a published schedule: a new draft copy (or the newest draft, if there already is one)."""
+    from apps.scheduling.editing import start_draft
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    draft = start_draft(version, ctx.user)
+    return Status(201, next(v for v in _history(draft) if v.id == draft.id))
+
+
+@router.post(
+    "/versions/{version_id}/publish",
+    response={200: VersionSummaryOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def publish_schedule(request, version_id: UUID):
+    """Publish the newest draft: employees see it in "Mój grafik"; the previous version stays as history."""
+    from apps.scheduling.editing import publish
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    published = publish(version, ctx.user)
+    return next(v for v in _history(published) if v.id == published.id)

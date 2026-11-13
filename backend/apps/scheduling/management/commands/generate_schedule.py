@@ -5,29 +5,15 @@
 
 With `--company`, every location of the company is generated (separately) for its newest period.
 The result is saved as draft versions, as from the worker, but does not count toward the monthly limit.
-`--publish` publishes the new version at once, so the employee's "Mój grafik" has something to show
-(until publishing from the manager's screens arrives in stage 8).
+`--publish` publishes the new version at once (as the "Opublikuj" button does), so the employee's "Mój grafik"
+has something to show.
 """
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
-from django.utils import timezone
 
+from apps.scheduling.editing import publish
 from apps.scheduling.generation import run_generation
-from apps.scheduling.models import GenerationRun, SchedulePeriod, ScheduleVersion
-
-
-def publish_version(version: ScheduleVersion) -> None:
-    """Make `version` the published one of its period; the previous published version becomes history."""
-    with transaction.atomic():
-        version.period.versions.filter(status=ScheduleVersion.Status.PUBLISHED).update(
-            status=ScheduleVersion.Status.SUPERSEDED
-        )
-        version.status = ScheduleVersion.Status.PUBLISHED
-        version.published_at = timezone.now()
-        version.save(update_fields=["status", "published_at"])
-        version.period.status = SchedulePeriod.Status.PUBLISHED
-        version.period.save(update_fields=["status"])
+from apps.scheduling.models import GenerationRun, SchedulePeriod
 
 
 class Command(BaseCommand):
@@ -62,7 +48,7 @@ class Command(BaseCommand):
                     f"zasady {s['manager_rules']} %, prośby {s['employee_requests']} %"
                 )
                 if options["publish"]:
-                    publish_version(version)
+                    publish(version, None)
                     self.stdout.write("  opublikowano")
 
     def _newest_periods(self, company_id):

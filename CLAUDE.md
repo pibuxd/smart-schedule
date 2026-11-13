@@ -109,5 +109,6 @@ cd ../frontend && npm run api:generate
   (tests wrap them in `AsManager` from `features/manager/test-utils.tsx`).
 - Schedules are arranged only when the manager asks (after the availability deadline or once everyone has answered);
   never add jobs that generate schedules on a timer or by themselves.
-- To see "Mój grafik" on demo data: `generate_schedule --period <id> --publish` (publishing from the UI is stage 8).
+- To see "Mój grafik" on demo data: publish from "Grafik" in the manager panel, or `generate_schedule --period <id> --publish`.
+- Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable; a change that adds a hard violation is refused; publishing records `AssignmentEvent` history). Shift explanations come from `engine/explain.py` (one validator run per candidate).
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

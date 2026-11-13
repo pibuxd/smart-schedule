@@ -198,6 +198,10 @@ def _save_versions(run: GenerationRun, built: BuiltProblem, schedule, report) ->
             )
             for shift in shifts
         )
+        # Older drafts become history: arranging again replaces them (pins were carried over by the builder).
+        ScheduleVersion.objects.for_company(period.company_id).filter(
+            period=period, status=ScheduleVersion.Status.DRAFT, number__lt=version.number
+        ).update(status=ScheduleVersion.Status.SUPERSEDED)
         if period.status == SchedulePeriod.Status.COLLECTING:
             period.status = SchedulePeriod.Status.DRAFT
             period.save(update_fields=["status"])

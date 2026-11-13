@@ -11,7 +11,17 @@ const MONTHS_LOCATIVE = [
   'styczniu', 'lutym', 'marcu', 'kwietniu', 'maju', 'czerwcu',
   'lipcu', 'sierpniu', 'wrześniu', 'październiku', 'listopadzie', 'grudniu',
 ]
+const MONTHS_NOMINATIVE = [
+  'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
+  'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień',
+]
 export const WEEKDAY_HEADERS = WEEKDAYS_SHORT
+
+/** "2026-12" -> "Grudzień 2026" */
+export function monthName(month: string): string {
+  const name = MONTHS_NOMINATIVE[Number(month.slice(5, 7)) - 1]
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${month.slice(0, 4)}`
+}
 
 /** "2026-12-04" -> a local Date at midnight (no time-zone shifts). */
 export function parseDate(iso: string): Date {

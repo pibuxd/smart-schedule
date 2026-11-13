@@ -80,7 +80,8 @@ h) Kierownik dostosowuje generator poleceniami tekstem do asystenta (LLM): zasad
 - Kod wpisuje kierownik przy zakładaniu firmy albo później w ustawieniach. Subskrypcja dotyczy całej firmy; pracownicy niczego nie wpisują.
 - Tabela subscriptions niezależna od dostawcy płatności: firma, status (aktywna / wygasła), data końca, źródło ("kod", w przyszłości "stripe"). Kolejny kod przedłuża dostęp od daty końca, nie od dnia wpisania.
 - 7 dni przed końcem baner w panelu kierownika. Po wygaśnięciu tryb tylko do odczytu: grafik widoczny, bez edycji i generowania. Danych nie usuwamy.
-- Tryb tylko do odczytu obejmuje też firmę założoną bez kodu. Każda zmiana danych firmy jest wtedy odrzucana (HTTP 402 z komunikatem po polsku); wyjątki: wpisanie kodu oraz odpowiedź zaproszonej osoby na zaproszenie.
+- Firma założona bez kodu dostaje 30 dni okresu próbnego z pełnym dostępem (decyzja Piotra z 12.11.2026; 13.11.2026 wydłużone z 14 do 30 dni, żeby zmieścił się pełny miesięczny cykl: dyspozycje, termin, ułożenie, publikacja). Okres próbny dostaje tylko pierwsza firma zakładana przez daną osobę; limit ułożeń grafiku obowiązuje także wtedy. Po okresie próbnym firma jest tylko do odczytu, dopóki kierownik nie wpisze kodu; kod wpisany w okresie próbnym dolicza swoje dni do końca okresu próbnego, więc nic nie przepada.
+- W trybie tylko do odczytu każda zmiana danych firmy jest odrzucana (HTTP 402 z komunikatem po polsku); wyjątki: wpisanie kodu oraz odpowiedź zaproszonej osoby na zaproszenie.
 - Limit prób wpisania kodu: 5 błędnych na konto i 20 na adres IP w ciągu godziny. Kod ma 12 znaków, pokazywany w grupach po 4 (ABCD-EFGH-JKMN); spacje i myślniki nie mają znaczenia. Jeden kod można użyć w danej firmie tylko raz. Kody widać w całości tylko raz, zaraz po wygenerowaniu; w bazie jest skrót i pierwsze 4 znaki.
 - Limit generowań grafiku na firmę (roboczo 30 na miesiąc), także w okresie darmowym.
 

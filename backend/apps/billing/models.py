@@ -67,6 +67,7 @@ class CodeRedemption(CompanyOwnedModel):
 class Subscription(CompanyOwnedModel):
     class Source(models.TextChoices):
         CODE = "code", "kod"
+        TRIAL = "trial", "okres próbny"
         STRIPE = "stripe", "Stripe"
 
     # One subscription per company (the unique constraint below); next codes extend `ends_at`.

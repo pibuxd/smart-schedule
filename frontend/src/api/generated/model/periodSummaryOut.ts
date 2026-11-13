@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { PeriodSummaryOutLatestVersionStatus } from './periodSummaryOutLatestVersionStatus';
 import type { PeriodSummaryOutStatus } from './periodSummaryOutStatus';
 
 export interface PeriodSummaryOut {
@@ -16,4 +17,8 @@ export interface PeriodSummaryOut {
   submitted: number;
   missing: string[];
   late_days: number;
+  latest_version_id: string | null;
+  latest_version_status: PeriodSummaryOutLatestVersionStatus;
+  active_run_id: string | null;
+  manual_changes: number;
 }
