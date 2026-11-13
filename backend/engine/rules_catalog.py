@@ -87,7 +87,10 @@ RULES: tuple[RuleDefinition, ...] = (
     RuleDefinition(
         code="max_hours_per_day",
         label="Godziny pracy w ciągu dnia",
-        description="Nie więcej niż tyle godzin pracy w zmianach zaczynających się tego samego dnia.",
+        description=(
+            "Nie więcej niż tyle godzin pracy w zmianach zaczynających się tego samego dnia "
+            "(nocna zmiana liczy się w całości do dnia, w którym się zaczyna)."
+        ),
         default_enabled=False,
         params={"max_hours": 8},
     ),
