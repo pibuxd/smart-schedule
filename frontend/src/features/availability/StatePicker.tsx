@@ -2,7 +2,7 @@ import { cn } from '../../lib/cn'
 import { type AvailabilityState, STATE_LABEL, STATES } from './marks'
 import { StateIcon } from './StateIcon'
 
-/** Four big buttons, one per state; the chosen one is outlined in the accent colour. */
+/** Three big buttons, one per state; the chosen one is outlined in the accent colour. */
 export function StatePicker({
   value,
   onChange,
@@ -15,7 +15,7 @@ export function StatePicker({
   extra?: React.ReactNode
 }) {
   return (
-    <div role="group" aria-label={label} className="grid grid-cols-2 gap-2">
+    <div role="group" aria-label={label} className="grid grid-cols-3 gap-2">
       {STATES.map((state) => (
         <button
           key={state}
@@ -23,7 +23,7 @@ export function StatePicker({
           aria-pressed={value === state}
           onClick={() => onChange(state)}
           className={cn(
-            'flex min-h-(--touch-main) cursor-pointer items-center gap-2.5 rounded-md border-2 border-line bg-surface px-3 text-left font-semibold',
+            'grid min-h-(--touch-main) min-w-0 cursor-pointer place-items-center gap-1 rounded-md border-2 border-line bg-surface px-1 py-2 text-center font-semibold',
             value === state && 'border-accent bg-accent-soft ring-3 ring-accent-soft',
           )}
         >

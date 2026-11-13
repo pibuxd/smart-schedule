@@ -10,7 +10,6 @@ export type GridDayOutState = typeof GridDayOutState[keyof typeof GridDayOutStat
 
 export const GridDayOutState = {
   cannot: 'cannot',
-  prefer_not: 'prefer_not',
   neutral: 'neutral',
   prefer: 'prefer',
 } as const;

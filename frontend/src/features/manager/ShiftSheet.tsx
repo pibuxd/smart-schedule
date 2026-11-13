@@ -13,8 +13,7 @@ import { shortDay } from './words'
 
 const WISH_LABEL: Record<CandidateOut['wish'], string> = {
   prefer: 'chętnie',
-  neutral: 'obojętnie',
-  prefer_not: 'wolę nie',
+  neutral: 'bez zaznaczenia',
   cannot: 'nie mogę',
 }
 

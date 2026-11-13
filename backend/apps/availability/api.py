@@ -29,7 +29,7 @@ from apps.tenancy.context import TenantContext, context_for
 
 router = Router(tags=["availability"])
 
-StateName = Literal["cannot", "prefer_not", "neutral", "prefer"]
+StateName = Literal["cannot", "neutral", "prefer"]
 PeriodStatusName = Literal["collecting", "draft", "published"]
 RequestStatusName = Literal["new", "interpreted", "needs_manager", "rejected"]
 
@@ -52,7 +52,7 @@ class AvailabilityPeriodOut(Schema):
 class AvailabilityDayOut(Schema):
     date: date
     state: StateName
-    # Optional hours: with "cannot"/"prefer_not" they say when; with "neutral"/"prefer" they mean "only then".
+    # Optional hours: with "cannot" they say when; with "neutral"/"prefer" they mean "only then".
     # An end at or before the start means the next morning.
     from_time: time | None = None
     to_time: time | None = None
@@ -280,7 +280,7 @@ def copy_previous_availability(request, payload: PeriodRefIn):
 
 @router.post("/me/availability/submit", response={200: MyAvailabilityOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})
 def submit_my_availability(request, payload: PeriodRefIn):
-    """ "Gotowe": tells the manager I have finished. Days left unmarked count as "obojętnie"."""
+    """ "Gotowe": tells the manager I have finished. Days left unmarked mean "mogę"."""
     ctx, profile = employee_context(request, payload.company_id)
     period = _editable_period(ctx, profile, payload.period_id)
     AvailabilitySubmission.objects.for_company(ctx.company).get_or_create(

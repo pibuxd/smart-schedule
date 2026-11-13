@@ -10,7 +10,6 @@ export type VersionShiftOutWish = typeof VersionShiftOutWish[keyof typeof Versio
 
 export const VersionShiftOutWish = {
   cannot: 'cannot',
-  prefer_not: 'prefer_not',
   neutral: 'neutral',
   prefer: 'prefer',
 } as const;

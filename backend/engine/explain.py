@@ -25,7 +25,6 @@ from engine.validator import Code, ValidationReport, validate
 WISH_WORDS = {
     AvailabilityState.PREFER: "chętnie pracuje tego dnia",
     AvailabilityState.NEUTRAL: "nie zaznaczył(a) nic szczególnego",
-    AvailabilityState.PREFER_NOT: "zaznaczył(a) „wolę nie”",
     AvailabilityState.CANNOT: "zaznaczył(a) „nie mogę”",
 }
 
@@ -138,7 +137,6 @@ def explain_slot(
         wish_rank = {
             AvailabilityState.PREFER: 0,
             AvailabilityState.NEUTRAL: 1,
-            AvailabilityState.PREFER_NOT: 2,
             AvailabilityState.CANNOT: 3,
         }[c.wish]
         return (not c.current, bool(c.blocked), c.scores.holes, -c.scores.manager_rules, wish_rank, c.name)

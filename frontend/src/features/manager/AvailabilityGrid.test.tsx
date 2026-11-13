@@ -36,7 +36,7 @@ describe('AvailabilityGrid', () => {
     expect(
       screen.getByRole('img', { name: 'środa 2 grudnia: chętnie 6–14, zmienione po terminie' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'czwartek 3 grudnia: nic nie zaznaczono' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'czwartek 3 grudnia: bez zaznaczenia' })).toBeInTheDocument()
     expect(screen.getByText('Nie wysłano')).toBeInTheDocument()
   })
 })

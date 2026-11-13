@@ -12,7 +12,7 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { prettyPhone } from '../auth/phone'
 import { useManager } from './ManagerContext'
-import { CONTRACT } from './words'
+import { CONTRACT, EXPERIENCE } from './words'
 
 export function EmployeesScreen({ locationId }: { locationId: string }) {
   const employees = useLocationEmployees(locationId)
@@ -42,7 +42,7 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
     <div className="grid gap-8">
       <Section
         title={`W grafiku (${active.length})`}
-        description="Stanowiska mówią, na jakie zmiany można kogoś wpisać. Maksimum i cel godzin są wskazówką dla układania grafiku."
+        description="Stanowiska mówią, na jakie zmiany można kogoś wpisać. Stopień doświadczenia widzisz tylko Ty: dzięki niemu na zmianie nie zostaną sami początkujący. Maksimum i cel godzin są wskazówką dla układania grafiku."
       >
         {active.length === 0 ? (
           <EmptyState title="Nikt jeszcze nie pracuje w tym lokalu">
@@ -99,7 +99,7 @@ function EmployeeList({
       {employees.map((e) => (
         <li
           key={e.id}
-          className="grid items-center gap-x-4 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 md:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1.3fr)_minmax(140px,1fr)_minmax(160px,1.2fr)_auto]"
+          className="grid items-center gap-x-4 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 md:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1.3fr)_minmax(120px,auto)_minmax(140px,1fr)_minmax(160px,1.2fr)_auto]"
         >
           <span className="grid">
             <b>{`${e.first_name} ${e.last_name}`.trim() || 'Bez imienia'}</b>
@@ -112,6 +112,9 @@ function EmployeeList({
               <Tag tone="warn">Bez stanowiska</Tag>
             )}
             {e.is_manager && <Tag tone="accent">Kierownik</Tag>}
+          </span>
+          <span>
+            <Tag tone={EXPERIENCE[e.experience].tone}>{EXPERIENCE[e.experience].label}</Tag>
           </span>
           <span className="text-sm">{CONTRACT[e.contract]}</span>
           <span className="text-sm text-ink-muted">{hoursWords(e)}</span>
@@ -132,6 +135,7 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
   const queryClient = useQueryClient()
   const [chosen, setChosen] = useState<string[]>(employee.position_ids)
   const [contract, setContract] = useState(employee.contract)
+  const [experience, setExperience] = useState(employee.experience)
   const [max, setMax] = useState(employee.max_hours_month?.toString() ?? '')
   const [target, setTarget] = useState(employee.target_hours_month?.toString() ?? '')
   const [active, setActive] = useState(employee.is_active)
@@ -144,6 +148,7 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
         data: {
           position_ids: chosen,
           contract,
+          experience,
           max_hours_month: toNumber(max),
           target_hours_month: toNumber(target),
           is_active: active,
@@ -168,6 +173,28 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
         )}
         {positions.map((p) => (
           <CheckField key={p.id} label={p.name} checked={chosen.includes(p.id)} onChange={() => toggle(p.id)} />
+        ))}
+      </fieldset>
+      <fieldset className="m-0 grid gap-1 border-0 p-0">
+        <legend className="mb-1 font-semibold">Doświadczenie</legend>
+        <p className="m-0 text-sm text-ink-muted">
+          Widzisz to tylko Ty, pracownik nie zobaczy swojego stopnia. Przy układaniu grafiku na zmianie ma być co
+          najmniej tylu doświadczonych, ilu początkujących (zasada „Początkujący z doświadczonymi”).
+        </p>
+        {([1, 2, 3] as const).map((value) => (
+          <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
+            <input
+              type="radio"
+              name="experience"
+              className="size-6 accent-accent"
+              checked={experience === value}
+              onChange={() => setExperience(value)}
+            />
+            <span className="grid">
+              <span>{EXPERIENCE[value].label}</span>
+              <span className="text-sm text-ink-muted">{EXPERIENCE[value].hint}</span>
+            </span>
+          </label>
         ))}
       </fieldset>
       <fieldset className="m-0 grid gap-1 border-0 p-0">

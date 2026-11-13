@@ -19,6 +19,7 @@ from apps.rules.models import RuleSetting
 from apps.rules.services import (
     LOCATION_ONLY_RULES,
     NUMBER_PARAMS,
+    OPTIONAL_PARAMS,
     Row,
     merge,
     rule_configs,
@@ -237,7 +238,7 @@ def _clean_params(sc: _Scope, code: str, given: dict[str, Any], enabled: bool) -
             if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
                 raise HttpError(400, f"„{rule.label}”: {what} musi być od {low} do {high}.")
         elif value in (None, ""):
-            if enabled:
+            if enabled and (code, name) not in OPTIONAL_PARAMS:
                 what = "stanowisko" if name == "position" else "zmianę"
                 raise HttpError(400, f"„{rule.label}”: wybierz {what}.")
             value = None

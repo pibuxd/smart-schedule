@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeOutContract } from './employeeOutContract';
+import type { EmployeeOutExperience } from './employeeOutExperience';
 
 export interface EmployeeOut {
   id: string;
@@ -13,6 +14,7 @@ export interface EmployeeOut {
   phone: string;
   position_ids: string[];
   contract: EmployeeOutContract;
+  experience: EmployeeOutExperience;
   max_hours_month: number | null;
   target_hours_month: number | null;
   is_active: boolean;

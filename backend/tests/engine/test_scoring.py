@@ -72,8 +72,10 @@ def test_requests_score_is_weighted():
     p = problem(
         people,
         slots,
-        availability=(Availability("anna", MON, "prefer_not"),),  # weight 3, broken
-        requests=(Request("r", "ola", "hours_limit", max_hours=8, level="bardzo_wazne"),),  # weight 9, kept
+        requests=(
+            Request("off", "anna", "days_off", dates=frozenset({MON})),  # weight 3, broken
+            Request("r", "ola", "hours_limit", max_hours=8, level="bardzo_wazne"),  # weight 9, kept
+        ),
     )
     report = validate(p, {"a": "anna", "b": "ola"})
     assert score(p, report).employee_requests == pytest.approx(75.0)
@@ -83,7 +85,7 @@ def test_requests_score_is_weighted():
 def test_scores_per_location():
     people = [employee("anna"), employee("ola", home="loc-2")]
     slots = [slot("a", MON), slot("b", MON, location="loc-2"), slot("c", day(1), location="loc-2")]
-    p = problem(people, slots, availability=(Availability("ola", MON, "prefer_not"),))
+    p = problem(people, slots, requests=(Request("off", "ola", "days_off", dates=frozenset({MON})),))
     report = validate(p, {"a": "anna", "b": "ola"})
     first, second = score(p, report, LOC), score(p, report, "loc-2")
     assert (first.holes, first.slots, first.employee_requests) == (0, 1, 100.0)
@@ -97,7 +99,7 @@ def test_penalty_weighs_manager_rules_over_requests_and_counts_changes():
         people,
         slots,
         rules=(RuleConfig("min_rest_between_shifts", LOC, 1),),
-        availability=(Availability("ola", day(1), "prefer_not"),),
+        requests=(Request("off", "ola", "days_off", dates=frozenset({day(1)})),),
         published={"late": "anna", "early": "anna"},
         weights=WeightProfile(manager_share=0.8, stability_penalty=5),
     )
@@ -129,10 +131,13 @@ def test_a_month_for_four_bakeries_is_checked_quickly():
                 slots.append(s)
                 schedule[s.id] = staff[(d * 8 + n) % 20]
     rules = tuple(RuleConfig(r.code, loc, rank) for loc in locations for rank, r in enumerate(RULES, start=1))
-    availability = tuple(
-        Availability(e.id, start + timedelta(days=d), "prefer_not") for e in people[::3] for d in (0, 7)
+    availability = tuple(Availability(e.id, start + timedelta(days=d), "prefer") for e in people[::3] for d in (0, 7))
+    days_off = tuple(
+        Request(f"off-{e.id}", e.id, "days_off", dates=frozenset({start + timedelta(days=3)})) for e in people[1::3]
     )
-    p = problem(people, slots, start=start, end=date(2026, 11, 30), rules=rules, availability=availability)
+    p = problem(
+        people, slots, start=start, end=date(2026, 11, 30), rules=rules, availability=availability, requests=days_off
+    )
 
     began = clock.perf_counter()
     report = validate(p, schedule)

@@ -65,7 +65,13 @@ class TestOverviewAndLocations:
         codes = list(
             RuleSetting.objects.filter(location=location).order_by("position").values_list("rule_code", flat=True)
         )
-        assert codes == ["min_rest_between_shifts", "max_consecutive_days", "fair_weekends", "fair_closings"]
+        assert codes == [
+            "min_rest_between_shifts",
+            "max_consecutive_days",
+            "fair_weekends",
+            "fair_closings",
+            "experience_mix",
+        ]
         again = api.post("/api/locations", {"company_id": str(shop["company"].pk), "name": "Skawina"})
         assert again.status_code == 409
 
@@ -212,6 +218,30 @@ class TestEmployees:
         cleared = api.patch(f"/api/employees/{row['id']}", {"max_hours_month": None}).json()
         assert cleared["max_hours_month"] is None and cleared["target_hours_month"] == 120
 
+    def test_experience_level_is_set_by_the_manager(self, api, shop):
+        as_manager(api, shop)
+        url = f"/api/employees/{shop['employee'].pk}"
+        [row] = api.get(f"/api/locations/{shop['location'].pk}/employees").json()
+        assert row["experience"] == 2  # samodzielny until the manager says otherwise
+        assert api.patch(url, {"experience": 1}).json()["experience"] == 1
+        assert EmployeeProfile.objects.get(pk=shop["employee"].pk).experience == 1
+        assert api.patch(url, {"experience": 4}).status_code == 422
+
+    def test_employee_never_sees_the_experience_level(self, api, shop):
+        EmployeeProfile.objects.filter(pk=shop["employee"].pk).update(experience=1)
+        api.login(shop["worker"])
+        company = f"?company_id={shop['company'].pk}"
+        for url in (
+            "/api/me",
+            "/api/me/availability" + company,
+            "/api/me/requests" + company + f"&period_id={shop['period'].pk}",
+            "/api/me/schedule" + company,
+        ):
+            response = api.get(url)
+            assert response.status_code == 200, url
+            assert "experience" not in response.content.decode() and "początkując" not in response.content.decode()
+        assert api.get(f"/api/locations/{shop['location'].pk}/employees").status_code == 403
+
     def test_target_above_max_is_refused(self, api, shop):
         response = as_manager(api, shop).patch(
             f"/api/employees/{shop['employee'].pk}", {"max_hours_month": 80, "target_hours_month": 100}
@@ -335,7 +365,8 @@ class TestRules:
         assert items["fair_weekends"]["source"] == "location" and items["fair_weekends"]["enabled"] is False
         assert items["max_shifts_per_week"]["source"] == "off"
         assert items["min_position_on_closing"]["location_only"] is True
-        assert len(body["items"]) == 10
+        assert items["experience_mix"]["location_only"] is False
+        assert len(body["items"]) == 11
 
     def test_saving_unchanged_list_keeps_following_the_group(self, api, shop, group):
         as_manager(api, shop)
@@ -376,6 +407,12 @@ class TestRules:
         assert put(api, url, {"items": [closing]}).status_code == 200
         group_url = f"/api/scopes/group/{group.pk}/rules"
         assert put(api, group_url, {"items": [closing]}).status_code == 400
+        mix = {"code": "experience_mix", "enabled": True, "params": {}}
+        assert put(api, url, {"items": [mix]}).status_code == 200  # no position = all positions together
+        assert put(api, group_url, {"items": [mix]}).status_code == 200  # a group can use it too
+        mix["params"]["position"] = str(shop["position"].pk)
+        assert put(api, url, {"items": [mix]}).status_code == 200
+        assert put(api, group_url, {"items": [mix]}).status_code == 400
         twice = {"code": "fair_closings", "enabled": True}
         assert put(api, url, {"items": [twice, twice]}).status_code == 400
 

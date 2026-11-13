@@ -1,4 +1,4 @@
-import { Check, Clock } from 'lucide-react'
+import { Check, Clock, Eraser } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 
 import {
@@ -23,7 +23,7 @@ import {
   describeMark,
   hasHours,
   markOf,
-  STATE_LABEL,
+  BRUSH_LABEL,
   STATES,
   type Marks,
   marksFromServer,
@@ -244,9 +244,6 @@ function AvailabilityEditor({
           Chętnie: <b className="text-ink tabular-nums">{counts.prefer}</b>
         </span>
         <span>
-          Wolę nie: <b className="text-ink tabular-nums">{counts.prefer_not}</b>
-        </span>
-        <span>
           Nie mogę: <b className="text-ink tabular-nums">{counts.cannot}</b>
         </span>
       </p>
@@ -302,7 +299,7 @@ function AvailabilityEditor({
                 Gotowe, wysyłam kierownikowi
               </Button>
               <p className="m-0 text-sm text-ink-muted">
-                Każdy dzień zapisuje się od razu. Dni bez zaznaczenia liczą się jako „obojętnie”.
+                Każdy dzień zapisuje się od razu. Dzień bez zaznaczenia znaczy, że możesz pracować.
               </p>
               {submit.isError && <InlineError>{errorMessage(submit.error, NETWORK_PROBLEM)}</InlineError>}
             </div>
@@ -391,7 +388,7 @@ function ToolBar({ tool, onChange }: { tool: Tool; onChange: (tool: Tool) => voi
       <p className="m-0 mb-1.5 text-sm font-semibold" id="tool-label">
         {tool === 'hours' ? 'Stuknij dzień, żeby ustawić godziny.' : 'Zaznaczam dni jako:'}
       </p>
-      <div role="group" aria-labelledby="tool-label" className="grid grid-cols-4 gap-1.5">
+      <div role="group" aria-labelledby="tool-label" className="grid grid-cols-3 gap-1.5">
         {STATES.map((t) => (
           <button
             key={t}
@@ -404,9 +401,9 @@ function ToolBar({ tool, onChange }: { tool: Tool; onChange: (tool: Tool) => voi
             )}
           >
             <i className={cn(`avail-${t}`, 'grid size-7 place-items-center rounded-sm border-2')}>
-              <StateIcon state={t} size={16} />
+              {t === 'neutral' ? <Eraser aria-hidden="true" size={16} /> : <StateIcon state={t} size={16} />}
             </i>
-            {STATE_LABEL[t]}
+            {BRUSH_LABEL[t]}
           </button>
         ))}
       </div>
