@@ -34,6 +34,7 @@ import type {
   MyRequestsParams,
   PatternIn,
   PeriodRefIn,
+  RequestChangeIn,
   RequestDecisionIn,
   RequestIn
 } from '../model';
@@ -934,6 +935,132 @@ export const useCreateMyRequest = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getCreateMyRequestMutationOptions(options), queryClient);
+    }
+    export type updateMyRequestResponse200 = {
+  data: MyRequestOut
+  status: 200
+}
+
+export type updateMyRequestResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type updateMyRequestResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type updateMyRequestResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type updateMyRequestResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type updateMyRequestResponseSuccess = (updateMyRequestResponse200) & {
+  headers: Headers;
+};
+export type updateMyRequestResponseError = (updateMyRequestResponse400 | updateMyRequestResponse402 | updateMyRequestResponse404 | updateMyRequestResponse409) & {
+  headers: Headers;
+};
+
+export type updateMyRequestResponse = (updateMyRequestResponseSuccess | updateMyRequestResponseError)
+
+export const getUpdateMyRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/me/requests/${requestId}`
+}
+
+/**
+ * Correct how my request was understood: write it again, or say "that is not what I meant" (then the
+ * manager reads it as written).
+ * @summary Update My Request
+ */
+export const updateMyRequest = async (requestId: string,
+    requestChangeIn: RequestChangeIn, options?: Parameters<typeof apiFetch>[1]): Promise<updateMyRequestResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<updateMyRequestResponse>(getUpdateMyRequestUrl(requestId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(requestChangeIn)
+  }
+);}
+
+
+
+
+
+export const getUpdateMyRequestMutationKey = () => ['updateMyRequest'] as const;
+
+export const getUpdateMyRequestMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyRequest>>, TError,UpdateMyRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMyRequest>>, TError,UpdateMyRequestMutationVariables, TContext> => {
+
+const mutationKey = getUpdateMyRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMyRequest>>, UpdateMyRequestMutationVariables> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  updateMyRequest(requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMyRequestMutationResult = NonNullable<Awaited<ReturnType<typeof updateMyRequest>>>
+    export type UpdateMyRequestMutationBody = RequestChangeIn
+    export type UpdateMyRequestMutationError = ErrorOut
+    export type UpdateMyRequestMutationVariables = {requestId: string;data: RequestChangeIn}
+
+    /**
+ * Correct how my request was understood: write it again, or say "that is not what I meant" (then the
+ * manager reads it as written).
+ * @summary Update My Request
+ */
+export const useUpdateMyRequest = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyRequest>>, TError,UpdateMyRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateMyRequest>>,
+        TError,
+        UpdateMyRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateMyRequestMutationOptions(options), queryClient);
     }
     export type deleteMyRequestResponse204 = {
   data: void

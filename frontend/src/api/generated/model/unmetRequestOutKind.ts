@@ -12,4 +12,5 @@ export const UnmetRequestOutKind = {
   text: 'text',
   prefer: 'prefer',
   unscored: 'unscored',
+  instruction: 'instruction',
 } as const;

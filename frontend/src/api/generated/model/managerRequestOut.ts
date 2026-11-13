@@ -14,6 +14,7 @@ export interface ManagerRequestOut {
   text: string;
   status: ManagerRequestOutStatus;
   summary: string | null;
+  employee_corrected: boolean;
   manager_priority: ManagerRequestOutManagerPriority;
   manager_rejected: boolean;
   created_at: string;

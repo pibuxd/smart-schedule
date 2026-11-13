@@ -144,3 +144,35 @@ def test_a_month_for_four_bakeries_is_checked_quickly():
     assert scores.slots == 960
     assert 0 <= scores.manager_rules <= 100
     assert 0 <= scores.employee_requests <= 100
+
+
+def test_calling_everything_very_important_does_not_buy_a_louder_voice():
+    # Anna marks five wishes "bardzo ważne", Ewa one "ważne". Each person's requests share one budget,
+    # so Anna's five together weigh as much as the budget, not five times "bardzo ważne".
+    days = [date(2026, 11, 2 + n) for n in range(5)]
+    slots = [slot(f"s{n}", d) for n, d in enumerate(days)]
+    requests = [
+        Request(f"a{n}", "anna", "days_off", dates=frozenset({d}), level="bardzo_wazne") for n, d in enumerate(days)
+    ] + [Request("e", "ewa", "days_off", dates=frozenset({days[0]}), level="wazne")]
+    p = problem([employee("anna"), employee("ewa")], slots, requests=requests)
+    report = validate(p, {})
+    weights = {m.request_id: m.weight for m in report.requests}
+    assert sum(weights[f"a{n}"] for n in range(5)) == pytest.approx(p.weights.level_weights["employee_budget"])
+    assert weights["e"] == pytest.approx(3.0)
+
+
+def test_manager_instructions_count_with_the_manager_rules_by_their_place():
+    days = [date(2026, 11, 2), date(2026, 11, 3)]
+    slots = [slot("s0", days[0]), slot("s1", days[1])]
+    requests = [
+        Request("first", "anna", "days_off", dates=frozenset({days[0]}), by_manager=True, rank=1),
+        Request("second", "anna", "days_off", dates=frozenset({days[1]}), by_manager=True, rank=2),
+        Request("wish", "ewa", "days_off", dates=frozenset({days[0]})),
+    ]
+    p = problem([employee("anna"), employee("ewa")], slots, requests=requests)
+    report = validate(p, {"s0": "ewa", "s1": "anna"})  # breaks the second instruction and Ewa's wish
+    weights = {m.request_id: m.weight for m in report.requests}
+    assert weights["first"] == 1 and weights["second"] == pytest.approx(p.weights.rank_decay)
+    scores = score(p, report)
+    assert scores.manager_rules == pytest.approx(100 * (1 - 0.75 / 1.75), abs=0.01)
+    assert scores.employee_requests == 0

@@ -275,6 +275,13 @@ def save_scope_rules(request, scope: ScopeType, scope_id: UUID, payload: RulesIn
     the group; anything else becomes the location's own setting."""
     sc = _scope(request, scope, scope_id)
     sc.ctx.require_writable()
+    save_rules(sc, payload)
+    return _rules_out(sc)
+
+
+def save_rules(sc: _Scope, payload: RulesIn) -> None:
+    """Check and store the whole list of one scope (also used when the manager accepts the assistant's plan)."""
+    scope = sc.scope
     rows = _clean_items(sc, payload)
     group_rows = {row.rule_code: row for row in sc.group_rows()}
     field = "location" if scope == "location" else "group"
@@ -299,7 +306,6 @@ def save_scope_rules(request, scope: ScopeType, scope_id: UUID, payload: RulesIn
             setting.position, setting.params = stored.position, stored.params
             setting.save()
         sc.own_rows().exclude(rule_code__in=keep).delete()
-    return _rules_out(sc)
 
 
 def _times(n: int) -> str:

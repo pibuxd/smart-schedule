@@ -73,7 +73,15 @@ class RuleSetting(ScopedModel):
 
 
 def default_level_weights() -> dict[str, float]:
-    return {"bardzo_wazne": 9.0, "wazne": 3.0, "mile_widziane": 1.0, "manager_higher": 2.0, "manager_lower": 0.5}
+    # employee_budget: the most one person's text requests can weigh together (see engine.problem).
+    return {
+        "bardzo_wazne": 9.0,
+        "wazne": 3.0,
+        "mile_widziane": 1.0,
+        "manager_higher": 2.0,
+        "manager_lower": 0.5,
+        "employee_budget": 12.0,
+    }
 
 
 class WeightProfile(ScopedModel):

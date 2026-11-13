@@ -9,12 +9,14 @@ from typing import Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
+from apps.assistant.services import queue_request
 from apps.availability.models import (
     AvailabilityDay,
     AvailabilityPattern,
@@ -97,10 +99,18 @@ class RequestIn(Schema):
     text: str = Field(min_length=1, max_length=1000)
 
 
+class RequestChangeIn(Schema):
+    # New wording (read again by the assistant), or `understood: false` = "that is not what I meant".
+    text: str | None = Field(default=None, min_length=1, max_length=1000)
+    understood: bool | None = None
+
+
 class MyRequestOut(Schema):
     id: UUID
     text: str
     status: RequestStatusName
+    # How the assistant understood the request (only when it was sure enough); the person can say it is wrong.
+    summary: str | None
     created_at: datetime
 
 
@@ -291,8 +301,17 @@ def submit_my_availability(request, payload: PeriodRefIn):
 
 def _request_out(text_request: TextRequest) -> MyRequestOut:
     return MyRequestOut(
-        id=text_request.id, text=text_request.text, status=text_request.status, created_at=text_request.created_at
+        id=text_request.id,
+        text=text_request.text,
+        status=text_request.status,
+        summary=_summary(text_request),
+        created_at=text_request.created_at,
     )
+
+
+def _summary(row: TextRequest) -> str | None:
+    summary = (row.interpretation or {}).get("summary") if row.status == TextRequest.Status.INTERPRETED else None
+    return str(summary) if summary else None
 
 
 @router.get("/me/requests", response={200: list[MyRequestOut], 404: ErrorOut})
@@ -311,10 +330,47 @@ def create_my_request(request, payload: RequestIn):
     text = payload.text.strip()
     if not text:
         raise HttpError(400, "Napisz, o co chodzi.")
-    text_request = TextRequest.objects.for_company(ctx.company).create(
-        company=ctx.company, employee=profile, period=period, text=text
-    )
+    if ctx.qs(TextRequest).filter(employee=profile, period=period).count() >= settings.TEXT_REQUESTS_PER_PERIOD:
+        raise HttpError(
+            400, "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń którąś albo powiedz kierownikowi."
+        )
+    with transaction.atomic():
+        text_request = TextRequest.objects.for_company(ctx.company).create(
+            company=ctx.company, employee=profile, period=period, text=text
+        )
+        queue_request(text_request)  # the assistant reads it in the worker; without a key the manager does
     return Status(201, _request_out(text_request))
+
+
+@router.patch(
+    "/me/requests/{request_id}",
+    response={200: MyRequestOut, 400: ErrorOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
+    """Correct how my request was understood: write it again, or say "that is not what I meant" (then the
+    manager reads it as written)."""
+    ctx, text_request = context_for(request, TextRequest, request_id)
+    if text_request.employee.membership_id != ctx.membership.pk:
+        raise HttpError(404, "Nie znaleziono.")
+    ctx.require_writable()
+    if text_request.period.status != SchedulePeriod.Status.COLLECTING:
+        raise HttpError(409, CLOSED)
+    text = (payload.text or "").strip()
+    if payload.text is not None and not text:
+        raise HttpError(400, "Napisz, o co chodzi.")
+    with transaction.atomic():
+        if text and text != text_request.text:
+            text_request.text = text
+            text_request.status = TextRequest.Status.NEW
+            text_request.interpretation = None
+            text_request.employee_corrected = True
+            text_request.save(update_fields=["text", "status", "interpretation", "employee_corrected", "updated_at"])
+            queue_request(text_request)
+        elif payload.understood is False and text_request.status == TextRequest.Status.INTERPRETED:
+            text_request.status = TextRequest.Status.NEEDS_MANAGER
+            text_request.employee_corrected = True
+            text_request.save(update_fields=["status", "employee_corrected", "updated_at"])
+    return _request_out(text_request)
 
 
 @router.delete("/me/requests/{request_id}", response={204: None, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})
@@ -371,8 +427,10 @@ class ManagerRequestOut(Schema):
     employee_name: str
     text: str
     status: RequestStatusName
-    # How the assistant understood it (stage 10); None until then.
+    # How the assistant understood it; None when it was not sure, is switched off, or has not read it yet.
     summary: str | None
+    # The person said the assistant got it wrong, or rewrote the request.
+    employee_corrected: bool
     manager_priority: PriorityName
     manager_rejected: bool
     created_at: datetime
@@ -446,14 +504,14 @@ def availability_grid(request, period_id: UUID):
 
 
 def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
-    summary = (row.interpretation or {}).get("summary") if row.status == TextRequest.Status.INTERPRETED else None
     return ManagerRequestOut(
         id=row.pk,
         employee_id=row.employee_id,
         employee_name=row.employee.membership.user.full_name or "Bez imienia",
         text=row.text,
         status=row.status,
-        summary=str(summary) if summary else None,
+        summary=_summary(row),
+        employee_corrected=row.employee_corrected,
         manager_priority=row.manager_priority,
         manager_rejected=row.manager_rejected,
         created_at=row.created_at,

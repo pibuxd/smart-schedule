@@ -620,3 +620,19 @@ def test_weights_can_be_replaced_for_a_variant():
     p = problem(people, slots, rules=[RuleConfig("min_rest_between_shifts", LOC, rank=1)])
     _result, report = solved(p, weights=WeightProfile(manager_share=1.0))
     assert score(p, report).manager_rules == 100
+
+
+def test_manager_instruction_beats_an_employee_request():
+    # Anna asks to work with Ewa; the manager says they are to be kept apart. The manager's word wins.
+    people = [employee("anna"), employee("ewa"), employee("ola")]
+    slots = [slot(f"m{d}.{k}", day(d)) for d in range(3) for k in range(2)]
+    requests = [
+        Request("wish", "anna", "prefer_person", subject_employee="ewa", level="bardzo_wazne"),
+        Request("order", "anna", "avoid_person", subject_employee="ewa", by_manager=True, rank=1),
+    ]
+    p = problem(people, slots, requests=requests)
+    result, report = solved(p)
+    for d in range(3):
+        assert {result.schedule[f"m{d}.0"], result.schedule[f"m{d}.1"]} != {"anna", "ewa"}
+    scores = score(p, report)
+    assert scores.manager_rules == 100 and scores.employee_requests < 100

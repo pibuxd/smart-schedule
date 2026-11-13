@@ -470,8 +470,9 @@ class RuleResultOut(Schema):
 class UnmetRequestOut(Schema):
     employee_name: str
     text: str
-    # "text" (written request), "prefer" ("chętnie" days), "unscored" (left to you)
-    kind: Literal["text", "prefer", "unscored"]
+    # "text" (written request), "prefer" ("chętnie" days), "unscored" (left to you),
+    # "instruction" (the manager's own instruction about a person, scored with the manager's rules)
+    kind: Literal["text", "prefer", "unscored", "instruction"]
     percent_kept: float | None
 
 
@@ -692,11 +693,8 @@ def _unmet_requests(loaded) -> list[UnmetRequestOut]:
         else:
             share = f"{kept:g}".replace(".", ",")
             text = f"Dni „chętnie”: dostał(a) zmiany w {share} % z nich (tyle, ile się dało)."
-        result.append(
-            UnmetRequestOut(
-                employee_name=names[measure.employee], text=text, kind=measure.kind.value, percent_kept=kept
-            )
-        )
+        kind = "instruction" if measure.by_manager else measure.kind.value
+        result.append(UnmetRequestOut(employee_name=names[measure.employee], text=text, kind=kind, percent_kept=kept))
     for request_id in loaded.report.unscored_requests:
         request = requests[request_id]
         if problem.employee_by_id[request.employee].home_location != loaded.location_id:
