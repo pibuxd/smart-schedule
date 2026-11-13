@@ -616,6 +616,14 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
 
   if (setup.shift_types.length === 0 || setup.positions.length === 0) return null
 
+  // Left empty, the exception keeps what the weekday usually asks for, so the requirement does not vanish
+  // on the very day the manager adds more people.
+  const weekday = date ? (parseDate(date).getDay() + 6) % 7 : null
+  const usual =
+    setup.staffing.find((c) => c.weekday === weekday && c.shift_type_id === shift && c.position_id === position)
+      ?.experienced ?? 0
+  const experiencedNow = experiencedCount === '' ? Math.min(Number(count), usual) : Number(experiencedCount)
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
     create.mutate(
@@ -626,7 +634,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
           shift_type_id: shift,
           position_id: position,
           count: Number(count),
-          experienced: Number(experiencedCount || 0),
+          experienced: experiencedNow,
           start_time: start || null,
           end_time: end || null,
           note,
@@ -686,7 +694,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
           ))}
         </SelectField>
         <TextField label="Liczba osób" type="number" inputMode="numeric" min={0} max={50} value={count} onChange={(e) => setCount(e.target.value)} required />
-        <TextField label="W tym doświadczonych" type="number" inputMode="numeric" min={0} max={50} placeholder="0" value={experiencedCount} onChange={(e) => setExperiencedCount(e.target.value)} />
+        <TextField label="W tym doświadczonych" type="number" inputMode="numeric" min={0} max={50} placeholder={String(experiencedNow)} value={experiencedCount} onChange={(e) => setExperiencedCount(e.target.value)} hint={usual > 0 ? `Puste = jak zwykle w ten dzień (${experiencedNow}).` : undefined} />
         <TextField label="Inne godziny: od (nieobowiązkowo)" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
         <TextField label="do" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
         <TextField label="Powód (nieobowiązkowo)" className="sm:col-span-2" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="np. Wigilia" />
