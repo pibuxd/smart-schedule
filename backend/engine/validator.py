@@ -44,6 +44,7 @@ class Code(StrEnum):
     POSITION = "position"
     CANNOT = "cannot"
     OVERLAP = "overlap"
+    EXPERIENCE = "experience"  # the staffing asks for experienced people and less experienced ones took their places
     PINNED = "pinned"
     FROZEN = "frozen"
     RULE = "rule"  # a catalog rule; see Violation.rule_code
@@ -283,6 +284,31 @@ class _Checker:
                     )
                 )
 
+    def check_experienced(self) -> None:
+        """Staffing "of these, N experienced": the others may fill only the places that are left. An unfilled
+        place is fine as long as it can still go to an experienced person."""
+        p = self.p
+        for slots in p.experienced_groups:
+            need = sum(1 for s in slots if s.needs_experienced)
+            others = [
+                (s, e)
+                for s in slots
+                if (e := self.assignment.get(s.id)) and p.employee_by_id[e].level(s.position) != EXPERIENCED
+            ]
+            if len(others) <= len(slots) - need:
+                continue
+            position = p.position_names.get(slots[0].position, "tym stanowisku")
+            wanted = "doświadczona osoba" if need == 1 else f"doświadczone osoby: {need}"
+            names = ", ".join(self.name(e) for _, e in others)
+            self.hard.append(
+                Violation(
+                    Code.EXPERIENCE,
+                    f"Na zmianie {_slot_text(slots[0], p)} na stanowisku {position} ma być {wanted}, "
+                    f"a miejsca zajmują: {names}.",
+                    slots=tuple(s.id for s, _ in others),
+                )
+            )
+
     def check_overlaps(self) -> None:
         for employee_id, intervals in self.intervals_of.items():
             for i, first in enumerate(intervals):
@@ -475,7 +501,7 @@ class _Checker:
         shifts = experience_shifts(self.p, rule)
         found = []
         for slots in shifts.values():
-            levels = [self.p.employee_by_id[e].experience for e in (self.assignment.get(s.id) for s in slots) if e]
+            levels = [self.p.employee_by_id[e].level(s.position) for s in slots if (e := self.assignment.get(s.id))]
             beginners, experienced = levels.count(BEGINNER), levels.count(EXPERIENCED)
             if beginners > experienced:
                 who = "początkujący" if beginners == 1 else f"{beginners} początkujących"
@@ -688,6 +714,7 @@ class _Checker:
 
     def run(self) -> ValidationReport:
         self.check_basic()
+        self.check_experienced()
         self.check_overlaps()
         rules = self.measure_rules()
         requests = self.measure_requests()

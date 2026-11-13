@@ -15,6 +15,7 @@ from apps.core.schemas import ErrorOut
 from apps.staffing.models import (
     EmployeeProfile,
     Position,
+    PositionExperience,
     ShiftType,
     StaffingException,
     StaffingRule,
@@ -23,6 +24,8 @@ from apps.tenancy.context import TenantContext, context_for
 from apps.tenancy.models import Location
 
 router = Router(tags=["staffing"])
+
+TOO_MANY_EXPERIENCED = "Doświadczonych nie może być więcej niż wszystkich osób na zmianie."
 
 ShiftKind = Literal["fixed", "flexible"]
 # 1 = początkujący, 2 = samodzielny, 3 = doświadczony. Only managers see it (never in employee endpoints).
@@ -62,6 +65,8 @@ class StaffingCellIn(Schema):
     shift_type_id: UUID
     position_id: UUID
     count: int = Field(ge=0, le=50)
+    # How many of `count` must be experienced on this position.
+    experienced: int = Field(0, ge=0, le=50)
     # Only for shifts with flexible hours.
     start_time: time | None = None
     end_time: time | None = None
@@ -76,6 +81,7 @@ class StaffingCellOut(Schema):
     shift_type_id: UUID
     position_id: UUID
     count: int
+    experienced: int
     start_time: time | None
     end_time: time | None
 
@@ -85,6 +91,7 @@ class StaffingExceptionIn(Schema):
     shift_type_id: UUID
     position_id: UUID
     count: int = Field(ge=0, le=50)  # 0 = nobody that day (e.g. closed)
+    experienced: int = Field(0, ge=0, le=50)
     start_time: time | None = None
     end_time: time | None = None
     note: str = Field("", max_length=200)
@@ -96,6 +103,7 @@ class StaffingExceptionOut(Schema):
     shift_type_id: UUID
     position_id: UUID
     count: int
+    experienced: int
     start_time: time | None
     end_time: time | None
     note: str
@@ -108,6 +116,11 @@ class LocationSetupOut(Schema):
     exceptions: list[StaffingExceptionOut]
 
 
+class PositionLevel(Schema):
+    position_id: UUID
+    experience: ExperienceLevel
+
+
 class EmployeeOut(Schema):
     id: UUID
     first_name: str
@@ -115,6 +128,8 @@ class EmployeeOut(Schema):
     phone: str
     position_ids: list[UUID]
     experience: ExperienceLevel
+    # The level on each of the person's positions (the default `experience` unless set otherwise).
+    position_experience: list[PositionLevel]
     max_hours_month: int | None
     target_hours_month: int | None
     is_active: bool
@@ -125,6 +140,8 @@ class EmployeeOut(Schema):
 class EmployeeIn(Schema):
     position_ids: list[UUID] | None = None
     experience: ExperienceLevel | None = None
+    # Levels for single positions; replaces what was set before. A position left out gets the default level.
+    position_experience: list[PositionLevel] | None = None
     # Send null to clear a limit.
     max_hours_month: int | None = Field(None, ge=1, le=400)
     target_hours_month: int | None = Field(None, ge=1, le=400)
@@ -165,6 +182,7 @@ def _exception_out(exc: StaffingException) -> StaffingExceptionOut:
         shift_type_id=exc.shift_type_id,
         position_id=exc.position_id,
         count=exc.count,
+        experienced=exc.experienced,
         start_time=exc.start_time,
         end_time=exc.end_time,
         note=exc.note,
@@ -188,6 +206,7 @@ def _setup_out(ctx: TenantContext, location: Location) -> LocationSetupOut:
                 shift_type_id=r.shift_type_id,
                 position_id=r.position_id,
                 count=r.count,
+                experienced=r.experienced,
                 start_time=r.start_time,
                 end_time=r.end_time,
             )
@@ -345,6 +364,8 @@ def save_staffing(request, location_id: UUID, payload: StaffingIn):
             raise HttpError(400, "Obsada może dotyczyć tylko zmian i stanowisk tego lokalu.")
         if not cell.count:
             continue
+        if cell.experienced > cell.count:
+            raise HttpError(400, TOO_MANY_EXPERIENCED)
         flexible = st.kind == ShiftType.Kind.FLEXIBLE
         start, end = (cell.start_time, cell.end_time) if flexible else (None, None)
         _check_hours(start, end, False, f"Zmiana „{st.name}”")
@@ -355,6 +376,7 @@ def save_staffing(request, location_id: UUID, payload: StaffingIn):
             shift_type=st,
             position=position,
             count=cell.count,
+            experienced=cell.experienced,
             start_time=start,
             end_time=end,
         )
@@ -375,6 +397,8 @@ def create_staffing_exception(request, location_id: UUID, payload: StaffingExcep
     st = _in_location(ctx, ShiftType, payload.shift_type_id, location, "zmianę")
     position = _in_location(ctx, Position, payload.position_id, location, "stanowisko")
     _check_hours(payload.start_time, payload.end_time, False, f"Zmiana „{st.name}”")
+    if payload.experienced > payload.count:
+        raise HttpError(400, TOO_MANY_EXPERIENCED)
     exc = StaffingException(
         company=ctx.company,
         location=location,
@@ -382,6 +406,7 @@ def create_staffing_exception(request, location_id: UUID, payload: StaffingExcep
         shift_type=st,
         position=position,
         count=payload.count,
+        experienced=payload.experienced,
         start_time=payload.start_time,
         end_time=payload.end_time,
         note=payload.note.strip(),
@@ -400,7 +425,8 @@ def delete_staffing_exception(request, exception_id: UUID):
 # --------------------------------------------------------------------------------------------- employees
 
 
-def _employee_out(profile: EmployeeProfile, position_ids: list) -> EmployeeOut:
+def _employee_out(profile: EmployeeProfile, position_ids: list, levels: dict | None = None) -> EmployeeOut:
+    levels = levels or {}
     user = profile.membership.user
     return EmployeeOut(
         id=profile.pk,
@@ -409,6 +435,9 @@ def _employee_out(profile: EmployeeProfile, position_ids: list) -> EmployeeOut:
         phone=user.phone_e164,
         position_ids=position_ids,
         experience=profile.experience,
+        position_experience=[
+            PositionLevel(position_id=pid, experience=levels.get(pid, profile.experience)) for pid in position_ids
+        ],
         max_hours_month=profile.max_hours_month,
         target_hours_month=profile.target_hours_month,
         is_active=profile.is_active,
@@ -426,6 +455,15 @@ def _position_ids(profiles) -> dict:
     return result
 
 
+def _position_levels(profiles) -> dict:
+    """profile id -> {position id -> level set for that position}."""
+    result: dict = {p.pk: {} for p in profiles}
+    rows = PositionExperience.objects.filter(employee_id__in=list(result))  # tenant-ok: profiles read via ctx
+    for profile_id, position_id, level in rows.values_list("employee_id", "position_id", "level"):
+        result[profile_id][position_id] = level
+    return result
+
+
 @router.get("/locations/{location_id}/employees", response={200: list[EmployeeOut], 403: ErrorOut, 404: ErrorOut})
 def location_employees(request, location_id: UUID):
     """People whose home location this is: active first, then switched off; by surname."""
@@ -437,7 +475,8 @@ def location_employees(request, location_id: UUID):
         .order_by("-is_active", "membership__user__last_name", "membership__user__first_name")
     )
     positions = _position_ids(profiles)
-    return [_employee_out(p, positions[p.pk]) for p in profiles]
+    levels = _position_levels(profiles)
+    return [_employee_out(p, positions[p.pk], levels[p.pk]) for p in profiles]
 
 
 @router.patch(
@@ -471,5 +510,18 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
             if len(positions) != len(set(payload.position_ids)):
                 raise HttpError(400, "Wybierz stanowiska z lokalu tej osoby.")
             profile.positions.set(positions)
+        own = set(profile.positions.values_list("pk", flat=True))
+        if "position_experience" in sent and payload.position_experience is not None:
+            wanted = {item.position_id: item.experience for item in payload.position_experience}
+            if not set(wanted) <= own:
+                raise HttpError(400, "Stopień można ustawić tylko na stanowisku, na którym ta osoba pracuje.")
+            ctx.qs(PositionExperience).filter(employee=profile).delete()
+            for position_id, level in wanted.items():
+                if level != profile.experience:  # only what differs from the default is kept
+                    PositionExperience(employee=profile, position_id=position_id, level=level).save()
+        # A level equal to the (possibly new) default, or for a position just taken away, is not kept.
+        stale = ctx.qs(PositionExperience).filter(employee=profile)
+        stale.exclude(position_id__in=own).delete()
+        stale.filter(level=profile.experience).delete()
     profile = ctx.qs(EmployeeProfile).select_related("membership__user").get(pk=profile.pk)
-    return _employee_out(profile, _position_ids([profile])[profile.pk])
+    return _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])

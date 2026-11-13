@@ -76,7 +76,7 @@ _MONOTONE_RULES = frozenset(
         "min_weekly_rest",
     }
 )
-_MONOTONE_CODES = frozenset({Code.POSITION, Code.CANNOT, Code.OVERLAP})
+_MONOTONE_CODES = frozenset({Code.POSITION, Code.CANNOT, Code.OVERLAP, Code.EXPERIENCE})
 
 
 class SolveStatus(StrEnum):
@@ -157,6 +157,7 @@ class _Builder:
         self._variables()
         self._intervals = {e.id: self._group_intervals(e.id) for e in problem.employees}
         self._no_overlap()
+        self._experienced()
         self._rules()
         self._requests()
         self._stability()
@@ -208,6 +209,20 @@ class _Builder:
         self.x[(employee_id, slot.id)] = var
         self.x_of_slot[slot.id].append((employee_id, var))
         self.x_of_emp[employee_id].append((slot, var))
+
+    def _experienced(self) -> None:
+        """Staffing "of these, N experienced": less experienced people get at most the remaining places
+        (the validator's `check_experienced`). Never infeasible on its own: a place can stay unfilled."""
+        for slots in self.p.experienced_groups:
+            need = sum(1 for s in slots if s.needs_experienced)
+            others = [
+                var
+                for slot in slots
+                for employee_id, var in self.x_of_slot[slot.id]
+                if self.p.employee_by_id[employee_id].level(slot.position) != EXPERIENCED
+            ]
+            if others:
+                self.m.add(sum(others) <= len(slots) - need)
 
     def _group_intervals(self, employee_id: str) -> list[_Interval]:
         groups: dict[tuple[datetime, datetime], list[Slot]] = defaultdict(list)
@@ -491,7 +506,7 @@ class _Builder:
             beginners, experienced = [], []
             for slot in slots:
                 for employee_id, var in self.x_of_slot[slot.id]:
-                    level = self.p.employee_by_id[employee_id].experience
+                    level = self.p.employee_by_id[employee_id].level(slot.position)
                     if level == BEGINNER:
                         beginners.append(var)
                     elif level == EXPERIENCED:

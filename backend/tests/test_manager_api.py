@@ -11,7 +11,14 @@ from apps.availability.models import AvailabilityDay, AvailabilitySubmission, Te
 from apps.notifications.models import Notification
 from apps.rules.models import RuleSetting
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
-from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
+from apps.staffing.models import (
+    EmployeeProfile,
+    Position,
+    PositionExperience,
+    ShiftType,
+    StaffingException,
+    StaffingRule,
+)
 from apps.tenancy.models import Location, LocationGroup, Membership, Role
 from engine.rules_catalog import RULES
 from tests.conftest import next_phone
@@ -228,6 +235,56 @@ class TestEmployees:
         assert api.patch(url, {"experience": 1}).json()["experience"] == 1
         assert EmployeeProfile.objects.get(pk=shop["employee"].pk).experience == 1
         assert api.patch(url, {"experience": 4}).status_code == 422
+
+    def test_level_can_differ_on_one_position(self, api, shop):
+        as_manager(api, shop)
+        seller = shop["position"]
+        baker = Position.objects.create(location=shop["location"], name="Piekarz")
+        url = f"/api/employees/{shop['employee'].pk}"
+        levels = lambda body: {i["position_id"]: i["experience"] for i in body["position_experience"]}  # noqa: E731
+        body = api.patch(
+            url,
+            {
+                "position_ids": [str(seller.pk), str(baker.pk)],
+                "experience": 3,
+                "position_experience": [
+                    {"position_id": str(seller.pk), "experience": 3},
+                    {"position_id": str(baker.pk), "experience": 1},
+                ],
+            },
+        ).json()
+        assert levels(body) == {str(seller.pk): 3, str(baker.pk): 1}
+        # Only what differs from the default is kept.
+        assert list(PositionExperience.objects.values_list("position_id", "level")) == [(baker.pk, 1)]
+        [row] = api.get(f"/api/locations/{shop['location'].pk}/employees").json()
+        assert levels(row) == {str(seller.pk): 3, str(baker.pk): 1}
+        # The default moving to the same level, or the position going away, drops the row.
+        assert levels(api.patch(url, {"experience": 1}).json()) == {str(seller.pk): 1, str(baker.pk): 1}
+        assert not PositionExperience.objects.exists()
+        api.patch(url, {"position_experience": [{"position_id": str(baker.pk), "experience": 3}]})
+        assert levels(api.patch(url, {"position_ids": [str(seller.pk)]}).json()) == {str(seller.pk): 1}
+        assert not PositionExperience.objects.exists()
+
+    def test_level_only_on_a_position_the_person_has(self, api, shop):
+        as_manager(api, shop)
+        other = Position.objects.create(location=shop["location"], name="Piekarz")
+        payload = {"position_experience": [{"position_id": str(other.pk), "experience": 3}]}
+        response = api.patch(f"/api/employees/{shop['employee'].pk}", payload)
+        assert response.status_code == 400 and "stanowisku" in response.json()["detail"]
+
+    def test_staffing_can_ask_for_experienced_people(self, api, shop):
+        as_manager(api, shop)
+        base = {"shift_type_id": str(shop["shift_type"].pk), "position_id": str(shop["position"].pk)}
+        url = f"/api/locations/{shop['location'].pk}/staffing"
+        body = put(api, url, {"cells": [{**base, "weekday": 0, "count": 2, "experienced": 1}]}).json()
+        assert body["staffing"][0]["experienced"] == 1
+        assert StaffingRule.objects.get().experienced == 1
+        too_many = put(api, url, {"cells": [{**base, "weekday": 0, "count": 2, "experienced": 3}]})
+        assert too_many.status_code == 400 and "Doświadczonych" in too_many.json()["detail"]
+        exceptions = f"/api/locations/{shop['location'].pk}/staffing-exceptions"
+        day = {**base, "date": str(shop["period"].start), "count": 3}
+        assert api.post(exceptions, {**day, "experienced": 4}).status_code == 400
+        assert api.post(exceptions, {**day, "experienced": 2}).json()["experienced"] == 2
 
     def test_employee_never_sees_the_experience_level(self, api, shop):
         EmployeeProfile.objects.filter(pk=shop["employee"].pk).update(experience=1)
