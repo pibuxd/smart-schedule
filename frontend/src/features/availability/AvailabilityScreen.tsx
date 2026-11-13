@@ -1,10 +1,8 @@
-import { Check, Clock, Eraser } from 'lucide-react'
+import { Check, Clock } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 
 import {
-  useCopyPreviousAvailability,
   useMyAvailability,
-  useRepeatMyAvailability,
   useSaveMyAvailability,
   useSubmitMyAvailability,
 } from '../../api/generated/availability/availability'
@@ -18,19 +16,17 @@ import { AvailabilityCalendar } from './AvailabilityCalendar'
 import { DayHoursSheet } from './DayHoursSheet'
 import {
   type AvailabilityState,
-  changedDays,
   countStates,
   describeMark,
   hasHours,
   markOf,
-  BRUSH_LABEL,
+  STATE_LABEL,
   STATES,
   type Marks,
   marksFromServer,
   sameMark,
   toDayIn,
 } from './marks'
-import { MoreOptionsSheet } from './MoreOptionsSheet'
 import { RequestsSection } from './RequestsSection'
 import { StateIcon } from './StateIcon'
 
@@ -80,10 +76,7 @@ function AvailabilityEditor({
   const [marks, setMarks] = useState<Marks>(() => marksFromServer(initial.days))
   const marksRef = useRef(marks)
   const [tool, setTool] = useState<Tool>('cannot')
-  const [history, setHistory] = useState<Marks[]>([])
   const [openDay, setOpenDay] = useState<string | null>(null)
-  const [moreOpen, setMoreOpen] = useState(false)
-  const [moreError, setMoreError] = useState<string | null>(null)
   const [submittedAt, setSubmittedAt] = useState(initial.submitted_at)
   const [status, setStatus] = useState<SaveStatus>('saved')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -92,8 +85,6 @@ function AvailabilityEditor({
   const stroke = useRef<Marks | null>(null)
 
   const save = useSaveMyAvailability()
-  const repeat = useRepeatMyAvailability()
-  const copy = useCopyPreviousAvailability()
   const submit = useSubmitMyAvailability()
   const ids = { company_id: companyId, period_id: period.id }
 
@@ -130,10 +121,6 @@ function AvailabilityEditor({
     [companyId, period.id],
   )
 
-  const record = (previous: Marks) => {
-    if (Object.keys(previous).length) setHistory((h) => [...h, previous])
-  }
-
   const paint = useCallback(
     (date: string) => {
       if (tool === 'hours') return
@@ -150,13 +137,9 @@ function AvailabilityEditor({
   const endStroke = useCallback(() => {
     const touched = stroke.current ?? {}
     stroke.current = null
-    const previous: Marks = {}
     const changes: Marks = {}
     for (const date of Object.keys(touched)) {
-      if (!sameMark(touched[date], markOf(marksRef.current, date))) {
-        previous[date] = touched[date]
-        changes[date] = markOf(marksRef.current, date)
-      }
+      if (!sameMark(touched[date], markOf(marksRef.current, date))) changes[date] = markOf(marksRef.current, date)
     }
     const dates = Object.keys(touched)
     if (dates.length === 1 && Object.keys(changes).length === 0) {
@@ -164,26 +147,8 @@ function AvailabilityEditor({
       setOpenDay(dates[0])
       return
     }
-    record(previous)
     send(changes)
   }, [send])
-
-  const undo = () => {
-    const last = history[history.length - 1]
-    if (!last) return
-    setHistory((h) => h.slice(0, -1))
-    apply(last)
-    send(last)
-  }
-
-  const replaceAll = (response: MyAvailabilityOut) => {
-    const next = marksFromServer(response.days)
-    record(changedDays(marksRef.current, next))
-    marksRef.current = next
-    setMarks(next)
-    setMoreOpen(false)
-    setMoreError(null)
-  }
 
   const dates: string[] = []
   for (let d = parseDate(period.start); d <= parseDate(period.end); d = addDays(d, 1)) dates.push(toIsoDate(d))
@@ -244,6 +209,9 @@ function AvailabilityEditor({
           Chętnie: <b className="text-ink tabular-nums">{counts.prefer}</b>
         </span>
         <span>
+          Mogę: <b className="text-ink tabular-nums">{counts.neutral}</b>
+        </span>
+        <span>
           Nie mogę: <b className="text-ink tabular-nums">{counts.cannot}</b>
         </span>
       </p>
@@ -268,14 +236,6 @@ function AvailabilityEditor({
               </span>
             </span>
           </button>
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" disabled={history.length === 0} onClick={undo}>
-              Cofnij
-            </Button>
-            <Button variant="secondary" onClick={() => setMoreOpen(true)}>
-              Więcej opcji
-            </Button>
-          </div>
           {submittedAt ? (
             <p className="m-0 flex items-start gap-2 rounded-md border-2 border-prefer bg-prefer-soft px-3.5 py-3 text-prefer">
               <Check aria-hidden="true" size={22} className="mt-0.5 flex-none" />
@@ -299,7 +259,7 @@ function AvailabilityEditor({
                 Gotowe, wysyłam kierownikowi
               </Button>
               <p className="m-0 text-sm text-ink-muted">
-                Każdy dzień zapisuje się od razu. Dzień bez zaznaczenia znaczy, że możesz pracować.
+                Każda zmiana zapisuje się od razu. Dni, których nie zmienisz, zostają jako „Mogę”.
               </p>
               {submit.isError && <InlineError>{errorMessage(submit.error, NETWORK_PROBLEM)}</InlineError>}
             </div>
@@ -317,7 +277,6 @@ function AvailabilityEditor({
           onSave={(mark) => {
             const before = markOf(marksRef.current, openDay)
             if (!sameMark(before, mark)) {
-              record({ [openDay]: before })
               apply({ [openDay]: mark })
               send({ [openDay]: mark })
             }
@@ -325,36 +284,6 @@ function AvailabilityEditor({
           }}
         />
       )}
-      <MoreOptionsSheet
-        open={moreOpen}
-        onOpenChange={(open) => {
-          setMoreOpen(open)
-          setMoreError(null)
-        }}
-        periodEnd={period.end}
-        marks={marks}
-        dates={dates}
-        busy={repeat.isPending || copy.isPending}
-        error={moreError}
-        onRepeat={(weekdays, state, until) =>
-          repeat.mutate(
-            { data: { ...ids, weekdays, state, repeat_until: until } },
-            {
-              onSuccess: (r) => replaceAll(r.data as MyAvailabilityOut),
-              onError: (e) => setMoreError(errorMessage(e, NETWORK_PROBLEM)),
-            },
-          )
-        }
-        onCopy={() =>
-          copy.mutate(
-            { data: ids },
-            {
-              onSuccess: (r) => replaceAll(r.data as MyAvailabilityOut),
-              onError: (e) => setMoreError(errorMessage(e, NETWORK_PROBLEM)),
-            },
-          )
-        }
-      />
     </div>
   )
 }
@@ -401,9 +330,9 @@ function ToolBar({ tool, onChange }: { tool: Tool; onChange: (tool: Tool) => voi
             )}
           >
             <i className={cn(`avail-${t}`, 'grid size-7 place-items-center rounded-sm border-2')}>
-              {t === 'neutral' ? <Eraser aria-hidden="true" size={16} /> : <StateIcon state={t} size={16} />}
+              <StateIcon state={t} size={16} />
             </i>
-            {BRUSH_LABEL[t]}
+            {STATE_LABEL[t]}
           </button>
         ))}
       </div>

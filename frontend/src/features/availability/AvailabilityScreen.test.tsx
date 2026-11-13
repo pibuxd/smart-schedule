@@ -46,16 +46,16 @@ describe('AvailabilityScreen', () => {
     renderScreen(<AvailabilityScreen companyId="c1" readOnly={false} />)
     const day = await screen.findByRole('button', { name: 'piątek 4 grudnia: chętnie, tylko 22:00–06:00 (do rana)' })
     expect(day).toHaveTextContent('22–6')
-    expect(screen.getByRole('button', { name: 'wtorek 1 grudnia: bez zaznaczenia' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę' })).toBeInTheDocument()
   })
 
-  it('marks a day with the chosen state, saves it, and undoes it', async () => {
+  it('marks a day with the chosen state and saves it', async () => {
     const calls = api(availability())
     renderScreen(<AvailabilityScreen companyId="c1" readOnly={false} />)
     await screen.findByText('Zaznaczam dni jako:')
     fireEvent.click(screen.getByRole('button', { name: 'Nie mogę' }))
     // A keyboard press (detail 0) paints one day, like a tap does.
-    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: bez zaznaczenia' }), { detail: 0 })
+    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę' }), { detail: 0 })
     expect(screen.getByRole('button', { name: 'wtorek 1 grudnia: nie mogę' })).toBeInTheDocument()
     await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1))
     expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({
@@ -64,19 +64,15 @@ describe('AvailabilityScreen', () => {
       days: [{ date: '2026-12-01', state: 'cannot', from_time: null, to_time: null }],
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cofnij' }))
-    expect(screen.getByRole('button', { name: 'wtorek 1 grudnia: bez zaznaczenia' })).toBeInTheDocument()
-    await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2))
-    expect(calls.filter((c) => c.method === 'PUT')[1].body).toMatchObject({
-      days: [{ date: '2026-12-01', state: 'neutral' }],
-    })
+    expect(screen.queryByRole('button', { name: 'Cofnij' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Więcej opcji' })).not.toBeInTheDocument()
   })
 
   it('warns plainly that "chętnie" with hours blocks other shifts that day', async () => {
     api(availability())
     renderScreen(<AvailabilityScreen companyId="c1" readOnly={false} />)
     fireEvent.click(await screen.findByRole('button', { name: /Godziny dnia/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: bez zaznaczenia' }))
+    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Chętnie' }))
     fireEvent.click(screen.getByRole('radio', { name: /Mogę tylko w tych godzinach/ }))
     expect(screen.getByText('Zmiany spoza godzin 14:00–22:00 tego dnia nie dostaniesz.')).toBeInTheDocument()
