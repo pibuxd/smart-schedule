@@ -16,7 +16,7 @@ function timeLabel(value: string, asEnd: boolean) {
 
 /**
  * One day in detail: the state and, if needed, the hours.
- * "Chętnie"/"Obojętnie" with hours = "I can only then"; "Nie mogę"/"Wolę nie" with hours = "not then".
+ * "Chętnie"/"Mogę" with hours = "I can only then"; "Nie mogę" with hours = "not then".
  */
 export function DayHoursSheet({
   date,
@@ -33,7 +33,7 @@ export function DayHoursSheet({
   const [limited, setLimited] = useState(mark.from !== null || mark.to !== null)
   const [from, setFrom] = useState(mark.from ?? '14:00')
   const [to, setTo] = useState(mark.to ?? '22:00')
-  const restricting = state === 'cannot' || state === 'prefer_not'
+  const restricting = state === 'cannot'
   const draft: Mark = limited ? { state, from, to } : { state, from: null, to: null }
   const empty = limited && from === to
 

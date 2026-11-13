@@ -10,8 +10,8 @@ Hard rules (always): one person or a hole per slot, the right position, home loc
 no "cannot" days, no overlapping shifts, pinned slots, frozen past days, "no exceptions" rules and, for employment
 contracts, 11 h daily rest, 35 h weekly rest and at most 8 h a day.
 
-The penalty in phase 2 is a linear stand-in for `engine.scoring.penalty`. Most parts are exact (requests,
-"wolę nie" days, hours, closings, days in a row); rules whose score is a share of a varying count (e.g. "rest
+The penalty in phase 2 is a linear stand-in for `engine.scoring.penalty`. Most parts are exact (text
+requests, hours, closings, days in a row); rules whose score is a share of a varying count (e.g. "rest
 between shifts" = broken pairs / all pairs) divide by an estimate of that count instead. The manager always sees
 the numbers from the independent validator, never the solver's own objective.
 
@@ -33,6 +33,8 @@ from enum import StrEnum
 from ortools.sat.python import cp_model
 
 from engine.problem import (
+    BEGINNER,
+    EXPERIENCED,
     AvailabilityState,
     Contract,
     Employee,
@@ -52,6 +54,7 @@ from engine.validator import (
     TARGET_HOURS_HARD_TOLERANCE,
     Code,
     RequestKind,
+    experience_shifts,
     validate,
 )
 
@@ -536,6 +539,27 @@ class _Builder:
                 self.m.add(need * missing >= need - have)
                 self.add_penalty(points / len(closings), missing)
 
+    def _rule_experience_mix(self, rule: RuleConfig, hard: bool, points: float) -> None:
+        shifts = experience_shifts(self.p, rule)
+        for (day, shift_type), slots in shifts.items():
+            # One person works at most one slot of a shift (no overlap), so summing the slot variables counts people.
+            beginners, experienced = [], []
+            for slot in slots:
+                for employee_id, var in self.x_of_slot[slot.id]:
+                    level = self.p.employee_by_id[employee_id].experience
+                    if level == BEGINNER:
+                        beginners.append(var)
+                    elif level == EXPERIENCED:
+                        experienced.append(var)
+            if not beginners:
+                continue
+            if hard:
+                self.m.add(sum(beginners) <= sum(experienced))
+            else:
+                broken = self.m.new_bool_var(f"green[{day},{shift_type}]")
+                self.m.add(sum(beginners) - sum(experienced) <= len(slots) * broken)
+                self.add_penalty(points / len(shifts), broken)
+
     def _weeks_of(self, employee_id: str) -> dict[date, list[tuple[Slot, cp_model.IntVar]]]:
         weeks: dict[date, list[tuple[Slot, cp_model.IntVar]]] = defaultdict(list)
         for slot, var in self.x_of_emp.get(employee_id, ()):
@@ -590,15 +614,7 @@ class _Builder:
             employee_id = measure.employee
             mine = self.x_of_emp.get(employee_id, ())
             weight = measure.weight * points
-            if measure.kind == RequestKind.PREFER_NOT:
-                hits = [
-                    v
-                    for s, v in mine
-                    if s.date == measure.date and p.availability_for(employee_id, s) == AvailabilityState.PREFER_NOT
-                ]
-                if hits:
-                    self.add_penalty(weight, self._or(hits, f"prefer_not[{employee_id},{measure.date}]"))
-            elif measure.kind == RequestKind.PREFER:
+            if measure.kind == RequestKind.PREFER:
                 by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
                 for s, v in mine:
                     if p.availability_for(employee_id, s) == AvailabilityState.PREFER:
@@ -659,6 +675,14 @@ class _Builder:
                 capped = self.m.new_int_var(0, limit, f"over_capped[{request.id}]")
                 self.m.add_min_equality(capped, [over, limit])
                 self.add_penalty(weight / limit, capped)
+            case RequestType.DAYS_OFF:
+                if not request.dates:  # no dates: left to the manager, as in the validator
+                    return
+                by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
+                for slot, var in own:
+                    by_day[slot.date].append(var)
+                for day, vars_ in by_day.items():
+                    self.add_penalty(weight / len(request.dates), self._or(vars_, f"day_off[{request.id},{day}]"))
             case _:
                 return
 

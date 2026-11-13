@@ -52,6 +52,7 @@ REQUEST_TYPES = {
     "preferuj_osobe": RequestType.PREFER_PERSON,
     "typ_zmiany": RequestType.SHIFT_TYPE,
     "limit_godzin": RequestType.HOURS_LIMIT,
+    "wolne_dni": RequestType.DAYS_OFF,
     "inne": RequestType.OTHER,
 }
 
@@ -266,6 +267,7 @@ class _Reader:
                 contract=p.contract,
                 max_hours_month=p.max_hours_month,
                 target_hours_month=p.target_hours_month,
+                experience=p.experience,
                 available=p.is_active and p.home_location_id in self.location_ids,
             )
             for p in rows

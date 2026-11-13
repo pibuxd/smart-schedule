@@ -1,16 +1,23 @@
 import type { AvailabilityDayOut, DayIn } from '../../api/generated/model'
 import { compactTime } from '../../lib/dates'
 
-export type AvailabilityState = 'cannot' | 'prefer_not' | 'neutral' | 'prefer'
+/**
+ * Two marks only (decision of 13.11.2026): "nie mogę" and "chętnie". "neutral" is a day without a mark ("mogę");
+ * it is stored only to carry "mogę tylko w tych godzinach" or after the employee clears a day.
+ * Wishes like "wolę nie" are written as a text request instead.
+ */
+export type AvailabilityState = 'cannot' | 'neutral' | 'prefer'
 
-export const STATES: AvailabilityState[] = ['cannot', 'prefer_not', 'neutral', 'prefer']
+export const STATES: AvailabilityState[] = ['cannot', 'neutral', 'prefer']
 
 export const STATE_LABEL: Record<AvailabilityState, string> = {
   cannot: 'Nie mogę',
-  prefer_not: 'Wolę nie',
-  neutral: 'Obojętnie',
+  neutral: 'Mogę',
   prefer: 'Chętnie',
 }
+
+/** On the brush the unmarked state works as an eraser. */
+export const BRUSH_LABEL: Record<AvailabilityState, string> = { ...STATE_LABEL, neutral: 'Wyczyść' }
 
 /** One day as the employee marked it. Hours are "HH:MM"; an end at or before the start means the next morning. */
 export type Mark = { state: AvailabilityState; from: string | null; to: string | null }
@@ -66,14 +73,14 @@ export function cellHours(mark: Mark): string | null {
 
 /** Spoken description, e.g. "chętnie, tylko 14:00–22:00". */
 export function describeMark(mark: Mark): string {
+  if (!hasHours(mark)) return mark.state === 'neutral' ? 'bez zaznaczenia' : STATE_LABEL[mark.state].toLowerCase()
   const state = STATE_LABEL[mark.state].toLowerCase()
-  if (!hasHours(mark)) return state
   const window = `${mark.from ?? '0:00'}–${mark.to ?? '24:00'}${overnight(mark) ? ' (do rana)' : ''}`
-  return mark.state === 'cannot' || mark.state === 'prefer_not' ? `${state} w godzinach ${window}` : `${state}, tylko ${window}`
+  return mark.state === 'cannot' ? `${state} w godzinach ${window}` : `${state}, tylko ${window}`
 }
 
 export function countStates(marks: Marks, dates: string[]): Record<AvailabilityState, number> {
-  const counts: Record<AvailabilityState, number> = { cannot: 0, prefer_not: 0, neutral: 0, prefer: 0 }
+  const counts: Record<AvailabilityState, number> = { cannot: 0, neutral: 0, prefer: 0 }
   for (const date of dates) counts[markOf(marks, date).state] += 1
   return counts
 }

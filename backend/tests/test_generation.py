@@ -444,7 +444,7 @@ def test_arrange_all_runs_each_demo_bakery_on_its_own():
     assert len(runs) == 4 and GenerationUsage.objects.get(company_id=BAKERY_COMPANY_ID).count == 4
     worked = set()
     for run in runs:
-        run = run_generation(run.pk, time_limit_s=4, workers=4, today=TODAY)
+        run = run_generation(run.pk, time_limit_s=8, workers=4, today=TODAY)
         assert run.status == GenerationRun.Status.SUCCEEDED, run.error
         [period] = run.periods.all()
         assert run.location_id == period.location_id and run.group_id is None

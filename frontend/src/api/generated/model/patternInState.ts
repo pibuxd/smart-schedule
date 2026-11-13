@@ -10,7 +10,6 @@ export type PatternInState = typeof PatternInState[keyof typeof PatternInState];
 
 export const PatternInState = {
   cannot: 'cannot',
-  prefer_not: 'prefer_not',
   neutral: 'neutral',
   prefer: 'prefer',
 } as const;

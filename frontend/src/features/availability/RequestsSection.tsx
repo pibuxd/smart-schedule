@@ -37,8 +37,8 @@ export function RequestsSection({
         Coś jeszcze?
       </h2>
       <p className="m-0 text-sm text-ink-muted">
-        Napisz tylko to, czego nie da się zaznaczyć w kalendarzu, na przykład z kim nie chcesz mieć zmiany. Prośbę
-        przeczyta tylko kierownik.
+        Napisz to, czego nie da się zaznaczyć w kalendarzu, na przykład w które dni wolisz mieć wolne albo z kim nie
+        chcesz mieć zmiany. Prośbę przeczyta tylko kierownik.
       </p>
       {requests.isError && <InlineError>Nie udało się wczytać Twoich próśb. Odśwież stronę za chwilę.</InlineError>}
       {list.length > 0 && (

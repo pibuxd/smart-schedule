@@ -10,7 +10,6 @@ export type UnmetRequestOutKind = typeof UnmetRequestOutKind[keyof typeof UnmetR
 
 export const UnmetRequestOutKind = {
   text: 'text',
-  prefer_not: 'prefer_not',
   prefer: 'prefer',
   unscored: 'unscored',
 } as const;

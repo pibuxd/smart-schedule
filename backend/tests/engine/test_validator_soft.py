@@ -169,6 +169,34 @@ class TestOtherRules:
         report = validate(p, {"c1": "anna", "c2": "szef", "c3": "anna"})
         assert [v.slots for v in report.hard] == [("c3",)]
 
+    def test_beginners_need_as_many_experienced_on_the_shift(self):
+        people = [
+            employee("nowa", experience=1),
+            employee("nowy", experience=1),
+            employee("stara", experience=3),
+            employee("ola"),
+        ]
+        slots = [slot(f"m{i}", MON, shift_type="am") for i in range(3)] + [slot("p", MON, "14:00", "22:00")]
+        p = problem(people, slots, rules=(rule("experience_mix"),))
+        report = validate(p, {"m0": "nowa", "m1": "nowy", "m2": "stara", "p": "ola"})
+        m = measure(report, "experience_mix")
+        assert (m.instances, m.degree) == (2, 0.5)
+        assert (
+            m.violations[0].message
+            == "Na zmianie 16.11 Zmiana 06:00–14:00 jest 2 początkujących, a doświadczonych tylko 1."
+        )
+        # Skilled people (the default) do not count either way.
+        assert measure(validate(p, {"m0": "nowa", "m1": "ola", "m2": "stara"}), "experience_mix").degree == 0.0
+
+    def test_experience_mix_for_one_position(self):
+        people = [employee("nowa", experience=1), employee("jan", positions=(BAKER,), experience=3)]
+        slots = [slot("s", MON), slot("b", MON, position=BAKER)]
+        p = problem(people, slots, rules=(rule("experience_mix", hard=True, position=SALES),))
+        assert not validate(p, {"s": "nowa", "b": "jan"}).ok
+        assert validate(
+            problem(people, slots, rules=(rule("experience_mix", hard=True),)), {"s": "nowa", "b": "jan"}
+        ).ok
+
     def test_same_shift_type_in_week(self):
         slots = [slot("a", MON, shift_type="am"), slot("b", day(1), "14:00", "22:00", shift_type="pm")]
         p = problem([employee("anna")], slots, rules=(rule("same_shift_type_in_week"),))
@@ -192,25 +220,10 @@ class TestOtherRules:
 
 
 class TestCalendarRequests:
-    def test_prefer_not_day(self):
-        p = problem(
-            [employee("anna")],
-            [slot("a", MON), slot("b", day(1))],
-            availability=(Availability("anna", MON, "prefer_not"),),
-        )
-        (item,) = validate(p, {"a": "anna"}).requests
-        assert (item.kind, item.degree, item.weight, item.date) == (RequestKind.PREFER_NOT, 1.0, 3.0, MON)
-        assert validate(p, {"b": "anna"}).requests[0].degree == 0.0
-
-    def test_many_prefer_not_days_do_not_outweigh_colleagues(self):
-        # A 14-day period counts 4 "wolę nie" days at full weight per person; 12 days share that same total.
-        slots = [slot(f"d{i}", day(i)) for i in range(14)]
-        availability = tuple(Availability("anna", day(i), "prefer_not") for i in range(12)) + tuple(
-            Availability("ola", day(i), "prefer_not") for i in range(2)
-        )
-        report = validate(problem([employee("anna"), employee("ola")], slots, availability=availability), {})
-        totals = {name: sum(r.weight for r in report.requests if r.employee == name) for name in ("anna", "ola")}
-        assert totals == {"anna": pytest.approx(12.0), "ola": pytest.approx(6.0)}
+    def test_unmarked_day_is_not_a_request(self):
+        # "Wolę nie" left the calendar (13.11.2026): an unmarked day, even a stored one, asks for nothing.
+        p = problem([employee("anna")], [slot("a", MON)], availability=(Availability("anna", MON, "neutral"),))
+        assert validate(p, {"a": "anna"}).requests == ()
 
     def test_prefer_days_count_against_days_actually_worked(self):
         availability = tuple(Availability("anna", day(i), "prefer") for i in range(4))
@@ -246,6 +259,13 @@ class TestTextRequests:
         no_mornings = Request("r", "anna", "shift_type", shift_type="06:00-14:00", avoid=True)
         assert self.degree(only_mornings, {"a1": "anna"}) == 0.0
         assert self.degree(no_mornings, {"a1": "anna"}) == 1.0
+
+    def test_days_off(self):
+        request = Request("r", "anna", "days_off", dates=frozenset({MON, day(1)}))
+        assert self.degree(request, {"o1": "ola", "e2": "ewa"}) == 0.0
+        assert self.degree(request, {"a1": "anna"}) == 0.5
+        assert self.degree(request, {"a1": "anna", "a2": "anna"}) == 1.0
+        assert self.degree(Request("r", "anna", "days_off"), {"a1": "anna"}) is None  # no dates: for the manager
 
     def test_hours_limit(self):
         request = Request("r", "anna", "hours_limit", max_hours=8)

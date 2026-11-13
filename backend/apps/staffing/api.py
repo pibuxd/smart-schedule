@@ -27,6 +27,8 @@ router = Router(tags=["staffing"])
 
 ShiftKind = Literal["fixed", "flexible"]
 ContractName = Literal["civil", "employment"]
+# 1 = początkujący, 2 = samodzielny, 3 = doświadczony. Only managers see it (never in employee endpoints).
+ExperienceLevel = Literal[1, 2, 3]
 
 
 class PositionIn(Schema):
@@ -115,6 +117,7 @@ class EmployeeOut(Schema):
     phone: str
     position_ids: list[UUID]
     contract: ContractName
+    experience: ExperienceLevel
     max_hours_month: int | None
     target_hours_month: int | None
     is_active: bool
@@ -125,6 +128,7 @@ class EmployeeOut(Schema):
 class EmployeeIn(Schema):
     position_ids: list[UUID] | None = None
     contract: ContractName | None = None
+    experience: ExperienceLevel | None = None
     # Send null to clear a limit.
     max_hours_month: int | None = Field(None, ge=1, le=400)
     target_hours_month: int | None = Field(None, ge=1, le=400)
@@ -409,6 +413,7 @@ def _employee_out(profile: EmployeeProfile, position_ids: list) -> EmployeeOut:
         phone=user.phone_e164,
         position_ids=position_ids,
         contract=profile.contract,
+        experience=profile.experience,
         max_hours_month=profile.max_hours_month,
         target_hours_month=profile.target_hours_month,
         is_active=profile.is_active,
@@ -445,13 +450,16 @@ def location_employees(request, location_id: UUID):
     response={200: EmployeeOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
 )
 def update_employee(request, employee_id: UUID, payload: EmployeeIn):
-    """Positions, contract, monthly maximum and target, or switching the person off (history stays)."""
+    """Positions, contract, experience level, monthly maximum and target, or switching the person off (history
+    stays)."""
     ctx, profile = context_for(request, EmployeeProfile, employee_id)
     ctx.require_manager_of(profile.home_location)
     ctx.require_writable()
     sent = payload.model_fields_set
     if "contract" in sent and payload.contract is not None:
         profile.contract = Contract(payload.contract)
+    if "experience" in sent and payload.experience is not None:
+        profile.experience = payload.experience
     if "max_hours_month" in sent:
         profile.max_hours_month = payload.max_hours_month
     if "target_hours_month" in sent:

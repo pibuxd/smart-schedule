@@ -35,9 +35,16 @@ class Row:
     params: dict[str, Any] = field(default_factory=dict)
 
 
-# Rules whose parameters point at a location's positions or shift types: they can only be set in a location.
+# Choices that may stay empty on an enabled rule (experience_mix: empty = all positions together).
+OPTIONAL_PARAMS = frozenset({("experience_mix", "position")})
+# Rules whose required parameters point at a location's positions or shift types: they can only be set in a
+# location. A group can still use a rule whose such parameter is optional, with that parameter left empty.
 LOCATION_ONLY_PARAMS = {"position", "shift_type"}
-LOCATION_ONLY_RULES = frozenset(rule.code for rule in RULES if LOCATION_ONLY_PARAMS & set(rule.params))
+LOCATION_ONLY_RULES = frozenset(
+    rule.code
+    for rule in RULES
+    if any(name in LOCATION_ONLY_PARAMS and (rule.code, name) not in OPTIONAL_PARAMS for name in rule.params)
+)
 
 # Numeric parameters: allowed range and the Polish name used in error messages.
 NUMBER_PARAMS: dict[str, tuple[int, int, str]] = {

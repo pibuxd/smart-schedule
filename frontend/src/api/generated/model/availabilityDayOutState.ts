@@ -10,7 +10,6 @@ export type AvailabilityDayOutState = typeof AvailabilityDayOutState[keyof typeo
 
 export const AvailabilityDayOutState = {
   cannot: 'cannot',
-  prefer_not: 'prefer_not',
   neutral: 'neutral',
   prefer: 'prefer',
 } as const;
