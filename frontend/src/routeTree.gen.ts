@@ -22,6 +22,7 @@ import { Route as KierownikIndexRouteImport } from './routes/kierownik/index'
 import { Route as KierownikDostepRouteImport } from './routes/kierownik/dostep'
 import { Route as KierownikGodzinyRouteImport } from './routes/kierownik/godziny'
 import { Route as KierownikOddaneZmianyRouteImport } from './routes/kierownik/oddane-zmiany'
+import { Route as KierownikPowiadomieniaRouteImport } from './routes/kierownik/powiadomienia'
 import { Route as KierownikLokalLocationIdRouteImport } from './routes/kierownik/lokal.$locationId'
 import { Route as KierownikGrupaGroupIdZasadyRouteImport } from './routes/kierownik/grupa.$groupId/zasady'
 import { Route as KierownikLokalLocationIdIndexRouteImport } from './routes/kierownik/lokal.$locationId/index'
@@ -95,6 +96,11 @@ const KierownikOddaneZmianyRoute = KierownikOddaneZmianyRouteImport.update({
   path: '/oddane-zmiany',
   getParentRoute: () => KierownikRoute,
 } as any)
+const KierownikPowiadomieniaRoute = KierownikPowiadomieniaRouteImport.update({
+  id: '/powiadomienia',
+  path: '/powiadomienia',
+  getParentRoute: () => KierownikRoute,
+} as any)
 const KierownikLokalLocationIdRoute =
   KierownikLokalLocationIdRouteImport.update({
     id: '/lokal/$locationId',
@@ -156,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/kierownik/dostep': typeof KierownikDostepRoute
   '/kierownik/godziny': typeof KierownikGodzinyRoute
   '/kierownik/oddane-zmiany': typeof KierownikOddaneZmianyRoute
+  '/kierownik/powiadomienia': typeof KierownikPowiadomieniaRoute
   '/kierownik/': typeof KierownikIndexRoute
   '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/kierownik/dostep': typeof KierownikDostepRoute
   '/kierownik/godziny': typeof KierownikGodzinyRoute
   '/kierownik/oddane-zmiany': typeof KierownikOddaneZmianyRoute
+  '/kierownik/powiadomienia': typeof KierownikPowiadomieniaRoute
   '/kierownik': typeof KierownikIndexRoute
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
   '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
@@ -200,6 +208,7 @@ export interface FileRoutesById {
   '/kierownik/dostep': typeof KierownikDostepRoute
   '/kierownik/godziny': typeof KierownikGodzinyRoute
   '/kierownik/oddane-zmiany': typeof KierownikOddaneZmianyRoute
+  '/kierownik/powiadomienia': typeof KierownikPowiadomieniaRoute
   '/kierownik/': typeof KierownikIndexRoute
   '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/kierownik/dostep'
     | '/kierownik/godziny'
     | '/kierownik/oddane-zmiany'
+    | '/kierownik/powiadomienia'
     | '/kierownik/'
     | '/kierownik/lokal/$locationId'
     | '/kierownik/grupa/$groupId/zasady'
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
     | '/kierownik/dostep'
     | '/kierownik/godziny'
     | '/kierownik/oddane-zmiany'
+    | '/kierownik/powiadomienia'
     | '/kierownik'
     | '/kierownik/grupa/$groupId/zasady'
     | '/kierownik/lokal/$locationId/dyspozycje'
@@ -267,6 +278,7 @@ export interface FileRouteTypes {
     | '/kierownik/dostep'
     | '/kierownik/godziny'
     | '/kierownik/oddane-zmiany'
+    | '/kierownik/powiadomienia'
     | '/kierownik/'
     | '/kierownik/lokal/$locationId'
     | '/kierownik/grupa/$groupId/zasady'
@@ -380,6 +392,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KierownikOddaneZmianyRouteImport
       parentRoute: typeof KierownikRoute
     }
+    '/kierownik/powiadomienia': {
+      id: '/kierownik/powiadomienia'
+      path: '/powiadomienia'
+      fullPath: '/kierownik/powiadomienia'
+      preLoaderRoute: typeof KierownikPowiadomieniaRouteImport
+      parentRoute: typeof KierownikRoute
+    }
     '/kierownik/lokal/$locationId': {
       id: '/kierownik/lokal/$locationId'
       path: '/lokal/$locationId'
@@ -486,6 +505,7 @@ interface KierownikRouteChildren {
   KierownikDostepRoute: typeof KierownikDostepRoute
   KierownikGodzinyRoute: typeof KierownikGodzinyRoute
   KierownikOddaneZmianyRoute: typeof KierownikOddaneZmianyRoute
+  KierownikPowiadomieniaRoute: typeof KierownikPowiadomieniaRoute
   KierownikIndexRoute: typeof KierownikIndexRoute
   KierownikLokalLocationIdRoute: typeof KierownikLokalLocationIdRouteWithChildren
   KierownikGrupaGroupIdZasadyRoute: typeof KierownikGrupaGroupIdZasadyRoute
@@ -495,6 +515,7 @@ const KierownikRouteChildren: KierownikRouteChildren = {
   KierownikDostepRoute: KierownikDostepRoute,
   KierownikGodzinyRoute: KierownikGodzinyRoute,
   KierownikOddaneZmianyRoute: KierownikOddaneZmianyRoute,
+  KierownikPowiadomieniaRoute: KierownikPowiadomieniaRoute,
   KierownikIndexRoute: KierownikIndexRoute,
   KierownikLokalLocationIdRoute: KierownikLokalLocationIdRouteWithChildren,
   KierownikGrupaGroupIdZasadyRoute: KierownikGrupaGroupIdZasadyRoute,

@@ -19,7 +19,7 @@ const TABS = [
   { to: '/powiadomienia', label: 'Powiadomienia', Icon: Bell },
 ] as const
 
-/** The employee's two screens with tabs: at the bottom on a phone (thumb reach), at the top on a computer. */
+/** The employee's screens with tabs: at the bottom on a phone (thumb reach), at the top on a computer. */
 function EmployeeLayout() {
   const session = useSession()
   const logout = useLogout()
@@ -99,7 +99,7 @@ function EmployeeLayout() {
         <nav
           aria-label="Ekrany"
           className={
-            'fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-line bg-surface ' +
+            'fixed inset-x-0 bottom-0 z-30 grid grid-cols-[repeat(3,minmax(max-content,1fr))] border-t border-line bg-surface ' +
             'pb-[env(safe-area-inset-bottom)] md:static md:mx-auto md:mt-4 md:max-w-(--column) md:rounded-md md:border'
           }
         >
@@ -107,7 +107,7 @@ function EmployeeLayout() {
             <Link
               key={to}
               to={to}
-              className="relative grid min-h-16 place-items-center gap-0.5 py-2 text-base font-semibold"
+              className="relative grid min-h-16 min-w-0 place-items-center gap-0.5 px-0.5 py-2 text-sm font-semibold whitespace-nowrap"
               inactiveProps={{ className: 'text-ink-muted' }}
               activeProps={{
                 className:

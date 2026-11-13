@@ -402,6 +402,16 @@ Decyzja Piotra po przeglądzie zrzutów: "wolę nie" i "obojętnie" znikają z k
 6. Siatka kierownika: dzień bez zaznaczenia to pusta kratka z pełną ramką; przerywana ramka zostaje dla osób, które nic nie wysłały.
 7. Po połączeniu z etapem 8: siatka grafiku, wyjaśnienie zmiany i lista niespełnionych próśb nie znają już "wolę nie" (bez znacznika "woli nie" i bez pozycji `prefer_not`); w wyjaśnieniu dzień bez zaznaczenia to "bez zaznaczenia".
 
+## 15a. Poprawki po testach Piotra (13.11.2026): prostsze "Kiedy mogę"
+
+Piotr z kolegą przetestowali wdrożoną aplikację. Zmiany w tej części (nadpisują punkty 2 i 6 sekcji 15 oraz "Cofnij" i "Więcej opcji" z sekcji 12):
+
+1. Pędzel ma trzy stany: "Nie mogę", "Mogę", "Chętnie". Nie ma gumki "Wyczyść"; "Mogę" to zwykły stan (`neutral`), jasnozielony z cienkim ptaszkiem, "Chętnie" to pełniejsza zieleń z podwójnym ptaszkiem. Dzień bez wiersza w bazie wygląda i czyta się tak samo jak "Mogę".
+2. Znikają przyciski "Cofnij" i "Więcej opcji" (powtarzanie co tydzień, kopiowanie z poprzedniego miesiąca). Endpointy `repeat_my_availability` i `copy_previous_availability` zostają w API bez ekranu (dane demo ich używają); do usunięcia, jeśli nie wrócą.
+3. Siatka kierownika: legenda ma trzy stany, dzień bez wpisu to "Mogę"; kto nie wysłał dyspozycji, ma jak dotąd znacznik "Nie wysłano" przy nazwisku.
+4. Zakładki pracownika: mniejszy podpis i kolumny nie węższe niż tekst, więc "Powiadomienia" mieszczą się na ekranie 320 px.
+5. Kierownik czyta powiadomienia w panelu kierownika (`/kierownik/powiadomienia`), a nie na ekranach pracownika.
+
 ## 16. Zmiana z 13.11.2026: stopień doświadczenia pracownika
 
 Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę z jednym z trzech stopni doświadczenia, pracownik jej nie widzi, a generator pilnuje, żeby na zmianie nie było wielu niedoświadczonych.

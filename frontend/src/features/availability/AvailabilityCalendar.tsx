@@ -139,7 +139,7 @@ function DayCell({
         onClick={onClick}
       >
         <span className="text-base leading-tight font-extrabold text-ink tabular-nums">{day.getDate()}</span>
-        <span className={cn('self-center', mark.state === 'neutral' && 'text-line')}>
+        <span className="self-center">
           <StateIcon state={mark.state} size={hours ? 16 : 20} />
         </span>
         {hours && <span className="text-center text-cell font-semibold tabular-nums">{hours}</span>}

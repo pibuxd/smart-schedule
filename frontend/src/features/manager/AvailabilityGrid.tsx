@@ -20,9 +20,9 @@ function hoursOf(day: GridDayOut): string | null {
 
 function cellLabel(iso: string, day: GridDayOut | undefined): string {
   const title = dayTitle(parseDate(iso))
-  if (!day) return `${title}: bez zaznaczenia`
+  if (!day) return `${title}: mogę`
   const hours = hoursOf(day)
-  const what = day.state === 'neutral' && !hours ? 'bez zaznaczenia' : STATE_LABEL[day.state].toLowerCase()
+  const what = STATE_LABEL[day.state].toLowerCase()
   return `${title}: ${what}${hours ? ` ${hours}` : ''}${day.late ? ', zmienione po terminie' : ''}`
 }
 
@@ -30,7 +30,7 @@ function cellLabel(iso: string, day: GridDayOut | undefined): string {
 export function GridLegend() {
   return (
     <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-2 p-0 text-sm">
-      {(['cannot', 'prefer'] as const).map((state) => (
+      {(['cannot', 'neutral', 'prefer'] as const).map((state) => (
         <li key={state} className="flex items-center gap-1.5">
           <span className={cn('grid size-7 place-items-center rounded-sm border-2', `avail-${state}`)}>
             <StateIcon state={state} size={16} />
@@ -38,10 +38,6 @@ export function GridLegend() {
           {STATE_LABEL[state]}
         </li>
       ))}
-      <li className="flex items-center gap-1.5">
-        <span className="grid size-7 place-items-center rounded-sm border-2 border-line bg-surface" />
-        Bez zaznaczenia (może pracować)
-      </li>
       <li className="flex items-center gap-1.5">
         <span className="relative grid size-7 place-items-center rounded-sm border-2 border-line bg-surface outline-2 outline-offset-1 outline-accent">
           <Clock aria-hidden="true" size={14} className="text-accent" />
@@ -119,7 +115,7 @@ function Row({ employee, days }: { employee: GridEmployeeOut; days: string[] }) 
               title={cellLabel(iso, day)}
               className={cn(
                 'relative grid min-h-11 place-items-center content-center gap-0.5 rounded-sm border-2 px-0.5',
-                day ? `avail-${day.state}` : 'border-dashed border-line bg-surface',
+                `avail-${day?.state ?? 'neutral'}`,
                 day?.late && 'outline-2 outline-offset-1 outline-accent',
               )}
             >
