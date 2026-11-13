@@ -7,8 +7,8 @@ Two phases, as in docs/plan.md section 3:
    location's weight profile (80 : 20 by default), plus a cost for every changed published assignment.
 
 Hard rules (always): one person or a hole per slot, the right position, home location only (borrowing is manual),
-no "cannot" days, no overlapping shifts, pinned slots, frozen past days, "no exceptions" rules and, for employment
-contracts, 11 h daily rest, 35 h weekly rest and at most 8 h a day.
+no "cannot" days, no overlapping shifts, pinned slots, frozen past days and "no exceptions" rules. There is no
+contract type and no built-in labour law: the manager switches on rules from the catalog (docs/spec.md).
 
 The penalty in phase 2 is a linear stand-in for `engine.scoring.penalty`. Most parts are exact (text
 requests, hours, closings, days in a row); rules whose score is a share of a varying count (e.g. "rest
@@ -36,7 +36,6 @@ from engine.problem import (
     BEGINNER,
     EXPERIENCED,
     AvailabilityState,
-    Contract,
     Employee,
     Problem,
     RequestType,
@@ -48,9 +47,6 @@ from engine.problem import (
 )
 from engine.rules_catalog import RULES_BY_CODE
 from engine.validator import (
-    LABOR_DAILY_REST,
-    LABOR_MAX_HOURS_PER_DAY,
-    LABOR_WEEKLY_REST,
     TARGET_HOURS_HARD_TOLERANCE,
     Code,
     RequestKind,
@@ -76,11 +72,11 @@ _MONOTONE_RULES = frozenset(
         "same_shift_type_in_week",
         "max_shifts_per_week",
         "personal_max_hours",
+        "max_hours_per_day",
+        "min_weekly_rest",
     }
 )
-_MONOTONE_CODES = frozenset(
-    {Code.POSITION, Code.CANNOT, Code.OVERLAP, Code.LABOR_DAILY_REST, Code.LABOR_DAILY_HOURS, Code.LABOR_WEEKLY_REST}
-)
+_MONOTONE_CODES = frozenset({Code.POSITION, Code.CANNOT, Code.OVERLAP})
 
 
 class SolveStatus(StrEnum):
@@ -161,7 +157,6 @@ class _Builder:
         self._variables()
         self._intervals = {e.id: self._group_intervals(e.id) for e in problem.employees}
         self._no_overlap()
-        self._labor_law()
         self._rules()
         self._requests()
         self._stability()
@@ -267,17 +262,6 @@ class _Builder:
             if sum(len(i.slots) for i in members) > 1:
                 self.m.add(sum(self.work(employee_id, i) for i in members) <= 1)
 
-    def _labor_law(self) -> None:
-        for employee in self.p.employees:
-            if employee.contract != Contract.EMPLOYMENT:
-                continue
-            intervals = self._intervals[employee.id]
-            if not intervals:
-                continue
-            self._rest(employee.id, intervals, LABOR_DAILY_REST, hard=True)
-            self._daily_hours(employee.id)
-            self._weekly_rest(employee.id, intervals)
-
     def _rest(self, employee_id: str, intervals: list[_Interval], need: timedelta, *, hard: bool) -> list:
         """Hard: forbid shifts closer than `need`. Soft: return (penalty unit) terms for each too-short gap."""
         terms: list[cp_model.LinearExprT] = []
@@ -304,45 +288,6 @@ class _Builder:
                 self.m.add(pair >= self.work(employee_id, first) + self.work(employee_id, second) - 1)
                 terms.append(pair)
         return terms
-
-    def _daily_hours(self, employee_id: str) -> None:
-        limit = round(LABOR_MAX_HOURS_PER_DAY * 3600)
-        external: dict[date, int] = defaultdict(int)
-        for ext in self.externals.get(employee_id, ()):
-            external[ext.date] += round((ext.end_utc - ext.start_utc).total_seconds())
-        by_day: dict[date, list[tuple[Slot, cp_model.IntVar]]] = defaultdict(list)
-        for slot, var in self.x_of_emp[employee_id]:
-            by_day[slot.date].append((slot, var))
-        for day, items in by_day.items():
-            self.m.add(sum(_seconds(s) * v for s, v in items) + external[day] <= limit)
-
-    def _weekly_rest(self, employee_id: str, intervals: list[_Interval]) -> None:
-        """Every week with a shift needs a free window of 35 h inside Monday 00:00 – Monday 00:00."""
-        tz = self.p.tz
-        externals = self.externals.get(employee_id, ())
-        by_week: dict[date, list[tuple[Slot, cp_model.IntVar]]] = defaultdict(list)
-        for slot, var in self.x_of_emp[employee_id]:
-            by_week[_week_start(slot.date)].append((slot, var))
-        for monday, items in by_week.items():
-            week_start = local_datetime(monday, time(0), tz).astimezone(UTC)
-            week_end = local_datetime(monday + timedelta(days=7), time(0), tz).astimezone(UTC)
-            starts = {week_start}
-            starts.update(i.end for i in intervals if week_start <= i.end < week_end)
-            starts.update(e.end_utc for e in externals if week_start <= e.end_utc < week_end)
-            windows = []
-            for begin in sorted(starts):
-                finish = begin + LABOR_WEEKLY_REST
-                if finish > week_end:
-                    continue
-                if any(e.start_utc < finish and begin < e.end_utc for e in externals):
-                    continue
-                free = self.m.new_bool_var(f"free[{employee_id},{begin:%Y%m%d%H%M}]")
-                for interval in intervals:
-                    if interval.start < finish and begin < interval.end:
-                        self.m.add(free + self.work(employee_id, interval) <= 1)
-                windows.append(free)
-            for _, var in items:
-                self.m.add(sum(windows) >= var)
 
     # ----------------------------------------------------------------- catalog rules
 
@@ -602,6 +547,63 @@ class _Builder:
                     over = self.m.new_bool_var(f"many[{employee.id},{monday}]")
                     self.m.add((len(items) - limit) * over >= count - limit)
                     self.add_penalty(points / estimate, over)
+
+    def _rule_max_hours_per_day(self, rule: RuleConfig, hard: bool, points: float) -> None:
+        limit = round(float(rule.params["max_hours"]) * 60)
+        estimate = max(1, len(self.slots_of(rule.location)))
+        for employee in self.employees_of(rule.location):
+            external: dict[date, int] = defaultdict(int)
+            for ext in self.externals.get(employee.id, ()):
+                external[ext.date] += round((ext.end_utc - ext.start_utc).total_seconds() / 60)
+            by_day: dict[date, list[tuple[Slot, cp_model.IntVar]]] = defaultdict(list)
+            for slot, var in self.x_of_emp.get(employee.id, ()):
+                by_day[slot.date].append((slot, var))
+            for day, items in sorted(by_day.items()):
+                total = sum(_minutes(s) * v for s, v in items) + external[day]
+                most = sum(_minutes(s) for s, _ in items) + external[day]
+                if most <= limit:
+                    continue
+                if hard:
+                    self.m.add(total <= limit)
+                else:
+                    over = self.m.new_bool_var(f"long_day[{employee.id},{day}]")
+                    self.m.add((most - limit) * over >= total - limit)
+                    self.add_penalty(points / estimate, over)
+
+    def _rule_min_weekly_rest(self, rule: RuleConfig, hard: bool, points: float) -> None:
+        """Every week with a shift needs a free window of `rest_hours` inside Monday 00:00 – Monday 00:00."""
+        need = timedelta(hours=float(rule.params["rest_hours"]))
+        tz = self.p.tz
+        estimate = self._week_estimate(rule.location)
+        for employee in self.employees_of(rule.location):
+            intervals = self._intervals[employee.id]
+            externals = self.externals.get(employee.id, ())
+            for monday, items in sorted(self._weeks_of(employee.id).items()):
+                week_start = local_datetime(monday, time(0), tz).astimezone(UTC)
+                week_end = local_datetime(monday + timedelta(days=7), time(0), tz).astimezone(UTC)
+                starts = {week_start}
+                starts.update(i.end for i in intervals if week_start <= i.end < week_end)
+                starts.update(e.end_utc for e in externals if week_start <= e.end_utc < week_end)
+                windows = []
+                for begin in sorted(starts):
+                    finish = begin + need
+                    if finish > week_end:
+                        continue
+                    if any(e.start_utc < finish and begin < e.end_utc for e in externals):
+                        continue
+                    free = self.m.new_bool_var(f"free[{employee.id},{begin:%Y%m%d%H%M}]")
+                    for interval in intervals:
+                        if interval.start < finish and begin < interval.end:
+                            self.m.add(free + self.work(employee.id, interval) <= 1)
+                    windows.append(free)
+                if hard:
+                    for _, var in items:
+                        self.m.add(sum(windows) >= var)
+                    continue
+                broken = self.m.new_bool_var(f"no_rest[{employee.id},{monday}]")
+                for _, var in items:
+                    self.m.add(sum(windows) + broken >= var)
+                self.add_penalty(points / estimate, broken)
 
     # ----------------------------------------------------------------- employee requests
 

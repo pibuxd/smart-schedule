@@ -74,8 +74,8 @@ const version = {
     shift('s3', '2026-12-02', null),
   ],
   employees: [
-    { id: 'e1', name: 'Anna Wróbel', position_ids: ['pos1'], contract: 'civil', hours: 8, shifts: 1, target_hours: 100, max_hours: 120, active: true },
-    { id: 'e2', name: 'Marek Zając', position_ids: ['pos1'], contract: 'employment', hours: 8, shifts: 1, target_hours: null, max_hours: null, active: true },
+    { id: 'e1', name: 'Anna Wróbel', position_ids: ['pos1'], hours: 8, shifts: 1, target_hours: 100, max_hours: 120, active: true },
+    { id: 'e2', name: 'Marek Zając', position_ids: ['pos1'], hours: 8, shifts: 1, target_hours: null, max_hours: null, active: true },
   ],
   positions: [{ id: 'pos1', name: 'Sprzedawca' }],
   hard_problems: [],
@@ -87,7 +87,7 @@ const version = {
     { employee_name: 'Marek Zając', text: 'Prosi o wolne 1 grudnia.', kind: 'text', percent_kept: 0 },
     { employee_name: 'Anna Wróbel', text: 'Nie chcę zamykać w piątki.', kind: 'unscored', percent_kept: null },
   ],
-  notes: ['Sprawdzenie Kodeksu pracy dla umów o pracę jest uproszczone.'],
+  notes: ['Grafik ułożony w 12 s.'],
   changed_people: [] as string[],
   history: [
     { id: 'v1', number: 1, status: 'draft', created_at: '2026-11-25T10:00:00+01:00', published_at: null, generated: true, created_by_name: 'Teresa Gawlik' },

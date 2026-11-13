@@ -45,7 +45,7 @@ def test_csv_opens_in_a_polish_spreadsheet(api, shop, published):
     assert response["Content-Disposition"] == 'attachment; filename="godziny-2026-12.csv"'
     text = response.content.decode("utf-8-sig")
     header, *lines = text.strip().splitlines()
-    assert header.startswith("Osoba;Lokal domowy;Umowa;Zmiany;")
+    assert header.startswith("Osoba;Lokal domowy;Zmiany;")
     assert header.endswith(";Razem;Uwagi")
     assert len(lines) == 3 and all(line.split(";")[-2].endswith(",00") for line in lines)
 

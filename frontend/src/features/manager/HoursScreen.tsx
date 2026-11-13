@@ -8,7 +8,6 @@ import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
 import { monthName } from '../../lib/dates'
 import { useManager } from './ManagerContext'
-import { CONTRACT } from './words'
 
 function shiftMonth(month: string, by: number): string {
   const [year, m] = month.split('-').map(Number)
@@ -80,7 +79,6 @@ function HoursTable({ data }: { data: HoursReportOut }) {
         <thead>
           <tr className="border-b-2 border-ink">
             <th className="px-3 py-2">Osoba</th>
-            <th className="px-3 py-2">Umowa</th>
             <th className="px-3 py-2 text-right">Zmiany</th>
             {many && data.locations.map((l) => <th key={l.id} className="px-3 py-2 text-right">{l.name}</th>)}
             <th className="px-3 py-2 text-right">Razem godzin</th>
@@ -100,7 +98,6 @@ function HoursTable({ data }: { data: HoursReportOut }) {
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2">{CONTRACT[row.contract] ?? row.contract}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{row.shifts}</td>
                 {many &&
                   data.locations.map((l) => (

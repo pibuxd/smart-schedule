@@ -4,13 +4,11 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
-import type { VersionEmployeeOutContract } from './versionEmployeeOutContract';
 
 export interface VersionEmployeeOut {
   id: string;
   name: string;
   position_ids: string[];
-  contract: VersionEmployeeOutContract;
   hours: number;
   shifts: number;
   target_hours: number | null;

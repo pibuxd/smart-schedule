@@ -4051,7 +4051,7 @@
             }
           }
         },
-        "description": "Positions, contract, experience level, monthly maximum and target, or switching the person off (history\nstays).",
+        "description": "Positions, experience level, monthly maximum and target, or switching the person off (history stays).",
         "tags": [
           "staffing"
         ],
@@ -6221,14 +6221,6 @@
             "title": "Position Ids",
             "type": "array"
           },
-          "contract": {
-            "enum": [
-              "civil",
-              "employment"
-            ],
-            "title": "Contract",
-            "type": "string"
-          },
           "hours": {
             "title": "Hours",
             "type": "number"
@@ -6268,7 +6260,6 @@
           "id",
           "name",
           "position_ids",
-          "contract",
           "hours",
           "shifts",
           "target_hours",
@@ -7938,14 +7929,6 @@
             "title": "Position Ids",
             "type": "array"
           },
-          "contract": {
-            "enum": [
-              "civil",
-              "employment"
-            ],
-            "title": "Contract",
-            "type": "string"
-          },
           "experience": {
             "enum": [
               1,
@@ -7992,7 +7975,6 @@
           "last_name",
           "phone",
           "position_ids",
-          "contract",
           "experience",
           "max_hours_month",
           "target_hours_month",
@@ -8018,21 +8000,6 @@
               }
             ],
             "title": "Position Ids"
-          },
-          "contract": {
-            "anyOf": [
-              {
-                "enum": [
-                  "civil",
-                  "employment"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contract"
           },
           "experience": {
             "anyOf": [
@@ -8311,7 +8278,7 @@
             "items": {
               "$ref": "#/components/schemas/RuleItemIn"
             },
-            "maxItems": 11,
+            "maxItems": 13,
             "title": "Items",
             "type": "array"
           }
@@ -8389,10 +8356,6 @@
             "title": "Home Location Name",
             "type": "string"
           },
-          "contract": {
-            "title": "Contract",
-            "type": "string"
-          },
           "shifts": {
             "title": "Shifts",
             "type": "integer"
@@ -8417,7 +8380,6 @@
           "employee_id",
           "name",
           "home_location_name",
-          "contract",
           "shifts",
           "total",
           "by_location",

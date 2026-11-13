@@ -32,9 +32,6 @@ WISH_WORDS = {
 _BLOCK_WORDS = {
     Code.CANNOT: "zaznaczone „nie mogę”",
     Code.OVERLAP: "inna zmiana w tym czasie",
-    Code.LABOR_DAILY_REST: "za krótki odpoczynek (umowa o pracę)",
-    Code.LABOR_DAILY_HOURS: "ponad 8 h na dobę (umowa o pracę)",
-    Code.LABOR_WEEKLY_REST: "brak 35 h wolnego w tygodniu (umowa o pracę)",
     Code.RULE: "zasada „bez wyjątków”",
     Code.FROZEN: "ten dzień już minął",
 }

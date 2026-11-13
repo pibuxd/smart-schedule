@@ -17,7 +17,6 @@ from apps.tenancy.context import tenant_context
 router = Router(tags=["reports"])
 
 ELSEWHERE_NOTE = "pracuje też w lokalach, których nie prowadzisz; suma niepełna"
-CONTRACT_WORDS = {"civil": "umowa zlecenie", "employment": "umowa o pracę"}
 
 
 class LocationColumnOut(Schema):
@@ -34,7 +33,6 @@ class EmployeeHoursOut(Schema):
     employee_id: UUID
     name: str
     home_location_name: str
-    contract: str
     shifts: int
     total: float
     by_location: list[LocationHoursOut]
@@ -101,7 +99,6 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
                 employee_id=employee_id,
                 name=profile.membership.user.full_name or "Bez imienia",
                 home_location_name=profile.home_location.name,
-                contract=profile.contract,
                 shifts=shifts[employee_id],
                 total=round(sum(hours[employee_id].values()), 2),
                 by_location=[
@@ -137,16 +134,13 @@ def hours_report_csv(request, company_id: UUID, month: str):
     report = _report(request, company_id, month)
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(
-        ["Osoba", "Lokal domowy", "Umowa", "Zmiany", *[loc.name for loc in report.locations], "Razem", "Uwagi"]
-    )
+    writer.writerow(["Osoba", "Lokal domowy", "Zmiany", *[loc.name for loc in report.locations], "Razem", "Uwagi"])
     for row in report.rows:
         by_location = {h.location_id: h.hours for h in row.by_location}
         writer.writerow(
             [
                 row.name,
                 row.home_location_name,
-                CONTRACT_WORDS.get(row.contract, row.contract),
                 row.shifts,
                 *[_number(by_location.get(loc.id, 0.0)) for loc in report.locations],
                 _number(row.total),

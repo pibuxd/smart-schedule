@@ -685,7 +685,6 @@ function PeopleHours({ data }: { data: VersionOut }) {
                 <tr key={e.id} className="border-b border-grid">
                   <td className="px-3 py-2">
                     {e.name}
-                    {e.contract === 'employment' && <span className="block text-sm text-ink-muted">umowa o pracę</span>}
                     {!e.active && <span className="block text-sm text-ink-muted">wyłączony z grafiku</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{e.shifts}</td>

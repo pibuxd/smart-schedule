@@ -48,8 +48,6 @@ export function people(n: number): string {
   return `${n} ${last >= 2 && last <= 4 && !teen ? 'osoby' : 'osób'}`
 }
 
-export const CONTRACT: Record<string, string> = { civil: 'Umowa zlecenie', employment: 'Umowa o pracę' }
-
 /** Experience levels set by the manager; the employee never sees them. */
 export const EXPERIENCE: Record<1 | 2 | 3, { label: string; hint: string; tone: 'warn' | 'muted' | 'accent' }> = {
   1: { label: 'Początkujący', hint: 'Dopiero się uczy, nie powinien zostawać sam z innymi nowymi.', tone: 'warn' },

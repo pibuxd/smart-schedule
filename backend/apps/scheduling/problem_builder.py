@@ -264,7 +264,6 @@ class _Reader:
                 name=_employee_name(p),
                 home_location=str(p.home_location_id),
                 positions=frozenset(positions[p.pk]),
-                contract=p.contract,
                 max_hours_month=p.max_hours_month,
                 target_hours_month=p.target_hours_month,
                 experience=p.experience,

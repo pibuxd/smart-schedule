@@ -39,6 +39,8 @@ const PARAM_LABEL: Record<string, string> = {
   hours: 'Godzin przerwy co najmniej',
   days: 'Dni z rzędu najwyżej',
   shifts: 'Zmian w tygodniu najwyżej',
+  max_hours: 'Godzin w ciągu dnia najwyżej',
+  rest_hours: 'Godzin wolnego bez przerwy co najmniej',
   count: 'Ile osób co najmniej',
   position: 'Stanowisko',
   shift_type: 'Zmiana',
@@ -131,9 +133,9 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
           </p>
         )}
         <p className="m-0 max-w-[75ch] text-sm text-ink-muted">
-          Dla umów o pracę Grafikomat zawsze pilnuje 11 godzin odpoczynku na dobę, 35 godzin wolnego w tygodniu i
-          najwyżej 8 godzin pracy na dobę. To sprawdzanie jest uproszczone (doba to dzień kalendarzowy, tydzień od
-          poniedziałku) i nie zastępuje oceny prawnej.
+          Grafikomat sam nie sprawdza Kodeksu pracy i za zgodność grafiku z prawem odpowiadasz Ty. Jeśli chcesz pilnować
+          czasu pracy, włącz „Odpoczynek między zmianami”, „Godziny pracy w ciągu dnia” i „Wolne w tygodniu” i zaznacz
+          „Bez wyjątków”. Dotyczą wszystkich osób w lokalu.
         </p>
       </div>
 
