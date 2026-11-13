@@ -4,6 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/pibuxd/smart-schedule/main/deploy/setup-server.sh | sh
 #   curl -fsSL .../deploy/setup-server.sh | sh -s -- grafikomat.pl      # with your own domain
 #
+# Set GRAFIKOMAT_AUTO_UPDATE=0 to skip automatic updates.
 # Safe to run again: it keeps an existing .env (and so the secrets and the database) and only
 # rebuilds and restarts the containers. Without a domain it uses <ip>.sslip.io, a free name that
 # points at the server's address, so HTTPS and logging in work from the first minute.
@@ -24,7 +25,7 @@ say() { printf '\n==> %s\n' "$*"; }
 say "Installing packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl git openssl cron >/dev/null
+apt-get install -y -qq ca-certificates curl git openssl cron util-linux >/dev/null
 
 if ! command -v docker >/dev/null 2>&1; then
   say "Installing Docker"
@@ -102,6 +103,15 @@ cat > /etc/cron.d/grafikomat-backup <<CRON
 15 3 * * * root $APP_DIR/deploy/backup.sh >> /var/log/grafikomat-backup.log 2>&1
 CRON
 chmod 644 /etc/cron.d/grafikomat-backup
+git rev-parse HEAD > .deployed-commit
+
+if [ "${GRAFIKOMAT_AUTO_UPDATE:-1}" = "1" ]; then
+  say "Switching on automatic updates (every 5 minutes the server checks GitHub for a new version)"
+  cat > /etc/cron.d/grafikomat-auto-update <<CRON
+*/5 * * * * root $APP_DIR/deploy/auto-update.sh >> /var/log/grafikomat-update.log 2>&1
+CRON
+  chmod 644 /etc/cron.d/grafikomat-auto-update
+fi
 
 cat <<DONE
 
@@ -112,7 +122,8 @@ Next steps, all from $APP_DIR:
   docker compose exec api python manage.py createsuperuser      # admin panel: https://$site/api/admin/
   docker compose exec api python manage.py seed_demo            # optional demo data
   docker compose logs api --since 5m | grep "SMS to"            # read a login code (no SMS gateway yet)
-  ./deploy/update.sh                                            # deploy the newest version from GitHub
+  New versions merged to the main branch are deployed automatically within about 10 minutes
+  (log: /var/log/grafikomat-update.log; by hand: ./deploy/update.sh).
 DONE
 }
 
