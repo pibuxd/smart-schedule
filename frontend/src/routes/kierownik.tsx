@@ -8,6 +8,7 @@ import { useSession } from '../features/auth/session'
 import { AccessBanner } from '../features/manager/AccessBanner'
 import { isManagerRole, ManagerContext } from '../features/manager/ManagerContext'
 import { useWaitingClaims } from '../features/manager/waiting-claims'
+import { useUnreadNotifications } from '../features/notifications/unread'
 
 export const Route = createFileRoute('/kierownik')({
   component: ManagerLayout,
@@ -70,6 +71,7 @@ function ManagerLayout() {
               <span className="font-semibold text-ink">{company.name}</span>
             )}
             <OffersLink companyId={company.id} />
+            <NotificationsLink companyId={company.id} />
             <Link
               to="/kierownik/godziny"
               className="inline-flex min-h-(--touch) items-center rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
@@ -118,6 +120,24 @@ function OffersLink({ companyId }: { companyId: string }) {
       {waiting > 0 && (
         <span className="rounded-full bg-accent px-2 text-sm text-accent-ink no-underline" aria-label={`czeka: ${waiting}`}>
           {waiting}
+        </span>
+      )}
+    </Link>
+  )
+}
+
+/** My notifications (also "someone gives a shift away" for the manager), with the number of new ones. */
+function NotificationsLink({ companyId }: { companyId: string }) {
+  const unread = useUnreadNotifications(companyId)
+  return (
+    <Link
+      to="/powiadomienia"
+      className="inline-flex min-h-(--touch) items-center gap-1.5 rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
+    >
+      Powiadomienia
+      {unread > 0 && (
+        <span className="rounded-full bg-accent px-2 text-sm text-accent-ink no-underline" aria-label={`nowe: ${unread}`}>
+          {unread}
         </span>
       )}
     </Link>

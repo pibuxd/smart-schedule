@@ -143,6 +143,7 @@ def test_claim_and_approval_move_the_shift_with_history(api, market):
     assert told("claim_approved") == {user_of(m["elsewhere"]).pk}
     assert told("offer_taken") == {user_of(m["giver"]).pk}
     assert told("claim_rejected") == {user_of(m["free"]).pk}
+    assert told("borrowed") == set()  # the owner manages both locations, so nobody else to tell
     # The shift is now in the taker's "Mój grafik" (in another location) and gone from the giver's.
     api.login(user_of(m["elsewhere"]))
     theirs = api.get(f"/api/me/schedule?company_id={m['company'].id}").json()["shifts"]
@@ -284,3 +285,24 @@ def test_notifications_list_and_mark_read(api, market):
     assert api.get(url).json()["unread"] == 0
     # Someone else's notifications are not touched.
     assert Notification.objects.filter(user=user_of(m["elsewhere"]), read_at__isnull=True).count() == 1
+
+
+def test_home_manager_learns_about_borrowing(api, market):
+    from apps.accounts.models import User
+    from apps.tenancy.models import Membership
+    from tests.conftest import next_phone
+
+    m = market
+    boss = User.objects.create_user(next_phone(), first_name="Kierownik Rynku")
+    Membership.objects.create(company=m["company"], user=boss, role="manager").locations.set([m["other"]])
+    offer_id = offer(api, m).json()["id"]
+    api.login(user_of(m["elsewhere"]))
+    claim_id = api.post(f"/api/offers/{offer_id}/claim").json()["my_claim_id"]
+    api.login(m["manager"])
+
+    assert api.post(f"/api/claims/{claim_id}/approve").status_code == 200
+    assert told("borrowed") == {boss.pk}
+    assert (
+        "bierze zmianę w innym lokalu"
+        in api.login(boss).get(f"/api/me/notifications?company_id={m['company'].id}").json()["notifications"][0]["text"]
+    )

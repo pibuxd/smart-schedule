@@ -260,7 +260,7 @@ def approve_claim(claim: ShiftClaim, user) -> ShiftOffer:
         _require_current(offer)
         taker = (
             EmployeeProfile.objects.for_company(claim.company_id)
-            .select_related("membership__user")
+            .select_related("membership__user", "home_location")
             .get(pk=claim.employee_id)
         )
         verdicts = check_people(offer, [taker]) if taker.is_active else []
@@ -317,6 +317,10 @@ def approve_claim(claim: ShiftClaim, user) -> ShiftOffer:
         notify(offer.company_id, [taker.membership.user_id], "claim_approved", payload)
         notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_taken", payload)
         notify(offer.company_id, other_users, "claim_rejected", payload)
+        if taker.home_location_id != shift.location_id:
+            # The taker's own manager learns that they work elsewhere that day.
+            home = set(location_manager_ids(taker.home_location)) - set(location_manager_ids(shift.location))
+            notify(offer.company_id, home, "borrowed", payload)
     return offer
 
 

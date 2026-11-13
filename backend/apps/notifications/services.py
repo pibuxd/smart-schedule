@@ -21,6 +21,7 @@ LINKS = {
     "shift_offered": "schedule",
     "shift_claimed": "offers",
     "offer_made": "offers",
+    "borrowed": "none",
     "claim_approved": "schedule",
     "claim_rejected": "schedule",
     "offer_taken": "schedule",
@@ -92,6 +93,10 @@ def notification_text(kind: str, payload: dict) -> str:
                     "Do decyzji ta osoba nadal ma tę zmianę; może warto porozmawiać."
                 )
             return f"{giver} oddaje zmianę {shift}. Powiadomienie dostały osoby, które mogą ją wziąć ({p['able']})."
+        case "borrowed":
+            return (
+                f"{taker} (Twój lokal) bierze zmianę w innym lokalu: {shift}. Zatwierdził to kierownik tamtego lokalu."
+            )
         case "shift_claimed":
             return f"{taker} chce wziąć zmianę od: {giver} ({shift}). Zatwierdź albo odrzuć w „Oddane zmiany”."
         case "claim_approved":
