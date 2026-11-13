@@ -454,12 +454,12 @@ Po przeglądzie Prelinta (PR #13), do sprawdzenia w pilocie: czy powiadomienie d
 Decyzja Piotra z 13.11.2026: zamiast wersji demo na GitHub Pages stawiamy pełny serwis na tanim VPS. Instrukcja: `docs/deploy.md`.
 
 - `docker-compose.prod.yml` dokłada do `docker-compose.yml` porty 80 i 443 dla Caddy i zdejmuje port bazy z hosta. Włącza go `COMPOSE_FILE` w `.env` na serwerze (`.env.production.example`), więc lokalne `docker compose up` działa bez zmian.
-- `deploy/setup-server.sh` (pierwsze uruchomienie, można powtarzać), `deploy/update.sh` (nowa wersja z `main`), `deploy/backup.sh` (codzienny zrzut bazy z crona, 14 dni).
+- `deploy/setup-server.sh` (pierwsze uruchomienie, można powtarzać), `deploy/update.sh` (nowa wersja z `main`), `deploy/auto-update.sh` (cron co 5 minut), `deploy/backup.sh` (codzienny zrzut bazy z crona, 14 dni).
 - Sekrety (`DJANGO_SECRET_KEY`, hasło bazy) losuje skrypt na serwerze; adresu serwera, haseł i kluczy nie ma w repozytorium.
 
 Założenia:
 1. Bez własnej domeny serwis działa pod nazwą `<ip>.sslip.io` z certyfikatem pobranym przez Caddy, bo logowanie wymaga HTTPS (ciasteczko sesji tylko po szyfrowanym połączeniu). Własna domena to zmiana trzech wartości w `.env`.
 2. Bramka SMS nadal niepodłączona: kody logowania są w logu serwera, więc do czasu jej podłączenia serwis jest do testów Piotra, nie dla pracowników.
-3. Wdrożenie nowej wersji jest ręczne (`deploy/update.sh` na serwerze); automatycznego wdrażania z GitHub Actions nie ma, bo wymagałoby trzymania klucza do serwera w sekretach repozytorium.
+3. Wdrożenie nowej wersji jest automatyczne (decyzja Piotra z 13.11.2026: „chcę, żeby wszystko szło samo”): serwer co 5 minut sprawdza gałąź `main` i sam uruchamia `deploy/update.sh` (`deploy/auto-update.sh` z crona). Serwer pobiera kod sam, więc w GitHubie nie ma klucza do serwera. Każdy merge do `main` trafia od razu na serwis; przed pilotażem wrócić do ręcznego wdrażania albo osobnej gałęzi.
 4. Kopie bazy leżą na tym samym serwerze; kopia poza serwerem to osobny krok przed pilotażem.
 5. `SOLVER_WORKERS=2` na serwerze (2 rdzenie), limit 30 s bez zmian.

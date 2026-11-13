@@ -67,7 +67,8 @@ cd ../frontend && npm run api:generate
 ```
 
 Deployment on a single VPS (`docs/deploy.md`): `deploy/setup-server.sh` (first run), `deploy/update.sh` (new version),
-`deploy/backup.sh` (daily dump from cron). The server uses `.env` made from `.env.production.example`, which adds
+`deploy/backup.sh` (daily dump from cron), `deploy/auto-update.sh` (cron, every 5 minutes: deploys new commits on `main`,
+so everything merged to `main` goes live by itself). The server uses `.env` made from `.env.production.example`, which adds
 `docker-compose.prod.yml` (ports 80/443, database not exposed). Never commit server addresses, passwords or keys.
 
 ## Conventions
