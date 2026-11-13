@@ -405,4 +405,7 @@ Założenia:
 6. Nowa publikacja okresu: otwarte oddania idą za zmianą, jeśli oddający nadal na niej jest; w przeciwnym razie wygasają, a oddający i chętni dostają powiadomienie.
 7. Otwarcie "Powiadomień" oznacza pokazane jako przeczytane; do następnego odświeżenia zostają oznaczone "Nowe". Oznaczanie działa też w trybie tylko do odczytu (dopisane do wyjątków w spec.md: inaczej licznik nowych nie dałby się wyzerować); oddawanie i branie zmian nie działa.
 8. Pełne zamiany dwóch osób (`AssignmentEvent.Reason.SWAP`) nadal na później; model oddań i historia ich nie blokują.
+9. Kierownicy lokalu dostają powiadomienie już przy oddaniu zmiany (z liczbą osób, które mogą ją wziąć; przy zerze wprost, że oddający nadal ma tę zmianę), żeby oddanie bez chętnych nie czekało po cichu do dnia zmiany.
+
+Po przeglądzie Prelinta (PR #13), do sprawdzenia w pilocie: czy powiadomienie do całej firmy (w danych demo jedna zmiana trafiła do 34 osób) nie jest za głośne i czy nie lepiej najpierw lokal domowy, a po kilku godzinach reszta; czy nazwy stanowisk w lokalach naprawdę się pokrywają (jeśli nie, potrzebne jawne powiązanie stanowisk); czy potrzebne jest przypomnienie oddającemu i kierownikowi na dzień przed zmianą bez chętnych (dziś tylko powiadomienie przy oddaniu).
 

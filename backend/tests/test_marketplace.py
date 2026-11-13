@@ -68,6 +68,9 @@ def test_offer_tells_everyone_who_could_take_the_shift(api, market):
     # that morning, not the baker, not the giver.
     assert told("shift_offered") == {user_of(m["free"]).pk, user_of(m["elsewhere"]).pk}
     assert response.json()["notified"] == 2
+    assert told("offer_made") == {m["manager"].pk}
+    note = Notification.objects.get(kind="offer_made")
+    assert note.payload["able"] == 2
     mine = api.get(f"/api/me/schedule?company_id={m['company'].id}").json()
     shift = next(s for s in mine["shifts"] if s["id"] == str(m["row"].pk))
     assert shift["offer_status"] == "open" and shift["offer_id"] == response.json()["id"]

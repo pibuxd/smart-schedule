@@ -156,7 +156,11 @@ def offer_shift(assignment: Assignment, profile: EmployeeProfile) -> tuple[Shift
         offer = ShiftOffer.objects.create(assignment=assignment, offered_by=profile)
         offer = offer_query(profile.company_id).get(pk=offer.pk)
         able = [v.employee for v in check_people(offer) if v.possible]
-        told = notify(offer.company_id, [p.membership.user_id for p in able], "shift_offered", offer_payload(offer))
+        payload = offer_payload(offer)
+        told = notify(offer.company_id, [p.membership.user_id for p in able], "shift_offered", payload)
+        # The managers know early, especially when nobody can take it (the giver still has to come).
+        managers = set(location_manager_ids(assignment.shift.location)) - {profile.membership.user_id}
+        notify(offer.company_id, managers, "offer_made", {**payload, "able": told})
     return offer, told
 
 
