@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import date
 
 import pytest
@@ -30,6 +31,8 @@ def test_bakery_matches_the_spec(demo):
         assert 15 <= staff.count() <= 25
         full_time = staff.filter(max_hours_month=184).count()
         assert 1 <= full_time < staff.count() - full_time
+        levels = Counter(staff.values_list("experience", flat=True))
+        assert levels[1] >= 2 and levels[3] >= 2 and levels[2] > 0  # beginners, experienced and the rest
 
     requests = TextRequest.objects.for_company(BAKERY_COMPANY_ID).count()
     requests += TextRequest.objects.for_company(CAFE_COMPANY_ID).count()
@@ -45,7 +48,7 @@ def test_availability_is_for_next_month_and_some_people_are_missing(demo):
     assert {(p.start, p.end) for p in periods} == {(date(2026, 12, 1), date(2026, 12, 31))}
     days = AvailabilityDay.objects.for_company(BAKERY_COMPANY_ID)
     assert days.filter(date__lt=date(2026, 12, 1)).count() == 0
-    assert set(days.values_list("state", flat=True)) == {"cannot", "prefer_not", "neutral", "prefer"}
+    assert set(days.values_list("state", flat=True)) == {"cannot", "neutral", "prefer"}
 
     employees = EmployeeProfile.objects.for_company(BAKERY_COMPANY_ID).count()
     submitted = AvailabilitySubmission.objects.for_company(BAKERY_COMPANY_ID).count()

@@ -32,6 +32,9 @@ import { useManager } from './ManagerContext'
 type Scope = 'location' | 'group'
 type Item = RuleItemOut
 
+// Parameters that point at a location's positions or shift types: a group list does not show them.
+const LOCATION_PARAMS = new Set(['position', 'shift_type'])
+
 const PARAM_LABEL: Record<string, string> = {
   hours: 'Godzin przerwy co najmniej',
   days: 'Dni z rzędu najwyżej',
@@ -328,7 +331,7 @@ function RuleCard({
               disabled={disabled || !item.enabled}
               onChange={(e) => onChange({ is_hard: e.target.checked })}
             />
-            {item.param_names.map((name) => (
+            {item.param_names.filter((name) => scope === 'location' || !LOCATION_PARAMS.has(name)).map((name) => (
               <ParamInput key={name} name={name} item={item} data={data} disabled={disabled || !item.enabled} onChange={onChange} />
             ))}
           </div>
@@ -372,7 +375,7 @@ function ParamInput({
       <label htmlFor={id} className="grid gap-1 text-sm font-semibold">
         {PARAM_LABEL[name]}
         <select id={id} className={cn(inputClass, 'min-w-44')} value={(value as string) ?? ''} disabled={disabled} onChange={(e) => set(e.target.value || null)}>
-          <option value="">Wybierz…</option>
+          <option value="">{item.code === 'experience_mix' ? 'Wszystkie stanowiska' : 'Wybierz…'}</option>
           {options.map((o) => (
             <option key={o.id} value={o.id}>
               {o.name}

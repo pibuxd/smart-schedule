@@ -2,7 +2,7 @@
 
 - unfilled slots (a schedule with any is "incomplete" and must not look good),
 - "manager rules" in % (location rules, good-practice rules, target hours),
-- "employee requests" in % ("wolę nie" and "chętnie" from the calendar and text requests).
+- "employee requests" in % ("chętnie" from the calendar and text requests).
 
 A group score is 100 × (1 − Σ wᵢ·vᵢ / Σ wᵢ) with vᵢ the degree (0–1) to which item i is broken.
 For rules wᵢ comes from the place on the location's list (each next rule weighs `rank_decay` times less), so

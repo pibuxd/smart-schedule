@@ -4,9 +4,11 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { EmployeeInExperience } from './employeeInExperience';
 
 export interface EmployeeIn {
   position_ids?: string[] | null;
+  experience?: EmployeeInExperience;
   max_hours_month?: number | null;
   target_hours_month?: number | null;
   is_active?: boolean | null;

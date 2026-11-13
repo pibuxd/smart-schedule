@@ -118,7 +118,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
           )}
           {collecting && passed && missing.length > 0 && (
             <p className="m-0 font-semibold text-accent">
-              Termin minął. Można układać grafik; osoby bez dyspozycji liczą się jak „obojętnie”.
+              Termin minął. Można układać grafik; osoby bez dyspozycji mogą dostać zmianę każdego dnia.
             </p>
           )}
           {period.availability_requested_at && (
@@ -377,7 +377,7 @@ function RequestCard({ request }: { request: ManagerRequestOut }) {
       <p className="m-0 text-sm text-ink-muted">
         {request.summary
           ? `Jak to zrozumiał asystent: ${request.summary}`
-          : 'Asystent jeszcze tej prośby nie przeczytał, więc przy układaniu grafiku zostaje do Twojej oceny.'}
+          : 'Asystent jeszcze tej prośby nie przeczytał, więc generator jej nie uwzględni. Jeśli chcesz ją spełnić, popraw grafik sam.'}
       </p>
       {!rejected && (
         <fieldset className="m-0 flex flex-wrap gap-1 border-0 p-0" disabled={readOnly || update.isPending}>

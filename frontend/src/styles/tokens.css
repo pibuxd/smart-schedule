@@ -114,13 +114,6 @@
       repeating-linear-gradient(-45deg, transparent 0 6px, rgb(179 38 30 / 0.16) 6px 8px),
       var(--color-cannot-soft);
   }
-  .avail-prefer_not {
-    color: var(--color-prefer-not);
-    border-color: var(--color-prefer-not);
-    background:
-      repeating-linear-gradient(45deg, transparent 0 7px, rgb(122 83 0 / 0.16) 7px 10px),
-      var(--color-prefer-not-soft);
-  }
   .avail-neutral {
     color: var(--color-ink-muted);
     border-color: var(--color-line);

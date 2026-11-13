@@ -1453,7 +1453,7 @@ export const getUpdateEmployeeUrl = (employeeId: string,) => {
 }
 
 /**
- * Positions, monthly maximum and target, or switching the person off (history stays).
+ * Positions, experience level, monthly maximum and target, or switching the person off (history stays).
  * @summary Update Employee
  */
 export const updateEmployee = async (employeeId: string,
@@ -1521,7 +1521,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateEmployeeMutationVariables = {employeeId: string;data: EmployeeIn}
 
     /**
- * Positions, monthly maximum and target, or switching the person off (history stays).
+ * Positions, experience level, monthly maximum and target, or switching the person off (history stays).
  * @summary Update Employee
  */
 export const useUpdateEmployee = <TError = ErrorOut,

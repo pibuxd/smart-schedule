@@ -10,7 +10,6 @@ export type CandidateOutWish = typeof CandidateOutWish[keyof typeof CandidateOut
 
 export const CandidateOutWish = {
   cannot: 'cannot',
-  prefer_not: 'prefer_not',
   neutral: 'neutral',
   prefer: 'prefer',
 } as const;

@@ -141,6 +141,14 @@ class StaffingException(CompanyOwnedModel):
         return f"{self.date}: {self.shift_type.name} – {self.position.name} × {self.count}"
 
 
+class Experience(models.IntegerChoices):
+    """Set by the manager, never shown to the employee; used by the rule experience_mix."""
+
+    BEGINNER = 1, "początkujący"
+    SKILLED = 2, "samodzielny"
+    EXPERIENCED = 3, "doświadczony"
+
+
 class EmployeeProfile(CompanyOwnedModel):
     """A person who can be put in the schedule. A manager may have one too (e.g. a manager on a shift)."""
 
@@ -151,6 +159,9 @@ class EmployeeProfile(CompanyOwnedModel):
         Location, on_delete=models.RESTRICT, related_name="employees", verbose_name="lokal domowy"
     )
     positions = models.ManyToManyField(Position, blank=True, related_name="employees", verbose_name="stanowiska")
+    experience = models.PositiveSmallIntegerField(
+        "stopień doświadczenia", choices=Experience.choices, default=Experience.SKILLED
+    )
     max_hours_month = models.PositiveSmallIntegerField("maks. godzin w miesiącu", null=True, blank=True)
     target_hours_month = models.PositiveSmallIntegerField("cel godzin w miesiącu", null=True, blank=True)
     is_active = models.BooleanField("aktywny", default=True)
@@ -165,6 +176,7 @@ class EmployeeProfile(CompanyOwnedModel):
                 | Q(target_hours_month__lte=models.F("max_hours_month")),
                 name="employee_target_le_max_hours",
             ),
+            models.CheckConstraint(condition=Q(experience__gte=1, experience__lte=3), name="employee_experience_level"),
         ]
 
     def __str__(self) -> str:

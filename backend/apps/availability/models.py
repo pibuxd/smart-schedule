@@ -11,8 +11,9 @@ from apps.tenancy.base import CompanyOwnedModel
 
 class AvailabilityState(models.TextChoices):
     CANNOT = "cannot", "nie mogę"
-    PREFER_NOT = "prefer_not", "wolę nie"
-    NEUTRAL = "neutral", "obojętnie"
+    # A day without a mark ("mogę"). Stored only when it carries hours ("mogę tylko w tych godzinach") or after
+    # the employee cleared a mark; for the generator it is the same as no row.
+    NEUTRAL = "neutral", "bez zaznaczenia"
     PREFER = "prefer", "chętnie"
 
 

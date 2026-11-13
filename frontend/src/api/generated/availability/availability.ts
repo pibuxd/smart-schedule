@@ -606,7 +606,7 @@ export const getSubmitMyAvailabilityUrl = () => {
 }
 
 /**
- * "Gotowe": tells the manager I have finished. Days left unmarked count as "obojętnie".
+ * "Gotowe": tells the manager I have finished. Days left unmarked mean "mogę".
  * @summary Submit My Availability
  */
 export const submitMyAvailability = async (periodRefIn: PeriodRefIn, options?: Parameters<typeof apiFetch>[1]): Promise<submitMyAvailabilityResponse> => {
@@ -673,7 +673,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SubmitMyAvailabilityMutationVariables = {data: PeriodRefIn}
 
     /**
- * "Gotowe": tells the manager I have finished. Days left unmarked count as "obojętnie".
+ * "Gotowe": tells the manager I have finished. Days left unmarked mean "mogę".
  * @summary Submit My Availability
  */
 export const useSubmitMyAvailability = <TError = ErrorOut,

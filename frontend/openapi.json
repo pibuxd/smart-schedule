@@ -2657,7 +2657,7 @@
             }
           }
         },
-        "description": "\"Gotowe\": tells the manager I have finished. Days left unmarked count as \"obojętnie\".",
+        "description": "\"Gotowe\": tells the manager I have finished. Days left unmarked mean \"mogę\".",
         "tags": [
           "availability"
         ],
@@ -4051,7 +4051,7 @@
             }
           }
         },
-        "description": "Positions, monthly maximum and target, or switching the person off (history stays).",
+        "description": "Positions, experience level, monthly maximum and target, or switching the person off (history stays).",
         "tags": [
           "staffing"
         ],
@@ -6175,7 +6175,6 @@
           "kind": {
             "enum": [
               "text",
-              "prefer_not",
               "prefer",
               "unscored"
             ],
@@ -6484,7 +6483,6 @@
               {
                 "enum": [
                   "cannot",
-                  "prefer_not",
                   "neutral",
                   "prefer"
                 ],
@@ -6623,7 +6621,6 @@
           "wish": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -6816,7 +6813,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -6987,7 +6983,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -7050,7 +7045,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -7186,7 +7180,6 @@
           "state": {
             "enum": [
               "cannot",
-              "prefer_not",
               "neutral",
               "prefer"
             ],
@@ -7936,6 +7929,15 @@
             "title": "Position Ids",
             "type": "array"
           },
+          "experience": {
+            "enum": [
+              1,
+              2,
+              3
+            ],
+            "title": "Experience",
+            "type": "integer"
+          },
           "max_hours_month": {
             "anyOf": [
               {
@@ -7973,6 +7975,7 @@
           "last_name",
           "phone",
           "position_ids",
+          "experience",
           "max_hours_month",
           "target_hours_month",
           "is_active",
@@ -7997,6 +8000,22 @@
               }
             ],
             "title": "Position Ids"
+          },
+          "experience": {
+            "anyOf": [
+              {
+                "enum": [
+                  1,
+                  2,
+                  3
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience"
           },
           "max_hours_month": {
             "anyOf": [
@@ -8259,7 +8278,7 @@
             "items": {
               "$ref": "#/components/schemas/RuleItemIn"
             },
-            "maxItems": 12,
+            "maxItems": 13,
             "title": "Items",
             "type": "array"
           }

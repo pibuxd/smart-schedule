@@ -10,7 +10,6 @@ export type DayInState = typeof DayInState[keyof typeof DayInState];
 
 export const DayInState = {
   cannot: 'cannot',
-  prefer_not: 'prefer_not',
   neutral: 'neutral',
   prefer: 'prefer',
 } as const;

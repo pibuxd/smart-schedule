@@ -70,7 +70,7 @@ const version = {
   scores,
   shifts: [
     shift('s1', '2026-12-01', ['e1', 'Anna Wróbel'], { pinned: true }),
-    shift('s2', '2026-12-01', ['e2', 'Marek Zając'], { wish: 'prefer_not', manual: true }),
+    shift('s2', '2026-12-01', ['e2', 'Marek Zając'], { wish: 'neutral', manual: true }),
     shift('s3', '2026-12-02', null),
   ],
   employees: [
@@ -84,7 +84,7 @@ const version = {
     { code: 'fair_closings', label: 'Równy podział zamknięć', hard: false, percent: null, broken: 0, examples: [] },
   ],
   unmet_requests: [
-    { employee_name: 'Marek Zając', text: 'Zaznaczył(a) „wolę nie” 01.12, a ma tego dnia zmianę.', kind: 'prefer_not', percent_kept: 0 },
+    { employee_name: 'Marek Zając', text: 'Prosi o wolne 1 grudnia.', kind: 'text', percent_kept: 0 },
     { employee_name: 'Anna Wróbel', text: 'Nie chcę zamykać w piątki.', kind: 'unscored', percent_kept: null },
   ],
   notes: ['Grafik ułożony w 12 s.'],
@@ -162,7 +162,7 @@ describe('ScheduleScreen', () => {
     expect(screen.getByText('91,3 %')).toBeInTheDocument()
     expect(screen.getByText('Do Twojej oceny: 2.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Anna Wróbel, 06:00–14:00, przypięta/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Marek Zając.*zmieniona ręcznie.*woli nie/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Marek Zając.*zmieniona ręcznie/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Bez obsady/ })).toBeInTheDocument()
     expect(screen.getByText('nic do oceny')).toBeInTheDocument()
     expect(screen.getByText('Nie chcę zamykać w piątki.')).toBeInTheDocument()

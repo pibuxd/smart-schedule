@@ -7,6 +7,6 @@
 import type { RuleItemIn } from './ruleItemIn';
 
 export interface RulesIn {
-  /** @maxItems 12 */
+  /** @maxItems 13 */
   items: RuleItemIn[];
 }

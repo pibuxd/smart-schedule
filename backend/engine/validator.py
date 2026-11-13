@@ -10,7 +10,6 @@ Every `Violation.message` is a Polish sentence for the manager.
 from __future__ import annotations
 
 import calendar
-import math
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -19,6 +18,8 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from engine.problem import (
+    BEGINNER,
+    EXPERIENCED,
     AvailabilityState,
     Employee,
     Problem,
@@ -30,10 +31,6 @@ from engine.problem import (
     Slot,
     local_datetime,
 )
-
-# "Wolę nie" days of one person count at full weight up to this many per week of the period; above that the
-# person's total stays the same and each day weighs less (marking every day cannot outweigh colleagues).
-PREFER_NOT_FULL_DAYS_PER_WEEK = 2
 
 # A "no exceptions" target_hours rule allows this relative deviation from the target.
 TARGET_HOURS_HARD_TOLERANCE = 0.10
@@ -77,7 +74,6 @@ class RuleMeasure:
 
 class RequestKind(StrEnum):
     TEXT = "text"  # a text request
-    PREFER_NOT = "prefer_not"  # a "wolę nie" day in the calendar
     PREFER = "prefer"  # all "chętnie" days of one employee
 
 
@@ -143,6 +139,16 @@ def _hours_text(hours: float) -> str:
     minutes = round(hours * 60)
     whole, rest = divmod(minutes, 60)
     return f"{whole} h {rest} min" if rest else f"{whole} h"
+
+
+def experience_shifts(problem: Problem, rule: RuleConfig) -> dict[tuple[date, str], list[Slot]]:
+    """Slots of one shift (day × shift type) of the rule's location, only of `position` when the rule names one."""
+    position = rule.params.get("position")
+    shifts: dict[tuple[date, str], list[Slot]] = defaultdict(list)
+    for slot in problem.slots:
+        if slot.location == rule.location and (not position or slot.position == position):
+            shifts[(slot.date, slot.shift_type)].append(slot)
+    return dict(sorted(shifts.items()))
 
 
 def _week_start(day: date) -> date:
@@ -465,6 +471,23 @@ class _Checker:
                 )
         return _Measured(len(closings), _ratio(len(found), len(closings)), tuple(found))
 
+    def rule_experience_mix(self, rule: RuleConfig) -> _Measured:
+        shifts = experience_shifts(self.p, rule)
+        found = []
+        for slots in shifts.values():
+            levels = [self.p.employee_by_id[e].experience for e in (self.assignment.get(s.id) for s in slots) if e]
+            beginners, experienced = levels.count(BEGINNER), levels.count(EXPERIENCED)
+            if beginners > experienced:
+                who = "początkujący" if beginners == 1 else f"{beginners} początkujących"
+                found.append(
+                    Violation(
+                        Code.RULE,
+                        f"Na zmianie {_slot_text(slots[0], self.p)} jest {who}, a doświadczonych tylko {experienced}.",
+                        slots=tuple(s.id for s in slots),
+                    )
+                )
+        return _Measured(len(shifts), _ratio(len(found), len(shifts)), tuple(found))
+
     def _per_week(self, rule: RuleConfig, broken: Callable[[list[Slot]], bool], message: str) -> _Measured:
         instances, found = 0, []
         for employee in self.employees_of(rule.location):
@@ -585,32 +608,9 @@ class _Checker:
         result: list[RequestMeasure] = []
         in_period = [e for e in p.availability if p.period_start <= e.date <= p.period_end]
         prefer_days: dict[str, int] = defaultdict(int)
-        prefer_not_days: dict[str, int] = defaultdict(int)
         for entry in in_period:
             if entry.state == AvailabilityState.PREFER:
                 prefer_days[entry.employee] += 1
-            elif entry.state == AvailabilityState.PREFER_NOT:
-                prefer_not_days[entry.employee] += 1
-        period_days = (p.period_end - p.period_start).days + 1
-        full_weight_days = max(1, math.ceil(period_days * PREFER_NOT_FULL_DAYS_PER_WEEK / 7))
-        for entry in in_period:
-            if entry.state != AvailabilityState.PREFER_NOT:
-                continue
-            worked = any(
-                s.date == entry.date and p.availability_for(entry.employee, s) == AvailabilityState.PREFER_NOT
-                for s in self.slots_of.get(entry.employee, ())
-            )
-            share = min(1.0, full_weight_days / prefer_not_days[entry.employee])
-            result.append(
-                RequestMeasure(
-                    location=p.employee_by_id[entry.employee].home_location,
-                    employee=entry.employee,
-                    kind=RequestKind.PREFER_NOT,
-                    weight=weights.request_weight(RequestLevel.IMPORTANT) * share,
-                    degree=1.0 if worked else 0.0,
-                    date=entry.date,
-                )
-            )
         for employee_id, count in sorted(prefer_days.items()):
             slots = self.slots_of.get(employee_id, ())
             worked_days = {s.date for s in slots}
@@ -676,6 +676,11 @@ class _Checker:
                 if request.max_hours <= 0:
                     return 1.0 if hours > _EPS else 0.0
                 return max(0.0, hours - request.max_hours) / request.max_hours
+            case RequestType.DAYS_OFF:
+                if not request.dates:
+                    return None
+                worked = {s.date for s in own}
+                return len(worked & request.dates) / len(request.dates)
             case _:
                 return None
 
@@ -713,7 +718,6 @@ def is_valid(problem: Problem, schedule: Schedule) -> bool:
 
 
 __all__ = [
-    "PREFER_NOT_FULL_DAYS_PER_WEEK",
     "TARGET_HOURS_HARD_TOLERANCE",
     "Code",
     "RequestKind",

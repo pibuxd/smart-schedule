@@ -408,7 +408,7 @@ def my_schedule(request, company_id: UUID):
 # --- The manager's schedule: a version, explanations, manual changes, publishing ----------------------------
 
 VersionStatus = Literal["draft", "published", "superseded"]
-Wish = Literal["cannot", "prefer_not", "neutral", "prefer"]
+Wish = Literal["cannot", "neutral", "prefer"]
 
 
 class VersionShiftOut(Schema):
@@ -425,7 +425,7 @@ class VersionShiftOut(Schema):
     pinned: bool
     manual: bool
     borrowed: bool
-    # The person's calendar mark for this shift ("wolę nie" shows on the grid); None for a hole.
+    # The person's calendar mark for this shift; None for a hole.
     wish: Wish | None
     # Hard problems on this shift (Polish sentences); a valid schedule has none.
     problems: list[str]
@@ -456,8 +456,8 @@ class RuleResultOut(Schema):
 class UnmetRequestOut(Schema):
     employee_name: str
     text: str
-    # "text" (written request), "prefer_not" (a "wolę nie" day), "prefer" ("chętnie" days), "unscored" (left to you)
-    kind: Literal["text", "prefer_not", "prefer", "unscored"]
+    # "text" (written request), "prefer" ("chętnie" days), "unscored" (left to you)
+    kind: Literal["text", "prefer", "unscored"]
     percent_kept: float | None
 
 
@@ -640,8 +640,6 @@ def _unmet_requests(loaded) -> list[UnmetRequestOut]:
         kept = round(100 * (1 - measure.degree), 1)
         if measure.kind == RequestKind.TEXT:
             text = requests[measure.request_id].summary
-        elif measure.kind == RequestKind.PREFER_NOT:
-            text = f"Zaznaczył(a) „wolę nie” {measure.date:%d.%m}, a ma tego dnia zmianę."
         else:
             share = f"{kept:g}".replace(".", ",")
             text = f"Dni „chętnie”: dostał(a) zmiany w {share} % z nich (tyle, ile się dało)."

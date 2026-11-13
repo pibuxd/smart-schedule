@@ -3,7 +3,7 @@
 from datetime import date
 
 from engine.explain import explain_slot
-from engine.problem import Availability, AvailabilityState, RuleConfig
+from engine.problem import Availability, AvailabilityState, Request, RuleConfig
 from tests.engine.factory import BAKER, LOC, employee, problem, slot
 
 MON = date(2026, 11, 2)
@@ -36,18 +36,16 @@ def test_assigned_slot_lists_the_person_first_and_who_else_could_work():
     p = problem(
         [employee("anna", target_hours_month=40), employee("ewa"), employee("ola")],
         [slot("a", MON)],
-        availability=(
-            Availability("anna", MON, AvailabilityState.PREFER),
-            Availability("ola", MON, AvailabilityState.PREFER_NOT),
-        ),
+        availability=(Availability("anna", MON, AvailabilityState.PREFER),),
+        requests=(Request("off", "ola", "days_off", dates=frozenset({MON})),),
     )
 
     explanation = explain_slot(p, {"a": "anna"}, "a")
 
     first, *rest = explanation.candidates
     assert first.employee == "anna" and first.current and first.possible
-    assert [c.employee for c in rest] == ["ewa", "ola"]  # "wolę nie" last among those who can
-    assert rest[1].wish == AvailabilityState.PREFER_NOT
+    assert [c.employee for c in rest] == ["ewa", "ola"]
+    assert rest[1].wish == AvailabilityState.NEUTRAL  # Ola asked in words for this day off
     assert rest[1].scores.employee_requests < first.scores.employee_requests
     assert "Anna chętnie pracuje tego dnia" in explanation.summary
     assert "cel na miesiąc: 40 h" in explanation.summary

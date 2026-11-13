@@ -32,7 +32,6 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
 import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/dates'
-import { StateIcon } from '../availability/StateIcon'
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
 import { pickPeriod } from './periods'
@@ -607,7 +606,6 @@ function ShiftChip({
     `${shift.start_time}–${shift.end_time}`,
     shift.pinned ? 'przypięta' : '',
     shift.manual ? 'zmieniona ręcznie' : '',
-    shift.wish === 'prefer_not' ? 'ta osoba woli nie pracować tego dnia' : '',
     bad ? 'łamie regułę' : '',
   ]
     .filter(Boolean)
@@ -635,11 +633,6 @@ function ShiftChip({
         )}
       >
         {hole && <AlertTriangle aria-hidden="true" size={18} className="shrink-0" />}
-        {!hole && shift.wish === 'prefer_not' && (
-          <span className="avail-prefer_not inline-flex shrink-0 rounded-sm border" title="woli nie">
-            <StateIcon state="prefer_not" size={16} />
-          </span>
-        )}
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {otherHours && (
           <span className="shrink-0 text-sm text-ink-muted">
@@ -658,12 +651,6 @@ function Legend() {
     <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-sm text-ink-muted">
       <li className="flex items-center gap-1.5">
         <AlertTriangle aria-hidden="true" size={16} className="text-cannot" /> bez obsady
-      </li>
-      <li className="flex items-center gap-1.5">
-        <span className="avail-prefer_not inline-flex rounded-sm border">
-          <StateIcon state="prefer_not" size={14} />
-        </span>
-        woli nie pracować tego dnia
       </li>
       <li className="flex items-center gap-1.5">
         <Hand aria-hidden="true" size={16} /> zmienione ręcznie

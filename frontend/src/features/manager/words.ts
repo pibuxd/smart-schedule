@@ -48,6 +48,13 @@ export function people(n: number): string {
   return `${n} ${last >= 2 && last <= 4 && !teen ? 'osoby' : 'osób'}`
 }
 
+/** Experience levels set by the manager; the employee never sees them. */
+export const EXPERIENCE: Record<1 | 2 | 3, { label: string; hint: string; tone: 'warn' | 'muted' | 'accent' }> = {
+  1: { label: 'Początkujący', hint: 'Dopiero się uczy, nie powinien zostawać sam z innymi nowymi.', tone: 'warn' },
+  2: { label: 'Samodzielny', hint: 'Radzi sobie sam, ale nie prowadzi nowych.', tone: 'muted' },
+  3: { label: 'Doświadczony', hint: 'Może pilnować początkujących na zmianie.', tone: 'accent' },
+}
+
 /** "1 zmiana", "3 zmiany", "5 zmian" */
 export function shifts(n: number): string {
   if (n === 1) return '1 zmiana'
