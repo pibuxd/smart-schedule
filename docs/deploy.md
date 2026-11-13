@@ -73,14 +73,22 @@ przebudowanie kontenerów i ponowne uruchomienie (migracje bazy wykonują się p
 zwykle do 10 minut po merge'u, a przerwa w działaniu trwa kilkanaście sekund.
 
 - Co się działo: `tail -n 50 /var/log/grafikomat-update.log`.
-- Jeśli wdrożenie wersji się nie uda, automat nie próbuje jej ponownie, tylko czeka na następny commit (poprawkę).
-  Wpis `UPDATE FAILED` w logu znaczy, że trzeba zajrzeć: `cd /opt/grafikomat && docker compose ps`.
+- Jeśli wdrożenie się nie uda (także wtedy, gdy API nie wstanie po aktualizacji), automat próbuje jeszcze raz
+  po 5 minutach. Po drugiej porażce zostawia tę wersję i czeka na następny commit (poprawkę). W logu jest wtedy
+  wpis `UPDATE FAILED`; zajrzyj: `cd /opt/grafikomat && docker compose ps`.
+- Powiadomienie o nieudanym wdrożeniu (opcjonalne): wpisz w `/opt/grafikomat/.env` adres w `DEPLOY_ALERT_URL`.
+  Po drugiej porażce serwer wysyła tam krótką wiadomość (HTTP POST). Najprościej: darmowa aplikacja ntfy na telefonie
+  i własny, trudny do zgadnięcia temat, np. `DEPLOY_ALERT_URL=https://ntfy.sh/grafikomat-<losowe-znaki>`.
+  Bez tego ślad zostaje tylko w logu.
 - Ręcznie, bez czekania: `/opt/grafikomat/deploy/update.sh`.
 - Wyłączenie automatu: `rm /etc/cron.d/grafikomat-auto-update`. Ponowne włączenie: uruchom jeszcze raz polecenie z punktu 1.
 - Na serwerze, który powstał przed dodaniem automatu, wystarczy raz uruchomić polecenie z punktu 1 (niczego nie kasuje).
 
-Uwaga: każdy merge do `main` trafia od razu na działający serwis. Przed wpuszczeniem prawdziwych użytkowników
-warto wrócić do ręcznego wdrażania albo wdrażać z osobnej gałęzi.
+Uwaga: każdy merge do `main` trafia od razu na działający serwis, o dowolnej porze. To jest w porządku tylko wtedy,
+gdy jedynym użytkownikiem jest Piotr. **Warunek przejścia na kontrolowane wdrożenia: zanim zostanie podłączona bramka SMS**
+(czyli zanim zaloguje się pierwszy prawdziwy pracownik) wyłącz automat albo przełącz serwer na osobną gałąź wydań
+(`git -C /opt/grafikomat switch <gałąź>`; automat śledzi gałąź, na której jest serwer). Razem z tym: kopia bazy poza
+serwerem i wdrażanie poza godzinami pracy lokali i terminami dyspozycji.
 
 ## 4. Kopie zapasowe
 
