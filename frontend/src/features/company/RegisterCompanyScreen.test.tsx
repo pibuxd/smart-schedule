@@ -9,11 +9,11 @@ const me = { id: 'u1', phone: '+48500100100', first_name: '', last_name: '', com
 describe('RegisterCompanyScreen', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('creates a company without a code and says it gets 14 days to try', async () => {
+  it('creates a company without a code and says it gets 30 days to try', async () => {
     const calls = mockApi(() => [201, { id: 'c9', name: 'Pod Lipą', role: 'owner', read_only: false, trial: true }])
     const onCreated = vi.fn()
     renderScreen(<RegisterCompanyScreen me={me} onCreated={onCreated} />)
-    expect(await screen.findByText(/Bez kodu masz 14 dni na wypróbowanie wszystkiego/)).toBeInTheDocument()
+    expect(await screen.findByText(/Bez kodu masz 30 dni na wypróbowanie wszystkiego/)).toBeInTheDocument()
     const submit = screen.getByRole('button', { name: 'Załóż firmę' })
     expect(submit).toBeDisabled()
     fireEvent.change(screen.getByLabelText('Nazwa firmy'), { target: { value: 'Pod Lipą' } })

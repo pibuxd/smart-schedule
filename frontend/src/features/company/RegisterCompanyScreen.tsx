@@ -13,7 +13,7 @@ import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 
 /**
  * Registering a company, after the phone number is confirmed: its name, the manager's name and (if they have one)
- * an access code. Without a code the company gets 14 days to try everything (decision of 12.11.2026).
+ * an access code. Without a code the company gets 30 days to try everything (decision of 13.11.2026).
  */
 export function RegisterCompanyScreen({ me, onCreated }: { me: MeOut; onCreated: (companyId: string) => void }) {
   const create = useCreateCompany()
@@ -73,7 +73,7 @@ export function RegisterCompanyScreen({ me, onCreated }: { me: MeOut; onCreated:
           spellCheck={false}
           hint={
             firstCompany
-              ? 'Bez kodu masz 14 dni na wypróbowanie wszystkiego. Kod możesz wpisać też później, w panelu kierownika.'
+              ? 'Bez kodu masz 30 dni na wypróbowanie wszystkiego. Kod możesz wpisać też później, w panelu kierownika.'
               : 'Okres próbny dostaje tylko pierwsza firma. Bez kodu ta firma będzie tylko do oglądania, dopóki go nie wpiszesz.'
           }
         />

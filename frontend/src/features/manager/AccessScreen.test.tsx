@@ -10,7 +10,7 @@ const trial = {
   trial: true,
   starts_at: '2026-11-12T10:00:00+01:00',
   ends_at: '2026-11-26T10:00:00+01:00',
-  days_left: 14,
+  days_left: 30,
   read_only: false,
   expiring_soon: false,
   generations_used: 2,
@@ -29,7 +29,7 @@ describe('AccessScreen', () => {
         <AccessScreen />
       </AsManager>,
     )
-    expect(await screen.findByText('Okres próbny: zostało 14 dni')).toBeInTheDocument()
+    expect(await screen.findByText('Okres próbny: zostało 30 dni')).toBeInTheDocument()
     expect(screen.getByText('Ułożenia grafiku w tym miesiącu: 2 z 20.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Kod (12 znaków)'), { target: { value: 'ABCD-EFGH-JKMN' } })
     fireEvent.submit(screen.getByLabelText('Kod (12 znaków)').closest('form')!)

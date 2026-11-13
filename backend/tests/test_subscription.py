@@ -291,9 +291,9 @@ def test_company_registered_without_a_code_gets_a_trial(api):
     assert body["trial"] is True
     subscription = Subscription.objects.get(company_id=body["id"])
     assert subscription.source == Subscription.Source.TRIAL
-    assert close_to(subscription.ends_at, timezone.now() + 14 * DAY)
+    assert close_to(subscription.ends_at, timezone.now() + 30 * DAY)
     state = api.get(f"/api/companies/{body['id']}/subscription").json()
-    assert state["trial"] is True and state["days_left"] == 14
+    assert state["trial"] is True and state["days_left"] == 30
 
 
 def test_only_the_first_company_of_a_person_gets_a_trial(api):
