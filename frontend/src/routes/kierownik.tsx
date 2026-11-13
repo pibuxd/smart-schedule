@@ -5,6 +5,7 @@ import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { Wordmark } from '../components/Wordmark'
 import { useSession } from '../features/auth/session'
+import { AccessBanner } from '../features/manager/AccessBanner'
 import { isManagerRole, ManagerContext } from '../features/manager/ManagerContext'
 
 export const Route = createFileRoute('/kierownik')({
@@ -68,6 +69,18 @@ function ManagerLayout() {
               <span className="font-semibold text-ink">{company.name}</span>
             )}
             <Link
+              to="/kierownik/godziny"
+              className="inline-flex min-h-(--touch) items-center rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
+            >
+              Godziny
+            </Link>
+            <Link
+              to="/kierownik/dostep"
+              className="inline-flex min-h-(--touch) items-center rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
+            >
+              Dostęp
+            </Link>
+            <Link
               to="/grafik"
               className="inline-flex min-h-(--touch) items-center rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
             >
@@ -83,6 +96,7 @@ function ManagerLayout() {
           </div>
         </div>
       </header>
+      <AccessBanner companyId={company.id} />
       <main className="mx-auto grid max-w-(--wide) gap-6 px-4 pt-5 pb-16">
         <Outlet />
       </main>

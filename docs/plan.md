@@ -193,9 +193,9 @@ Zasady
 
 Grafik
 - `GET/POST /locations/{id}/periods` · `POST /periods/generate` (jeden lub kilka okresów; osobne `GenerationRun` dla każdego lokalu)
-- `GET /generation-runs/{id}` · `GET /versions/{id}` (zmiany, przypisania, ocena, wyjaśnienia)
-- `POST /versions/{id}/validate` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena) · `PATCH /versions/{id}/assignments` (przeniesienie, przypięcie)
-- `POST /versions/{id}/publish` · `GET /assignments/{id}/explain?deep=false`
+- `GET /generation-runs/{id}` · `GET /versions/{id}` (zmiany, przypisania, ocena, zasady, niespełnione prośby, historia wersji)
+- `POST /versions/{id}/check` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena) · `PATCH /versions/{id}/assignments` (wpisanie, zamiana, zostawienie bez obsady) · `POST /versions/{id}/shifts/{shift_id}/pin`
+- `POST /versions/{id}/draft` (poprawka opublikowanego grafiku) · `POST /versions/{id}/publish` · `GET /versions/{id}/shifts/{shift_id}/explain`
 - `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin, współpracownicy na zmianie)
 
 Oddawanie zmian i powiadomienia
@@ -203,7 +203,7 @@ Oddawanie zmian i powiadomienia
 - `GET /me/notifications` · `POST /me/notifications/read`
 
 Raporty
-- `GET /reports/hours?month=&scope=` · `GET /reports/hours.csv`
+- `GET /reports/hours?company_id=&month=` · `GET /reports/hours.csv?company_id=&month=`
 
 Admin Django: kody subskrypcji (generowanie partii, podgląd użyć), firmy, profile wag.
 
@@ -253,7 +253,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 4. Zmiany typu "dowolne godziny" generator traktuje jak sloty z godzinami ustawionymi w obsadzie lub wyjątku na dany dzień; menedżer może też dodać zmianę z dowolnymi godzinami ręcznie.
 5. Tydzień zaczyna się w poniedziałek, strefa czasowa Europe/Warsaw, godziny zmian liczone w czasie lokalnym z uwzględnieniem zmiany czasu.
 6. Menedżer też może mieć profil pracownika (np. kierownik na umowie o pracę w grafiku).
-7. Rejestracja firmy możliwa bez kodu; bez aktywnej subskrypcji firma jest w trybie tylko do odczytu, dopóki nie wpisze kodu.
+7. Rejestracja firmy możliwa bez kodu; firma dostaje wtedy 30 dni okresu próbnego (decyzja Piotra z 12.11.2026, 13.11.2026 wydłużone z 14 dni; zob. sekcja 14), potem jest tylko do odczytu, dopóki nie wpisze kodu.
 8. Odświeżanie wyniku generowania przez odpytywanie co 1–2 s, bez websocketów.
 9. CI na GitHub Actions (ruff, pytest, eslint, typecheck, build) to część stosu narzędzi, nie aplikacji; dodam w etapie 1, jeśli się zgadzasz.
 10. Row Level Security w Postgresie odłożone; izolacja w warstwie aplikacji z testami.
@@ -268,7 +268,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 - Decyzje Piotra po przeglądzie etapu 5 (12.11.2026): każdy lokal generujemy osobno, lokale są niezależne, chyba że kierownik w poleceniu powie inaczej; daty okresu wpisuje kierownik, razem z dniem układania grafiku, i może jednym przyciskiem poprosić wszystkich pracowników o dyspozycje (etap 7: przycisk, etap 9: powiadomienie); ponowne generowanie usuwa nieprzypięte ręczne poprawki (etap 8: uprzedzić o tym przy przycisku), a zmiany w wyniku kierownik wprowadza poleceniem do asystenta; generator ma być w pełni ustawialny poleceniami (etap 10 obejmie też polecenia kierownika, nie tylko prośby pracowników).
 - Do sprawdzenia z pilotem (z przeglądu etapu 6): czy pracownicy rozumieją, że "chętnie" z godzinami blokuje inne zmiany tego dnia (krótki test z 3–5 osobami); kierownik nie chce twardego zamknięcia dyspozycji w terminie, tylko oznaczenia "zmienione po terminie" w siatce (decyzja Piotra z 12.11.2026, zrobione w etapie 7).
 - Do sprawdzenia z pilotem: porównanie jakości z grafikami układanymi ręcznie. Etap 7/8: prośby "inne" i przypięcia wyraźnie widoczne na ekranie.
-- Przed wdrożeniem dla prawdziwych użytkowników: bramka SMS (bez niej kody logowania są w logach serwera; `manage.py check` ostrzega: `accounts.W001`), sprawdzenie limitu 20 próśb o kod na adres IP przy wspólnym Wi-Fi w lokalu, decyzja, czy firma bez kodu ma dostać krótki okres próbny zamiast trybu tylko do odczytu.
+- Przed wdrożeniem dla prawdziwych użytkowników: bramka SMS (bez niej kody logowania są w logach serwera; `manage.py check` ostrzega: `accounts.W001`), sprawdzenie limitu 20 próśb o kod na adres IP przy wspólnym Wi-Fi w lokalu. (Okres próbny dla firmy bez kodu: rozstrzygnięte w etapie 8, 30 dni.)
 
 ## 9. Etap 3: jak to działa i przyjęte założenia
 
@@ -370,7 +370,26 @@ Na etap 8 (dopisane tutaj, nie zrobione w etapie 7): przycisk "Ułóż grafik" p
 
 Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że pracownicy zobaczą powiadomienie w jednej z następnych wersji i że na razie trzeba im powiedzieć osobiście; podgląd zasad mówi wprost, że to sprawdzenie ostatniego grafiku, a nie prognoza; ekran zasad lokalu tłumaczy, kiedy zasada przestaje iść za grupą; licznik to "Wysłali dyspozycje" (przycisk "Gotowe"), nie zaznaczone dni. Do sprawdzenia w pilocie: czy kierownik chce móc pominąć zmiany po terminie, czy podgląd na ostatnim grafiku wystarcza, i czy ktoś poza właścicielem musi zakładać lokale i grupy.
 
-## 14. Zmiana z 13.11.2026: w kalendarzu tylko "nie mogę" i "chętnie"
+## 14. Etap 8: układanie z ekranu, edycja, publikacja, godziny
+
+- Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Limit ułożeń grafiku działa też w okresie próbnym. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
+- Ekrany: "Załóż firmę" (`/rejestracja`: numer, kod SMS, nazwa firmy, imię i nazwisko, opcjonalny kod; link z ekranu logowania), "Dostęp" (`/kierownik/dostep`: stan, ułożenia w miesiącu, wpisanie kodu), baner dostępu w panelu kierownika, "Godziny" (`/kierownik/godziny`: miesiąc, tabela osób z podziałem na lokale, CSV) i karta "Grafik" w lokalu (`/kierownik/lokal/{id}/grafik`). Na "Lokale" przycisk "Ułóż grafik" przy każdym lokalu i "Ułóż dla wszystkich" (każdy lokal osobno), z arkuszem, który ostrzega przed terminem, mówi, ilu osób brakuje i ile nieprzypiętych ręcznych poprawek zniknie; postęp odpytywany co 1,5 s.
+- Karta "Grafik": trzy wartości oceny, twarde problemy, siatka dni × zmiany (przypięte, ręczne, pożyczone, bez obsady; znacznik "woli nie" usunięty 13.11.2026, zob. sekcja 15), przeciąganie osoby na inną zmianę z wynikiem sprawdzenia na żywo w trakcie przeciągania, arkusz zmiany z wyjaśnieniem (kto może, ile to kosztuje, kto nie może i dlaczego) i akcjami "Wpisz", "Zostaw bez obsady", "Przypnij", godziny osób, zasady z procentem, niespełnione prośby, wersje, "Opublikuj" i "Popraw grafik".
+- Nowe pole `Assignment.manual` (ręczna zmiana). Nowy moduł `engine/explain.py` (bez Django): dla każdej osoby ze stanowiskiem sprawdza walidatorem grafik z tą osobą na zmianie, więc wyjaśnienie zgadza się z walidatorem. `apps/scheduling/editing.py`: sprawdzanie i zapis ręcznych zmian, przypinanie, poprawka opublikowanego grafiku, publikacja. Raport godzin: `apps/reports`.
+
+Założenia:
+1. Ręcznie można zmieniać tylko najnowszy szkic okresu. Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
+2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmiana zostawiona bez obsady nie może być przypięta.
+3. W edytorze można wpisać tylko osoby z lokalu (z danym stanowiskiem); pożyczanie z innych lokali zostaje dla oddawania zmian (etap 9).
+4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły. Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
+5. Okres próbny dostaje tylko pierwsza firma danej osoby; kolejne firmy bez kodu są od razu tylko do odczytu.
+6. Wyjaśnienie zmiany liczy szybkie sprawdzenie walidatorem dla każdej osoby (ok. 5 ms na osobę). Głębsza analiza ("kto by mógł, gdyby przestawić inne zmiany") wymaga solvera w workerze i zostaje na później.
+7. Raport godzin liczy tylko opublikowane zmiany w lokalach, którymi zarządza kierownik, w podanym miesiącu kalendarzowym (zmiana należy do dnia, w którym się zaczyna). CSV: średniki, przecinek dziesiętny, BOM, żeby Excel otworzył polskie znaki.
+
+
+Po przeglądzie Prelinta (PR #10): nad siatką jest pasek "Ręczne poprawki bez przypięcia: N" z przyciskiem "Przypnij poprawki", bo ponowne układanie je usuwa; arkusz publikacji mówi, że powiadomień w aplikacji jeszcze nie ma (trzeba powiedzieć pracownikom), a przy poprawce opublikowanego grafiku wymienia osoby, których zmiany się zmieniają (`VersionOut.changed_people`); ekran "Godziny" mówi, że to plan z opublikowanych grafików w lokalach kierownika, a nie ewidencja czasu pracy, i oznacza osobę, która w tym miesiącu pracuje też w lokalach, których kierownik nie prowadzi (suma niepełna; w CSV kolumna "Uwagi"). Ręczna zmiana osoby zawsze zdejmuje przypięcie. Link "Załóż firmę" zostaje w pustym stanie zaproszeń, bo to jedyna droga do rejestracji dla zalogowanej osoby bez firmy (np. kierownika, który najpierw się zalogował). Do sprawdzenia w pilocie: czy kierownik oczekuje, że ręczne poprawki zostają domyślnie, i czy potrzebuje obejścia „nie mogę” po rozmowie z pracownikiem.
+
+## 15. Zmiana z 13.11.2026: w kalendarzu tylko "nie mogę" i "chętnie"
 
 Decyzja Piotra po przeglądzie zrzutów: "wolę nie" i "obojętnie" znikają z kalendarza; takie życzenia pracownik pisze jako prośbę tekstem, a LLM (etap 10) zamienia je na nowy typ `wolne_dni`.
 
@@ -380,8 +399,9 @@ Decyzja Piotra po przeglądzie zrzutów: "wolę nie" i "obojętnie" znikają z k
 4. Typ prośby `wolne_dni` (`RequestType.DAYS_OFF`): stopień złamania = część podanych dni, w które osoba pracuje; bez dat prośba trafia do kierownika jako "inne". W solverze kara za każdy z tych dni, w który osoba ma zmianę.
 5. Do etapu 10 prośby tekstem nie mają interpretacji, więc życzenia typu "wolę nie" widzi tylko kierownik, a generator ich nie liczy.
 6. Siatka kierownika: dzień bez zaznaczenia to pusta kratka z pełną ramką; przerywana ramka zostaje dla osób, które nic nie wysłały.
+7. Po połączeniu z etapem 8: siatka grafiku, wyjaśnienie zmiany i lista niespełnionych próśb nie znają już "wolę nie" (bez znacznika "woli nie" i bez pozycji `prefer_not`); w wyjaśnieniu dzień bez zaznaczenia to "bez zaznaczenia".
 
-## 15. Zmiana z 13.11.2026: stopień doświadczenia pracownika
+## 16. Zmiana z 13.11.2026: stopień doświadczenia pracownika
 
 Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę z jednym z trzech stopni doświadczenia, pracownik jej nie widzi, a generator pilnuje, żeby na zmianie nie było wielu niedoświadczonych.
 

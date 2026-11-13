@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -22,22 +22,25 @@ const phoneSchema = z.object({
 })
 type PhoneForm = z.input<typeof phoneSchema>
 
-export function LoginScreen() {
+type Purpose = 'login' | 'register'
+
+/** Logging in, or (purpose "register") the first step of registering a new company: the phone number and the code. */
+export function LoginScreen({ purpose = 'login' }: { purpose?: Purpose }) {
   const [sent, setSent] = useState<RequestCodeOut | null>(null)
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-(--column) flex-col gap-6 px-4 pt-6 pb-8">
       <Wordmark />
       {sent ? (
-        <CodeStep sent={sent} onResent={setSent} onChangePhone={() => setSent(null)} />
+        <CodeStep sent={sent} purpose={purpose} onResent={setSent} onChangePhone={() => setSent(null)} />
       ) : (
-        <PhoneStep onSent={setSent} />
+        <PhoneStep purpose={purpose} onSent={setSent} />
       )}
     </main>
   )
 }
 
-function PhoneStep({ onSent }: { onSent: (sent: RequestCodeOut) => void }) {
+function PhoneStep({ purpose, onSent }: { purpose: Purpose; onSent: (sent: RequestCodeOut) => void }) {
   const requestCode = useRequestCode()
   const form = useForm<PhoneForm, unknown, z.output<typeof phoneSchema>>({
     resolver: zodResolver(phoneSchema),
@@ -47,7 +50,7 @@ function PhoneStep({ onSent }: { onSent: (sent: RequestCodeOut) => void }) {
 
   const submit = form.handleSubmit(({ phone }) => {
     requestCode.mutate(
-      { data: { phone: `+48${phone}`, purpose: 'login' } },
+      { data: { phone: `+48${phone}`, purpose } },
       { onSuccess: (response) => onSent(response.data as RequestCodeOut) },
     )
   })
@@ -55,8 +58,12 @@ function PhoneStep({ onSent }: { onSent: (sent: RequestCodeOut) => void }) {
   return (
     <form className="mt-6 flex flex-1 flex-col gap-5" onSubmit={submit} noValidate>
       <div className="grid gap-2">
-        <h1 className="m-0 text-2xl font-extrabold">Zaloguj się</h1>
-        <p className="m-0 text-ink-muted">Wpisz swój numer telefonu. Wyślemy na niego SMS z kodem.</p>
+        <h1 className="m-0 text-2xl font-extrabold">{purpose === 'register' ? 'Załóż firmę' : 'Zaloguj się'}</h1>
+        <p className="m-0 text-ink-muted">
+          {purpose === 'register'
+            ? 'Wpisz swój numer telefonu. Wyślemy SMS z kodem, a potem podasz nazwę firmy. Pracowników zaprosisz później.'
+            : 'Wpisz swój numer telefonu. Wyślemy na niego SMS z kodem.'}
+        </p>
       </div>
       <div className="grid gap-2">
         <label htmlFor="phone" className="font-semibold">
@@ -85,10 +92,19 @@ function PhoneStep({ onSent }: { onSent: (sent: RequestCodeOut) => void }) {
         )}
       </div>
       {requestCode.isError && <InlineError>{errorMessage(requestCode.error, NETWORK_PROBLEM)}</InlineError>}
-      <div className="mt-auto">
+      <div className="mt-auto grid gap-2">
         <Button type="submit" wide disabled={requestCode.isPending}>
           {requestCode.isPending ? 'Wysyłam kod…' : 'Wyślij kod SMS'}
         </Button>
+        {purpose === 'register' ? (
+          <Link to="/logowanie" className="inline-flex min-h-(--touch) items-center justify-center font-semibold text-accent underline underline-offset-4">
+            Masz już konto? Zaloguj się
+          </Link>
+        ) : (
+          <Link to="/rejestracja" className="inline-flex min-h-(--touch) items-center justify-center font-semibold text-accent underline underline-offset-4">
+            Prowadzisz lokal? Załóż firmę
+          </Link>
+        )}
       </div>
     </form>
   )
@@ -106,10 +122,12 @@ function useCountdown(seconds: number, restartKey: unknown) {
 
 function CodeStep({
   sent,
+  purpose,
   onResent,
   onChangePhone,
 }: {
   sent: RequestCodeOut
+  purpose: Purpose
   onResent: (sent: RequestCodeOut) => void
   onChangePhone: () => void
 }) {
@@ -128,7 +146,7 @@ function CodeStep({
         {
           onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: getMeQueryKey() })
-            await navigate({ to: '/' })
+            await navigate({ to: purpose === 'register' ? '/rejestracja' : '/' })
           },
           onError: () => setCode(''),
         },
@@ -166,7 +184,7 @@ function CodeStep({
           disabled={left > 0 || resend.isPending}
           onClick={() =>
             resend.mutate(
-              { data: { phone: sent.phone, purpose: 'login' } },
+              { data: { phone: sent.phone, purpose } },
               {
                 onSuccess: (response) => {
                   setCode('')

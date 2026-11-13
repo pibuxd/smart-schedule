@@ -30,6 +30,8 @@ class SubscriptionOut(Schema):
     days_left: int
     # True in the last 7 days of access: the manager's panel shows a banner.
     expiring_soon: bool
+    # Access comes from the free trial (no code entered yet).
+    trial: bool
     generations_used: int
     generations_limit: int
 
@@ -46,6 +48,7 @@ def _subscription_out(ctx: TenantContext) -> SubscriptionOut:
         ends_at=state.ends_at,
         days_left=state.days_left,
         expiring_soon=state.expiring_soon,
+        trial=state.trial,
         generations_used=generations_used_this_month(ctx.company.pk),
         generations_limit=settings.GENERATION_MONTHLY_LIMIT,
     )
