@@ -27,6 +27,7 @@ import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
+import { AssistantPanel } from './Assistant'
 import { useManager } from './ManagerContext'
 
 type Scope = 'location' | 'group'
@@ -112,6 +113,7 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
 
   return (
     <div className="grid gap-5">
+      {scope === 'location' && <AssistantPanel locationId={scopeId} />}
       <div className="grid gap-2">
         <h2 className="m-0 text-xl font-extrabold">
           {scope === 'group' ? `Zasady wspólne: ${data.name}` : 'Zasady lokalu'}
