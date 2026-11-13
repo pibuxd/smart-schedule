@@ -8,4 +8,6 @@ cd "$(dirname "$0")/.."
 git pull --ff-only
 docker compose up -d --build --remove-orphans
 docker image prune -f >/dev/null
+# Remember what is running, for deploy/auto-update.sh.
+git rev-parse HEAD > .deployed-commit
 docker compose ps

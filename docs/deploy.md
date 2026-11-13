@@ -67,12 +67,20 @@ Kody na darmowy dostęp dla firm tworzy się w panelu administratora: Kody dost�
 
 ## 3. Aktualizacja
 
-```bash
-/opt/grafikomat/deploy/update.sh
-```
+Serwer aktualizuje się sam. Co 5 minut `deploy/auto-update.sh` (cron `/etc/cron.d/grafikomat-auto-update`) sprawdza,
+czy na gałęzi `main` w GitHubie jest nowy kod. Jeśli jest, uruchamia `deploy/update.sh`: kopia bazy, pobranie kodu,
+przebudowanie kontenerów i ponowne uruchomienie (migracje bazy wykonują się przy starcie API). Nowa wersja działa
+zwykle do 10 minut po merge'u, a przerwa w działaniu trwa kilkanaście sekund.
 
-Robi kopię bazy, pobiera najnowszy kod z gałęzi `main`, przebudowuje kontenery i uruchamia je ponownie
-(migracje bazy wykonują się przy starcie API).
+- Co się działo: `tail -n 50 /var/log/grafikomat-update.log`.
+- Jeśli wdrożenie wersji się nie uda, automat nie próbuje jej ponownie, tylko czeka na następny commit (poprawkę).
+  Wpis `UPDATE FAILED` w logu znaczy, że trzeba zajrzeć: `cd /opt/grafikomat && docker compose ps`.
+- Ręcznie, bez czekania: `/opt/grafikomat/deploy/update.sh`.
+- Wyłączenie automatu: `rm /etc/cron.d/grafikomat-auto-update`. Ponowne włączenie: uruchom jeszcze raz polecenie z punktu 1.
+- Na serwerze, który powstał przed dodaniem automatu, wystarczy raz uruchomić polecenie z punktu 1 (niczego nie kasuje).
+
+Uwaga: każdy merge do `main` trafia od razu na działający serwis. Przed wpuszczeniem prawdziwych użytkowników
+warto wrócić do ręcznego wdrażania albo wdrażać z osobnej gałęzi.
 
 ## 4. Kopie zapasowe
 
