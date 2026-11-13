@@ -113,8 +113,15 @@ function EmployeeList({
             )}
             {e.is_manager && <Tag tone="accent">Kierownik</Tag>}
           </span>
-          <span>
+          <span className="flex flex-wrap gap-1">
             <Tag tone={EXPERIENCE[e.experience].tone}>{EXPERIENCE[e.experience].label}</Tag>
+            {e.position_experience
+              .filter((level) => level.experience !== e.experience)
+              .map((level) => (
+                <Tag key={level.position_id} tone={EXPERIENCE[level.experience].tone}>
+                  {`${names.get(level.position_id) ?? 'Stanowisko'}: ${EXPERIENCE[level.experience].label.toLowerCase()}`}
+                </Tag>
+              ))}
           </span>
           <span className="text-sm text-ink-muted">{hoursWords(e)}</span>
           <Button variant="quiet" size="normal" onClick={() => onEdit(e)} disabled={readOnly} aria-label={`Zmień: ${e.first_name} ${e.last_name}`}>
@@ -127,6 +134,8 @@ function EmployeeList({
   )
 }
 
+type Level = 1 | 2 | 3
+
 const toNumber = (value: string) => (value.trim() === '' ? null : Number(value))
 
 function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; positions: PositionOut[]; onDone: () => void }) {
@@ -134,6 +143,14 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
   const queryClient = useQueryClient()
   const [chosen, setChosen] = useState<string[]>(employee.position_ids)
   const [experience, setExperience] = useState(employee.experience)
+  // Levels that differ from the default on single positions (position id -> level).
+  const [levels, setLevels] = useState<Record<string, Level>>(() =>
+    Object.fromEntries(
+      employee.position_experience
+        .filter((level) => level.experience !== employee.experience)
+        .map((level) => [level.position_id, level.experience]),
+    ),
+  )
   const [max, setMax] = useState(employee.max_hours_month?.toString() ?? '')
   const [target, setTarget] = useState(employee.target_hours_month?.toString() ?? '')
   const [active, setActive] = useState(employee.is_active)
@@ -146,6 +163,7 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
         data: {
           position_ids: chosen,
           experience,
+          position_experience: chosen.map((id) => ({ position_id: id, experience: levels[id] ?? experience })),
           max_hours_month: toNumber(max),
           target_hours_month: toNumber(target),
           is_active: active,
@@ -194,6 +212,44 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
           </label>
         ))}
       </fieldset>
+      {chosen.length >= 2 && (
+        <fieldset className="m-0 grid gap-2 border-0 p-0">
+          <legend className="mb-1 font-semibold">Inny stopień na którymś stanowisku</legend>
+          <p className="m-0 text-sm text-ink-muted">
+            Zmień tylko tam, gdzie jest inaczej, np. ktoś doświadczony przy piecu dopiero uczy się kasy.
+          </p>
+          {positions
+            .filter((p) => chosen.includes(p.id))
+            .map((p) => (
+              <label key={p.id} className="grid gap-1 sm:grid-cols-[1fr_minmax(200px,auto)] sm:items-center">
+                <span>{p.name}</span>
+                <select
+                  className="min-h-(--touch) rounded-md border border-line bg-surface px-3 text-base text-ink"
+                  aria-label={`Stopień na stanowisku ${p.name}`}
+                  value={levels[p.id] ?? ''}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setLevels((now) => {
+                      const next = { ...now }
+                      if (value === '') delete next[p.id]
+                      else next[p.id] = Number(value) as Level
+                      return next
+                    })
+                  }}
+                >
+                  <option value="">{`Tak jak wyżej (${EXPERIENCE[experience].label.toLowerCase()})`}</option>
+                  {([1, 2, 3] as const)
+                    .filter((value) => value !== experience)
+                    .map((value) => (
+                      <option key={value} value={value}>
+                        {EXPERIENCE[value].label}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            ))}
+        </fieldset>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField
           label="Cel godzin w miesiącu"

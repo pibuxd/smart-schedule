@@ -18,6 +18,11 @@ export interface StaffingCellIn {
      * @maximum 50
      */
   count: number;
+  /**
+     * @minimum 0
+     * @maximum 50
+     */
+  experienced?: number;
   start_time?: string | null;
   end_time?: string | null;
 }
