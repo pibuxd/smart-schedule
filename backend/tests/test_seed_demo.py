@@ -32,6 +32,8 @@ def test_bakery_matches_the_spec(demo):
         contracts = Counter(staff.values_list("contract", flat=True))
         assert contracts[Contract.EMPLOYMENT] >= 1
         assert contracts[Contract.CIVIL] > contracts[Contract.EMPLOYMENT]
+        levels = Counter(staff.values_list("experience", flat=True))
+        assert levels[1] >= 2 and levels[3] >= 2 and levels[2] > 0  # beginners, experienced and the rest
 
     requests = TextRequest.objects.for_company(BAKERY_COMPANY_ID).count()
     requests += TextRequest.objects.for_company(CAFE_COMPANY_ID).count()

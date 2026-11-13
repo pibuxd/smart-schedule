@@ -33,7 +33,8 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 
 ## Menedżer (najpierw komputer)
 
-1. Dane lokalu w formularzach: stanowiska, typy zmian z godzinami (stałe lub dowolne, także przez północ), obsada według stanowisk dla dnia tygodnia i typu zmiany z wyjątkami na daty, okres grafiku (tydzień lub miesiąc), termin dyspozycji, pracownicy (stanowiska, typ umowy, osobiste maksimum i cel godzin). Aplikacja niczego z tego nie zakłada z góry.
+1. Dane lokalu w formularzach: stanowiska, typy zmian z godzinami (stałe lub dowolne, także przez północ), obsada według stanowisk dla dnia tygodnia i typu zmiany z wyjątkami na daty, okres grafiku (tydzień lub miesiąc), termin dyspozycji, pracownicy (stanowiska, typ umowy, stopień doświadczenia, osobiste maksimum i cel godzin). Aplikacja niczego z tego nie zakłada z góry.
+   Stopień doświadczenia (decyzja Piotra z 13.11.2026): kierownik daje każdej osobie na liście pracowników jedną z trzech etykiet: początkujący, samodzielny (domyślna) albo doświadczony. Pracownik nigdy nie widzi swojego stopnia. Generator używa go w zasadzie "Początkujący z doświadczonymi", żeby na zmianie nie było wielu niedoświadczonych osób naraz. Pomysł na później: podpowiedź stopnia z przepracowanych godzin.
 2. Przegląd dyspozycji: siatka pracownicy x dni, lista próśb z interpretacją (menedżer może prośbę odrzucić albo oznaczyć jako ważniejszą lub mniej ważną), lista osób bez zgłoszonej dyspozycji.
 3. Zasady lokalu: gotowa lista z przełącznikami i licznikami; kolejność na liście = ważność; każdą zasadę można oznaczyć "bez wyjątków" (twarda). Przed zapisaniem pokaż skutek zmiany na danych z ostatniego okresu, np. "przez tę zasadę 6 próśb nie zostałoby spełnionych".
 4. Generowanie grafiku osobno dla każdego lokalu (lokale są od siebie niezależne: każdy ma własne zasady i wagi; "ułóż dla wszystkich" uruchamia osobne generowanie dla każdego lokalu). Lokale zależą od siebie tylko wtedy, gdy kierownik tak powie w poleceniu dla asystenta. Wynik z oceną i wyjaśnieniami; ręczna edycja (przeciąganie, przypinanie) z walidacją na żywo przez endpoint; publikacja z wersjami.
@@ -48,7 +49,7 @@ Każda osoba ma typ umowy: zlecenie (prawie wszyscy, domyślne) albo umowa o pra
 - Zlecenie: twarde są tylko "nie mogę", właściwe stanowisko, brak nakładających się zmian, zmiany przypięte ręcznie i zasady menedżera "bez wyjątków".
 - Umowa o pracę: dodatkowo twarde 11 h odpoczynku na dobę, 35 h na tydzień, max 8 h na dobę. Okres rozliczeniowy i doba pracownicza w kolejnej wersji.
 - Limity prawne zawsze twarde. Osobiste maksimum i cel godzin ustawione przez menedżera są miękkie.
-- Zasady dobrej praktyki: miękkie, włączone domyślnie, menedżer może każdą wyłączyć albo zamienić na twardą: min. 11 h między zmianami, max 6 dni pracy z rzędu, równy podział weekendów i zmian zamykających.
+- Zasady dobrej praktyki: miękkie, włączone domyślnie, menedżer może każdą wyłączyć albo zamienić na twardą: min. 11 h między zmianami, max 6 dni pracy z rzędu, równy podział weekendów i zmian zamykających, początkujący z doświadczonymi (na każdej zmianie co najmniej tylu doświadczonych, ilu początkujących; można zawęzić do jednego stanowiska).
 
 ## Generator (najważniejsza część)
 

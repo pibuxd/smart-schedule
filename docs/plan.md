@@ -108,7 +108,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `ShiftType` | location, name, start_time, end_time, kind (fixed/flexible), is_closing | koniec przed początkiem = przez północ |
 | `StaffingRule` | location, weekday, shift_type, position, count, start/end (tylko dla zmian z dowolnymi godzinami) | unikalne (location, weekday, shift_type, position) |
 | `StaffingException` | location, date, shift_type, position, count, start/end (opcjonalnie inne godziny) | np. Wigilia, dzień bez obsady (count=0) |
-| `EmployeeProfile` | membership, home_location, positions (M2M), contract (civil/employment), max_hours_month, target_hours_month, is_active | zlecenie domyślne |
+| `EmployeeProfile` | membership, home_location, positions (M2M), contract (civil/employment), experience (1 początkujący / 2 samodzielny / 3 doświadczony), max_hours_month, target_hours_month, is_active | zlecenie domyślne, stopień 2; stopnia nie widzi pracownik |
 
 ### Dyspozycyjność i prośby
 
@@ -380,3 +380,15 @@ Decyzja Piotra po przeglądzie zrzutów: "wolę nie" i "obojętnie" znikają z k
 4. Typ prośby `wolne_dni` (`RequestType.DAYS_OFF`): stopień złamania = część podanych dni, w które osoba pracuje; bez dat prośba trafia do kierownika jako "inne". W solverze kara za każdy z tych dni, w który osoba ma zmianę.
 5. Do etapu 10 prośby tekstem nie mają interpretacji, więc życzenia typu "wolę nie" widzi tylko kierownik, a generator ich nie liczy.
 6. Siatka kierownika: dzień bez zaznaczenia to pusta kratka z pełną ramką; przerywana ramka zostaje dla osób, które nic nie wysłały.
+
+## 15. Zmiana z 13.11.2026: stopień doświadczenia pracownika
+
+Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę z jednym z trzech stopni doświadczenia, pracownik jej nie widzi, a generator pilnuje, żeby na zmianie nie było wielu niedoświadczonych.
+
+1. `EmployeeProfile.experience`: 1 = początkujący, 2 = samodzielny (domyślny), 3 = doświadczony. Dopóki kierownik nikogo nie oznaczy, wszyscy są samodzielni i zasada nic nie zmienia.
+2. Stopień jest tylko w API kierownika (`GET /locations/{id}/employees`, `PATCH /employees/{id}`). Żaden endpoint pracownika go nie zwraca.
+3. Nowa zasada katalogu `experience_mix` ("Początkujący z doświadczonymi"), dobra praktyka (włączona w nowych lokalach): na każdej zmianie (dzień × typ zmiany w lokalu) liczba początkujących nie może przekraczać liczby doświadczonych. Samodzielni się nie liczą. Parametr `position` (puste = wszystkie stanowiska razem) zawęża liczenie do jednego stanowiska, np. kelnerów.
+4. Stopień złamania = część zmian, na których początkujących jest więcej niż doświadczonych. Solver: kara za każdą taką zmianę (twarda: ograniczenie "początkujących ≤ doświadczonych").
+5. Migracja dopisuje zasadę na koniec listy w istniejących lokalach bez grupy i w grupach, które mają już zasady (najmniejsza waga, łatwo przesunąć albo wyłączyć).
+6. Dane przykładowe: w każdym lokalu kilka osób początkujących i kilka doświadczonych.
+7. Na później (pomysł Piotra): podpowiedź stopnia z liczby przepracowanych godzin.

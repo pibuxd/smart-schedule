@@ -373,6 +373,35 @@ def test_fair_split_rules_as_hard_constraints(code):
     assert measure.violations == ()
 
 
+def test_beginner_is_put_with_an_experienced_colleague():
+    people = [
+        employee("nowa", experience=1),
+        employee("nowy", experience=1),
+        employee("stara", experience=3),
+        employee("ola"),
+    ]
+    # Two places on each of two shifts a day: without the rule the two beginners could work together.
+    slots = week(3, places=2, closing=False)
+    p = problem(people, slots, rules=[RuleConfig("experience_mix", LOC, rank=1)])
+    result, report = solved(p)
+    assert next(m for m in report.rules if m.code == "experience_mix").violations == ()
+    for shift in {(s.date, s.shift_type) for s in p.slots}:
+        team = {result.schedule[s.id] for s in p.slots if (s.date, s.shift_type) == shift}
+        assert not {"nowa", "nowy"} <= team
+
+
+def test_experience_mix_can_count_one_position_only():
+    people = [employee("nowa", experience=1), employee("piekarz", positions=(BAKER,), experience=3)]
+    slots = [slot("s", MON), slot("b", MON, position=BAKER)]
+    whole_shift = problem(people, slots, rules=[RuleConfig("experience_mix", LOC, rank=1, hard=True)])
+    sales_only = problem(
+        people, slots, rules=[RuleConfig("experience_mix", LOC, rank=1, hard=True, params={"position": SALES})]
+    )
+    assert solved(whole_shift)[0].schedule == {"s": "nowa", "b": "piekarz"}
+    # Counting sellers only, the experienced baker does not help: the beginner may not sell alone.
+    assert solved(sales_only)[0].schedule == {"s": None, "b": "piekarz"}
+
+
 # ----------------------------------------------------------------- hard rules never broken (random problems)
 
 HARD_SAFE_RULES = [
@@ -383,6 +412,7 @@ HARD_SAFE_RULES = [
     ("personal_max_hours", {}),
     ("same_shift_type_in_week", {}),
     ("max_shifts_per_week", {"shifts": 4}),
+    ("experience_mix", {}),
 ]
 
 
@@ -399,6 +429,7 @@ def random_problem(seed: int):
                 max_hours_month=rng.choice([None, 60, 120]),
                 target_hours_month=rng.choice([None, 40, 80]),
                 home=rng.choice([LOC, LOC, "loc-2"]),
+                experience=1 + i % 3,
             )
         )
     slots = []
@@ -491,8 +522,8 @@ def test_finds_the_lowest_penalty_on_tiny_problems(seed):
     """For rules modelled exactly, the solver's choice must be as good as the best of all schedules."""
     rng = random.Random(seed)
     people = [
-        employee("anna", target_hours_month=rng.choice([16, 24]) * 30 / 7, max_hours_month=24 * 30 / 7),
-        employee("ewa", target_hours_month=rng.choice([8, 16]) * 30 / 7, positions=(SALES, BAKER)),
+        employee("anna", target_hours_month=rng.choice([16, 24]) * 30 / 7, max_hours_month=24 * 30 / 7, experience=1),
+        employee("ewa", target_hours_month=rng.choice([8, 16]) * 30 / 7, positions=(SALES, BAKER), experience=3),
         employee("ola", positions=(BAKER,)),
     ]
     slots = [
@@ -504,7 +535,7 @@ def test_finds_the_lowest_penalty_on_tiny_problems(seed):
     ]
     # "chętnie" is left out: its share of possible days is only approximated in the model.
     days_off = [
-        Request(f"off-{e.id}", e.id, "days_off", dates=frozenset({day(d)}))
+        Request(f"off-{e.id}-{d}", e.id, "days_off", dates=frozenset({day(d)}))
         for e in people
         for d in range(2)
         if rng.random() < 0.5
@@ -518,6 +549,7 @@ def test_finds_the_lowest_penalty_on_tiny_problems(seed):
             RuleConfig("target_hours", LOC, rank=1),
             RuleConfig("personal_max_hours", LOC, rank=2),
             RuleConfig("min_position_on_closing", LOC, rank=3, params={"position": BAKER}),
+            RuleConfig("experience_mix", LOC, rank=4),
         ],
         requests=[
             Request("r1", "anna", "hours_limit", max_hours=8, level=rng.choice(["wazne", "mile_widziane"])),

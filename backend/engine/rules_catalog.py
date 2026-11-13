@@ -48,6 +48,13 @@ RULES: tuple[RuleDefinition, ...] = (
         good_practice=True,
     ),
     RuleDefinition(
+        code="experience_mix",
+        label="Początkujący z doświadczonymi",
+        description="Na zmianie co najmniej tylu doświadczonych, ilu początkujących. Stopień ustawiasz przy pracowniku.",
+        params={"position": None},
+        good_practice=True,
+    ),
+    RuleDefinition(
         code="target_hours",
         label="Cel godzin",
         description="Każdy dostaje liczbę godzin bliską swojemu celowi na miesiąc.",

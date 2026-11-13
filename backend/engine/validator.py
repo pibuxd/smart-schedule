@@ -18,6 +18,8 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from engine.problem import (
+    BEGINNER,
+    EXPERIENCED,
     AvailabilityState,
     Contract,
     Employee,
@@ -147,6 +149,16 @@ def _hours_text(hours: float) -> str:
     minutes = round(hours * 60)
     whole, rest = divmod(minutes, 60)
     return f"{whole} h {rest} min" if rest else f"{whole} h"
+
+
+def experience_shifts(problem: Problem, rule: RuleConfig) -> dict[tuple[date, str], list[Slot]]:
+    """Slots of one shift (day × shift type) of the rule's location, only of `position` when the rule names one."""
+    position = rule.params.get("position")
+    shifts: dict[tuple[date, str], list[Slot]] = defaultdict(list)
+    for slot in problem.slots:
+        if slot.location == rule.location and (not position or slot.position == position):
+            shifts[(slot.date, slot.shift_type)].append(slot)
+    return dict(sorted(shifts.items()))
 
 
 def _week_start(day: date) -> date:
@@ -529,6 +541,23 @@ class _Checker:
                     )
                 )
         return _Measured(len(closings), _ratio(len(found), len(closings)), tuple(found))
+
+    def rule_experience_mix(self, rule: RuleConfig) -> _Measured:
+        shifts = experience_shifts(self.p, rule)
+        found = []
+        for slots in shifts.values():
+            levels = [self.p.employee_by_id[e].experience for e in (self.assignment.get(s.id) for s in slots) if e]
+            beginners, experienced = levels.count(BEGINNER), levels.count(EXPERIENCED)
+            if beginners > experienced:
+                who = "początkujący" if beginners == 1 else f"{beginners} początkujących"
+                found.append(
+                    Violation(
+                        Code.RULE,
+                        f"Na zmianie {_slot_text(slots[0], self.p)} jest {who}, a doświadczonych tylko {experienced}.",
+                        slots=tuple(s.id for s in slots),
+                    )
+                )
+        return _Measured(len(shifts), _ratio(len(found), len(shifts)), tuple(found))
 
     def _per_week(self, rule: RuleConfig, broken: Callable[[list[Slot]], bool], message: str) -> _Measured:
         instances, found = 0, []

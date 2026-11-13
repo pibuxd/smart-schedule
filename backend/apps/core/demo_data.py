@@ -25,7 +25,15 @@ from apps.availability.models import (
 from apps.billing.models import Subscription
 from apps.rules.models import RuleSetting, WeightProfile
 from apps.scheduling.models import SchedulePeriod
-from apps.staffing.models import Contract, EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
+from apps.staffing.models import (
+    Contract,
+    EmployeeProfile,
+    Experience,
+    Position,
+    ShiftType,
+    StaffingException,
+    StaffingRule,
+)
 from apps.tenancy.models import Company, Invitation, InvitationStatus, Location, LocationGroup, Membership, Role
 
 BAKERY_COMPANY_ID = uuid.UUID("6a1e0000-0000-4000-8000-000000000001")
@@ -446,6 +454,14 @@ def _bakery_settings(location: Location, spec: BakerySpec, start: date, end: dat
     return positions
 
 
+def _experience(i: int, *, lead: bool = False) -> Experience:
+    """Shift leads and every fifth person experienced, every fourth a beginner (no random draw, so the rest of the
+    demo data stays the same)."""
+    if lead or i % 5 == 2:
+        return Experience.EXPERIENCED
+    return Experience.BEGINNER if i % 4 == 3 else Experience.SKILLED
+
+
 def _bakery_employees(rng, names, phones, company, location, spec: BakerySpec, positions) -> list[EmployeeProfile]:
     employees = []
     for i in range(spec.employees):
@@ -474,6 +490,7 @@ def _bakery_employees(rng, names, phones, company, location, spec: BakerySpec, p
             membership=membership,
             home_location=location,
             contract=contract,
+            experience=_experience(i, lead=i < spec.shift_leads or employment),
             max_hours_month=max_hours,
             target_hours_month=target,
         )
@@ -601,6 +618,7 @@ def _bakery_rules(group: LocationGroup, locations: list[Location]) -> None:
         ("fair_closings", {}, False),
         ("same_shift_type_in_week", {}, False),
         ("personal_max_hours", {}, False),
+        ("experience_mix", {}, False),
     ]
     RuleSetting.objects.bulk_create(
         RuleSetting(company_id=group.company_id, group=group, rule_code=code, params=params, is_hard=hard, position=i)
@@ -678,7 +696,9 @@ def _create_cafe_company(rng: random.Random, start: date, end: date) -> dict[str
     for i in range(7):
         first, last = names.next()
         membership = Membership.objects.create(company=company, user=_user(phones.next(), first, last))
-        profile = EmployeeProfile.objects.create(membership=membership, home_location=location)
+        # Waiters: one experienced, two beginners (the example from Piotr's café).
+        level = {3: Experience.EXPERIENCED, 5: Experience.BEGINNER, 6: Experience.BEGINNER}.get(i, Experience.SKILLED)
+        profile = EmployeeProfile.objects.create(membership=membership, home_location=location, experience=level)
         profile.positions.set([barista] if i < 3 else [waiter])
         employees.append(profile)
     monday = start + timedelta(days=(7 - start.weekday()) % 7)  # weekly schedule: first full week of next month
@@ -686,4 +706,7 @@ def _create_cafe_company(rng: random.Random, start: date, end: date) -> dict[str
     _availability(rng, employees, period, students=1)
     _text_requests(rng, employees, period, count=2)
     RuleSetting.objects.create(location=location, rule_code="fair_closings", position=1)
+    RuleSetting.objects.create(
+        location=location, rule_code="experience_mix", position=2, params={"position": str(waiter.pk)}
+    )
     return {"company": company, "manager_phone": CAFE_MANAGER_PHONE, "employees": len(employees)}

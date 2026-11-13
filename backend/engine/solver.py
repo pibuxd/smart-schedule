@@ -33,6 +33,8 @@ from enum import StrEnum
 from ortools.sat.python import cp_model
 
 from engine.problem import (
+    BEGINNER,
+    EXPERIENCED,
     AvailabilityState,
     Contract,
     Employee,
@@ -52,6 +54,7 @@ from engine.validator import (
     TARGET_HOURS_HARD_TOLERANCE,
     Code,
     RequestKind,
+    experience_shifts,
     validate,
 )
 
@@ -535,6 +538,27 @@ class _Builder:
                 missing = self.m.new_bool_var(f"no_closer[{key[0]},{key[1]}]")
                 self.m.add(need * missing >= need - have)
                 self.add_penalty(points / len(closings), missing)
+
+    def _rule_experience_mix(self, rule: RuleConfig, hard: bool, points: float) -> None:
+        shifts = experience_shifts(self.p, rule)
+        for (day, shift_type), slots in shifts.items():
+            # One person works at most one slot of a shift (no overlap), so summing the slot variables counts people.
+            beginners, experienced = [], []
+            for slot in slots:
+                for employee_id, var in self.x_of_slot[slot.id]:
+                    level = self.p.employee_by_id[employee_id].experience
+                    if level == BEGINNER:
+                        beginners.append(var)
+                    elif level == EXPERIENCED:
+                        experienced.append(var)
+            if not beginners:
+                continue
+            if hard:
+                self.m.add(sum(beginners) <= sum(experienced))
+            else:
+                broken = self.m.new_bool_var(f"green[{day},{shift_type}]")
+                self.m.add(sum(beginners) - sum(experienced) <= len(slots) * broken)
+                self.add_penalty(points / len(shifts), broken)
 
     def _weeks_of(self, employee_id: str) -> dict[date, list[tuple[Slot, cp_model.IntVar]]]:
         weeks: dict[date, list[tuple[Slot, cp_model.IntVar]]] = defaultdict(list)
