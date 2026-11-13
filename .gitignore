@@ -8,3 +8,5 @@ backend/staticfiles/
 node_modules/
 frontend/dist/
 .DS_Store
+.deployed-commit
+.deploy-failed-commit

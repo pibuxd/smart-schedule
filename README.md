@@ -9,6 +9,7 @@ Stan: prototyp, wszystkie 10 etapów planu zbudowane.
 - Wymagania: [docs/spec.md](docs/spec.md)
 - Plan techniczny, model danych, endpointy i założenia każdego etapu: [docs/plan.md](docs/plan.md)
 - Komendy i konwencje dla programistów: [CLAUDE.md](CLAUDE.md)
+- Wdrożenie na serwer VPS: [docs/deploy.md](docs/deploy.md)
 
 ## Co jest w prototypie
 
@@ -115,8 +116,7 @@ Logowanie i dostęp
 Dane i bezpieczeństwo
 
 - Izolacja firm jest w warstwie aplikacji (filtr po firmie i testy), bez Row Level Security w Postgresie.
-- Wszystko działa lokalnie; wdrożenie na serwer VPS to późniejszy krok (ten sam `docker-compose.yml`, inna
-  wartość `SITE_ADDRESS`, prawdziwe sekrety, kopie zapasowe bazy).
+- Wdrożenie to jeden serwer VPS z Dockerem, bez zapasowego serwera; kopie bazy leżą na tym samym serwerze (zob. [docs/deploy.md](docs/deploy.md)).
 - Zmianę numeru telefonu pracownika robi superadmin w panelu.
 
 Grafik i generator

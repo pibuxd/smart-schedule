@@ -1,0 +1,15 @@
+# Additions for a single VPS. Used together with docker-compose.yml:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml   (set in .env, see .env.production.example)
+# Caddy listens on 80/443 and gets the HTTPS certificate for SITE_ADDRESS by itself.
+# Step-by-step instructions: docs/deploy.md
+
+services:
+  caddy:
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
+  db:
+    # The database is reachable only from the other containers.
+    ports: !reset []
