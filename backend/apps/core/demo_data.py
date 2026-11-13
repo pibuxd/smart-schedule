@@ -25,7 +25,7 @@ from apps.availability.models import (
 from apps.billing.models import Subscription
 from apps.rules.models import RuleSetting, WeightProfile
 from apps.scheduling.models import SchedulePeriod
-from apps.staffing.models import Contract, EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
+from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
 from apps.tenancy.models import Company, Invitation, InvitationStatus, Location, LocationGroup, Membership, Role
 
 BAKERY_COMPANY_ID = uuid.UUID("6a1e0000-0000-4000-8000-000000000001")
@@ -459,12 +459,11 @@ def _bakery_employees(rng, names, phones, company, location, spec: BakerySpec, p
             roles = ["Kierowca"]
         else:
             roles = ["Sprzedawca"]
-        # One shift lead and one baker per location on an employment contract, everyone else on a civil one.
-        employment = i == 0 or i == spec.shift_leads
-        if employment:
-            contract, max_hours, target = Contract.EMPLOYMENT, 184, 168
+        # One shift lead and one baker per location work full time, everyone else has looser limits.
+        full_time = i == 0 or i == spec.shift_leads
+        if full_time:
+            max_hours, target = 184, 168
         else:
-            contract = Contract.CIVIL
             max_hours = rng.choice([None, 120, 140, 160, 180])
             target = rng.choice([None, 60, 80, 100, 120])
             if max_hours is not None and target is not None and target > max_hours:
@@ -472,7 +471,6 @@ def _bakery_employees(rng, names, phones, company, location, spec: BakerySpec, p
         profile = EmployeeProfile.objects.create(
             membership=membership,
             home_location=location,
-            contract=contract,
             max_hours_month=max_hours,
             target_hours_month=target,
         )

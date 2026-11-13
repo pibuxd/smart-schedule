@@ -16,7 +16,7 @@ from apps.rules.models import RuleSetting, WeightProfile
 from apps.scheduling.generation import fail_stale_runs, request_generation, run_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuildError, build_problem, slot_key
-from apps.staffing.models import Contract, EmployeeProfile, ShiftType, StaffingException, StaffingRule
+from apps.staffing.models import EmployeeProfile, ShiftType, StaffingException, StaffingRule
 from apps.tenancy.models import LocationGroup, Membership
 from engine.problem import RequestType
 from engine.validator import validate
@@ -458,9 +458,9 @@ def test_arrange_all_runs_each_demo_bakery_on_its_own():
         report = validate(build_problem([period], today=TODAY).problem, schedule)
         assert report.ok
         worked |= {e for e, hours in report.hours.items() if hours > 0}
-    # Employment-contract people (one shift lead and one baker per bakery) are in the schedule.
-    employment = EmployeeProfile.objects.filter(company_id=BAKERY_COMPANY_ID, contract=Contract.EMPLOYMENT)
-    assert {str(e.id) for e in employment} <= worked
+    # Full-time people (one shift lead and one baker per bakery) are in the schedule.
+    full_time = EmployeeProfile.objects.filter(company_id=BAKERY_COMPANY_ID, max_hours_month=184)
+    assert {str(e.id) for e in full_time} <= worked
 
 
 @pytest.mark.django_db

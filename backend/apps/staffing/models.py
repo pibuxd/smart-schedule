@@ -141,11 +141,6 @@ class StaffingException(CompanyOwnedModel):
         return f"{self.date}: {self.shift_type.name} – {self.position.name} × {self.count}"
 
 
-class Contract(models.TextChoices):
-    CIVIL = "civil", "umowa zlecenie"
-    EMPLOYMENT = "employment", "umowa o pracę"
-
-
 class EmployeeProfile(CompanyOwnedModel):
     """A person who can be put in the schedule. A manager may have one too (e.g. a manager on a shift)."""
 
@@ -156,7 +151,6 @@ class EmployeeProfile(CompanyOwnedModel):
         Location, on_delete=models.RESTRICT, related_name="employees", verbose_name="lokal domowy"
     )
     positions = models.ManyToManyField(Position, blank=True, related_name="employees", verbose_name="stanowiska")
-    contract = models.CharField("umowa", max_length=16, choices=Contract.choices, default=Contract.CIVIL)
     max_hours_month = models.PositiveSmallIntegerField("maks. godzin w miesiącu", null=True, blank=True)
     target_hours_month = models.PositiveSmallIntegerField("cel godzin w miesiącu", null=True, blank=True)
     is_active = models.BooleanField("aktywny", default=True)

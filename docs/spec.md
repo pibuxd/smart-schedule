@@ -42,13 +42,14 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
    Grafik powstaje wyłącznie na świadome polecenie kierownika, gdy minie termin albo gdy wszyscy wpiszą dyspozycje (Piotr, 12.11.2026: ludzie zwlekają do ostatniej chwili, więc grafik ma sens dopiero przy komplecie danych). Aplikacja nie układa grafiku sama, okresowo ani automatycznie; może jedynie podpowiedzieć, że przyszła pora.
 7. Podsumowanie godzin w miesiącu z podziałem na lokale, eksport CSV.
 
-## Typy umów i reguły
+## Reguły (bez typu umowy)
 
-Każda osoba ma typ umowy: zlecenie (prawie wszyscy, domyślne) albo umowa o pracę (pojedyncze osoby, np. kierownik).
-- Zlecenie: twarde są tylko "nie mogę", właściwe stanowisko, brak nakładających się zmian, zmiany przypięte ręcznie i zasady menedżera "bez wyjątków".
-- Umowa o pracę: dodatkowo twarde 11 h odpoczynku na dobę, 35 h na tydzień, max 8 h na dobę. Okres rozliczeniowy i doba pracownicza w kolejnej wersji.
-- Limity prawne zawsze twarde. Osobiste maksimum i cel godzin ustawione przez menedżera są miękkie.
-- Zasady dobrej praktyki: miękkie, włączone domyślnie, menedżer może każdą wyłączyć albo zamienić na twardą: min. 11 h między zmianami, max 6 dni pracy z rzędu, równy podział weekendów i zmian zamykających.
+Decyzja Piotra z 13.11.2026: aplikacja nie zna typu umowy i nie wbudowuje ograniczeń umowy o pracę ani Kodeksu pracy. Nie ingeruje w to; kierownik sam ustawia wszystko w zasadach lokalu i może pisać prośby tekstem (np. "doświadczony kelner zawsze z niedoświadczonym").
+- Zawsze twarde są tylko: "nie mogę", właściwe stanowisko, brak nakładających się zmian, zmiany przypięte ręcznie, dni, które minęły, i zasady kierownika oznaczone "bez wyjątków".
+- Osobiste maksimum i cel godzin ustawione przez kierownika są miękkie, chyba że kierownik oznaczy zasadę "bez wyjątków".
+- Zasady dobrej praktyki: miękkie, włączone domyślnie, kierownik może każdą wyłączyć albo zamienić na twardą: min. 11 h między zmianami, max 6 dni pracy z rzędu, równy podział weekendów i zmian zamykających.
+- W katalogu są też zasady, które kierownik może włączyć, jeśli chce pilnować czasu pracy: "Godziny pracy w ciągu dnia" (domyślnie najwyżej 8 h) i "Wolne w tygodniu" (domyślnie co najmniej 35 h bez przerwy). Domyślnie wyłączone; dotyczą wszystkich osób lokalu. Odpoczynek dobowy to istniejąca zasada "Odpoczynek między zmianami".
+- Odpowiedzialność za zgodność grafiku z prawem pracy spoczywa na kierowniku; aplikacja tego nie sprawdza.
 
 ## Generator (najważniejsza część)
 
@@ -103,7 +104,7 @@ h) Kierownik dostosowuje generator poleceniami tekstem do asystenta (LLM): zasad
 
 ## Dane przykładowe
 
-Firma z 4 piekarniami w jednej grupie i jednym menedżerem, 15-25 pracowników na lokal (większość na zleceniu, pojedyncze osoby na umowie o pracę), dyspozycyjność na kolejny miesiąc, 20-30 próśb tekstem i kilka zasad menedżera, w tym sprzeczne ze sobą. Druga, osobna firma do sprawdzenia izolacji danych.
+Firma z 4 piekarniami w jednej grupie i jednym menedżerem, 15-25 pracowników na lokal, dyspozycyjność na kolejny miesiąc, 20-30 próśb tekstem i kilka zasad menedżera, w tym sprzeczne ze sobą. Druga, osobna firma do sprawdzenia izolacji danych.
 
 ## Poza pierwszą wersją
 

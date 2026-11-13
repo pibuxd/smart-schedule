@@ -160,7 +160,6 @@ def test_invited_person_sees_the_invitation_and_accepts_it(api, a):
     assert membership.role == Role.EMPLOYEE
     profile = EmployeeProfile.objects.get(membership=membership)
     assert profile.home_location == a["location"]
-    assert profile.contract == "civil"
     user.refresh_from_db()
     assert user.full_name == "Ewa Lis"
 

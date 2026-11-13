@@ -20,7 +20,6 @@ from types import MappingProxyType
 
 from engine.problem import (
     AvailabilityState,
-    Contract,
     Employee,
     Problem,
     Request,
@@ -31,12 +30,6 @@ from engine.problem import (
     Slot,
     local_datetime,
 )
-
-# Labour-law limits for an employment contract (Kodeks pracy art. 129, 132, 133), simplified: rest is measured
-# between consecutive shifts and the working day is the calendar day a shift starts on (see docs/plan.md, stage 4).
-LABOR_DAILY_REST = timedelta(hours=11)
-LABOR_WEEKLY_REST = timedelta(hours=35)
-LABOR_MAX_HOURS_PER_DAY = 8.0
 
 # "Wolę nie" days of one person count at full weight up to this many per week of the period; above that the
 # person's total stays the same and each day weighs less (marking every day cannot outweigh colleagues).
@@ -56,9 +49,6 @@ class Code(StrEnum):
     OVERLAP = "overlap"
     PINNED = "pinned"
     FROZEN = "frozen"
-    LABOR_DAILY_REST = "labor_daily_rest"
-    LABOR_DAILY_HOURS = "labor_daily_hours"
-    LABOR_WEEKLY_REST = "labor_weekly_rest"
     RULE = "rule"  # a catalog rule; see Violation.rule_code
 
 
@@ -305,67 +295,6 @@ class _Checker:
                         )
                     )
 
-    # ----------------------------------------------------------------- employment contract (always hard)
-
-    def check_labor_law(self) -> None:
-        p = self.p
-        for employee in p.employees:
-            if employee.contract != Contract.EMPLOYMENT or employee.id not in self.slots_of:
-                continue
-            for earlier, later, gap in self.gaps(employee.id):
-                if gap < LABOR_DAILY_REST:
-                    self.hard.append(
-                        Violation(
-                            Code.LABOR_DAILY_REST,
-                            f"{employee.name} (umowa o pracę) ma tylko {_hours_text(gap.total_seconds() / 3600)} "
-                            f"odpoczynku między {earlier.label} a {later.label}; potrzeba 11 h.",
-                            employee=employee.id,
-                            slots=tuple(i.slot.id for i in (earlier, later) if i.slot is not None),
-                        )
-                    )
-
-            per_day: dict[date, list[_Interval]] = defaultdict(list)
-            for interval in self.intervals_of[employee.id]:
-                per_day[interval.date].append(interval)
-            for day, intervals in sorted(per_day.items()):
-                if all(i.slot is None for i in intervals):
-                    continue
-                hours = sum((i.end - i.start).total_seconds() for i in intervals) / 3600
-                if hours > LABOR_MAX_HOURS_PER_DAY + _EPS:
-                    self.hard.append(
-                        Violation(
-                            Code.LABOR_DAILY_HOURS,
-                            f"{employee.name} (umowa o pracę) pracuje {day:%d.%m} {_hours_text(hours)}; "
-                            "najwyżej 8 h na dobę.",
-                            employee=employee.id,
-                            slots=tuple(i.slot.id for i in intervals if i.slot is not None),
-                        )
-                    )
-
-            weeks = sorted({_week_start(s.date) for s in self.slots_of[employee.id]})
-            for monday in weeks:
-                window_start = local_datetime(monday, time(0), p.tz).astimezone(UTC)
-                window_end = local_datetime(monday + timedelta(days=7), time(0), p.tz).astimezone(UTC)
-                longest = timedelta(0)
-                free_from = window_start
-                for interval in self.intervals_of[employee.id]:
-                    if interval.end <= window_start or interval.start >= window_end:
-                        continue
-                    longest = max(longest, interval.start - free_from)
-                    free_from = max(free_from, interval.end)
-                longest = max(longest, window_end - free_from)
-                if longest < LABOR_WEEKLY_REST:
-                    sunday = monday + timedelta(days=6)
-                    self.hard.append(
-                        Violation(
-                            Code.LABOR_WEEKLY_REST,
-                            f"{employee.name} (umowa o pracę) nie ma 35 h wolnego w tygodniu "
-                            f"{monday:%d.%m}–{sunday:%d.%m} (najdłużej {_hours_text(longest.total_seconds() / 3600)}).",
-                            employee=employee.id,
-                            slots=tuple(s.id for s in self.slots_of[employee.id] if _week_start(s.date) == monday),
-                        )
-                    )
-
     # ----------------------------------------------------------------- catalog rules
 
     def rule_min_rest_between_shifts(self, rule: RuleConfig) -> _Measured:
@@ -568,6 +497,63 @@ class _Checker:
             rule, lambda slots: len(slots) > limit, f"{{name}} ma w tygodniu od {{week}} więcej niż {limit} zmian."
         )
 
+    def rule_max_hours_per_day(self, rule: RuleConfig) -> _Measured:
+        """Hours of all shifts starting on one calendar day (external ones too), on days with a shift from here."""
+        limit = float(rule.params["max_hours"])
+        instances, found = 0, []
+        for employee in self.employees_of(rule.location):
+            per_day: dict[date, list[_Interval]] = defaultdict(list)
+            for interval in self.intervals_of.get(employee.id, ()):
+                per_day[interval.date].append(interval)
+            for day, intervals in sorted(per_day.items()):
+                if all(i.slot is None for i in intervals):
+                    continue
+                instances += 1
+                hours = sum((i.end - i.start).total_seconds() for i in intervals) / 3600
+                if hours > limit + _EPS:
+                    found.append(
+                        Violation(
+                            Code.RULE,
+                            f"{employee.name} pracuje {day:%d.%m} {_hours_text(hours)}; "
+                            f"najwyżej {_hours_text(limit)} w ciągu dnia.",
+                            employee=employee.id,
+                            slots=tuple(i.slot.id for i in intervals if i.slot is not None),
+                        )
+                    )
+        return _Measured(instances, _ratio(len(found), instances), tuple(found))
+
+    def rule_min_weekly_rest(self, rule: RuleConfig) -> _Measured:
+        """The longest free stretch inside each Monday-to-Monday week (local time) with a shift from here."""
+        need = timedelta(hours=float(rule.params["rest_hours"]))
+        tz = self.p.tz
+        instances, found = 0, []
+        for employee in self.employees_of(rule.location):
+            own = self.slots_of.get(employee.id, ())
+            for monday in sorted({_week_start(s.date) for s in own}):
+                instances += 1
+                window_start = local_datetime(monday, time(0), tz).astimezone(UTC)
+                window_end = local_datetime(monday + timedelta(days=7), time(0), tz).astimezone(UTC)
+                longest = timedelta(0)
+                free_from = window_start
+                for interval in self.intervals_of[employee.id]:
+                    if interval.end <= window_start or interval.start >= window_end:
+                        continue
+                    longest = max(longest, interval.start - free_from)
+                    free_from = max(free_from, interval.end)
+                longest = max(longest, window_end - free_from)
+                if longest < need:
+                    sunday = monday + timedelta(days=6)
+                    found.append(
+                        Violation(
+                            Code.RULE,
+                            f"{employee.name} nie ma {_hours_text(need.total_seconds() / 3600)} wolnego w tygodniu "
+                            f"{monday:%d.%m}–{sunday:%d.%m} (najdłużej {_hours_text(longest.total_seconds() / 3600)}).",
+                            employee=employee.id,
+                            slots=tuple(s.id for s in own if _week_start(s.date) == monday),
+                        )
+                    )
+        return _Measured(instances, _ratio(len(found), instances), tuple(found))
+
     def measure_rules(self) -> list[RuleMeasure]:
         measures = []
         for location in self.p.locations:
@@ -698,7 +684,6 @@ class _Checker:
     def run(self) -> ValidationReport:
         self.check_basic()
         self.check_overlaps()
-        self.check_labor_law()
         rules = self.measure_rules()
         requests = self.measure_requests()
         holes = tuple(s.id for s in self.p.slots if self.assignment.get(s.id) is None)
@@ -728,9 +713,6 @@ def is_valid(problem: Problem, schedule: Schedule) -> bool:
 
 
 __all__ = [
-    "LABOR_DAILY_REST",
-    "LABOR_MAX_HOURS_PER_DAY",
-    "LABOR_WEEKLY_REST",
     "PREFER_NOT_FULL_DAYS_PER_WEEK",
     "TARGET_HOURS_HARD_TOLERANCE",
     "Code",

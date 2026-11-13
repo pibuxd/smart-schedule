@@ -29,11 +29,6 @@ class ProblemError(ValueError):
     """The problem description is inconsistent (a bug in the code that built it, not a user mistake)."""
 
 
-class Contract(StrEnum):
-    CIVIL = "civil"  # umowa zlecenie: only the basic hard rules
-    EMPLOYMENT = "employment"  # umowa o pracę: + 11 h daily rest, 35 h weekly rest, max 8 h a day
-
-
 class AvailabilityState(StrEnum):
     CANNOT = "cannot"
     PREFER_NOT = "prefer_not"
@@ -94,7 +89,6 @@ class Employee:
     name: str
     home_location: str
     positions: frozenset[str]
-    contract: Contract = Contract.CIVIL
     max_hours_month: float | None = None  # personal maximum (soft rule personal_max_hours)
     target_hours_month: float | None = None  # soft rule target_hours
     # False for someone switched off (or borrowed from another location) who only keeps the shifts they already
@@ -103,7 +97,6 @@ class Employee:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "positions", frozenset(self.positions))
-        object.__setattr__(self, "contract", Contract(self.contract))
 
 
 @dataclass(frozen=True)
@@ -173,8 +166,8 @@ class Availability:
     at or before the start means the next morning (e.g. 22:00-06:00 for a night shift):
     - "cannot" and "prefer not" apply to shifts that overlap the window ("nie mogę od 8 do 12");
     - "prefer" and "neutral" mean "I can only in these hours": a shift that fits inside the window gets that
-      state, any other shift of that day counts as "cannot" (civil contracts are fully flexible, so people
-      mark the hours they can work).
+      state, any other shift of that day counts as "cannot" (people mark the hours they can
+      work).
     No entry for a day means "neutral" (nothing submitted).
     """
 

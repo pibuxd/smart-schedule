@@ -12,7 +12,6 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { prettyPhone } from '../auth/phone'
 import { useManager } from './ManagerContext'
-import { CONTRACT } from './words'
 
 export function EmployeesScreen({ locationId }: { locationId: string }) {
   const employees = useLocationEmployees(locationId)
@@ -99,7 +98,7 @@ function EmployeeList({
       {employees.map((e) => (
         <li
           key={e.id}
-          className="grid items-center gap-x-4 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 md:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1.3fr)_minmax(140px,1fr)_minmax(160px,1.2fr)_auto]"
+          className="grid items-center gap-x-4 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 md:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1.3fr)_minmax(160px,1.2fr)_auto]"
         >
           <span className="grid">
             <b>{`${e.first_name} ${e.last_name}`.trim() || 'Bez imienia'}</b>
@@ -113,7 +112,6 @@ function EmployeeList({
             )}
             {e.is_manager && <Tag tone="accent">Kierownik</Tag>}
           </span>
-          <span className="text-sm">{CONTRACT[e.contract]}</span>
           <span className="text-sm text-ink-muted">{hoursWords(e)}</span>
           <Button variant="quiet" size="normal" onClick={() => onEdit(e)} disabled={readOnly} aria-label={`Zmień: ${e.first_name} ${e.last_name}`}>
             <Pencil aria-hidden="true" size={18} />
@@ -131,7 +129,6 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
   const update = useUpdateEmployee()
   const queryClient = useQueryClient()
   const [chosen, setChosen] = useState<string[]>(employee.position_ids)
-  const [contract, setContract] = useState(employee.contract)
   const [max, setMax] = useState(employee.max_hours_month?.toString() ?? '')
   const [target, setTarget] = useState(employee.target_hours_month?.toString() ?? '')
   const [active, setActive] = useState(employee.is_active)
@@ -143,7 +140,6 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
         employeeId: employee.id,
         data: {
           position_ids: chosen,
-          contract,
           max_hours_month: toNumber(max),
           target_hours_month: toNumber(target),
           is_active: active,
@@ -169,28 +165,6 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
         {positions.map((p) => (
           <CheckField key={p.id} label={p.name} checked={chosen.includes(p.id)} onChange={() => toggle(p.id)} />
         ))}
-      </fieldset>
-      <fieldset className="m-0 grid gap-1 border-0 p-0">
-        <legend className="mb-1 font-semibold">Umowa</legend>
-        {(['civil', 'employment'] as const).map((value) => (
-          <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
-            <input
-              type="radio"
-              name="contract"
-              className="size-6 accent-accent"
-              checked={contract === value}
-              onChange={() => setContract(value)}
-            />
-            {CONTRACT[value]}
-          </label>
-        ))}
-        {contract === 'employment' && (
-          <p className="m-0 text-sm text-ink-muted">
-            Przy umowie o pracę Grafikomat zawsze pilnuje 11 godzin odpoczynku między zmianami, najwyżej 8 godzin
-            pracy na dobę i 35 godzin wolnego w tygodniu. Sprawdzanie jest uproszczone (doba to dzień kalendarzowy,
-            tydzień od poniedziałku) i nie zastępuje oceny kadrowej.
-          </p>
-        )}
       </fieldset>
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField

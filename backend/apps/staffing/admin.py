@@ -35,8 +35,8 @@ class StaffingExceptionAdmin(CompanyOwnedAdmin):
 
 @admin.register(EmployeeProfile)
 class EmployeeProfileAdmin(CompanyOwnedAdmin):
-    list_display = ("__str__", "home_location", "contract", "max_hours_month", "target_hours_month", "is_active")
-    list_filter = ("company", "home_location", "contract", "is_active")
+    list_display = ("__str__", "home_location", "max_hours_month", "target_hours_month", "is_active")
+    list_filter = ("company", "home_location", "is_active")
     list_select_related = ("company", "home_location", "membership__user")
     search_fields = ("membership__user__first_name", "membership__user__last_name", "membership__user__phone_e164")
     raw_id_fields = ("membership",)

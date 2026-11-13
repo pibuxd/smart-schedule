@@ -13,6 +13,7 @@ from apps.rules.models import RuleSetting
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
 from apps.tenancy.models import Location, LocationGroup, Membership, Role
+from engine.rules_catalog import RULES
 from tests.conftest import next_phone
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -201,13 +202,12 @@ class TestEmployees:
         body = api.patch(
             f"/api/employees/{row['id']}",
             {
-                "contract": "employment",
                 "max_hours_month": 160,
                 "target_hours_month": 120,
                 "position_ids": [str(baker.pk)],
             },
         ).json()
-        assert body["contract"] == "employment" and body["position_ids"] == [str(baker.pk)]
+        assert "contract" not in body and body["position_ids"] == [str(baker.pk)]
         assert body["max_hours_month"] == 160
         cleared = api.patch(f"/api/employees/{row['id']}", {"max_hours_month": None}).json()
         assert cleared["max_hours_month"] is None and cleared["target_hours_month"] == 120
@@ -335,7 +335,7 @@ class TestRules:
         assert items["fair_weekends"]["source"] == "location" and items["fair_weekends"]["enabled"] is False
         assert items["max_shifts_per_week"]["source"] == "off"
         assert items["min_position_on_closing"]["location_only"] is True
-        assert len(body["items"]) == 10
+        assert len(body["items"]) == len(RULES)
 
     def test_saving_unchanged_list_keeps_following_the_group(self, api, shop, group):
         as_manager(api, shop)
@@ -451,3 +451,10 @@ class TestIsolation:
         assert api.patch(f"/api/employees/{shop['employee'].pk}", {"is_active": False}).status_code == 402
         assert put(api, f"/api/scopes/location/{shop['location'].pk}/rules", {"items": []}).status_code == 402
         assert api.get(f"/api/locations/{shop['location'].pk}/setup").status_code == 200
+
+
+def test_every_numeric_rule_parameter_has_an_allowed_range():
+    from apps.rules.services import LOCATION_ONLY_PARAMS, NUMBER_PARAMS
+
+    names = {name for rule in RULES for name in rule.params}
+    assert names - LOCATION_ONLY_PARAMS - set(NUMBER_PARAMS) == set()

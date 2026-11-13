@@ -36,6 +36,8 @@ const PARAM_LABEL: Record<string, string> = {
   hours: 'Godzin przerwy co najmniej',
   days: 'Dni z rzędu najwyżej',
   shifts: 'Zmian w tygodniu najwyżej',
+  max_hours: 'Godzin w ciągu dnia najwyżej',
+  rest_hours: 'Godzin wolnego bez przerwy co najmniej',
   count: 'Ile osób co najmniej',
   position: 'Stanowisko',
   shift_type: 'Zmiana',

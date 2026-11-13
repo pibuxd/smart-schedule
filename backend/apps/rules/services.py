@@ -45,6 +45,8 @@ NUMBER_PARAMS: dict[str, tuple[int, int, str]] = {
     "days": (1, 14, "liczba dni"),
     "shifts": (1, 14, "liczba zmian"),
     "count": (1, 10, "liczba osób"),
+    "max_hours": (1, 24, "liczba godzin"),
+    "rest_hours": (1, 72, "liczba godzin"),
 }
 
 

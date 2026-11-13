@@ -1,4 +1,3 @@
-from collections import Counter
 from datetime import date
 
 import pytest
@@ -8,7 +7,7 @@ from apps.availability.models import AvailabilityDay, AvailabilitySubmission, Te
 from apps.core.demo_data import BAKERY_COMPANY_ID, CAFE_COMPANY_ID, create_demo_data
 from apps.rules.models import RuleSetting
 from apps.scheduling.models import SchedulePeriod
-from apps.staffing.models import Contract, EmployeeProfile, StaffingException
+from apps.staffing.models import EmployeeProfile, StaffingException
 from apps.tenancy.models import Location, Membership, Role
 
 
@@ -29,9 +28,8 @@ def test_bakery_matches_the_spec(demo):
     for location in locations:
         staff = EmployeeProfile.objects.filter(home_location=location)
         assert 15 <= staff.count() <= 25
-        contracts = Counter(staff.values_list("contract", flat=True))
-        assert contracts[Contract.EMPLOYMENT] >= 1
-        assert contracts[Contract.CIVIL] > contracts[Contract.EMPLOYMENT]
+        full_time = staff.filter(max_hours_month=184).count()
+        assert 1 <= full_time < staff.count() - full_time
 
     requests = TextRequest.objects.for_company(BAKERY_COMPANY_ID).count()
     requests += TextRequest.objects.for_company(CAFE_COMPANY_ID).count()

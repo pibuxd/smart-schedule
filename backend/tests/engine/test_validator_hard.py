@@ -1,24 +1,20 @@
-"""Hard rules for everyone (both contracts): position, "cannot", overlaps, pins, frozen days, unknown ids."""
+"""Hard rules for everyone: position, "cannot", overlaps, pins, frozen days, unknown ids."""
 
 from datetime import date, time
-
-import pytest
 
 from engine.problem import Availability, ExternalShift, shift_bounds
 from engine.validator import Code, validate
 from tests.engine.factory import BAKER, employee, problem, slot
 
 DAY = date(2026, 11, 16)  # Monday
-CONTRACTS = ["civil", "employment"]
 
 
 def codes(report):
     return sorted(v.code for v in report.hard)
 
 
-@pytest.mark.parametrize("contract", CONTRACTS)
-def test_valid_schedule_has_no_violations(contract):
-    p = problem([employee("anna", contract=contract)], [slot("s1", DAY)])
+def test_valid_schedule_has_no_violations():
+    p = problem([employee("anna")], [slot("s1", DAY)])
     report = validate(p, {"s1": "anna"})
     assert report.ok
     assert report.holes == ()
@@ -33,21 +29,15 @@ def test_unfilled_slot_is_a_hole_not_a_violation():
     assert validate(p, {"s1": "anna"}).holes == ("s2",)  # a missing key is a hole too
 
 
-@pytest.mark.parametrize("contract", CONTRACTS)
-def test_wrong_position(contract):
-    p = problem(
-        [employee("anna", contract=contract)], [slot("s1", DAY, position=BAKER)], position_names={BAKER: "Piekarz"}
-    )
+def test_wrong_position():
+    p = problem([employee("anna")], [slot("s1", DAY, position=BAKER)], position_names={BAKER: "Piekarz"})
     report = validate(p, {"s1": "anna"})
     assert codes(report) == [Code.POSITION]
     assert "Piekarz" in report.hard[0].message
 
 
-@pytest.mark.parametrize("contract", CONTRACTS)
-def test_cannot_day(contract):
-    p = problem(
-        [employee("anna", contract=contract)], [slot("s1", DAY)], availability=(Availability("anna", DAY, "cannot"),)
-    )
+def test_cannot_day():
+    p = problem([employee("anna")], [slot("s1", DAY)], availability=(Availability("anna", DAY, "cannot"),))
     report = validate(p, {"s1": "anna"})
     assert codes(report) == [Code.CANNOT]
     assert report.hard[0].employee == "anna"
@@ -67,27 +57,18 @@ def test_cannot_from_given_hour_allows_a_shift_ending_at_that_hour():
     assert [v.slots for v in report.hard] == [("s2",)]
 
 
-@pytest.mark.parametrize("contract", CONTRACTS)
-def test_overlapping_shifts(contract):
+def test_overlapping_shifts():
     p = problem(
-        [employee("anna", contract=contract)],
+        [employee("anna")],
         [slot("s1", DAY, "06:00", "14:00"), slot("s2", DAY, "13:00", "21:00", location="loc-2")],
     )
     report = validate(p, {"s1": "anna", "s2": "anna"})
     assert Code.OVERLAP in codes(report)
 
 
-def test_touching_shifts_do_not_overlap_for_civil_contract():
+def test_touching_shifts_do_not_overlap():
     p = problem([employee("anna")], [slot("s1", DAY, "06:00", "14:00"), slot("s2", DAY, "14:00", "22:00")])
     assert validate(p, {"s1": "anna", "s2": "anna"}).ok
-
-
-def test_touching_shifts_break_labour_law_for_employment_contract():
-    p = problem(
-        [employee("anna", contract="employment")],
-        [slot("s1", DAY, "06:00", "14:00"), slot("s2", DAY, "14:00", "22:00")],
-    )
-    assert codes(validate(p, {"s1": "anna", "s2": "anna"})) == [Code.LABOR_DAILY_HOURS, Code.LABOR_DAILY_REST]
 
 
 def test_overnight_shift_overlaps_next_morning():

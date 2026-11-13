@@ -47,4 +47,3 @@ export function people(n: number): string {
   return `${n} ${last >= 2 && last <= 4 && !teen ? 'osoby' : 'osób'}`
 }
 
-export const CONTRACT: Record<string, string> = { civil: 'Umowa zlecenie', employment: 'Umowa o pracę' }

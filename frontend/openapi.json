@@ -3498,7 +3498,7 @@
             }
           }
         },
-        "description": "Positions, contract, monthly maximum and target, or switching the person off (history stays).",
+        "description": "Positions, monthly maximum and target, or switching the person off (history stays).",
         "tags": [
           "staffing"
         ],
@@ -6412,14 +6412,6 @@
             "title": "Position Ids",
             "type": "array"
           },
-          "contract": {
-            "enum": [
-              "civil",
-              "employment"
-            ],
-            "title": "Contract",
-            "type": "string"
-          },
           "max_hours_month": {
             "anyOf": [
               {
@@ -6457,7 +6449,6 @@
           "last_name",
           "phone",
           "position_ids",
-          "contract",
           "max_hours_month",
           "target_hours_month",
           "is_active",
@@ -6482,21 +6473,6 @@
               }
             ],
             "title": "Position Ids"
-          },
-          "contract": {
-            "anyOf": [
-              {
-                "enum": [
-                  "civil",
-                  "employment"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contract"
           },
           "max_hours_month": {
             "anyOf": [
@@ -6759,7 +6735,7 @@
             "items": {
               "$ref": "#/components/schemas/RuleItemIn"
             },
-            "maxItems": 10,
+            "maxItems": 12,
             "title": "Items",
             "type": "array"
           }

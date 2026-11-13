@@ -84,6 +84,20 @@ RULES: tuple[RuleDefinition, ...] = (
         default_enabled=False,
         params={"shifts": 5},
     ),
+    RuleDefinition(
+        code="max_hours_per_day",
+        label="Godziny pracy w ciągu dnia",
+        description="Nie więcej niż tyle godzin pracy w zmianach zaczynających się tego samego dnia.",
+        default_enabled=False,
+        params={"max_hours": 8},
+    ),
+    RuleDefinition(
+        code="min_weekly_rest",
+        label="Wolne w tygodniu",
+        description="W każdym tygodniu (od poniedziałku) co najmniej tyle godzin wolnego bez przerwy.",
+        default_enabled=False,
+        params={"rest_hours": 35},
+    ),
 )
 
 RULES_BY_CODE: dict[str, RuleDefinition] = {rule.code: rule for rule in RULES}

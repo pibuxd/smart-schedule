@@ -13,7 +13,6 @@ def employee(
     id: str,
     *,
     positions: tuple[str, ...] = (SALES,),
-    contract: str = "civil",
     home: str = LOC,
     **kwargs,
 ) -> Employee:
@@ -22,7 +21,6 @@ def employee(
         name=kwargs.pop("name", id.capitalize()),
         home_location=home,
         positions=frozenset(positions),
-        contract=contract,
         **kwargs,
     )
 

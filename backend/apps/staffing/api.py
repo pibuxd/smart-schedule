@@ -1,5 +1,5 @@
 """Location settings for the manager: positions, shifts and their hours, staffing per weekday with date
-exceptions, and the location's employees (positions, contract, hours, switched off)."""
+exceptions, and the location's employees (positions, hours, switched off)."""
 
 from datetime import date, time
 from typing import Literal
@@ -13,7 +13,6 @@ from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
 from apps.staffing.models import (
-    Contract,
     EmployeeProfile,
     Position,
     ShiftType,
@@ -26,7 +25,6 @@ from apps.tenancy.models import Location
 router = Router(tags=["staffing"])
 
 ShiftKind = Literal["fixed", "flexible"]
-ContractName = Literal["civil", "employment"]
 
 
 class PositionIn(Schema):
@@ -114,7 +112,6 @@ class EmployeeOut(Schema):
     last_name: str
     phone: str
     position_ids: list[UUID]
-    contract: ContractName
     max_hours_month: int | None
     target_hours_month: int | None
     is_active: bool
@@ -124,7 +121,6 @@ class EmployeeOut(Schema):
 
 class EmployeeIn(Schema):
     position_ids: list[UUID] | None = None
-    contract: ContractName | None = None
     # Send null to clear a limit.
     max_hours_month: int | None = Field(None, ge=1, le=400)
     target_hours_month: int | None = Field(None, ge=1, le=400)
@@ -408,7 +404,6 @@ def _employee_out(profile: EmployeeProfile, position_ids: list) -> EmployeeOut:
         last_name=user.last_name,
         phone=user.phone_e164,
         position_ids=position_ids,
-        contract=profile.contract,
         max_hours_month=profile.max_hours_month,
         target_hours_month=profile.target_hours_month,
         is_active=profile.is_active,
@@ -445,13 +440,11 @@ def location_employees(request, location_id: UUID):
     response={200: EmployeeOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
 )
 def update_employee(request, employee_id: UUID, payload: EmployeeIn):
-    """Positions, contract, monthly maximum and target, or switching the person off (history stays)."""
+    """Positions, monthly maximum and target, or switching the person off (history stays)."""
     ctx, profile = context_for(request, EmployeeProfile, employee_id)
     ctx.require_manager_of(profile.home_location)
     ctx.require_writable()
     sent = payload.model_fields_set
-    if "contract" in sent and payload.contract is not None:
-        profile.contract = Contract(payload.contract)
     if "max_hours_month" in sent:
         profile.max_hours_month = payload.max_hours_month
     if "target_hours_month" in sent:
