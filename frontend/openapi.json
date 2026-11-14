@@ -2533,6 +2533,154 @@
         ]
       }
     },
+    "/api/me/calendar": {
+      "get": {
+        "operationId": "my_calendar",
+        "summary": "My Calendar",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "schema": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "schema": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyCalendarOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "My availability between two dates (a month on the screen). Open all the time: no period is needed.",
+        "tags": [
+          "availability"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "save_my_calendar",
+        "summary": "Save My Calendar",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Save marked days, with or without a request from the manager (saved at once after every tap or drag).",
+        "tags": [
+          "availability"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/me/availability/pattern": {
       "post": {
         "operationId": "repeat_my_availability",
@@ -7873,6 +8021,91 @@
           "state"
         ],
         "title": "DayIn",
+        "type": "object"
+      },
+      "MyCalendarOut": {
+        "properties": {
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityDayOut"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "locked": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Locked",
+            "type": "array"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AvailabilityPeriodOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "days",
+          "locked",
+          "period",
+          "submitted_at"
+        ],
+        "title": "MyCalendarOut",
+        "type": "object"
+      },
+      "CalendarIn": {
+        "properties": {
+          "company_id": {
+            "format": "uuid",
+            "title": "Company Id",
+            "type": "string"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayIn"
+            },
+            "maxItems": 62,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          }
+        },
+        "required": [
+          "company_id",
+          "days"
+        ],
+        "title": "CalendarIn",
         "type": "object"
       },
       "PatternIn": {

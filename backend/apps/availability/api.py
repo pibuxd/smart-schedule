@@ -1,7 +1,8 @@
 """The employee's "Kiedy mogę" screen: availability for a period, weekly repeats, copying, requests in words.
 
 Every endpoint works on the logged-in person's own employee profile in one company (`company_id`).
-Availability can be changed only while the period is collecting availability.
+The calendar (`/me/calendar`) is always open: days can be marked ahead of time, also before the manager asks.
+Only past days and days of a period whose schedule is already arranged are closed.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -36,6 +37,10 @@ RequestStatusName = Literal["new", "interpreted", "needs_manager", "rejected"]
 # "Repeat every week until ..." reaches at most this far ahead.
 MAX_REPEAT_DAYS = 366
 CLOSED = "Termin zaznaczania dla tego okresu minął. Jeśli coś się zmieniło, powiedz kierownikowi."
+# The always-open calendar: how far ahead days can be marked and how many days one request may cover.
+MAX_AHEAD_DAYS = 366
+MAX_CALENDAR_DAYS = 62
+ARRANGED = "Grafik na te dni jest już ułożony. Jeśli coś się zmieniło, powiedz kierownikowi."
 
 
 class AvailabilityPeriodOut(Schema):
@@ -63,6 +68,22 @@ class MyAvailabilityOut(Schema):
     period: AvailabilityPeriodOut | None
     days: list[AvailabilityDayOut]
     submitted_at: datetime | None
+
+
+class MyCalendarOut(Schema):
+    start: date
+    end: date
+    days: list[AvailabilityDayOut]
+    # Days of this range that cannot be changed: past days and days whose schedule is already arranged.
+    locked: list[date]
+    # The nearest period the manager is collecting availability for (None: no request is open now).
+    period: AvailabilityPeriodOut | None
+    submitted_at: datetime | None
+
+
+class CalendarIn(Schema):
+    company_id: UUID
+    days: list["DayIn"] = Field(min_length=1, max_length=62)
 
 
 class DayIn(Schema):
@@ -210,6 +231,75 @@ def save_my_availability(request, payload: AvailabilityIn):
     with transaction.atomic():
         _save_days(ctx, profile, states, AvailabilityDay.Source.MANUAL)
     return _availability_out(ctx, profile, period)
+
+
+def _collecting_period(ctx: TenantContext, profile: EmployeeProfile) -> SchedulePeriod | None:
+    return (
+        ctx.qs(SchedulePeriod)
+        .filter(location=profile.home_location, status=SchedulePeriod.Status.COLLECTING, end__gte=timezone.localdate())
+        .select_related("location")
+        .order_by("start")
+        .first()
+    )
+
+
+def _locked_days(ctx: TenantContext, profile: EmployeeProfile, start: date, end: date) -> set[date]:
+    """Days between `start` and `end` that the employee cannot change any more."""
+    today = timezone.localdate()
+    locked = {start + timedelta(days=i) for i in range(max(0, min((today - start).days, (end - start).days + 1)))}
+    arranged = (
+        ctx.qs(SchedulePeriod)
+        .filter(location=profile.home_location, start__lte=end, end__gte=start)
+        .exclude(status=SchedulePeriod.Status.COLLECTING)
+    )
+    for period_start, period_end in arranged.values_list("start", "end"):
+        day = max(period_start, start)
+        while day <= min(period_end, end):
+            locked.add(day)
+            day += timedelta(days=1)
+    return locked
+
+
+@router.get("/me/calendar", response={200: MyCalendarOut, 400: ErrorOut, 404: ErrorOut})
+def my_calendar(request, company_id: UUID, start: date, end: date):
+    """My availability between two dates (a month on the screen). Open all the time: no period is needed."""
+    ctx, profile = employee_context(request, company_id)
+    if end < start or (end - start).days >= MAX_CALENDAR_DAYS:
+        raise HttpError(400, f"Kalendarz pokazuje najwyżej {MAX_CALENDAR_DAYS} dni naraz.")
+    period = _collecting_period(ctx, profile)
+    submission = ctx.qs(AvailabilitySubmission).filter(employee=profile, period=period).first() if period else None
+    days = ctx.qs(AvailabilityDay).filter(employee=profile, date__gte=start, date__lte=end).order_by("date")
+    return MyCalendarOut(
+        start=start,
+        end=end,
+        days=[AvailabilityDayOut(date=d.date, state=d.state, from_time=d.from_time, to_time=d.to_time) for d in days],
+        locked=sorted(_locked_days(ctx, profile, start, end)),
+        period=_period_out(period) if period else None,
+        submitted_at=submission.submitted_at if submission else None,
+    )
+
+
+@router.put("/me/calendar", response={204: None, 400: ErrorOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})
+def save_my_calendar(request, payload: CalendarIn):
+    """Save marked days, with or without a request from the manager (saved at once after every tap or drag)."""
+    ctx, profile = employee_context(request, payload.company_id)
+    ctx.require_writable()
+    today = timezone.localdate()
+    dates = [day.date for day in payload.days]
+    if min(dates) < today:
+        raise HttpError(409, "Dni, które już minęły, nie da się zmienić.")
+    if max(dates) > today + timedelta(days=MAX_AHEAD_DAYS):
+        raise HttpError(400, "Można zaznaczać najwyżej rok naprzód.")
+    if _locked_days(ctx, profile, min(dates), max(dates)) & set(dates):
+        raise HttpError(409, ARRANGED)
+    states = {}
+    for day in payload.days:
+        if day.from_time is not None and day.from_time == day.to_time:
+            raise HttpError(400, "Godzina początku i końca nie mogą być takie same.")
+        states[day.date] = (day.state, (day.from_time, day.to_time))
+    with transaction.atomic():
+        _save_days(ctx, profile, states, AvailabilityDay.Source.MANUAL)
+    return Status(204, None)
 
 
 @router.post(
