@@ -419,6 +419,15 @@ Piotr z kolegą przetestowali wdrożoną aplikację. Zmiany w tej części (nadp
 
 9. "Kiedy mogę" jest zawsze otwarte (prośba Piotra z 13.11.2026: pracownicy mają móc zaznaczać dostępność na przyszłość, także zanim kierownik o nią poprosi; wcześniej ekran był pusty do czasu prośby). Ekran pokazuje kalendarz miesiącami (bieżący i trzy kolejne, strzałki), a nie jeden okres. Nowe endpointy: `GET /me/calendar?start&end` (dni, lista dni zamkniętych, najbliższy okres zbierający dyspozycje, data wysłania) i `PUT /me/calendar` (zapis bez `period_id`). Zamknięte są tylko dni, które minęły, i dni okresu z ułożonym grafikiem (szkic albo opublikowany); zapis najwyżej rok naprzód. `AvailabilityDay` było od początku kluczowane datą, więc kierownik widzi wcześniejsze zaznaczenia w siatce okresu bez zmian po swojej stronie. Gdy kierownik poprosi o dyspozycje, ekran otwiera się na miesiącu tego okresu i pokazuje termin oraz "Gotowe, wysyłam kierownikowi"; prośby tekstem nadal pisze się do konkretnego okresu, więc pojawiają się dopiero po prośbie kierownika. Stare `PUT /me/availability` zostaje w API (nieużywane przez ekran).
 
+10. Redakcja tekstów (prośba Piotra z 13-14.11.2026: "bardziej po polsku", "ma być prosto i wiadomo"). Teksty ekranów przepisane według zasad prostego języka (wzorce: gov.pl "Prosty język", standard UM Warszawa, bankowość, polskie aplikacje grafikowe):
+    - najważniejsze na początku, krótkie zdania, jedna myśl w zdaniu, bez średników;
+    - zwracamy się na "ty", strona czynna, czasowniki zamiast rzeczowników ("Możesz układać grafik", nie "Można układać grafik");
+    - przycisk to polecenie, które mówi, co się stanie: "Wyślij kierownikowi", "Weź zmianę", "Zrezygnuj", "Jednak nie oddaję", "Przyjmij zaproszenie", "Sprawdź i zapisz";
+    - błąd mówi, co się stało i co zrobić; pusty ekran mówi, co tu będzie i co zrobić;
+    - jedno słowo na jedną rzecz. Zostają: "dyspozycje", "kierownik", "lokal", "obsada", "szkic", "przypięte", zakładka "Kiedy mogę". Znikają: "siatka dyspozycji" (teraz "Kto kiedy może"), "okres grafiku" w tekstach dla ludzi ("daty grafiku"), "generator" ("ułożone automatycznie");
+    - bez form zależnych od płci tam, gdzie się da.
+    Nowe teksty piszemy według tych samych zasad. Gdy nie ma prośby kierownika, "Kiedy mogę" mówi wprost, że prośbę tekstem pisze się dopiero, gdy kierownik poprosi o dyspozycje (uwaga Prelinta do PR #20).
+
 ## 16. Zmiana z 13.11.2026: stopień doświadczenia pracownika
 
 Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę z jednym z trzech stopni doświadczenia, pracownik jej nie widzi, a generator pilnuje, żeby na zmianie nie było wielu niedoświadczonych.
@@ -449,7 +458,7 @@ Założenia:
 ## 18. Etap 9: oddawanie zmian, powiadomienia, historia przypisań
 
 - Logika: `apps/marketplace/services.py` (oddanie, "Biorę", wycofanie, zatwierdzenie, odrzucenie, oddania po nowej publikacji), `apps/notifications/services.py` (zapis powiadomień i polskie zdania budowane przy odczycie z rodzaju i danych, więc poprawka tekstu działa też dla starych powiadomień).
-- Ekrany: w "Mój grafik" przycisk "Oddaj" przy każdej zmianie (arkusz z wyjaśnieniem, że do decyzji kierownika to nadal moja zmiana, i "Zostaję na tej zmianie"), sekcja "Zmiany do wzięcia" z "Biorę" / "Jednak nie biorę"; trzecia zakładka "Powiadomienia" z licznikiem nowych (`/powiadomienia`); u kierownika "Oddane zmiany" (`/kierownik/oddane-zmiany`) z licznikiem chętnych w nagłówku; w arkuszu zmiany na karcie "Grafik" "Historia tej zmiany".
+- Ekrany: w "Mój grafik" przycisk "Oddaj" przy każdej zmianie (arkusz z wyjaśnieniem, że do decyzji kierownika to nadal moja zmiana, i "Zostaję na tej zmianie"), sekcja "Zmiany do wzięcia" z "Biorę" / "Jednak nie biorę" (od 14.11.2026 "Weź zmianę" / "Zrezygnuj", a "Zostaję na tej zmianie" to "Jednak nie oddaję", patrz 15a pkt 10); trzecia zakładka "Powiadomienia" z licznikiem nowych (`/powiadomienia`); u kierownika "Oddane zmiany" (`/kierownik/oddane-zmiany`) z licznikiem chętnych w nagłówku; w arkuszu zmiany na karcie "Grafik" "Historia tej zmiany".
 - Licznik i listy odświeżają się co minutę (bez websocketów, jak w założeniu 8 z sekcji 7).
 
 Założenia:

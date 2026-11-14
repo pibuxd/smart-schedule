@@ -60,7 +60,7 @@ function addMonths(month: string, count: number): string {
 
 /**
  * "Kiedy mogę" is always open: the employee marks days month by month, also before the manager asks.
- * When the manager has asked for a period, the screen opens on it and shows the deadline and "Gotowe".
+ * When the manager has asked for a period, the screen opens on it and shows the deadline and "Wyślij kierownikowi".
  */
 export function AvailabilityScreen({
   companyId,
@@ -93,7 +93,7 @@ export function AvailabilityScreen({
 
   return (
     <div className="grid gap-4">
-      <h1 className="m-0 text-xl font-extrabold">Kiedy mogę</h1>
+      <h1 className="m-0 text-xl font-extrabold">Kiedy mogę pracować</h1>
       <PeriodNote period={period} readOnly={readOnly} today={today} />
       <MonthPager
         month={month}
@@ -118,26 +118,26 @@ export function AvailabilityScreen({
 function PeriodNote({ period, readOnly, today }: { period: AvailabilityPeriodOut | null; readOnly: boolean; today: Date }) {
   let text: React.ReactNode
   if (readOnly) {
-    text = 'Twoja firma ma teraz wstrzymany dostęp do aplikacji, więc nie da się nic zaznaczać. Grafik nadal widać.'
+    text = 'Firma ma teraz wstrzymany dostęp do aplikacji, więc nic nie zaznaczysz. Grafik nadal widać.'
   } else if (!period) {
     text =
-      'Zaznacz z wyprzedzeniem, kiedy możesz pracować. Kierownik weźmie to pod uwagę, gdy będzie układać grafik.'
+      'Zaznacz, kiedy możesz pracować w kolejnych miesiącach. Kierownik zobaczy to, gdy będzie układać grafik.'
   } else {
     const deadline = parseDate(period.deadline)
     const when = periodWords(period.start, period.end)
     text =
       toIsoDate(today) > period.deadline ? (
         <>
-          Kierownik czeka na dyspozycje {when.startsWith('w ') ? when : `na ${when}`}. Termin minął{' '}
-          {dayAndMonth(deadline)}, ale grafik nie jest jeszcze ułożony, więc możesz poprawiać.
+          Zaznacz, kiedy możesz pracować {when}. Termin minął {dayAndMonth(deadline)}, ale kierownik nie ułożył
+          jeszcze grafiku, więc nadal możesz zmieniać.
         </>
       ) : (
         <>
-          Kierownik prosi o dyspozycje {when.startsWith('w ') ? when : `na ${when}`}. Zaznacz do{' '}
+          Zaznacz, kiedy możesz pracować {when}. Masz czas do{' '}
           <b className="text-base">
             {weekdayGenitive(deadline)} {dayAndMonth(deadline)}
           </b>
-          . Potem kierownik układa grafik.
+          . Potem kierownik ułoży grafik.
         </>
       )
   }
@@ -314,8 +314,7 @@ function AvailabilityEditor({
 
       {arranged && (
         <p className="m-0 text-sm text-ink-muted">
-          Wyszarzone dni mają już ułożony grafik i nie da się ich zmienić. Jeśli coś się zmieniło, powiedz
-          kierownikowi.
+          Na szare dni grafik jest już ułożony, więc ich nie zmienisz. Jeśli coś Ci wypadło, powiedz kierownikowi.
         </p>
       )}
 
@@ -371,20 +370,21 @@ function AvailabilityEditor({
             <span>
               Godziny dnia
               <span className="block text-sm font-normal text-ink-muted">
-                {tool === 'hours' ? 'Stuknij dzień w kalendarzu. Stuknij tu, żeby wrócić.' : 'Gdy możesz tylko w części dnia'}
+                {tool === 'hours' ? 'Stuknij dzień w kalendarzu. Stuknij tu, żeby wrócić.' : 'Gdy możesz tylko przez część dnia'}
               </span>
             </span>
           </button>
           {!period ? (
             <p className="m-0 text-sm text-ink-muted">
-              Każda zmiana zapisuje się od razu. Dni, których nie zmienisz, zostają jako „Mogę”.
+              Wszystko zapisuje się samo. Dni, których nie ruszysz, zostają jako „Mogę”. Prośbę do kierownika napiszesz
+              tutaj, gdy poprosi o dyspozycje.
             </p>
           ) : submittedAt ? (
             <p className="m-0 flex items-start gap-2 rounded-md border-2 border-prefer bg-prefer-soft px-3.5 py-3 text-prefer">
               <Check aria-hidden="true" size={22} className="mt-0.5 flex-none" />
               <span>
-                Wysłane do kierownika {dayAndMonth(new Date(submittedAt))}. Dopóki grafik nie jest ułożony, możesz
-                jeszcze coś zmienić, zapisuje się samo.
+                Wysłane do kierownika {dayAndMonth(new Date(submittedAt))}. Dopóki kierownik nie ułoży grafiku, możesz
+                jeszcze coś zmienić. Zapisuje się samo.
               </span>
             </p>
           ) : (
@@ -399,10 +399,10 @@ function AvailabilityEditor({
                   )
                 }
               >
-                Gotowe, wysyłam kierownikowi
+                Wyślij kierownikowi
               </Button>
               <p className="m-0 text-sm text-ink-muted">
-                Każda zmiana zapisuje się od razu. Dni, których nie zmienisz, zostają jako „Mogę”.
+                Wszystko zapisuje się samo. Dni, których nie ruszysz, zostają jako „Mogę”.
               </p>
               {submit.isError && <InlineError>{errorMessage(submit.error, NETWORK_PROBLEM)}</InlineError>}
             </div>
@@ -458,7 +458,7 @@ function ToolBar({ tool, onChange }: { tool: Tool; onChange: (tool: Tool) => voi
   return (
     <div className="sticky bottom-[calc(65px+env(safe-area-inset-bottom))] z-20 -mx-4 border-t border-line bg-paper px-4 pt-2 pb-2.5 md:bottom-0">
       <p className="m-0 mb-1.5 text-sm font-semibold" id="tool-label">
-        {tool === 'hours' ? 'Stuknij dzień, żeby ustawić godziny.' : 'Zaznaczam dni jako:'}
+        {tool === 'hours' ? 'Stuknij dzień, żeby ustawić godziny.' : 'Wybierz, a potem zaznacz dni:'}
       </p>
       <div role="group" aria-labelledby="tool-label" className="grid grid-cols-3 gap-1.5">
         {STATES.map((t) => (

@@ -41,10 +41,10 @@ describe('AvailabilityScreen', () => {
   it('is open for marking ahead when the manager has not asked yet', async () => {
     const calls = api({ period: null, days: [] })
     show()
-    expect(await screen.findByText(/Zaznacz z wyprzedzeniem/)).toBeInTheDocument()
+    expect(await screen.findByText(/Zaznacz, kiedy możesz pracować w kolejnych miesiącach/)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Listopad 2026' })).toBeInTheDocument()
-    expect(await screen.findByText('Zaznaczam dni jako:')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Gotowe/ })).not.toBeInTheDocument()
+    expect(await screen.findByText('Wybierz, a potem zaznacz dni:')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Wyślij kierownikowi/ })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Następny miesiąc' }))
     expect(screen.getByRole('heading', { name: 'Grudzień 2026' })).toBeInTheDocument()
     await waitFor(() => expect(calls.filter((c) => c.url.includes('/api/me/calendar?'))).toHaveLength(2))
@@ -55,14 +55,14 @@ describe('AvailabilityScreen', () => {
     api()
     show()
     expect(await screen.findByRole('heading', { name: 'Grudzień 2026' })).toBeInTheDocument()
-    expect(screen.getByText(/Kierownik prosi o dyspozycje w grudniu/)).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Gotowe, wysyłam kierownikowi' })).toBeInTheDocument()
+    expect(screen.getByText(/Zaznacz, kiedy możesz pracować w grudniu/)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Wyślij kierownikowi' })).toBeInTheDocument()
   })
 
   it('does not let days with an arranged schedule be changed', async () => {
     const calls = api({ locked: ['2026-12-01', '2026-12-02'] })
     show()
-    await screen.findByText('Zaznaczam dni jako:')
+    await screen.findByText('Wybierz, a potem zaznacz dni:')
     fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę, nie da się zmienić' }), { detail: 0 })
     expect(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę, nie da się zmienić' })).toBeInTheDocument()
     expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0)
@@ -79,7 +79,7 @@ describe('AvailabilityScreen', () => {
   it('marks a day with the chosen state and saves it', async () => {
     const calls = api()
     show()
-    await screen.findByText('Zaznaczam dni jako:')
+    await screen.findByText('Wybierz, a potem zaznacz dni:')
     fireEvent.click(screen.getByRole('button', { name: 'Nie mogę' }))
     // A keyboard press (detail 0) paints one day, like a tap does.
     fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę' }), { detail: 0 })
@@ -120,6 +120,6 @@ describe('AvailabilityScreen', () => {
     show(true)
     expect(await screen.findByText(/wstrzymany dostęp/)).toBeInTheDocument()
     expect(await screen.findByRole('grid')).toBeInTheDocument()
-    expect(screen.queryByText('Zaznaczam dni jako:')).not.toBeInTheDocument()
+    expect(screen.queryByText('Wybierz, a potem zaznacz dni:')).not.toBeInTheDocument()
   })
 })

@@ -9,7 +9,7 @@ import { dayTitle, parseDate, shortTime } from '../../lib/dates'
 
 /**
  * "Zmiany do wzięcia": shifts that colleagues give away and that I can take (the server checks my calendar,
- * my other shifts and the position). "Biorę" asks the manager; the shift is mine only after they approve.
+ * my other shifts and the position). "Weź zmianę" asks the manager; the shift is mine only after they approve.
  * Hidden when there is nothing to take, so the schedule stays the first thing on the screen.
  */
 export function OffersToTake({ companyId, readOnly }: { companyId: string; readOnly: boolean }) {
@@ -62,7 +62,7 @@ function OfferCard({ offer, readOnly }: { offer: AvailableOfferOut; readOnly: bo
       {waiting ? (
         <>
           <p role="status" className="m-0 rounded-sm bg-accent-soft px-3 py-2 font-semibold">
-            Zgłoszenie wysłane. Czekasz na decyzję kierownika i dostaniesz powiadomienie.
+            Zgłoszone. Kierownik musi to zatwierdzić. Damy Ci znać.
           </p>
           <Button
             variant="quiet"
@@ -70,7 +70,7 @@ function OfferCard({ offer, readOnly }: { offer: AvailableOfferOut; readOnly: bo
             disabled={withdraw.isPending || readOnly}
             onClick={() => withdraw.mutate({ claimId: offer.my_claim_id! }, { onSuccess: refresh })}
           >
-            Jednak nie biorę
+            Zrezygnuj
           </Button>
         </>
       ) : (
@@ -79,7 +79,7 @@ function OfferCard({ offer, readOnly }: { offer: AvailableOfferOut; readOnly: bo
           disabled={claim.isPending || readOnly}
           onClick={() => claim.mutate({ offerId: offer.id }, { onSuccess: refresh })}
         >
-          Biorę
+          Weź zmianę
         </Button>
       )}
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}

@@ -37,7 +37,7 @@ describe('RunProgress', () => {
     await waitFor(() =>
       expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/generation-runs/r1/cancel'))).toBe(true),
     )
-    expect(await screen.findByText('Układanie anulowane. Nic się nie zmieniło.')).toBeInTheDocument()
+    expect(await screen.findByText('Anulowane. Nic się nie zmieniło.')).toBeInTheDocument()
   })
 
   it('has no cancel button when the company is read-only', async () => {

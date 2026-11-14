@@ -55,7 +55,7 @@ export function GridLegend() {
 export function AvailabilityGrid({ data }: { data: AvailabilityGridOut }) {
   const days = periodDays(data.period.start, data.period.end)
   return (
-    <div className="overflow-x-auto rounded-md border border-line bg-surface" tabIndex={0} aria-label="Siatka dyspozycji">
+    <div className="overflow-x-auto rounded-md border border-line bg-surface" tabIndex={0} aria-label="Kto kiedy może">
       <table className="border-separate border-spacing-0 text-sm">
         <caption className="sr-only">Dyspozycje pracowników na każdy dzień okresu</caption>
         <thead>

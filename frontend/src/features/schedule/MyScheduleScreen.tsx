@@ -90,7 +90,7 @@ function GiveButton({ shift, onGive, wide }: { shift: MyShiftOut; onGive?: (shif
   const label = shift.offer_status
     ? shift.offer_status === 'claimed'
       ? 'Oddajesz: czeka na kierownika'
-      : 'Oddajesz: czeka na chętnego'
+      : 'Oddajesz, jeszcze nikt się nie zgłosił'
     : wide
       ? 'Oddaj tę zmianę'
       : 'Oddaj'

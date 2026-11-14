@@ -48,11 +48,11 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
     <div className="grid gap-8">
       <Section
         title={`W grafiku (${active.length})`}
-        description="Stanowiska mówią, na jakie zmiany można kogoś wpisać. Stopień doświadczenia widzisz tylko Ty: dzięki niemu na zmianie nie zostaną sami początkujący. Maksimum i cel godzin są wskazówką dla układania grafiku."
+        description="Stanowisko mówi, na jakie zmiany ktoś może przyjść. Doświadczenie widzisz tylko Ty: dzięki niemu na zmianie nie zostaną sami początkujący. Cel i maksimum godzin to wskazówki przy układaniu grafiku."
       >
         {active.length === 0 ? (
           <EmptyState title="Nikt jeszcze nie pracuje w tym lokalu">
-            <p className="m-0">Zaproś pierwszą osobę po numerze telefonu w sekcji poniżej.</p>
+            <p className="m-0">Zaproś pierwszą osobę niżej. Wystarczy numer telefonu.</p>
           </EmptyState>
         ) : (
           <EmployeeList employees={active} names={names} onEdit={setEditing} />
@@ -65,7 +65,7 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
       {off.length > 0 && (
         <Section
           title={`Wyłączeni z grafiku (${off.length})`}
-          description="Nie dostają nowych zmian, ale ich dawne grafiki zostają. Możesz ich włączyć z powrotem."
+          description="Nie dostają nowych zmian. Dawne grafiki zostają. Każdą osobę możesz włączyć z powrotem."
         >
           <EmployeeList employees={off} names={names} onEdit={setEditing} />
         </Section>
@@ -101,7 +101,7 @@ function AddMyself({ locationId, employees }: { locationId: string; employees: E
         <span>
           <b>Też pracujesz na zmianach?</b>
           <span className="block text-sm text-ink-muted">
-            Dodaj siebie do grafiku tego lokalu. Dostaniesz wszystkie stanowiska; możesz je potem zmienić.
+            Dodaj siebie do grafiku tego lokalu. Dostaniesz wszystkie stanowiska. Potem możesz je zmienić.
           </span>
         </span>
         <Button
@@ -217,8 +217,8 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
       <fieldset className="m-0 grid gap-1 border-0 p-0">
         <legend className="mb-1 font-semibold">Doświadczenie</legend>
         <p className="m-0 text-sm text-ink-muted">
-          Widzisz to tylko Ty, pracownik nie zobaczy swojego stopnia. Przy układaniu grafiku na zmianie ma być co
-          najmniej tylu doświadczonych, ilu początkujących (zasada „Początkujący z doświadczonymi”).
+          Widzisz to tylko Ty. Na każdej zmianie ma być co najmniej tylu doświadczonych, ilu początkujących (zasada
+          „Początkujący z doświadczonymi”).
         </p>
         {([1, 2, 3] as const).map((value) => (
           <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
@@ -260,7 +260,7 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
       </div>
       <CheckField
         label="W grafiku"
-        hint="Odznacz, gdy ktoś odchodzi albo długo nie pracuje. Jego dawne zmiany zostaną w historii."
+        hint="Odznacz, gdy ktoś odchodzi albo długo nie pracuje. Dawne zmiany tej osoby zostaną."
         checked={active}
         onChange={(e) => setActive(e.target.checked)}
       />
@@ -295,7 +295,7 @@ function InvitationsSection({ locationId }: { locationId: string }) {
         onSuccess: (response) => {
           const out = response.data as InvitationOut
           setSent(
-            `Zaproszenie zapisane dla ${prettyPhone(out.phone)}. Powiedz tej osobie, żeby zalogowała się w Grafikomacie tym numerem: zaproszenie zobaczy od razu. Nie wysyłamy SMS-a z zaproszeniem.`,
+            `Zaproszenie czeka na numer ${prettyPhone(out.phone)}. Nie wysyłamy SMS-a, więc powiedz tej osobie, żeby zalogowała się w Grafikomacie tym numerem. Zaproszenie zobaczy od razu.`,
           )
           setPhone('')
           setFirst('')
@@ -310,7 +310,7 @@ function InvitationsSection({ locationId }: { locationId: string }) {
   return (
     <Section
       title="Zaproś do lokalu"
-      description="Wpisz numer telefonu. Osoba zaloguje się kodem SMS i przyjmie zaproszenie w aplikacji."
+      description="Wpisz numer telefonu. Ta osoba zaloguje się kodem z SMS-a i przyjmie zaproszenie w aplikacji."
     >
       <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
         <TextField label="Numer telefonu" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="512 345 678" />

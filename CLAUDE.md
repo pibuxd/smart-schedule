@@ -103,6 +103,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - Do not edit generated files: `frontend/src/api/generated/**`, `frontend/src/routeTree.gen.ts`.
 - Frontend calls the API only through the generated hooks; `src/api/http.ts` adds the session cookie and CSRF token.
 - Every screen has an empty, loading and error state with plain-language Polish text.
+- UI copy follows the plain-language rules in `docs/plan.md` 15a point 10: short sentences, "ty" form, active verbs, buttons as
+  commands that say what happens ("Wyślij kierownikowi"), one word per concept (keep "dyspozycje", "kierownik", "lokal").
 - Visual tokens live in `frontend/src/styles/tokens.css` (Tailwind `@theme`; default colours, font sizes, radii and
   shadows are switched off, so only token classes exist: `bg-paper`, `text-ink`, `text-accent`, `rounded-md`, `text-lg`…).
   Touch sizes: `min-h-(--touch)` (48 px) and `min-h-(--touch-main)` (56 px). No purple gradients, glass, emoji icons.

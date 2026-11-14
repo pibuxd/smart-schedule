@@ -55,7 +55,7 @@ export function NotificationsScreen({ companyId, now = new Date() }: { companyId
     return (
       <EmptyState title="Nie masz powiadomień">
         <p className="m-0">
-          Tu zobaczysz, gdy kierownik poprosi o dyspozycje, opublikuje grafik albo ktoś odda zmianę, którą możesz wziąć.
+          Damy Ci tu znać, gdy kierownik poprosi o dyspozycje, pokaże nowy grafik albo ktoś odda zmianę, którą możesz wziąć.
         </p>
       </EmptyState>
     )

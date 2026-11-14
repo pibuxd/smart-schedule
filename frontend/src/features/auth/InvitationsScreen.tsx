@@ -90,7 +90,7 @@ function InvitationCard({ invitation }: { invitation: MyInvitationOut }) {
       {confirmDecline ? (
         <div className="grid gap-3 rounded-md bg-cannot-soft p-4">
           <p className="m-0">
-            Na pewno odrzucić? Żeby dołączyć później, kierownik musi zaprosić Cię jeszcze raz.
+            Na pewno odrzucić? Jeśli zmienisz zdanie, kierownik będzie musiał zaprosić Cię jeszcze raz.
           </p>
           <Button
             variant="danger"
@@ -107,7 +107,7 @@ function InvitationCard({ invitation }: { invitation: MyInvitationOut }) {
       ) : (
         <>
           <p className="m-0 text-ink-muted">
-            Po przyjęciu zobaczysz tu swój grafik i zaznaczysz, kiedy możesz pracować.
+            Gdy przyjmiesz zaproszenie, zobaczysz swój grafik i zaznaczysz, kiedy możesz pracować.
           </p>
           <div className="grid gap-2">
             <Button
@@ -125,7 +125,7 @@ function InvitationCard({ invitation }: { invitation: MyInvitationOut }) {
                 )
               }
             >
-              {accept.isPending ? 'Przyjmuję…' : 'Przyjmuję zaproszenie'}
+              {accept.isPending ? 'Przyjmuję…' : 'Przyjmij zaproszenie'}
             </Button>
             <Button variant="secondary" wide disabled={busy} onClick={() => setConfirmDecline(true)}>
               Odrzucam

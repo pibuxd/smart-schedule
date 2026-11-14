@@ -107,7 +107,7 @@ function LocationForm({ location }: { location: LocationOut }) {
       <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 md:grid-cols-2 lg:grid-cols-4 lg:items-start">
         <TextField label="Nazwa" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
         <TextField label="Adres" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} />
-        <SelectField label="Grafik układany na" value={period} onChange={(e) => setPeriod(e.target.value as 'week' | 'month')}>
+        <SelectField label="Grafik układasz na" value={period} onChange={(e) => setPeriod(e.target.value as 'week' | 'month')}>
           <option value="month">miesiąc</option>
           <option value="week">tydzień</option>
         </SelectField>
@@ -119,7 +119,7 @@ function LocationForm({ location }: { location: LocationOut }) {
           max={60}
           value={days}
           onChange={(e) => setDays(e.target.value)}
-          hint="Podpowiedź przy nowym okresie. Dokładny dzień ustawisz przy każdym okresie."
+          hint="Tak podpowiemy termin przy nowym grafiku. Dokładny dzień ustawisz za każdym razem."
         />
         <div className="flex flex-wrap items-center gap-3 md:col-span-2 lg:col-span-4">
           <Button type="submit" size="normal" disabled={update.isPending || readOnly}>
@@ -143,7 +143,7 @@ function ArchiveSection({ location }: { location: LocationOut }) {
   return (
     <Section
       title="Archiwum"
-      description="Lokal, który przestał działać, przenieś do archiwum zamiast go usuwać: historia grafików i godzin zostaje."
+      description="Lokal, który już nie działa, przenieś do archiwum. Dawne grafiki i godziny zostaną."
     >
       <div>
         <Button variant="danger" size="normal" onClick={() => setOpen(true)} disabled={readOnly}>
@@ -153,8 +153,8 @@ function ArchiveSection({ location }: { location: LocationOut }) {
       <Sheet open={open} onOpenChange={setOpen} title="Przenieść do archiwum?">
         <div className="grid gap-4">
           <p className="m-0">
-            {location.name} zniknie z listy lokali i nie będzie można układać dla niego grafiku. Pracownicy zostaną,
-            dawne grafiki też. Lokal przywrócisz jednym przyciskiem z listy lokali.
+            {location.name} zniknie z listy lokali i nie ułożysz dla niego grafiku. Pracownicy i dawne grafiki
+            zostaną. Lokal przywrócisz jednym przyciskiem na liście lokali.
           </p>
           {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
           <Button
@@ -270,7 +270,7 @@ function ShiftTypesSection({ locationId, setup }: { locationId: string; setup: L
   return (
     <Section
       title="Zmiany i godziny"
-      description="Godziny końca wcześniejsze niż początek znaczą zmianę do rana (np. 22–6)."
+      description="Gdy koniec jest wcześniej niż początek, zmiana trwa do rana (np. 22–6)."
       action={
         <Button variant="secondary" size="normal" onClick={() => setEditing('new')} disabled={readOnly}>
           <Plus aria-hidden="true" size={20} />
@@ -374,12 +374,12 @@ function ShiftTypeForm({
       {night && <p className="m-0 text-sm text-ink-muted">Ta zmiana kończy się następnego dnia rano.</p>}
       <CheckField
         label="Zmiana zamykająca"
-        hint="Liczy się do równego podziału zamknięć."
+        hint="Zamknięcia lokalu dzielimy po równo między pracowników."
         checked={closing}
         onChange={(e) => setClosing(e.target.checked)}
       />
       {shiftType && (
-        <p className="m-0 text-sm text-ink-muted">Nowe godziny dotyczą grafików układanych od teraz. Ułożone grafiki zostają bez zmian.</p>
+        <p className="m-0 text-sm text-ink-muted">Nowe godziny działają w grafikach, które ułożysz od teraz. Gotowe grafiki się nie zmienią.</p>
       )}
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
       <Button type="submit" wide disabled={create.isPending || update.isPending}>
@@ -430,7 +430,7 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
     return (
       <Section title="Obsada">
         <EmptyState title="Najpierw stanowiska i zmiany">
-          <p className="m-0">Dodaj wyżej co najmniej jedno stanowisko i jedną zmianę. Wtedy ustawisz tu, ilu ludzi potrzeba.</p>
+          <p className="m-0">Najpierw dodaj wyżej stanowisko i zmianę. Wtedy ustawisz tu, ile osób potrzeba.</p>
         </EmptyState>
       </Section>
     )
@@ -481,7 +481,7 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
   return (
     <Section
       title="Obsada"
-      description="Ilu ludzi z danym stanowiskiem potrzeba na każdej zmianie w każdy dzień tygodnia. Puste pole = nikt."
+      description="Ile osób na danym stanowisku potrzeba na każdej zmianie w każdy dzień tygodnia. Puste pole znaczy: nikt."
     >
       <div className="overflow-x-auto rounded-md border border-line bg-surface" tabIndex={0} aria-label="Tabela obsady">
         <table className="w-full border-separate border-spacing-0">
@@ -622,7 +622,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
   return (
     <Section
       title="Wyjątki w obsadzie"
-      description="Inna obsada w jeden dzień, np. Wigilia albo dzień zamknięcia (0 osób). Zastępuje zwykłą obsadę tego dnia."
+      description="Inna obsada w wybrany dzień, np. w Wigilię albo gdy lokal jest zamknięty (0 osób). Zastępuje zwykłą obsadę tego dnia."
     >
       {setup.exceptions.length > 0 && (
         <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">

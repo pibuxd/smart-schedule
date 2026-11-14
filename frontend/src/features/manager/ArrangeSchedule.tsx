@@ -94,35 +94,35 @@ function ArrangeSheet({
       title={one ? `Ułożyć grafik: ${targets[0].locationName}?` : `Ułożyć grafik dla ${targets.length} lokali?`}
       description={
         one
-          ? 'Grafik ułoży się z dyspozycji, obsady i zasad lokalu. Potrwa to do pół minuty.'
-          : 'Każdy lokal ułoży się osobno, z własnymi zasadami. Każdy potrwa do pół minuty.'
+          ? 'Ułożymy grafik według dyspozycji, obsady i zasad lokalu. To trwa do pół minuty.'
+          : 'Każdy lokal układamy osobno, według jego zasad. Każdy trwa do pół minuty.'
       }
     >
       <div className="grid gap-4">
         {early.length > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
             {one
-              ? `Termin dyspozycji jeszcze nie minął, a bez dyspozycji: ${people(early[0].missing)}.`
+              ? `Termin dyspozycji jeszcze nie minął. Czekasz jeszcze na: ${people(early[0].missing)}.`
               : `W ${early.length} lokalach termin jeszcze nie minął, a nie wszyscy wpisali dyspozycje.`}{' '}
-            Możesz ułożyć grafik już teraz i ułożyć go ponownie później.
+            Możesz ułożyć grafik już teraz, a potem jeszcze raz.
           </p>
         )}
         {missing.length > 0 && early.length === 0 && (
           <p className="m-0">
-            Bez dyspozycji:{' '}
+            Dyspozycji nie wysłali:{' '}
             {missing.map((t) => (one ? people(t.missing) : `${t.locationName} (${people(t.missing)})`)).join(', ')}.
-            Liczymy ich jak „obojętnie”.
+            Przyjmiemy, że mogą pracować każdego dnia.
           </p>
         )}
         {manual.length > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2 text-ink">
-            Ułożenie od nowa usunie nieprzypięte ręczne poprawki:{' '}
+            Stracisz ręczne poprawki bez przypięcia:{' '}
             {manual.map((t) => (one ? t.manualChanges : `${t.locationName}: ${t.manualChanges}`)).join(', ')}.
-            Przypięte zmiany zostaną na miejscu.
+            Przypięte zmiany zostaną.
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Wynik zobaczysz jako szkic. Pracownicy zobaczą grafik dopiero, gdy go opublikujesz.
+          Dostaniesz szkic do poprawek. Pracownicy zobaczą grafik dopiero, gdy go opublikujesz.
         </p>
         {generate.isError && <InlineError>{errorMessage(generate.error, NETWORK_PROBLEM)}</InlineError>}
         <Button wide onClick={start} disabled={generate.isPending}>
@@ -156,7 +156,7 @@ export function RunProgress({ runId, locationId, compact }: { runId: string; loc
     if (finished) void queryClient.invalidateQueries({ predicate: (q) => !String(q.queryKey[0]).includes('generation-runs') })
   }, [finished, queryClient])
 
-  if (run.isError) return <InlineError>{errorMessage(run.error, 'Nie udało się sprawdzić, jak idzie układanie.')}</InlineError>
+  if (run.isError) return <InlineError>{errorMessage(run.error, 'Nie udało się sprawdzić, czy grafik jest już ułożony.')}</InlineError>
   if (!data || data.status === 'queued' || data.status === 'running') {
     // A 409 means the run ended a moment ago: the next poll shows its result, so it is not an error to show.
     const cancelFailed = cancel.isError && errorStatus(cancel.error) !== 409
@@ -169,7 +169,7 @@ export function RunProgress({ runId, locationId, compact }: { runId: string; loc
               ? 'Anuluję…'
               : data?.status === 'running'
                 ? 'Układam grafik…'
-                : 'Czekam w kolejce na ułożenie…'}
+                : 'Grafik czeka w kolejce…'}
             {!compact && !cancel.isPending && <span className="font-normal text-ink-muted">To trwa do pół minuty.</span>}
           </p>
           {!readOnly && (
@@ -192,7 +192,7 @@ export function RunProgress({ runId, locationId, compact }: { runId: string; loc
   if (data.status === 'cancelled') {
     return (
       <p role="status" className="m-0 font-semibold">
-        Układanie anulowane. Nic się nie zmieniło.
+        Anulowane. Nic się nie zmieniło.
       </p>
     )
   }

@@ -48,7 +48,7 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
         <div className="grid gap-1">
           <h1 className="m-0 text-2xl font-extrabold">Lokale</h1>
           <p className="m-0 max-w-[62ch] text-ink-muted">
-            Każdy lokal ma własny termin dyspozycji. Grafik układasz sam, gdy termin minie albo gdy wszyscy wpiszą
+            Każdy lokal ma swój termin dyspozycji. Grafik układasz sam, gdy termin minie albo gdy wszyscy wpiszą
             dyspozycje.
           </p>
         </div>
@@ -74,7 +74,7 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
         <EmptyState title="Nie masz jeszcze żadnego lokalu">
           <p className="m-0">
             {role === 'owner'
-              ? 'Dodaj pierwszy lokal przyciskiem „Nowy lokal”. Potem ustawisz w nim stanowiska, zmiany i obsadę.'
+              ? 'Dodaj pierwszy lokal przyciskiem „Nowy lokal”. Potem ustawisz w nim stanowiska, zmiany i to, ile osób potrzeba.'
               : 'Właściciel firmy nie przypisał Ci jeszcze lokalu. Poproś go o to.'}
           </p>
         </EmptyState>
@@ -112,11 +112,11 @@ function readiness(location: LocationSummaryOut, today: Date): { text: string; t
   const period = location.period
   if (!period || period.status !== 'collecting') return null
   if (location.employees > 0 && period.missing.length === 0) {
-    return { text: 'Wszyscy wpisali dyspozycje. Można układać grafik.', tone: 'accent' }
+    return { text: 'Wszyscy wysłali dyspozycje. Możesz układać grafik.', tone: 'accent' }
   }
   if (daysUntil(period.deadline, today) < 0) {
     return {
-      text: `Termin minął. Można układać grafik (bez dyspozycji: ${people(period.missing.length)}).`,
+      text: `Termin minął. Możesz układać grafik. Dyspozycji nie wysłali: ${people(period.missing.length)}.`,
       tone: 'accent',
     }
   }
@@ -160,8 +160,8 @@ function LocationRow({ location, today, readOnly }: { location: LocationSummaryO
           </>
         ) : (
           <>
-            <span className="font-semibold">Brak okresu grafiku</span>
-            <span className="text-sm text-ink-muted">Ustal daty okresu i termin dyspozycji.</span>
+            <span className="font-semibold">Nie ma jeszcze dat grafiku</span>
+            <span className="text-sm text-ink-muted">Ustal, na jakie dni układasz grafik.</span>
           </>
         )}
       </div>
@@ -187,7 +187,7 @@ function LocationRow({ location, today, readOnly }: { location: LocationSummaryO
         {period?.active_run_id && <RunProgress runId={period.active_run_id} locationId={location.id} compact />}
         {period && !period.active_run_id && period.latest_version_status === 'draft' && (
           <span className="text-sm">
-            <Tag tone="warn">Szkic czeka na publikację</Tag>
+            <Tag tone="warn">Pracownicy jeszcze nie widzą grafiku</Tag>
           </span>
         )}
       </div>
@@ -238,11 +238,11 @@ export function Progress({ done, total }: { done: number; total: number }) {
   return (
     <div className="grid gap-1">
       <span className="font-semibold">
-        Wysłali dyspozycje: {done} z {total}
+        Dyspozycje wysłało: {done} z {total}
       </span>
       <div
         role="progressbar"
-        aria-label="Kto wpisał dyspozycje"
+        aria-label="Ile osób wysłało dyspozycje"
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={done}
@@ -262,8 +262,8 @@ function ArchivedList({ data }: { data: ManagerOverviewOut }) {
     <section className="grid gap-2">
       <h2 className="m-0 text-lg font-extrabold">Archiwum</h2>
       <p className="m-0 text-sm text-ink-muted">
-        Zarchiwizowane lokale zachowują historię grafików, ale nie pojawiają się na liście i nie da się dla nich
-        układać grafiku.
+        Lokale w archiwum zachowują dawne grafiki, ale nie ma ich na liście i nie ułożysz dla nich nowego
+        grafiku.
       </p>
       <ul className="m-0 grid list-none gap-2 p-0">
         {data.archived.map((location) => (
@@ -345,7 +345,7 @@ function NewLocationSheet({
             ))}
           </SelectField>
         )}
-        <SelectField label="Grafik układany na" value={period} onChange={(e) => setPeriod(e.target.value as 'month' | 'week')}>
+        <SelectField label="Grafik układasz na" value={period} onChange={(e) => setPeriod(e.target.value as 'month' | 'week')}>
           <option value="month">miesiąc</option>
           <option value="week">tydzień</option>
         </SelectField>
