@@ -13,7 +13,7 @@ from apps.accounts.models import User
 from apps.availability.models import AvailabilityDay, TextRequest
 from apps.billing.models import GenerationUsage
 from apps.rules.models import RuleSetting, WeightProfile
-from apps.scheduling.generation import fail_stale_runs, request_generation, run_generation
+from apps.scheduling.generation import cancel_generation, fail_stale_runs, request_generation, run_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuildError, build_problem, slot_key
 from apps.staffing.models import EmployeeProfile, ShiftType, StaffingException, StaffingRule
@@ -476,3 +476,71 @@ def test_too_few_generations_left_for_all_locations(api, shop, settings, make_co
     assert response.status_code == 429
     assert "zostało 1, a potrzeba 2" in response.json()["detail"]
     assert not GenerationRun.objects.exists()
+
+
+@pytest.mark.django_db
+def test_manager_cancels_a_queued_generation_and_gets_it_back(api, shop):
+    api.login(shop["manager"])
+    run_id = generate(api, shop["period"]).json()[0]["id"]
+    assert GenerationUsage.objects.get(company=shop["company"]).count == 1
+
+    response = api.post(f"/api/generation-runs/{run_id}/cancel")
+
+    assert response.status_code == 200, response.content
+    assert response.json()["status"] == "cancelled"
+    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
+    periods = api.get(f"/api/locations/{shop['location'].id}/periods").json()
+    assert periods[0]["active_run_id"] is None
+    # The worker finds the job later and leaves the cancelled run alone.
+    assert run_generation(run_id, **FAST).status == GenerationRun.Status.CANCELLED
+    assert not ScheduleVersion.objects.exists()
+    assert api.post(f"/api/generation-runs/{run_id}/cancel").status_code == 409
+    assert generate(api, shop["period"]).status_code == 202  # arranging again is possible at once
+
+
+@pytest.mark.django_db
+def test_cancelling_while_the_solver_works_saves_nothing(shop):
+    run = request_generation(_ctx(shop), [shop["period"]])[0]
+
+    def manager_cancels() -> bool:
+        cancel_generation(_ctx(shop), GenerationRun.objects.get(pk=run.pk))
+        return True  # the solver hears about it
+
+    run = run_generation(run.pk, **FAST, should_stop=manager_cancels)
+
+    assert run.status == GenerationRun.Status.CANCELLED
+    assert not ScheduleVersion.objects.exists()
+    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
+    shop["period"].refresh_from_db()
+    assert shop["period"].status == SchedulePeriod.Status.COLLECTING
+
+
+@pytest.mark.django_db
+def test_a_result_that_arrives_after_the_cancel_is_dropped(shop):
+    run = request_generation(_ctx(shop), [shop["period"]])[0]
+    cancelled = []
+
+    def cancelled_too_late_for_the_solver() -> bool:
+        if not cancelled:
+            cancelled.append(cancel_generation(_ctx(shop), GenerationRun.objects.get(pk=run.pk)))
+        return False
+
+    run = run_generation(run.pk, **FAST, should_stop=cancelled_too_late_for_the_solver)
+
+    assert run.status == GenerationRun.Status.CANCELLED
+    assert not ScheduleVersion.objects.exists()
+    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
+
+
+@pytest.mark.django_db
+def test_cancel_is_for_managers_of_a_writable_company_only(api, shop, make_company, subscribe):
+    run = request_generation(_ctx(shop), [shop["period"]])[0]
+    api.login(shop["worker"])
+    assert api.post(f"/api/generation-runs/{run.pk}/cancel").status_code == 403
+    api.login(make_company("Obca")["manager"])
+    assert api.post(f"/api/generation-runs/{run.pk}/cancel").status_code == 404
+    subscribe(shop["company"], days=-1)
+    api.login(shop["manager"])
+    assert api.post(f"/api/generation-runs/{run.pk}/cancel").status_code == 402
+    run.refresh_from_db()
+    assert run.status == GenerationRun.Status.QUEUED

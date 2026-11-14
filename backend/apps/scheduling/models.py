@@ -60,6 +60,7 @@ class GenerationRun(CompanyOwnedModel):
         RUNNING = "running", "w trakcie"
         SUCCEEDED = "succeeded", "gotowe"
         FAILED = "failed", "błąd"
+        CANCELLED = "cancelled", "anulowane"
 
     class SolverStatus(models.TextChoices):
         OPTIMAL = "optimal", "optymalny"

@@ -7,16 +7,19 @@
   with the independent validator and save one draft `ScheduleVersion` per location. A schedule that breaks a hard
   rule is never saved. It is safe to run twice: only a queued run is started.
 - A run that fails gives its generation back to the monthly limit.
+- `cancel_generation` stops a queued or running run when the manager asks: the run is marked cancelled at once,
+  the worker's solver notices within about a second, nothing is saved and the generation is given back.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Sequence
 from datetime import date, timedelta
 
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import F, Max
 from django.utils import timezone
 from ninja.errors import HttpError
@@ -27,7 +30,7 @@ from apps.scheduling.problem_builder import BuildError, BuiltProblem, build_prob
 from apps.tenancy.context import TenantContext
 from apps.tenancy.models import Company
 from engine.scoring import score
-from engine.solver import solve
+from engine.solver import SolveStatus, solve
 from engine.validator import validate
 
 logger = logging.getLogger(__name__)
@@ -44,6 +47,7 @@ INVALID_RESULT = (
 )
 NO_SLOTS = "W tym okresie nie ma żadnych zmian do obsadzenia. Ustaw obsadę w ustawieniach lokalu."
 STALE = "Układanie grafiku zostało przerwane. Spróbuj ponownie."
+ALREADY_FINISHED = "Układanie grafiku już się skończyło, więc nie ma czego anulować."
 
 
 def _month(now=None) -> date:
@@ -95,8 +99,52 @@ def _give_back_generation(run: GenerationRun) -> None:
     )
 
 
+def cancel_generation(ctx: TenantContext, run: GenerationRun) -> GenerationRun:
+    """Stop a queued or running generation. Nothing is saved; the generation does not count toward the limit."""
+    for period in run.periods.select_related("location"):
+        ctx.require_manager_of(period.location)
+    ctx.require_writable()
+    with transaction.atomic():
+        run = ctx.qs(GenerationRun).select_for_update().get(pk=run.pk)
+        if run.status not in ACTIVE:
+            raise HttpError(409, ALREADY_FINISHED)
+        run.status = GenerationRun.Status.CANCELLED
+        run.finished_at = timezone.now()
+        run.save(update_fields=["status", "finished_at"])
+        _give_back_generation(run)
+    return run
+
+
+def _cancelled(run_id) -> bool:
+    return GenerationRun.objects.filter(pk=run_id, status=GenerationRun.Status.CANCELLED).exists()  # by run id
+
+
+def _stop_check(run_id):
+    """What the solver asks about once a second, mostly from its helper thread. That thread gets its own
+    database connection, closed after every question so none is left open when the search ends."""
+    caller = threading.get_ident()
+
+    def should_stop() -> bool:
+        try:
+            return _cancelled(run_id)
+        finally:
+            if threading.get_ident() != caller:
+                connection.close()
+
+    return should_stop
+
+
+def _still_active(run: GenerationRun) -> bool:
+    """Lock the run and say whether its outcome may still be written (False once it was cancelled or ended)."""
+    status = GenerationRun.objects.select_for_update().filter(pk=run.pk).values_list("status", flat=True).first()
+    return status in ACTIVE
+
+
 def _fail(run: GenerationRun, message: str, solver_status: str = "") -> GenerationRun:
     with transaction.atomic():
+        if not _still_active(run):
+            run.refresh_from_db()
+            return run
         run.status = GenerationRun.Status.FAILED
         run.error = message
         run.solver_status = solver_status
@@ -107,7 +155,12 @@ def _fail(run: GenerationRun, message: str, solver_status: str = "") -> Generati
 
 
 def run_generation(
-    run_id, *, time_limit_s: float | None = None, workers: int | None = None, today: date | None = None
+    run_id,
+    *,
+    time_limit_s: float | None = None,
+    workers: int | None = None,
+    today: date | None = None,
+    should_stop=None,
 ) -> GenerationRun:
     """Solve a queued run and save its draft versions. Does nothing for a run that is not queued."""
     with transaction.atomic():
@@ -128,8 +181,12 @@ def run_generation(
             built.problem,
             time_limit_s=time_limit_s or settings.SOLVER_TIME_LIMIT_S,
             workers=workers or settings.SOLVER_WORKERS,
+            should_stop=should_stop or _stop_check(run.pk),
         )
         run.time_ms = result.time_ms
+        if result.status == SolveStatus.STOPPED:
+            run.refresh_from_db()
+            return run
         if not result.has_schedule:
             return _fail(run, "\n".join(result.messages), result.status)
         report = validate(built.problem, result.schedule)
@@ -141,6 +198,9 @@ def run_generation(
             )
             return _fail(run, INVALID_RESULT, result.status)
         with transaction.atomic():
+            if not _still_active(run):  # cancelled while the result was being checked
+                run.refresh_from_db()
+                return run
             _save_versions(run, built, result.schedule, report)
             run.status = GenerationRun.Status.SUCCEEDED
             run.solver_status = result.status

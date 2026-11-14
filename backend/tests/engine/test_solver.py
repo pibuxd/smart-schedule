@@ -251,7 +251,7 @@ def test_impossible_hard_rule_is_named():
     assert "Równy podział weekendów" not in result.messages[0]
 
 
-def test_time_limit_is_kept_on_a_big_problem():
+def _big_problem():
     rng = random.Random(7)
     people = [employee(f"e{i}", target_hours_month=rng.choice([None, 80, 120])) for i in range(40)]
     slots = []
@@ -271,7 +271,11 @@ def test_time_limit_is_kept_on_a_big_problem():
         for d in range(30)
         if rng.random() < 0.4
     ]
-    p = problem(people, slots, start=MON, end=MON + timedelta(days=29), rules=rules, availability=availability)
+    return problem(people, slots, start=MON, end=MON + timedelta(days=29), rules=rules, availability=availability)
+
+
+def test_time_limit_is_kept_on_a_big_problem():
+    p = _big_problem()
     started = clock.monotonic()
     result = solve(p, time_limit_s=2, workers=4)
     elapsed = clock.monotonic() - started
@@ -279,6 +283,26 @@ def test_time_limit_is_kept_on_a_big_problem():
     assert result.status in (SolveStatus.FEASIBLE, SolveStatus.OPTIMAL, SolveStatus.TIMEOUT_NO_SOLUTION)
     if result.schedule is not None:
         assert validate(p, result.schedule).ok
+
+
+def test_search_stops_soon_after_the_caller_asks(monkeypatch):
+    monkeypatch.setattr("engine.solver.STOP_POLL_S", 0.2)
+    asked = []
+
+    def should_stop() -> bool:
+        asked.append(clock.monotonic())
+        return len(asked) > 2  # "no" before the search and at the first check, then "yes"
+
+    started = clock.monotonic()
+    result = solve(_big_problem(), time_limit_s=30, workers=4, should_stop=should_stop)
+    assert result.status == SolveStatus.STOPPED and result.schedule is None
+    assert clock.monotonic() - started < 10  # far below the 30 s limit (building the model takes a moment)
+
+
+def test_stop_before_the_search_starts_returns_no_schedule():
+    people = [employee("e1")]
+    p = problem(people, [slot("s1", MON, "06:00", "14:00")], start=MON, end=MON)
+    assert solve(p, should_stop=lambda: True).status == SolveStatus.STOPPED
 
 
 # ----------------------------------------------------------------- stability
