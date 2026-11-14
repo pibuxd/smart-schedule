@@ -2,9 +2,8 @@ import type { AvailabilityDayOut, DayIn } from '../../api/generated/model'
 import { compactTime } from '../../lib/dates'
 
 /**
- * Two marks only (decision of 13.11.2026): "nie mogę" and "chętnie". "neutral" is a day without a mark ("mogę");
- * it is stored only to carry "mogę tylko w tych godzinach" or after the employee clears a day.
- * Wishes like "wolę nie" are written as a text request instead.
+ * Three states: "nie mogę", "mogę" and "chętnie". "neutral" is "mogę", the state of every day until the employee
+ * changes it (shown in light green, never as an empty day). Wishes like "wolę nie" are written as a text request.
  */
 export type AvailabilityState = 'cannot' | 'neutral' | 'prefer'
 
@@ -15,9 +14,6 @@ export const STATE_LABEL: Record<AvailabilityState, string> = {
   neutral: 'Mogę',
   prefer: 'Chętnie',
 }
-
-/** On the brush the unmarked state works as an eraser. */
-export const BRUSH_LABEL: Record<AvailabilityState, string> = { ...STATE_LABEL, neutral: 'Wyczyść' }
 
 /** One day as the employee marked it. Hours are "HH:MM"; an end at or before the start means the next morning. */
 export type Mark = { state: AvailabilityState; from: string | null; to: string | null }
@@ -44,16 +40,6 @@ export function toDayIn(date: string, mark: Mark): DayIn {
   return { date, state: mark.state, from_time: mark.from, to_time: mark.to }
 }
 
-/** Previous marks of the days that differ between two versions (for "Cofnij"). */
-export function changedDays(before: Marks, after: Marks): Marks {
-  const dates = new Set([...Object.keys(before), ...Object.keys(after)])
-  const previous: Marks = {}
-  for (const date of dates) {
-    if (!sameMark(markOf(before, date), markOf(after, date))) previous[date] = markOf(before, date)
-  }
-  return previous
-}
-
 export function hasHours(mark: Mark): boolean {
   return mark.from !== null || mark.to !== null
 }
@@ -73,7 +59,7 @@ export function cellHours(mark: Mark): string | null {
 
 /** Spoken description, e.g. "chętnie, tylko 14:00–22:00". */
 export function describeMark(mark: Mark): string {
-  if (!hasHours(mark)) return mark.state === 'neutral' ? 'bez zaznaczenia' : STATE_LABEL[mark.state].toLowerCase()
+  if (!hasHours(mark)) return STATE_LABEL[mark.state].toLowerCase()
   const state = STATE_LABEL[mark.state].toLowerCase()
   const window = `${mark.from ?? '0:00'}–${mark.to ?? '24:00'}${overnight(mark) ? ' (do rana)' : ''}`
   return mark.state === 'cannot' ? `${state} w godzinach ${window}` : `${state}, tylko ${window}`
@@ -83,22 +69,4 @@ export function countStates(marks: Marks, dates: string[]): Record<AvailabilityS
   const counts: Record<AvailabilityState, number> = { cannot: 0, neutral: 0, prefer: 0 }
   for (const date of dates) counts[markOf(marks, date).state] += 1
   return counts
-}
-
-/** Days among `dates` that already carry a mark and would end up different (for the overwrite note). */
-export function marksToReplace(marks: Marks, dates: string[], next?: Mark): number {
-  return dates.filter((date) => {
-    const mark = markOf(marks, date)
-    const marked = mark.state !== 'neutral' || hasHours(mark)
-    return marked && (next === undefined || !sameMark(mark, next))
-  }).length
-}
-
-/** "Zastąpi 3 zaznaczone dni w tym miesiącu." or null when nothing is replaced. */
-export function replaceNote(count: number): string | null {
-  if (count === 0) return null
-  const tens = count % 100
-  const few = count % 10 >= 2 && count % 10 <= 4 && (tens < 12 || tens > 14)
-  const words = count === 1 ? 'zaznaczony dzień' : few ? 'zaznaczone dni' : 'zaznaczonych dni'
-  return `Zastąpi ${count} ${words} w tym miesiącu.`
 }

@@ -13,8 +13,8 @@ export function AccessBanner({ companyId }: { companyId: string }) {
   const tone = data.read_only ? 'border-cannot bg-cannot-soft text-cannot' : 'border-accent bg-accent-soft text-ink'
   const words = data.read_only
     ? data.trial
-      ? 'Okres próbny minął: grafiki można oglądać, ale nie zmieniać.'
-      : 'Grafiki można teraz tylko oglądać.'
+      ? 'Okres próbny minął. Grafiki możesz oglądać, ale nie zmieniać.'
+      : 'Grafiki możesz teraz tylko oglądać.'
     : `${statusWords(data)}.`
   return (
     <div role="status" className={`border-b-2 ${tone}`}>

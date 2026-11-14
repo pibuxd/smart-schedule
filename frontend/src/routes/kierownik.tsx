@@ -131,7 +131,7 @@ function NotificationsLink({ companyId }: { companyId: string }) {
   const unread = useUnreadNotifications(companyId)
   return (
     <Link
-      to="/powiadomienia"
+      to="/kierownik/powiadomienia"
       className="inline-flex min-h-(--touch) items-center gap-1.5 rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
     >
       Powiadomienia

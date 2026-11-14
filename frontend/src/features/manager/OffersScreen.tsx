@@ -11,7 +11,7 @@ import { OFFERS_REFRESH_MS } from './waiting-claims'
 import { shortDay } from './words'
 
 const STATUS: Record<ManagerOfferOut['status'], string> = {
-  open: 'Czeka na chętnego',
+  open: 'Nikt się jeszcze nie zgłosił',
   claimed: 'Czeka na Twoją decyzję',
   approved: 'Zatwierdzona',
   rejected: 'Odrzucona',
@@ -27,7 +27,7 @@ const CLAIM_STATUS: Record<ClaimOut['status'], string> = {
 }
 
 /**
- * "Oddane zmiany": shifts employees give away in my locations. For each volunteer ("Biorę") the manager sees
+ * "Oddane zmiany": shifts employees give away in my locations. For each volunteer ("Weź zmianę") the manager sees
  * whether they can still take the shift (checked again by the validator) and approves one or rejects.
  * Approving changes the published schedule right away and tells everyone involved in the app.
  */
@@ -40,8 +40,8 @@ export function OffersScreen() {
       <div className="grid gap-1">
         <h1 className="m-0 text-2xl font-extrabold">Oddane zmiany</h1>
         <p className="m-0 max-w-[62ch] text-ink-muted">
-          Pracownik oddaje zmianę, a osoby, które mogą ją wziąć, dostają powiadomienie. Gdy ktoś powie „Biorę”,
-          decydujesz tutaj. Po zatwierdzeniu zmiana od razu przechodzi w opublikowanym grafiku i jest przypięta.
+          Gdy pracownik oddaje zmianę, dajemy znać osobom, które mogą ją wziąć. Gdy ktoś się zgłosi, decydujesz tutaj.
+          Po zatwierdzeniu grafik od razu się zmienia, a zmiana jest przypięta do nowej osoby.
         </p>
       </div>
       {offers.isPending ? (
@@ -53,7 +53,7 @@ export function OffersScreen() {
       ) : (offers.data.data as ManagerOffersOut).offers.length === 0 ? (
         <EmptyState title="Nikt nie oddaje teraz zmian">
           <p className="m-0">
-            Gdy pracownik odda zmianę w „Mój grafik”, zobaczysz ją tutaj razem z osobami, które chcą ją wziąć.
+            Gdy pracownik odda zmianę, zobaczysz ją tutaj razem z osobami, które chcą ją wziąć.
           </p>
         </EmptyState>
       ) : (

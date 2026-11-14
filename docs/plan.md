@@ -402,6 +402,32 @@ Decyzja Piotra po przeglądzie zrzutów: "wolę nie" i "obojętnie" znikają z k
 6. Siatka kierownika: dzień bez zaznaczenia to pusta kratka z pełną ramką; przerywana ramka zostaje dla osób, które nic nie wysłały.
 7. Po połączeniu z etapem 8: siatka grafiku, wyjaśnienie zmiany i lista niespełnionych próśb nie znają już "wolę nie" (bez znacznika "woli nie" i bez pozycji `prefer_not`); w wyjaśnieniu dzień bez zaznaczenia to "bez zaznaczenia".
 
+## 15a. Poprawki po testach Piotra (13.11.2026): prostsze "Kiedy mogę"
+
+Piotr z kolegą przetestowali wdrożoną aplikację. Zmiany w tej części (nadpisują punkty 2 i 6 sekcji 15 oraz "Cofnij" i "Więcej opcji" z sekcji 12):
+
+1. Pędzel ma trzy stany: "Nie mogę", "Mogę", "Chętnie". Nie ma gumki "Wyczyść"; "Mogę" to zwykły stan (`neutral`), jasnozielony z cienkim ptaszkiem, "Chętnie" to pełniejsza zieleń z podwójnym ptaszkiem. Dzień bez wiersza w bazie wygląda i czyta się tak samo jak "Mogę".
+2. Znikają przyciski "Cofnij" i "Więcej opcji" (powtarzanie co tydzień, kopiowanie z poprzedniego miesiąca). Endpointy `repeat_my_availability` i `copy_previous_availability` zostają w API bez ekranu (dane demo ich używają); do usunięcia, jeśli nie wrócą.
+3. Siatka kierownika: legenda ma trzy stany, dzień bez wpisu to "Mogę"; kto nie wysłał dyspozycji, ma jak dotąd znacznik "Nie wysłano" przy nazwisku.
+4. Zakładki pracownika: mniejszy podpis i kolumny nie węższe niż tekst, więc "Powiadomienia" mieszczą się na ekranie 320 px.
+5. Kierownik czyta powiadomienia w panelu kierownika (`/kierownik/powiadomienia`), a nie na ekranach pracownika.
+
+6. Anulowanie układania grafiku: `POST /generation-runs/{id}/cancel` (kierownik lokalu, firma z dostępem) ustawia `GenerationRun.status = cancelled` i oddaje ułożenie do limitu. Zadanie w kolejce po prostu nic nie zrobi; liczący solver pyta o anulowanie mniej więcej co sekundę (`engine.solver.solve(should_stop=...)`, wątek pomocniczy wywołuje `stop_search`) i kończy bez wyniku. Wynik, który dotarł już po anulowaniu, nie jest zapisywany. Ekran: przycisk "Anuluj" obok "Układam grafik…" na liście lokali i w zakładce "Grafik".
+7. Pędzel nadal zdejmuje godziny dnia przy zmianie stanu (uwaga Prelinta do PR #20: bez "Cofnij" źle przeciągnięty palec kasuje godziny i trzeba je wpisać jeszcze raz). Zostaje do decyzji Piotra po pilotażu: pędzel zachowujący godziny albo powrót "Cofnij".
+
+8. Kierownik jako pracownik (prośba Piotra z 13.11.2026: w kawiarniach kierownik często sam staje na zmianie i każdego zastąpi): w zakładce "Pracownicy" przycisk "Dodaj mnie jako pracownika" (`POST /locations/{id}/employees/me`) zakłada kierownikowi profil pracownika w tym lokalu ze wszystkimi stanowiskami lokalu, bez zaproszenia na własny numer. Profil wyłączony wcześniej włącza się z powrotem. Jedna osoba ma nadal jeden lokal domowy, więc kierownik kilku lokali dodaje się w jednym (w pozostałych może być pożyczany jak każdy).
+
+9. "Kiedy mogę" jest zawsze otwarte (prośba Piotra z 13.11.2026: pracownicy mają móc zaznaczać dostępność na przyszłość, także zanim kierownik o nią poprosi; wcześniej ekran był pusty do czasu prośby). Ekran pokazuje kalendarz miesiącami (bieżący i trzy kolejne, strzałki), a nie jeden okres. Nowe endpointy: `GET /me/calendar?start&end` (dni, lista dni zamkniętych, najbliższy okres zbierający dyspozycje, data wysłania) i `PUT /me/calendar` (zapis bez `period_id`). Zamknięte są tylko dni, które minęły, i dni okresu z ułożonym grafikiem (szkic albo opublikowany); zapis najwyżej rok naprzód. `AvailabilityDay` było od początku kluczowane datą, więc kierownik widzi wcześniejsze zaznaczenia w siatce okresu bez zmian po swojej stronie. Gdy kierownik poprosi o dyspozycje, ekran otwiera się na miesiącu tego okresu i pokazuje termin oraz "Gotowe, wysyłam kierownikowi"; prośby tekstem nadal pisze się do konkretnego okresu, więc pojawiają się dopiero po prośbie kierownika. Stare `PUT /me/availability` zostaje w API (nieużywane przez ekran).
+
+10. Redakcja tekstów (prośba Piotra z 13-14.11.2026: "bardziej po polsku", "ma być prosto i wiadomo"). Teksty ekranów przepisane według zasad prostego języka (wzorce: gov.pl "Prosty język", standard UM Warszawa, bankowość, polskie aplikacje grafikowe):
+    - najważniejsze na początku, krótkie zdania, jedna myśl w zdaniu, bez średników;
+    - zwracamy się na "ty", strona czynna, czasowniki zamiast rzeczowników ("Możesz układać grafik", nie "Można układać grafik");
+    - przycisk to polecenie, które mówi, co się stanie: "Wyślij kierownikowi", "Weź zmianę", "Zrezygnuj", "Jednak nie oddaję", "Przyjmij zaproszenie", "Sprawdź i zapisz";
+    - błąd mówi, co się stało i co zrobić; pusty ekran mówi, co tu będzie i co zrobić;
+    - jedno słowo na jedną rzecz. Zostają: "dyspozycje", "kierownik", "lokal", "obsada", "szkic", "przypięte", zakładka "Kiedy mogę". Znikają: "siatka dyspozycji" (teraz "Kto kiedy może"), "okres grafiku" w tekstach dla ludzi ("daty grafiku"), "generator" ("ułożone automatycznie");
+    - bez form zależnych od płci tam, gdzie się da.
+    Nowe teksty piszemy według tych samych zasad. Gdy nie ma prośby kierownika, "Kiedy mogę" mówi wprost, że prośbę tekstem pisze się dopiero, gdy kierownik poprosi o dyspozycje (uwaga Prelinta do PR #20).
+
 ## 16. Zmiana z 13.11.2026: stopień doświadczenia pracownika
 
 Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę z jednym z trzech stopni doświadczenia, pracownik jej nie widzi, a generator pilnuje, żeby na zmianie nie było wielu niedoświadczonych.
@@ -432,7 +458,7 @@ Założenia:
 ## 18. Etap 9: oddawanie zmian, powiadomienia, historia przypisań
 
 - Logika: `apps/marketplace/services.py` (oddanie, "Biorę", wycofanie, zatwierdzenie, odrzucenie, oddania po nowej publikacji), `apps/notifications/services.py` (zapis powiadomień i polskie zdania budowane przy odczycie z rodzaju i danych, więc poprawka tekstu działa też dla starych powiadomień).
-- Ekrany: w "Mój grafik" przycisk "Oddaj" przy każdej zmianie (arkusz z wyjaśnieniem, że do decyzji kierownika to nadal moja zmiana, i "Zostaję na tej zmianie"), sekcja "Zmiany do wzięcia" z "Biorę" / "Jednak nie biorę"; trzecia zakładka "Powiadomienia" z licznikiem nowych (`/powiadomienia`); u kierownika "Oddane zmiany" (`/kierownik/oddane-zmiany`) z licznikiem chętnych w nagłówku; w arkuszu zmiany na karcie "Grafik" "Historia tej zmiany".
+- Ekrany: w "Mój grafik" przycisk "Oddaj" przy każdej zmianie (arkusz z wyjaśnieniem, że do decyzji kierownika to nadal moja zmiana, i "Zostaję na tej zmianie"), sekcja "Zmiany do wzięcia" z "Biorę" / "Jednak nie biorę" (od 14.11.2026 "Weź zmianę" / "Zrezygnuj", a "Zostaję na tej zmianie" to "Jednak nie oddaję", patrz 15a pkt 10); trzecia zakładka "Powiadomienia" z licznikiem nowych (`/powiadomienia`); u kierownika "Oddane zmiany" (`/kierownik/oddane-zmiany`) z licznikiem chętnych w nagłówku; w arkuszu zmiany na karcie "Grafik" "Historia tej zmiany".
 - Licznik i listy odświeżają się co minutę (bez websocketów, jak w założeniu 8 z sekcji 7).
 
 Założenia:

@@ -13,4 +13,5 @@ export const GenerationRunOutStatus = {
   running: 'running',
   succeeded: 'succeeded',
   failed: 'failed',
+  cancelled: 'cancelled',
 } as const;
