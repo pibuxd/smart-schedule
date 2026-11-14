@@ -4062,6 +4062,85 @@
         ]
       }
     },
+    "/api/locations/{location_id}/employees/me": {
+      "post": {
+        "operationId": "add_myself_as_employee",
+        "summary": "Add Myself As Employee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "A manager who also works shifts adds themselves to the schedule of a location they manage, with every\nposition of the location (they can stand in for anyone; positions can be narrowed afterwards).",
+        "tags": [
+          "staffing"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/employees/{employee_id}": {
       "patch": {
         "operationId": "update_employee",

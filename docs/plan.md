@@ -415,6 +415,8 @@ Piotr z kolegą przetestowali wdrożoną aplikację. Zmiany w tej części (nadp
 6. Anulowanie układania grafiku: `POST /generation-runs/{id}/cancel` (kierownik lokalu, firma z dostępem) ustawia `GenerationRun.status = cancelled` i oddaje ułożenie do limitu. Zadanie w kolejce po prostu nic nie zrobi; liczący solver pyta o anulowanie mniej więcej co sekundę (`engine.solver.solve(should_stop=...)`, wątek pomocniczy wywołuje `stop_search`) i kończy bez wyniku. Wynik, który dotarł już po anulowaniu, nie jest zapisywany. Ekran: przycisk "Anuluj" obok "Układam grafik…" na liście lokali i w zakładce "Grafik".
 7. Pędzel nadal zdejmuje godziny dnia przy zmianie stanu (uwaga Prelinta do PR #20: bez "Cofnij" źle przeciągnięty palec kasuje godziny i trzeba je wpisać jeszcze raz). Zostaje do decyzji Piotra po pilotażu: pędzel zachowujący godziny albo powrót "Cofnij".
 
+8. Kierownik jako pracownik (prośba Piotra z 13.11.2026: w kawiarniach kierownik często sam staje na zmianie i każdego zastąpi): w zakładce "Pracownicy" przycisk "Dodaj mnie jako pracownika" (`POST /locations/{id}/employees/me`) zakłada kierownikowi profil pracownika w tym lokalu ze wszystkimi stanowiskami lokalu, bez zaproszenia na własny numer. Profil wyłączony wcześniej włącza się z powrotem. Jedna osoba ma nadal jeden lokal domowy, więc kierownik kilku lokali dodaje się w jednym (w pozostałych może być pożyczany jak każdy).
+
 ## 16. Zmiana z 13.11.2026: stopień doświadczenia pracownika
 
 Decyzja Piotra: kierownik na liście pracowników daje każdej osobie etykietę z jednym z trzech stopni doświadczenia, pracownik jej nie widzi, a generator pilnuje, żeby na zmianie nie było wielu niedoświadczonych.

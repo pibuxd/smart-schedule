@@ -2,8 +2,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Pencil, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 
-import type { EmployeeOut, InvitationOut, LocationSetupOut, PositionOut } from '../../api/generated/model'
-import { useLocationEmployees, useLocationSetup, useUpdateEmployee } from '../../api/generated/staffing/staffing'
+import type { EmployeeOut, InvitationOut, LocationSetupOut, MeOut, PositionOut } from '../../api/generated/model'
+import { useMe } from '../../api/generated/auth/auth'
+import {
+  useAddMyselfAsEmployee,
+  useLocationEmployees,
+  useLocationSetup,
+  useUpdateEmployee,
+} from '../../api/generated/staffing/staffing'
 import { useCancelInvitation, useInviteToLocation, useLocationInvitations } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
 import { CheckField, Section, Tag, TextField } from '../../components/ui/field'
@@ -51,6 +57,7 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
         ) : (
           <EmployeeList employees={active} names={names} onEdit={setEditing} />
         )}
+        <AddMyself locationId={locationId} employees={list} />
       </Section>
 
       <InvitationsSection locationId={locationId} />
@@ -73,6 +80,41 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
           <EmployeeForm key={editing.id} employee={editing} positions={positions} onDone={() => setEditing(null)} />
         )}
       </Sheet>
+    </div>
+  )
+}
+
+/**
+ * A manager who also works shifts adds themselves with one button (no invitation to their own number).
+ * Shown only while the manager is not on this location's list.
+ */
+function AddMyself({ locationId, employees }: { locationId: string; employees: EmployeeOut[] }) {
+  const { readOnly } = useManager()
+  const queryClient = useQueryClient()
+  const me = useMe({ query: { retry: false, staleTime: 60_000 } })
+  const add = useAddMyselfAsEmployee()
+  const phone = me.data?.status === 200 ? (me.data.data as MeOut).phone : null
+  if (!phone || employees.some((e) => e.phone === phone && e.is_active)) return null
+  return (
+    <div className="grid gap-2 rounded-md border border-dashed border-line bg-surface px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <span>
+          <b>Też pracujesz na zmianach?</b>
+          <span className="block text-sm text-ink-muted">
+            Dodaj siebie do grafiku tego lokalu. Dostaniesz wszystkie stanowiska; możesz je potem zmienić.
+          </span>
+        </span>
+        <Button
+          variant="secondary"
+          size="normal"
+          disabled={readOnly || add.isPending}
+          onClick={() => add.mutate({ locationId }, { onSuccess: () => void queryClient.invalidateQueries() })}
+        >
+          <UserPlus aria-hidden="true" size={20} />
+          Dodaj mnie jako pracownika
+        </Button>
+      </div>
+      {add.isError && <InlineError>{errorMessage(add.error, NETWORK_PROBLEM)}</InlineError>}
     </div>
   )
 }

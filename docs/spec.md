@@ -73,6 +73,7 @@ h) Kierownik dostosowuje generator poleceniami tekstem do asystenta (LLM): zasad
 - Limity dokładnie: kolejny kod najwcześniej po 60 s, najwyżej 5 kodów na numer na godzinę i 20 próśb o kod z jednego adresu IP na godzinę (liczą się też prośby dla nieznanych numerów). Nowy kod unieważnia poprzedni. W bazie jest tylko skrót kodu.
 - Nieznany numer przy logowaniu dostaje jasną odpowiedź ("Nie znamy tego numeru. Poproś kierownika o zaproszenie…"), a nie udawane wysłanie kodu: dla osób niechętnych technologii czekanie na SMS, który nie przyjdzie, jest gorsze niż ryzyko, że ktoś sprawdzi, czy numer ma konto (to ryzyko ogranicza limit na adres IP).
 - Zapraszając, menedżer może od razu wpisać imię i nazwisko; trafiają na konto przy akceptacji, jeśli konto nie ma jeszcze imienia. Pracownika zaprasza menedżer lokalu, menedżera zaprasza tylko właściciel firmy. Akceptacja zaproszenia pracownika tworzy członkostwo w firmie i profil pracownika z tym lokalem jako domowym.
+- Kierownik, który sam pracuje na zmianach, dodaje siebie do grafiku lokalu jednym przyciskiem w zakładce "Pracownicy" (bez zaproszenia); dostaje wszystkie stanowiska lokalu i może je potem zawęzić (prośba Piotra z 13.11.2026).
 - Zmiana numeru telefonu: robi ją superadmin w panelu. Konto, członkostwa i historia zostają; wszystkie sesje tego konta wygasają i trzeba zalogować się nowym numerem. Zaproszenia oczekujące na stary numer menedżer wysyła ponownie. Numery spoza Polski: poza prototypem.
 - Poza kodami logowania nic nie wysyłamy SMS-em ani e-mailem. Powiadomienia tylko w aplikacji.
 
