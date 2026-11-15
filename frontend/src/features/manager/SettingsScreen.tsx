@@ -650,9 +650,11 @@ function ClosuresSection({ locationId, setup }: { locationId: string; setup: Loc
               <span>
                 <b>{dayTitle(parseDate(c.date))}</b>
                 {c.note && <span className="text-ink-muted"> ({c.note})</span>}
-                {c.in_draft && (
+                {(c.in_draft || c.in_published) && (
                   <span className="block text-sm text-ink-muted">
-                    Szkic grafiku ma jeszcze zmiany w ten dzień. Ułóż grafik od nowa, żeby zniknęły.
+                    {c.in_published ? 'Opublikowany grafik' : 'Szkic grafiku'} ma jeszcze zmiany w ten dzień. Ułóż grafik
+                    od nowa{c.in_published ? ' i opublikuj go' : ''}, żeby zniknęły. Ułożenie od nowa zostawia tylko
+                    przypięte zmiany, inne ręczne poprawki znikną.
                   </span>
                 )}
               </span>

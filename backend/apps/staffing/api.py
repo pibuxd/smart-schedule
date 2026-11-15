@@ -124,6 +124,7 @@ class ClosureOut(Schema):
     in_draft: bool = Field(
         False, description="An unpublished draft still has people on this day; arrange again to clear it."
     )
+    in_published: bool = Field(False, description="The published schedule still has people on this day.")
 
 
 class LocationSetupOut(Schema):
@@ -460,8 +461,7 @@ def create_closure(request, location_id: UUID, payload: ClosureIn):
         raise HttpError(400, "Dzień zamknięcia może być najwyżej dwa lata od dziś. Sprawdź rok.")
     closure = LocationClosure(company=ctx.company, location=location, date=payload.date, note=payload.note.strip())
     _unique(closure.save, "Ten dzień jest już na liście dni zamknięcia.")
-    in_draft = closure.date in _draft_days(ctx, location, [closure.date])
-    return Status(201, ClosureOut(id=closure.pk, date=closure.date, note=closure.note, in_draft=in_draft))
+    return Status(201, _closures_out(ctx, location, [closure])[0])
 
 
 @router.delete("/closures/{closure_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut})
@@ -532,25 +532,31 @@ def location_employees(request, location_id: UUID):
     ]
 
 
-def _draft_days(ctx: TenantContext, location: Location, days) -> set:
-    """Days among `days` on which a draft (not yet published) of this location still has someone working."""
-    return set(
+def _closures_out(ctx: TenantContext, location: Location, closures=None) -> list[ClosureOut]:
+    """Closed days, each saying whether a draft or the published schedule still has someone working that day."""
+    if closures is None:
+        closures = list(ctx.qs(LocationClosure).filter(location=location).order_by("date"))
+    worked = set(
         ctx.qs(Assignment)
         .filter(
             shift__location=location,
-            shift__date__in=days,
-            shift__version__status=ScheduleVersion.Status.DRAFT,
+            shift__date__in=[c.date for c in closures],
+            shift__version__status__in=[ScheduleVersion.Status.DRAFT, ScheduleVersion.Status.PUBLISHED],
             employee__isnull=False,
         )
-        .values_list("shift__date", flat=True)
+        .values_list("shift__date", "shift__version__status")
         .distinct()
     )
-
-
-def _closures_out(ctx: TenantContext, location: Location) -> list[ClosureOut]:
-    closures = list(ctx.qs(LocationClosure).filter(location=location).order_by("date"))
-    drafts = _draft_days(ctx, location, [c.date for c in closures])
-    return [ClosureOut(id=c.pk, date=c.date, note=c.note, in_draft=c.date in drafts) for c in closures]
+    return [
+        ClosureOut(
+            id=c.pk,
+            date=c.date,
+            note=c.note,
+            in_draft=(c.date, ScheduleVersion.Status.DRAFT) in worked,
+            in_published=(c.date, ScheduleVersion.Status.PUBLISHED) in worked,
+        )
+        for c in closures
+    ]
 
 
 def _draft_shifts(ctx: TenantContext, profiles) -> dict:

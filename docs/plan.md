@@ -607,4 +607,11 @@ Czwarty PR (prośba Piotra z 15.11.2026: dyspozycja w dwóch przedziałach dnia 
   (`one_shift=True`): dodatkowo najwyżej jedna zmiana zaczynająca się tego dnia, licząc zmiany z innych lokali
   (twarde: walidator `Code.ONE_SHIFT`, solver `sum ≤ 1`). Przy „nie mogę” oba przedziały są zakazane, „albo” nic nie znaczy.
 - „Albo” bez drugiego przedziału nie jest zapisywane. Zapis dnia bez drugiego przedziału go czyści.
-- Powtarzanie co tydzień i wzorce zostają z jednym przedziałem; kopiowanie z poprzedniego miesiąca przenosi oba.
+- Powtarzanie co tydzień (`/me/availability/pattern`, na razie bez ekranu) ustawia sam stan bez godzin, jak dotąd;
+  wzorce z godzinami i dwoma przedziałami to następny krok, jeśli pilotaż pokaże taką potrzebę. Kopiowanie
+  z poprzedniego miesiąca przenosi oba przedziały.
+- Tabela dyspozycji kierownika pisze „6–10/16–22”, a przy „albo” dodatkowo słowo „albo” w komórce i w legendzie.
+- Hipotezy do sprawdzenia w pilotażu (uwagi Prelinta do PR #27): czy pracownicy rozumieją różnicę „lub” / „albo”
+  i jak często „albo” zostawia zmiany bez obsady.
+- Dzień zamknięcia mówi też, gdy opublikowany grafik ma kogoś w ten dzień (`ClosureOut.in_published`), i przypomina,
+  że ułożenie od nowa zostawia tylko przypięte zmiany.

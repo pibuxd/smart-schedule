@@ -11,4 +11,6 @@ export interface ClosureOut {
   note: string;
   /** An unpublished draft still has people on this day; arrange again to clear it. */
   in_draft?: boolean;
+  /** The published schedule still has people on this day. */
+  in_published?: boolean;
 }

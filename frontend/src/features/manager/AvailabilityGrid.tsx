@@ -48,6 +48,10 @@ export function GridLegend() {
         </span>
         Zmienione po terminie
       </li>
+      <li className="flex items-center gap-1.5">
+        <span className="text-cell font-semibold">albo</span>
+        najwyżej jedna zmiana w tym dniu
+      </li>
     </ul>
   )
 }
@@ -125,6 +129,7 @@ function Row({ employee, days }: { employee: GridEmployeeOut; days: string[] }) 
             >
               {day && day.state !== 'neutral' && <StateIcon state={day.state} size={hours ? 14 : 18} />}
               {hours && <span className="text-cell font-semibold whitespace-nowrap tabular-nums">{hours}</span>}
+              {day?.one_shift && day.from_time_2 && <span className="text-cell font-semibold">albo</span>}
               {day?.late && (
                 <Clock aria-hidden="true" size={12} className="absolute -top-1.5 -right-1.5 rounded-full bg-surface text-accent" />
               )}

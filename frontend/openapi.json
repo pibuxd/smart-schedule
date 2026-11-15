@@ -9556,6 +9556,12 @@
             "description": "An unpublished draft still has people on this day; arrange again to clear it.",
             "title": "In Draft",
             "type": "boolean"
+          },
+          "in_published": {
+            "default": false,
+            "description": "The published schedule still has people on this day.",
+            "title": "In Published",
+            "type": "boolean"
           }
         },
         "required": [

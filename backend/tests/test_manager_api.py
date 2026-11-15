@@ -254,10 +254,11 @@ class TestSettings:
         assert api.post(url, {"date": str(day + timedelta(days=1))}).json()["in_draft"] is False
         setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
         assert [c["in_draft"] for c in setup["closures"]] == [True, False]
+        assert [c["in_published"] for c in setup["closures"]] == [False, False]
         version.status = ScheduleVersion.Status.PUBLISHED
         version.save()
         setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
-        assert [c["in_draft"] for c in setup["closures"]] == [False, False]
+        assert [(c["in_draft"], c["in_published"]) for c in setup["closures"]] == [(False, True), (False, False)]
 
 
 class TestEmployees:
