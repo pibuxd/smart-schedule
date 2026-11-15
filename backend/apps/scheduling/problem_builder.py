@@ -326,7 +326,19 @@ class _Reader:
         rows = self.qs(AvailabilityDay).filter(
             employee__in=employee_ids, date__range=(self.start - EXTERNAL_MARGIN, self.end + EXTERNAL_MARGIN)
         )
-        return [Availability(str(a.employee_id), a.date, a.state, a.from_time, a.to_time) for a in rows]
+        return [
+            Availability(
+                str(a.employee_id),
+                a.date,
+                a.state,
+                a.from_time,
+                a.to_time,
+                from_time_2=a.from_time_2,
+                to_time_2=a.to_time_2,
+                one_shift=a.one_shift,
+            )
+            for a in rows
+        ]
 
     def external_shifts(self, employee_ids: list[str]) -> list[ExternalShift]:
         rows = (

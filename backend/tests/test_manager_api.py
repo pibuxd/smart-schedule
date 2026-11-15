@@ -233,6 +233,38 @@ class TestSettings:
         assert api.client.delete(f"/api/closures/{created.json()['id']}").status_code == 204
         assert not LocationClosure.objects.exists()
 
+    def test_closed_day_with_people_in_the_draft(self, api, shop):
+        day = shop["period"].start
+        version = ScheduleVersion.objects.create(period=shop["period"], number=1)
+        start = datetime.combine(day, time(6), WARSAW)
+        shift = Shift.objects.create(
+            version=version,
+            location=shop["location"],
+            date=day,
+            shift_type=shop["shift_type"],
+            position=shop["position"],
+            start_at=start,
+            end_at=start + timedelta(hours=8),
+            slot_key=f"{day}/{shop['shift_type'].pk}/{shop['position'].pk}/1",
+        )
+        Assignment.objects.create(shift=shift, employee=shop["employee"])
+        as_manager(api, shop)
+        url = f"/api/locations/{shop['location'].pk}/closures"
+        assert api.post(url, {"date": str(day)}).json()["in_draft"] is True
+        assert api.post(url, {"date": str(day + timedelta(days=1))}).json()["in_draft"] is False
+        setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+        assert [c["in_draft"] for c in setup["closures"]] == [True, False]
+        assert [c["in_published"] for c in setup["closures"]] == [False, False]
+        version.status = ScheduleVersion.Status.PUBLISHED
+        version.save()
+        setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+        assert [(c["in_draft"], c["in_published"]) for c in setup["closures"]] == [(False, True), (False, False)]
+        past = timezone.localdate() - timedelta(days=3)
+        Shift.objects.filter(pk=shift.pk).update(date=past)
+        LocationClosure.objects.create(company=shop["location"].company, location=shop["location"], date=past)
+        setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+        assert not any(c["in_draft"] or c["in_published"] for c in setup["closures"])
+
 
 class TestEmployees:
     def test_list_and_update(self, api, shop):

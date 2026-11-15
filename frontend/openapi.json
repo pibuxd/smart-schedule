@@ -8704,6 +8704,35 @@
               }
             ],
             "title": "To Time"
+          },
+          "from_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Time 2"
+          },
+          "to_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Time 2"
+          },
+          "one_shift": {
+            "default": false,
+            "title": "One Shift",
+            "type": "boolean"
           }
         },
         "required": [
@@ -8879,6 +8908,35 @@
               }
             ],
             "title": "To Time"
+          },
+          "from_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Time 2"
+          },
+          "to_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Time 2"
+          },
+          "one_shift": {
+            "default": false,
+            "title": "One Shift",
+            "type": "boolean"
           }
         },
         "required": [
@@ -9204,6 +9262,35 @@
             ],
             "title": "To Time"
           },
+          "from_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Time 2"
+          },
+          "to_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Time 2"
+          },
+          "one_shift": {
+            "default": false,
+            "title": "One Shift",
+            "type": "boolean"
+          },
           "late": {
             "title": "Late",
             "type": "boolean"
@@ -9463,6 +9550,18 @@
           "note": {
             "title": "Note",
             "type": "string"
+          },
+          "in_draft": {
+            "default": false,
+            "description": "An unpublished draft still has people on this day; arrange again to clear it.",
+            "title": "In Draft",
+            "type": "boolean"
+          },
+          "in_published": {
+            "default": false,
+            "description": "The published schedule still has people on this day.",
+            "title": "In Published",
+            "type": "boolean"
           }
         },
         "required": [

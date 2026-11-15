@@ -104,6 +104,35 @@ describe('AvailabilityScreen', () => {
     expect(screen.getByText('Zmiany spoza godzin 14:00–22:00 tego dnia nie dostaniesz.')).toBeInTheDocument()
   })
 
+  it('saves two windows in a day with "albo" (only one shift)', async () => {
+    const calls = api()
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /Godziny dnia/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Mogę tylko w tych godzinach/ }))
+    fireEvent.change(screen.getByLabelText('Od'), { target: { value: '06:00' } })
+    fireEvent.change(screen.getByLabelText('Do'), { target: { value: '10:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj drugi przedział' }))
+    fireEvent.change(screen.getAllByLabelText('Od')[1], { target: { value: '16:00' } })
+    fireEvent.click(screen.getByRole('radio', { name: /Albo: tylko jedna zmiana/ }))
+    expect(screen.getByText('Zmiany spoza godzin 6:00–10:00 i 16:00–22:00 tego dnia nie dostaniesz.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz ten dzień' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
+    expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({
+      days: [
+        {
+          date: '2026-12-01',
+          state: 'neutral',
+          from_time: '06:00',
+          to_time: '10:00',
+          from_time_2: '16:00',
+          to_time_2: '22:00',
+          one_shift: true,
+        },
+      ],
+    })
+  })
+
   it('opens a day with its hours when it is tapped with the state it already has', async () => {
     api()
     show()

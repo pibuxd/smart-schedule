@@ -33,9 +33,23 @@ export function DayHoursSheet({
   const [limited, setLimited] = useState(mark.from !== null || mark.to !== null)
   const [from, setFrom] = useState(mark.from ?? '14:00')
   const [to, setTo] = useState(mark.to ?? '22:00')
+  const [second, setSecond] = useState(Boolean(mark.from2 && mark.to2))
+  const [from2, setFrom2] = useState(mark.from2 ?? '18:00')
+  const [to2, setTo2] = useState(mark.to2 ?? '22:00')
+  const [oneShift, setOneShift] = useState(Boolean(mark.oneShift))
   const restricting = state === 'cannot'
-  const draft: Mark = limited ? { state, from, to } : { state, from: null, to: null }
-  const empty = limited && from === to
+  const two = limited && second
+  const draft: Mark = limited
+    ? {
+        state,
+        from,
+        to,
+        from2: two ? from2 : null,
+        to2: two ? to2 : null,
+        oneShift: two && !restricting && oneShift,
+      }
+    : { state, from: null, to: null }
+  const empty = limited && (from === to || (two && from2 === to2))
   // "Od 20:00 do 16:00" is more likely swapped fields than a 20-hour night, so it needs a second look.
   const longNight = limited && !empty && overnight(draft) && spanHours(from, to) > 12
 
@@ -105,9 +119,58 @@ export function DayHoursSheet({
                 </p>
               )
             )}
+            {two ? (
+              <div className="grid gap-3 rounded-md border border-line bg-surface p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">Drugi przedział</span>
+                  <Button variant="quiet" size="normal" onClick={() => setSecond(false)}>
+                    Usuń
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <TimeSelect id="hours-from-2" label="Od" value={from2} onChange={setFrom2} asEnd={false} />
+                  <TimeSelect id="hours-to-2" label="Do" value={to2} onChange={setTo2} asEnd />
+                </div>
+                {!restricting && (
+                  <fieldset className="m-0 grid gap-2 border-0 p-0">
+                    <legend className="mb-1 font-semibold">Ile zmian tego dnia?</legend>
+                    {[false, true].map((option) => (
+                      <label
+                        key={String(option)}
+                        className={cn(
+                          'flex min-h-(--touch) cursor-pointer items-center gap-3 rounded-md border-2 border-line bg-surface px-3 py-2',
+                          oneShift === option && 'border-accent bg-accent-soft',
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="one-shift"
+                          className="size-5 flex-none accent-accent"
+                          checked={oneShift === option}
+                          onChange={() => setOneShift(option)}
+                        />
+                        <span>
+                          {option ? 'Albo: tylko jedna zmiana' : 'Lub: mogę w obu'}
+                          <span className="block text-sm text-ink-muted">
+                            {option
+                              ? 'Dostaniesz najwyżej jedną zmianę, w jednym z tych przedziałów.'
+                              : 'Możesz dostać zmianę w każdym z przedziałów.'}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+              </div>
+            ) : (
+              <Button variant="secondary" size="normal" className="w-fit" onClick={() => setSecond(true)}>
+                Dodaj drugi przedział
+              </Button>
+            )}
             {!restricting && !empty && (
               <p className="m-0 rounded-md border border-line bg-paper px-3 py-2">
-                Zmiany spoza godzin {shortTime(from)}–{to === '00:00' ? '24:00' : shortTime(to)} tego dnia nie dostaniesz.
+                Zmiany spoza godzin {shortTime(from)}–{to === '00:00' ? '24:00' : shortTime(to)}
+                {two && ` i ${shortTime(from2)}–${to2 === '00:00' ? '24:00' : shortTime(to2)}`} tego dnia nie dostaniesz.
               </p>
             )}
           </div>

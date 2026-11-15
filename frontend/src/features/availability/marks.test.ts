@@ -9,6 +9,10 @@ describe('availability marks', () => {
     expect(describeMark({ state: 'cannot', from: '08:00', to: '12:00' })).toBe('nie mogę w godzinach 08:00–12:00')
     expect(cellHours({ state: 'prefer', from: '14:00', to: '22:30' })).toBe('14–22:30')
     expect(cellHours(NEUTRAL)).toBeNull()
+    const two = { state: 'neutral' as const, from: '06:00', to: '10:00', from2: '16:00', to2: '22:00' }
+    expect(describeMark(two)).toBe('mogę, tylko 06:00–10:00 lub 16:00–22:00')
+    expect(describeMark({ ...two, oneShift: true })).toBe('mogę, tylko 06:00–10:00 albo 16:00–22:00 (jedna zmiana)')
+    expect(cellHours(two)).toBe('6–10/16–22')
   })
 
   it('lays the period out in Monday-first weeks', () => {

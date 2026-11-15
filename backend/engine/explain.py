@@ -31,6 +31,7 @@ WISH_WORDS = {
 # Why someone cannot take a slot, in words for the summary of an empty slot.
 _BLOCK_WORDS = {
     Code.CANNOT: "zaznaczone „nie mogę”",
+    Code.ONE_SHIFT: "dyspozycja „albo”: już ma zmianę tego dnia",
     Code.OVERLAP: "inna zmiana w tym czasie",
     Code.EXPERIENCE: "obsada wymaga tu doświadczonej osoby",
     Code.RULE: "zasada „bez wyjątków”",

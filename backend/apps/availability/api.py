@@ -66,6 +66,10 @@ class AvailabilityDayOut(Schema):
     # An end at or before the start means the next morning.
     from_time: time | None = None
     to_time: time | None = None
+    # A second window ("lub"); `one_shift` ("albo"): at most one shift that day, in one of the windows.
+    from_time_2: time | None = None
+    to_time_2: time | None = None
+    one_shift: bool = False
 
 
 class MyAvailabilityOut(Schema):
@@ -96,6 +100,9 @@ class DayIn(Schema):
     state: StateName
     from_time: time | None = None
     to_time: time | None = None
+    from_time_2: time | None = None
+    to_time_2: time | None = None
+    one_shift: bool = False
 
 
 class AvailabilityIn(Schema):
@@ -175,16 +182,35 @@ def _availability_out(ctx: TenantContext, profile: EmployeeProfile, period: Sche
     submission = ctx.qs(AvailabilitySubmission).filter(employee=profile, period=period).first()
     return MyAvailabilityOut(
         period=_period_out(period),
-        days=[
-            AvailabilityDayOut(date=d.date, state=d.state, from_time=d.from_time, to_time=d.to_time)
-            for d in days.order_by("date")
-        ],
+        days=[_day_out(d) for d in days.order_by("date")],
         submitted_at=submission.submitted_at if submission else None,
     )
 
 
-Hours = tuple[time | None, time | None]
-NO_HOURS: Hours = (None, None)
+# from, to, second from, second to, one shift ("albo")
+Hours = tuple[time | None, time | None, time | None, time | None, bool]
+NO_HOURS: Hours = (None, None, None, None, False)
+HOUR_FIELDS = ("from_time", "to_time", "from_time_2", "to_time_2", "one_shift")
+
+
+def _day_out(day: AvailabilityDay) -> AvailabilityDayOut:
+    return AvailabilityDayOut(date=day.date, state=day.state, **{f: getattr(day, f) for f in HOUR_FIELDS})
+
+
+def _hours_in(day: DayIn) -> Hours:
+    """The hours of one marked day, checked; a day without hours has no second window and no "albo"."""
+    if day.from_time is not None and day.from_time == day.to_time:
+        raise HttpError(400, "Godzina początku i końca nie mogą być takie same.")
+    first = day.from_time is not None or day.to_time is not None
+    if (day.from_time_2 is None) != (day.to_time_2 is None):
+        raise HttpError(400, "Drugi przedział godzin potrzebuje początku i końca.")
+    if day.from_time_2 is not None:
+        if not first:
+            raise HttpError(400, "Najpierw wpisz pierwszy przedział godzin.")
+        if day.from_time_2 == day.to_time_2:
+            raise HttpError(400, "Godzina początku i końca nie mogą być takie same.")
+    two = day.from_time_2 is not None
+    return (day.from_time, day.to_time, day.from_time_2, day.to_time_2, two and day.one_shift)
 
 
 def _save_days(
@@ -196,8 +222,7 @@ def _save_days(
             employee=profile,
             date=day,
             state=state,
-            from_time=hours[0],
-            to_time=hours[1],
+            **dict(zip(HOUR_FIELDS, hours, strict=True)),
             source=source,
         )
         for day, (state, hours) in states.items()
@@ -206,7 +231,7 @@ def _save_days(
         rows,
         update_conflicts=True,
         unique_fields=["employee", "date"],
-        update_fields=["state", "source", "from_time", "to_time", "updated_at"],
+        update_fields=["state", "source", *HOUR_FIELDS, "updated_at"],
     )
 
 
@@ -239,9 +264,7 @@ def save_my_availability(request, payload: AvailabilityIn):
     for day in payload.days:
         if not period.start <= day.date <= period.end:
             raise HttpError(400, "Można zaznaczać tylko dni z tego okresu.")
-        if day.from_time is not None and day.from_time == day.to_time:
-            raise HttpError(400, "Godzina początku i końca nie mogą być takie same.")
-        states[day.date] = (day.state, (day.from_time, day.to_time))
+        states[day.date] = (day.state, _hours_in(day))
     with transaction.atomic():
         _save_days(ctx, profile, states, AvailabilityDay.Source.MANUAL)
     return _availability_out(ctx, profile, period)
@@ -286,7 +309,7 @@ def my_calendar(request, company_id: UUID, start: date, end: date):
     return MyCalendarOut(
         start=start,
         end=end,
-        days=[AvailabilityDayOut(date=d.date, state=d.state, from_time=d.from_time, to_time=d.to_time) for d in days],
+        days=[_day_out(d) for d in days],
         locked=sorted(_locked_days(ctx, profile, start, end)),
         period=_period_out(period) if period else None,
         submitted_at=submission.submitted_at if submission else None,
@@ -308,9 +331,7 @@ def save_my_calendar(request, payload: CalendarIn):
         raise HttpError(409, ARRANGED)
     states = {}
     for day in payload.days:
-        if day.from_time is not None and day.from_time == day.to_time:
-            raise HttpError(400, "Godzina początku i końca nie mogą być takie same.")
-        states[day.date] = (day.state, (day.from_time, day.to_time))
+        states[day.date] = (day.state, _hours_in(day))
     with transaction.atomic():
         _save_days(ctx, profile, states, AvailabilityDay.Source.MANUAL)
     return Status(204, None)
@@ -371,9 +392,7 @@ def copy_previous_availability(request, payload: PeriodRefIn):
         sources[day] = previous_month_day(day, period.start)
         day += timedelta(days=1)
     rows = ctx.qs(AvailabilityDay).filter(employee=profile, date__in=list(sources.values()))
-    earlier = {
-        d: (state, (start, end)) for d, state, start, end in rows.values_list("date", "state", "from_time", "to_time")
-    }
+    earlier = {d: (state, tuple(hours)) for d, state, *hours in rows.values_list("date", "state", *HOUR_FIELDS)}
     states = {day: earlier[source] for day, source in sources.items() if source in earlier}
     if not states:
         raise HttpError(400, "W poprzednim miesiącu nie masz nic zaznaczone, więc nie ma czego skopiować.")
@@ -564,15 +583,7 @@ def availability_grid(request, period_id: UUID):
     cutoff = late_after(period)
     rows = ctx.qs(AvailabilityDay).filter(employee__in=profiles, date__gte=period.start, date__lte=period.end)
     for row in rows.order_by("date"):
-        days[row.employee_id].append(
-            GridDayOut(
-                date=row.date,
-                state=row.state,
-                from_time=row.from_time,
-                to_time=row.to_time,
-                late=row.updated_at >= cutoff,
-            )
-        )
+        days[row.employee_id].append(GridDayOut(**_day_out(row).dict(), late=row.updated_at >= cutoff))
     submitted = dict(ctx.qs(AvailabilitySubmission).filter(period=period).values_list("employee_id", "submitted_at"))
     return AvailabilityGridOut(
         period=GridPeriodOut(

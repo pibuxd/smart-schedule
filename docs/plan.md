@@ -574,7 +574,8 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
   15.11.2026); na dziś to tylko dane demo, a przed pilotażem trzeba uprzedzić kierowników, że osoby z maksimum mogą
   zostawić więcej pustych zmian i że zasadę da się zmienić na zwykłą w „Zasady”.
 - Dni zamknięcia (`staffing.LocationClosure`: lokal, data, powód): generator nie tworzy w nie żadnych miejsc, ważniejsze
-  niż wyjątek w obsadzie. Dni, które minęły, zostają jak w opublikowanym grafiku.
+  niż wyjątek w obsadzie. Dni, które minęły, zostają jak w opublikowanym grafiku. Gdy szkic ma jeszcze kogoś w dzień zamknięcia
+  (`ClosureOut.in_draft`), lista mówi, że trzeba ułożyć grafik od nowa.
 - Pustą zmianę można przypiąć („Zostaw pustą na stałe”): `Problem.pinned` przyjmuje `None`, solver trzyma ją pustą,
   walidator zgłasza wpisanie kogoś mimo przypięcia. Ręczne wpisanie osoby zdejmuje przypięcie jak dotąd.
 - Zmiana, której nikt nie może wziąć, nie dostaje przycisku „Wpisz mimo to”: wpisanie łamiące zasady bez wyjątków
@@ -598,3 +599,19 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
 - Hipotezy do sprawdzenia w pilotażu (uwagi Prelinta do PR #25): czy kierownicy kilku lokali chcą wpisywać dni
   zamknięcia raz dla całej grupy (dziś każdy lokal osobno) i czy w nagłej sytuacji proszą o jednorazowy wyjątek od
   zasady „bez wyjątków” zamiast zmiany zasady dla całego lokalu.
+
+Czwarty PR (prośba Piotra z 15.11.2026: dyspozycja w dwóch przedziałach dnia z „lub/albo”):
+
+- `AvailabilityDay` ma drugi przedział (`from_time_2`, `to_time_2`, oba albo żaden, tylko gdy jest pierwszy) i `one_shift`.
+  „Lub” (`one_shift=False`): zmiana pasuje, gdy mieści się w którymkolwiek przedziale, można dostać dwie. „Albo”
+  (`one_shift=True`): dodatkowo najwyżej jedna zmiana zaczynająca się tego dnia, licząc zmiany z innych lokali
+  (twarde: walidator `Code.ONE_SHIFT`, solver `sum ≤ 1`). Przy „nie mogę” oba przedziały są zakazane, „albo” nic nie znaczy.
+- „Albo” bez drugiego przedziału nie jest zapisywane. Zapis dnia bez drugiego przedziału go czyści.
+- Powtarzanie co tydzień (`/me/availability/pattern`, na razie bez ekranu) ustawia sam stan bez godzin, jak dotąd;
+  wzorce z godzinami i dwoma przedziałami to następny krok, jeśli pilotaż pokaże taką potrzebę. Kopiowanie
+  z poprzedniego miesiąca przenosi oba przedziały.
+- Tabela dyspozycji kierownika pisze „6–10/16–22”, a przy „albo” dodatkowo słowo „albo” w komórce i w legendzie.
+- Hipotezy do sprawdzenia w pilotażu (uwagi Prelinta do PR #27): czy pracownicy rozumieją różnicę „lub” / „albo”
+  i jak często „albo” zostawia zmiany bez obsady.
+- Dzień zamknięcia mówi też, gdy opublikowany grafik ma kogoś w ten dzień (`ClosureOut.in_published`), i przypomina,
+  że ułożenie od nowa zostawia tylko przypięte zmiany.
