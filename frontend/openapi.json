@@ -4604,7 +4604,7 @@
             }
           }
         },
-        "description": "Name and phone number, positions, experience level, monthly maximum and target, or switching the person off\n(history stays).",
+        "description": "Name, positions, experience level, monthly maximum and target, or switching the person off\n(history stays).",
         "tags": [
           "staffing"
         ],
@@ -10122,18 +10122,6 @@
               }
             ],
             "title": "Last Name"
-          },
-          "phone": {
-            "anyOf": [
-              {
-                "maxLength": 32,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Phone"
           },
           "position_ids": {
             "anyOf": [

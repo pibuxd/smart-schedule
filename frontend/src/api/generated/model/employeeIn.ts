@@ -10,7 +10,6 @@ import type { PositionLevel } from './positionLevel';
 export interface EmployeeIn {
   first_name?: string | null;
   last_name?: string | null;
-  phone?: string | null;
   position_ids?: string[] | null;
   experience?: EmployeeInExperience;
   position_experience?: PositionLevel[] | null;

@@ -198,7 +198,6 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
   const [active, setActive] = useState(employee.is_active)
   const [first, setFirst] = useState(employee.first_name)
   const [last, setLast] = useState(employee.last_name)
-  const [phone, setPhone] = useState(prettyPhone(employee.phone))
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -208,7 +207,6 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
         data: {
           first_name: first,
           last_name: last,
-          ...(phone !== prettyPhone(employee.phone) && { phone }),
           position_ids: chosen,
           experience,
           position_experience: chosen.map((id) => ({ position_id: id, experience: levels[id] ?? experience })),
@@ -232,20 +230,9 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField label="Imię" value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} required />
         <TextField label="Nazwisko" value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} />
-        <TextField
-          label="Numer telefonu"
-          type="tel"
-          inputMode="tel"
-          className="sm:col-span-2"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          disabled={employee.is_manager}
-          hint={
-            employee.is_manager
-              ? 'Kierownik loguje się tym numerem, więc tu go nie zmienisz.'
-              : 'Tym numerem ta osoba się loguje. Po zmianie kod przyjdzie na nowy numer.'
-          }
-        />
+        <p className="m-0 text-sm text-ink-muted sm:col-span-2">
+          Numer {prettyPhone(employee.phone)} służy do logowania, więc zmienia go tylko administrator Grafikomatu.
+        </p>
       </div>
       <fieldset className="m-0 grid gap-1 border-0 p-0">
         <legend className="mb-1 font-semibold">Stanowiska</legend>

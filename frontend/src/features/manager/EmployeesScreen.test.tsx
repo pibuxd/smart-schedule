@@ -118,7 +118,7 @@ describe('EmployeesScreen', () => {
     await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Dodaj mnie jako pracownika' })).not.toBeInTheDocument())
   })
 
-  it('corrects the name and number, and warns about shifts in the draft before switching someone off', async () => {
+  it('corrects the name, and warns about shifts in the draft before switching someone off', async () => {
     const calls = mockApi((method, path) => {
       if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 8 }]]
       if (path.endsWith('/setup')) return [200, setup]
@@ -141,6 +141,6 @@ describe('EmployeesScreen', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
     expect(body).toMatchObject({ first_name: 'Alicja', last_name: 'Nowak', is_active: false })
-    expect(body).not.toHaveProperty('phone') // unchanged numbers are not sent
+    expect(body).not.toHaveProperty('phone') // the login number is changed only by the superadmin
   })
 })
