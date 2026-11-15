@@ -49,15 +49,20 @@ function RequestStatus({
   return <p className="m-0 text-sm text-ink-muted">Kierownik przeczyta tę prośbę sam.</p>
 }
 
-/** "Coś jeszcze?": a request in words, only for what the calendar cannot say. Only the manager reads it. */
+/**
+ * "Coś jeszcze?": a request in words, only for what the calendar cannot say. The manager reads it; when the
+ * assistant is on (`assistantReads`), the text also goes to an outside AI service, and the screen says so.
+ */
 export function RequestsSection({
   companyId,
   periodId,
   editable,
+  assistantReads = false,
 }: {
   companyId: string
   periodId: string
   editable: boolean
+  assistantReads?: boolean
 }) {
   const params = { company_id: companyId, period_id: periodId }
   const requests = useMyRequests(params, {
@@ -86,7 +91,10 @@ export function RequestsSection({
       </h2>
       <p className="m-0 text-sm text-ink-muted">
         Napisz to, czego nie zaznaczysz w kalendarzu. Na przykład: w które dni wolisz mieć wolne albo z kim nie chcesz
-        pracować. Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny. Przeczyta to tylko kierownik.
+        pracować. Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny.{' '}
+        {assistantReads
+          ? 'Przeczyta to kierownik i asystent AI, który pomaga mu układać grafik. Asystent to zewnętrzna usługa (Claude), więc nie wpisuj tu nic, czego nie chcesz jej przekazać.'
+          : 'Przeczyta to tylko kierownik.'}
       </p>
       {requests.isError && <InlineError>Nie udało się wczytać Twoich próśb. Spróbuj za chwilę.</InlineError>}
       {list.length > 0 && (

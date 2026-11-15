@@ -17,6 +17,7 @@ from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
+from apps.assistant import llm
 from apps.assistant.services import queue_request
 from apps.availability.models import (
     AvailabilityDay,
@@ -54,6 +55,8 @@ class AvailabilityPeriodOut(Schema):
     # Last day to mark availability (the location's setting: days before the period starts).
     deadline: date
     editable: bool
+    # True when text requests are also read by the assistant (an outside AI service); the screen says so.
+    assistant_reads: bool
 
 
 class AvailabilityDayOut(Schema):
@@ -144,6 +147,7 @@ def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
         status=period.status,
         deadline=period.deadline,
         editable=period.status == SchedulePeriod.Status.COLLECTING,
+        assistant_reads=llm.is_enabled(),
     )
 
 

@@ -14,4 +14,5 @@ export interface AvailabilityPeriodOut {
   status: AvailabilityPeriodOutStatus;
   deadline: string;
   editable: boolean;
+  assistant_reads: boolean;
 }

@@ -39,4 +39,15 @@ describe('RequestsSection', () => {
     expect(await screen.findByText('Kierownik przeczyta tę prośbę sam.')).toBeInTheDocument()
     expect(screen.queryByText(/Tak to zrozumieliśmy/)).not.toBeInTheDocument()
   })
+
+  it('says that the assistant also reads the request, only when it does', async () => {
+    mockApi(() => [200, []])
+    const { unmount } = renderScreen(<RequestsSection companyId="c1" periodId="p1" editable assistantReads />)
+    expect(await screen.findByText(/Przeczyta to kierownik i asystent AI/)).toBeInTheDocument()
+    expect(screen.queryByText(/Przeczyta to tylko kierownik/)).not.toBeInTheDocument()
+    unmount()
+
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
+    expect(await screen.findByText(/Przeczyta to tylko kierownik/)).toBeInTheDocument()
+  })
 })
