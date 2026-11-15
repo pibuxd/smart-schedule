@@ -93,7 +93,7 @@ export function RequestsSection({
         Napisz to, czego nie zaznaczysz w kalendarzu. Na przykład: w które dni wolisz mieć wolne albo z kim nie chcesz
         pracować. Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny.{' '}
         {assistantReads
-          ? 'Przeczyta to kierownik i asystent AI, który pomaga mu układać grafik. Asystent to zewnętrzna usługa (Claude), więc nie wpisuj tu nic, czego nie chcesz jej przekazać.'
+          ? 'Przeczyta to kierownik i asystent AI. Asystent to zewnętrzna usługa (Claude), która pomaga zrozumieć prośby. Grafiku nie układa. Nie wpisuj tu nic, czego nie chcesz jej przekazać.'
           : 'Przeczyta to tylko kierownik.'}
       </p>
       {requests.isError && <InlineError>Nie udało się wczytać Twoich próśb. Spróbuj za chwilę.</InlineError>}
