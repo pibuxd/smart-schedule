@@ -13,7 +13,7 @@ const make = (patch: Record<string, unknown>) => ({ ...base, ...patch, scores: {
 
 describe('verdict', () => {
   it('praises a schedule with nothing to check', () => {
-    expect(verdict(base)).toBe('Dobry grafik. Wszystkie zmiany obsadzone, zasady i prośby spełnione.')
+    expect(verdict(base)).toBe('Wszystkie zmiany obsadzone, zasady i prośby spełnione.')
   })
 
   it('puts holes and hard problems first', () => {
@@ -30,6 +30,6 @@ describe('verdict', () => {
       unmet_requests: [{ kind: 'text' }, { kind: 'unscored' }],
       scores: { unscored_requests: 1 },
     })
-    expect(verdict(data)).toBe('Dobry grafik. Wszystkie zmiany obsadzone. Do sprawdzenia: 3 rzeczy, opisane niżej.')
+    expect(verdict(data)).toBe('Wszystkie zmiany obsadzone. Do sprawdzenia: 3 rzeczy, opisane niżej.')
   })
 })
