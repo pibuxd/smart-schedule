@@ -16,6 +16,7 @@ from apps.staffing.models import (
     Experience,
     Position,
     PositionExperience,
+    ShiftType,
     StaffingException,
     StaffingRule,
 )
@@ -27,35 +28,37 @@ class ExperiencedShortOut(Schema):
     # The most experienced people one shift of the period needs, and how many the location has.
     needed: int
     available: int
+    # The first day and the shift with that need, so the manager knows where to look.
+    day: date
+    shift_name: str
 
 
-def _needed(company_id, location_id, start: date, end: date) -> dict[UUID, int]:
-    """Position -> the largest experienced requirement on one shift of a day in the period."""
-    weekdays = {(start + timedelta(days=i)).weekday() for i in range(min((end - start).days + 1, 7))}
-    exceptions = {
-        (day, shift_type, position): (count, experienced)
-        for day, shift_type, position, count, experienced in StaffingException.objects.for_company(company_id)
-        .filter(location=location_id, date__range=(start, end))
-        .values_list("date", "shift_type_id", "position_id", "count", "experienced")
-    }
-    needed: dict[UUID, int] = defaultdict(int)
-    for (_day, _shift_type, position), (count, experienced) in exceptions.items():
-        needed[position] = max(needed[position], min(count, experienced))
-    # A weekday rule counts when at least one of its days in the period has no exception in its place.
-    replaced: dict[tuple, int] = defaultdict(int)
-    for day, shift_type, position in exceptions:
-        replaced[(day.weekday(), shift_type, position)] += 1
-    days_of: dict[int, int] = defaultdict(int)
-    for i in range((end - start).days + 1):
-        days_of[(start + timedelta(days=i)).weekday()] += 1
+def _needed(company_id, location_id, start: date, end: date) -> dict[UUID, tuple[int, date, UUID]]:
+    """Position -> the largest experienced requirement on one shift of the period, with its first day and shift."""
+    weekly: dict[int, dict[tuple, int]] = defaultdict(dict)
     for weekday, shift_type, position, count, experienced in (
         StaffingRule.objects.for_company(company_id)
-        .filter(location=location_id, weekday__in=weekdays, experienced__gt=0)
+        .filter(location=location_id)
         .values_list("weekday", "shift_type_id", "position_id", "count", "experienced")
     ):
-        if replaced[(weekday, shift_type, position)] < days_of[weekday]:
-            needed[position] = max(needed[position], min(count, experienced))
-    return {position: n for position, n in needed.items() if n > 0}
+        weekly[weekday][(shift_type, position)] = min(count, experienced)
+    exceptions: dict[date, dict[tuple, int]] = defaultdict(dict)
+    for day, shift_type, position, count, experienced in (
+        StaffingException.objects.for_company(company_id)
+        .filter(location=location_id, date__range=(start, end))
+        .values_list("date", "shift_type_id", "position_id", "count", "experienced")
+    ):
+        exceptions[day][(shift_type, position)] = min(count, experienced)
+
+    needed: dict[UUID, tuple[int, date, UUID]] = {}
+    for i in range((end - start).days + 1):
+        day = start + timedelta(days=i)
+        # A date exception replaces the weekday's staffing of that shift and position, as in the generator.
+        demand = {**weekly.get(day.weekday(), {}), **exceptions.get(day, {})}
+        for (shift_type, position), experienced in sorted(demand.items(), key=str):
+            if experienced > needed.get(position, (0,))[0]:
+                needed[position] = (experienced, day, shift_type)
+    return needed
 
 
 def experienced_shortage(company_id, location_id, start: date, end: date) -> list[ExperiencedShortOut]:
@@ -77,10 +80,20 @@ def experienced_shortage(company_id, location_id, start: date, end: date) -> lis
         if own.get((employee, position), default[employee]) == Experience.EXPERIENCED:
             available[position] += 1
     names = dict(Position.objects.for_company(company_id).filter(pk__in=needed).values_list("pk", "name"))
+    shifts = dict(
+        ShiftType.objects.for_company(company_id)
+        .filter(pk__in=[shift_type for _n, _day, shift_type in needed.values()])
+        .values_list("pk", "name")
+    )
     return [
         ExperiencedShortOut(
-            position_id=position, position_name=names[position], needed=n, available=available[position]
+            position_id=position,
+            position_name=names[position],
+            needed=n,
+            available=available[position],
+            day=day,
+            shift_name=shifts[shift_type],
         )
-        for position, n in sorted(needed.items(), key=lambda item: names[item[0]].casefold())
+        for position, (n, day, shift_type) in sorted(needed.items(), key=lambda item: names[item[0]].casefold())
         if available[position] < n
     ]

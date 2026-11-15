@@ -10,7 +10,7 @@ import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
 import { useManager } from './ManagerContext'
-import { people, shifts } from './words'
+import { people, shifts, shortDay } from './words'
 
 /** One location's period, as the "Ułóż grafik" sheet needs it. */
 export type ArrangeTarget = {
@@ -132,7 +132,7 @@ function ArrangeSheet({
                 t.experiencedShort.map((row) => (
                   <li key={`${t.periodId}-${row.position_id}`}>
                     {one ? '' : `${t.locationName}, `}
-                    {row.position_name}: na jednej zmianie potrzeba {row.needed}, a w tym lokalu {row.available === 0 ? 'nie masz żadnej' : `masz ${row.available}`}.
+                    {row.position_name}: zmiana {row.shift_name} ({shortDay(row.day)}) potrzebuje {row.needed}, a w tym lokalu {row.available === 0 ? 'nie masz żadnej' : `masz ${row.available}`}.
                   </li>
                 )),
               )}

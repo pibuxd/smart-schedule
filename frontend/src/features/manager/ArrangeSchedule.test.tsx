@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { ExperiencedShortOut } from '../../api/generated/model'
 import { mockApi, renderScreen } from '../../test/render'
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { AsManager } from './test-utils'
@@ -63,14 +64,14 @@ describe('ArrangeButton', () => {
     deadlinePassed: true,
     manualChanges: 0,
     hasVersion: false,
-    experiencedShort: [] as { position_id: string; position_name: string; needed: number; available: number }[],
+    experiencedShort: [] as ExperiencedShortOut[],
   }
 
   it('warns before arranging when the location has too few experienced people, and still arranges', async () => {
     const calls = mockApi(() => [200, [run]])
     const short = [
-      { position_id: 'k', position_name: 'Kelner', needed: 2, available: 1 },
-      { position_id: 'b', position_name: 'Barista', needed: 1, available: 0 },
+      { position_id: 'k', position_name: 'Kelner', needed: 2, available: 1, day: '2026-11-27', shift_name: 'Zamknięcie' },
+      { position_id: 'b', position_name: 'Barista', needed: 1, available: 0, day: '2026-11-23', shift_name: 'Rano' },
     ]
     renderScreen(
       <AsManager>
@@ -80,8 +81,8 @@ describe('ArrangeButton', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ułóż grafik' }))
     const sheet = await screen.findByRole('dialog')
     expect(sheet).toHaveTextContent('Masz za mało doświadczonych osób.')
-    expect(sheet).toHaveTextContent('Kelner: na jednej zmianie potrzeba 2, a w tym lokalu masz 1.')
-    expect(sheet).toHaveTextContent('Barista: na jednej zmianie potrzeba 1, a w tym lokalu nie masz żadnej.')
+    expect(sheet).toHaveTextContent('Kelner: zmiana Zamknięcie (pt 27 listopada) potrzebuje 2, a w tym lokalu masz 1.')
+    expect(sheet).toHaveTextContent('Barista: zmiana Rano (pon 23 listopada) potrzebuje 1, a w tym lokalu nie masz żadnej.')
 
     fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż grafik' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))).toBe(true))

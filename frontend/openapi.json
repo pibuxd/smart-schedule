@@ -6480,13 +6480,24 @@
           "available": {
             "title": "Available",
             "type": "integer"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "shift_name": {
+            "title": "Shift Name",
+            "type": "string"
           }
         },
         "required": [
           "position_id",
           "position_name",
           "needed",
-          "available"
+          "available",
+          "day",
+          "shift_name"
         ],
         "title": "ExperiencedShortOut",
         "type": "object"

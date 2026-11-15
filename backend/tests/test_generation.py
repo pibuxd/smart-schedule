@@ -594,7 +594,14 @@ def test_period_warns_when_staffing_needs_more_experienced_people_than_the_locat
     # Mondays need 1 experienced seller and nobody is experienced.
     StaffingRule.objects.filter(location=location, weekday=0).update(experienced=1)
     assert periods()[0]["experienced_short"] == [
-        {"position_id": str(seller.id), "position_name": seller.name, "needed": 1, "available": 0}
+        {
+            "position_id": str(seller.id),
+            "position_name": seller.name,
+            "needed": 1,
+            "available": 0,
+            "day": str(MON),
+            "shift_name": shop["shift_type"].name,
+        }
     ]
     assert overview()["locations"][0]["period"]["experienced_short"][0]["needed"] == 1
 
@@ -610,7 +617,9 @@ def test_period_warns_when_staffing_needs_more_experienced_people_than_the_locat
         count=3,
         experienced=2,
     )
-    assert [(row["needed"], row["available"]) for row in periods()[0]["experienced_short"]] == [(2, 1)]
+    assert [(row["needed"], row["available"], row["day"]) for row in periods()[0]["experienced_short"]] == [
+        (2, 1, str(MON + timedelta(days=2)))
+    ]
 
     # The level on the position counts, not the person's default; people who left do not count.
     EmployeeProfile.objects.filter(pk=jan.pk).update(experience=3)

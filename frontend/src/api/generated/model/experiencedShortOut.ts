@@ -10,4 +10,6 @@ export interface ExperiencedShortOut {
   position_name: string;
   needed: number;
   available: number;
+  day: string;
+  shift_name: string;
 }
