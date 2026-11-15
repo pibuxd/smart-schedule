@@ -13,6 +13,7 @@ import { Wordmark } from '../../components/Wordmark'
 import { CodeInput } from './CodeInput'
 import { prettyPhone } from './phone'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { takeSessionEnded } from '../../lib/session-ended'
 
 const phoneSchema = z.object({
   phone: z
@@ -25,7 +26,6 @@ type PhoneForm = z.input<typeof phoneSchema>
 type Purpose = 'login' | 'register'
 
 const SENT_KEY = 'grafikomat.code-sent'
-
 /**
  * The code step survives a page refresh (someone switches to their SMS app and back, the browser reloads):
  * the number and the times are kept in this tab until the code expires.
@@ -79,6 +79,7 @@ export function LoginScreen({ purpose = 'login' }: { purpose?: Purpose }) {
 
 function PhoneStep({ purpose, onSent }: { purpose: Purpose; onSent: (sent: RequestCodeOut) => void }) {
   const requestCode = useRequestCode()
+  const [sessionEnded] = useState(takeSessionEnded)
   const form = useForm<PhoneForm, unknown, z.output<typeof phoneSchema>>({
     resolver: zodResolver(phoneSchema),
     defaultValues: { phone: '' },
@@ -101,6 +102,11 @@ function PhoneStep({ purpose, onSent }: { purpose: Purpose; onSent: (sent: Reque
             ? 'Wpisz swój numer telefonu. Wyślemy Ci SMS z kodem. Potem podasz nazwę firmy, a pracowników zaprosisz później.'
             : 'Wpisz swój numer telefonu. Wyślemy Ci SMS z kodem.'}
         </p>
+        {sessionEnded && (
+          <p role="status" className="m-0 rounded-md bg-accent-soft px-3 py-2 font-semibold">
+            Sesja wygasła. Zaloguj się jeszcze raz. To, co już zapisane, zostało.
+          </p>
+        )}
       </div>
       <div className="grid gap-2">
         <label htmlFor="phone" className="font-semibold">

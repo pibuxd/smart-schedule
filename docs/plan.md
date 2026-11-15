@@ -545,6 +545,6 @@ Poprawki w trzech PR-ach. Pierwszy (błędy i bezpieczeństwo) przyjmuje te zał
 - Publikacja blokuje najpierw firmę, potem okres, jak układanie grafiku (bez zakleszczeń).
 - CSV godzin: nazwy zaczynające się od `= + - @` dostają apostrof (Excel nie wykona formuły).
 - Kody dostępu: sprawdzenie limitu i zapis próby pod blokadą per osoba i per IP (równoległe próby nie omijają limitu).
-- Rejestracja: jeden adres IP może w godzinę wysłać kody najwyżej na 3 nowe numery (`REGISTER_NUMBERS_PER_IP_PER_HOUR`).
+- Rejestracja: jeden adres IP może w godzinę wysłać kody najwyżej na 5 nowych numerów (`REGISTER_NUMBERS_PER_IP_PER_HOUR`); komunikat podpowiada inną sieć (wspólne wifi).
 - `/api/docs` i `/api/openapi.json` tylko przy `DJANGO_DEBUG=1`; logowanie do admina: najwyżej 10 nieudanych prób na adres
   na godzinę (`ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR`, licznik w pamięci procesu).

@@ -366,7 +366,8 @@ def test_registering_new_numbers_is_limited_per_address(api, sms_outbox, setting
 
     assert request_code(api, "+48601700811", purpose="register").status_code == 200
     assert request_code(api, "+48601700812", purpose="register").status_code == 200
-    assert request_code(api, "+48601700813", purpose="register").status_code == 429
+    refused = request_code(api, "+48601700813", purpose="register")
+    assert refused.status_code == 429 and "innej sieci" in refused.json()["detail"]
     # People with an account still get their code from this address.
     assert request_code(api, "+48601700899").status_code == 200
     assert len(sms_outbox) == 3

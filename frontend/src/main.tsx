@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/atkinson-hyperlegible-next'
 import './index.css'
 import { errorStatus } from './lib/api-error'
+import { SESSION_ENDED_KEY } from './lib/session-ended'
 import { routeTree } from './routeTree.gen'
 
 /** The session ended (logged out elsewhere, expired): go to the login screen instead of showing errors. */
@@ -14,6 +15,11 @@ function onApiError(error: unknown) {
   const path = window.location.pathname
   if (path.startsWith('/logowanie') || path.startsWith('/rejestracja')) return
   queryClient.clear()
+  try {
+    window.sessionStorage.setItem(SESSION_ENDED_KEY, '1')
+  } catch {
+    // The login screen just does not explain why.
+  }
   void router.navigate({ to: '/logowanie', replace: true })
 }
 

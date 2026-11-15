@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
 import {
+  dayTitle,
   hoursText,
   inMonth,
   monthGenitive,
@@ -63,6 +64,12 @@ export function MyScheduleScreen({
       )}
       {next && (rest.length > 0 || (data.published_until ?? next.date) > next.date) && (
         <UpcomingList first={next} shifts={rest} publishedUntil={data.published_until} onGive={give} />
+      )}
+      {data.published_until && (
+        <p className="m-0 text-ink-muted">
+          Grafik jest opublikowany do {dayTitle(parseDate(data.published_until))}. Dalsze dni pokażemy, gdy kierownik
+          opublikuje kolejny grafik.
+        </p>
       )}
       <div className="grid gap-2">
         {data.months.map((month) => (

@@ -29,6 +29,10 @@ Purpose = Literal["login", "register"]
 
 UNKNOWN_PHONE = "Nie znamy tego numeru. Poproś kierownika o zaproszenie albo załóż firmę, jeśli sam układasz grafik."
 TOO_MANY_CODES = "Za dużo kodów w krótkim czasie. Spróbuj ponownie za godzinę."
+TOO_MANY_REGISTRATIONS = (
+    "Z tej sieci w ostatniej godzinie zakładano już kilka nowych kont. "
+    "Spróbuj za godzinę albo z innej sieci, na przykład z internetu w telefonie."
+)
 BAD_CODE = "Ten kod jest nieprawidłowy."
 NO_ACTIVE_CODE = "Kod wygasł. Poproś o nowy."
 TOO_MANY_ATTEMPTS = "Za dużo błędnych prób. Poproś o nowy kod."
@@ -122,7 +126,7 @@ def _check_new_numbers_limit(ip: str, hour_ago) -> None:
         .count()
     )
     if recent >= settings.REGISTER_NUMBERS_PER_IP_PER_HOUR:
-        raise HttpError(429, TOO_MANY_CODES)
+        raise HttpError(429, TOO_MANY_REGISTRATIONS)
 
 
 def _issue_code(phone: str, ip: str | None, now) -> None:

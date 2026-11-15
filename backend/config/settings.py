@@ -124,7 +124,7 @@ LOGIN_CODE_RESEND_AFTER_S = int(env("LOGIN_CODE_RESEND_AFTER_S", "60"))
 LOGIN_CODES_PER_PHONE_PER_HOUR = int(env("LOGIN_CODES_PER_PHONE_PER_HOUR", "5"))
 LOGIN_CODES_PER_IP_PER_HOUR = int(env("LOGIN_CODES_PER_IP_PER_HOUR", "20"))
 # New numbers (no account, no invitation) one address may send a registration code to per hour.
-REGISTER_NUMBERS_PER_IP_PER_HOUR = int(env("REGISTER_NUMBERS_PER_IP_PER_HOUR", "3"))
+REGISTER_NUMBERS_PER_IP_PER_HOUR = int(env("REGISTER_NUMBERS_PER_IP_PER_HOUR", "5"))
 
 # Django admin (superuser password): failed logins allowed per address per hour.
 ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR = int(env("ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR", "10"))
