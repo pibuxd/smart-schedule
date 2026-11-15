@@ -227,7 +227,36 @@ class TestOpenCalendar:
         assert saved.status_code == 204, saved.content
         body = self.get(api, shop["company"], day - timedelta(days=3), day + timedelta(days=3)).json()
         assert body["period"] is None and body["submitted_at"] is None and body["locked"] == []
-        assert body["days"] == [{"date": str(day), "state": "cannot", "from_time": "08:00:00", "to_time": None}]
+        assert body["days"] == [
+            {
+                "date": str(day),
+                "state": "cannot",
+                "from_time": "08:00:00",
+                "to_time": None,
+                "from_time_2": None,
+                "to_time_2": None,
+                "one_shift": False,
+            }
+        ]
+
+    def test_two_windows_with_albo(self, api, shop):
+        api.login(shop["worker"])
+        day = timezone.localdate() + timedelta(days=60)
+        both = {"date": str(day), "state": "prefer", "from_time": "06:00", "to_time": "10:00"}
+        saved = self.put(
+            api, shop["company"], {**both, "from_time_2": "16:00", "to_time_2": "22:00", "one_shift": True}
+        )
+        assert saved.status_code == 204, saved.content
+        [row] = self.get(api, shop["company"], day, day).json()["days"]
+        assert (row["from_time_2"], row["to_time_2"], row["one_shift"]) == ("16:00:00", "22:00:00", True)
+        half = self.put(api, shop["company"], {**both, "from_time_2": "16:00"})
+        assert half.status_code == 400 and "początku i końca" in half.json()["detail"]
+        alone = {"date": str(day), "state": "prefer", "from_time_2": "16:00", "to_time_2": "22:00"}
+        assert self.put(api, shop["company"], alone).json()["detail"] == "Najpierw wpisz pierwszy przedział godzin."
+        # "albo" without a second window means nothing, so it is not kept.
+        assert self.put(api, shop["company"], {**both, "one_shift": True}).status_code == 204
+        [row] = self.get(api, shop["company"], day, day).json()["days"]
+        assert (row["from_time_2"], row["one_shift"]) == (None, False)
 
     def test_past_days_and_arranged_periods_are_locked(self, api, shop):
         period = shop["period"]

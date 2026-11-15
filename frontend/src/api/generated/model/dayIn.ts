@@ -11,4 +11,7 @@ export interface DayIn {
   state: DayInState;
   from_time?: string | null;
   to_time?: string | null;
+  from_time_2?: string | null;
+  to_time_2?: string | null;
+  one_shift?: boolean;
 }

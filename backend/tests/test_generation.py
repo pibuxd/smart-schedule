@@ -114,6 +114,25 @@ def test_slots_come_from_staffing_with_exceptions_and_flexible_hours(shop):
 
 
 @pytest.mark.django_db
+def test_two_availability_windows_reach_the_problem(shop):
+    from apps.availability.models import AvailabilityDay
+
+    person = shop["people"][0]
+    AvailabilityDay.objects.create(
+        employee=person,
+        date=MON,
+        state="prefer",
+        from_time=time(6),
+        to_time=time(10),
+        from_time_2=time(16),
+        to_time_2=time(22),
+        one_shift=True,
+    )
+    [entry] = [a for a in build_problem([shop["period"]], today=TODAY).problem.availability if a.date == MON]
+    assert (entry.from_time_2, entry.to_time_2, entry.one_shift) == (time(16), time(22), True)
+
+
+@pytest.mark.django_db
 def test_closed_days_get_no_shifts(shop):
     location = shop["location"]
     LocationClosure.objects.create(location=location, date=MON + timedelta(days=2), note="Inwentaryzacja")

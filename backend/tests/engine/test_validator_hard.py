@@ -3,7 +3,9 @@
 from dataclasses import replace
 from datetime import date, time
 
-from engine.problem import Availability, ExternalShift, shift_bounds
+import pytest
+
+from engine.problem import Availability, ExternalShift, ProblemError, shift_bounds
 from engine.validator import Code, validate
 from tests.engine.factory import BAKER, employee, problem, slot
 
@@ -168,3 +170,53 @@ def test_the_level_on_the_position_of_the_shift_counts():
     p = problem([jan, ewa], [oven])
     assert codes(validate(p, {"b": "jan"})) == [Code.EXPERIENCE]
     assert validate(p, {"b": "ewa"}).ok
+
+
+class TestTwoWindows:
+    """ "Mogę 6–10 lub 16–22" and the same with "albo" (at most one shift that day)."""
+
+    def slots(self):
+        return [
+            slot("rano", DAY, "06:00", "10:00"),
+            slot("poludnie", DAY, "11:00", "15:00"),
+            slot("wieczor", DAY, "16:00", "22:00"),
+        ]
+
+    def entry(self, **kwargs):
+        return Availability(
+            "anna",
+            DAY,
+            "neutral",
+            from_time=time(6),
+            to_time=time(10),
+            from_time_2=time(16),
+            to_time_2=time(22),
+            **kwargs,
+        )
+
+    def test_a_shift_fits_either_window(self):
+        p = problem([employee("anna")], self.slots(), availability=(self.entry(),))
+        assert validate(p, {"rano": "anna", "wieczor": "anna"}).ok
+        report = validate(p, {"poludnie": "anna"})
+        assert [v.code for v in report.hard] == [Code.CANNOT]
+
+    def test_albo_allows_one_shift_that_day(self):
+        p = problem([employee("anna")], self.slots(), availability=(self.entry(one_shift=True),))
+        assert validate(p, {"wieczor": "anna"}).ok
+        report = validate(p, {"rano": "anna", "wieczor": "anna"})
+        assert [v.code for v in report.hard] == [Code.ONE_SHIFT]
+        assert "tylko na jednej zmianie" in report.hard[0].message
+
+    def test_cannot_covers_both_windows(self):
+        entry = Availability(
+            "anna", DAY, "cannot", from_time=time(6), to_time=time(10), from_time_2=time(16), to_time_2=time(22)
+        )
+        p = problem([employee("anna")], self.slots(), availability=(entry,))
+        assert validate(p, {"poludnie": "anna"}).ok
+        assert not validate(p, {"wieczor": "anna"}).ok
+
+    def test_a_second_window_needs_both_ends(self):
+        with pytest.raises(ProblemError):
+            Availability("anna", DAY, "neutral", from_time=time(6), to_time=time(10), from_time_2=time(16))
+        with pytest.raises(ProblemError):
+            Availability("anna", DAY, "neutral", from_time_2=time(16), to_time_2=time(20))

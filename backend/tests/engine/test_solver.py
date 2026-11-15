@@ -485,6 +485,23 @@ def test_staffing_leaves_a_hole_rather_than_a_less_experienced_person():
     assert solved(problem([employee("ola"), oven], slots))[0].schedule == {"s": "jan"}
 
 
+@pytest.mark.parametrize(("one_shift", "filled"), [(False, 2), (True, 1)])
+def test_two_windows_with_lub_or_albo(one_shift, filled):
+    slots = [slot("rano", MON, "06:00", "10:00"), slot("wieczor", MON, "16:00", "22:00")]
+    entry = Availability(
+        "anna",
+        MON,
+        "prefer",
+        from_time=time(6),
+        to_time=time(10),
+        from_time_2=time(16),
+        to_time_2=time(22),
+        one_shift=one_shift,
+    )
+    result, _report = solved(problem([employee("anna")], slots, availability=[entry]))
+    assert sum(1 for e in result.schedule.values() if e) == filled
+
+
 def test_a_pinned_hole_stays_empty():
     p = problem([employee("anna")], [slot("a", MON), slot("b", MON + timedelta(days=1))], pinned={"a": None})
     result, _report = solved(p)

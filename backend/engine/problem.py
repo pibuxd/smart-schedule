@@ -187,6 +187,10 @@ class Availability:
       state, any other shift of that day counts as "cannot" (people mark the hours they can
       work).
     No entry for a day means "neutral" (nothing submitted).
+
+    A second window (`from_time_2`/`to_time_2`, both set) works the same way: "I can 6-10 or 16-22" fits a shift
+    inside either window; "cannot" covers both. `one_shift` ("albo") means at most one shift that day, in one of
+    the windows; without it ("lub") the person may get a shift in each.
     """
 
     employee: str
@@ -194,11 +198,24 @@ class Availability:
     state: AvailabilityState
     from_time: time | None = None
     to_time: time | None = None
+    from_time_2: time | None = None
+    to_time_2: time | None = None
+    one_shift: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "state", AvailabilityState(self.state))
         if self.from_time is not None and self.from_time == self.to_time:
             raise ProblemError("Availability hours must not start and end at the same time")
+        if (self.from_time_2 is None) != (self.to_time_2 is None) or (
+            self.from_time_2 is not None and self.from_time_2 == self.to_time_2
+        ):
+            raise ProblemError("A second availability window needs a start and a different end")
+        if self.from_time_2 is not None and self.from_time is None and self.to_time is None:
+            raise ProblemError("A second availability window needs a first one")
+
+    @property
+    def has_hours(self) -> bool:
+        return self.from_time is not None or self.to_time is not None
 
 
 @dataclass(frozen=True)
@@ -396,28 +413,42 @@ class Problem:
         return tuple(sorted((r for r in self.rules if r.location == location), key=lambda r: r.rank))
 
     def availability_window(self, entry: Availability) -> tuple[datetime, datetime]:
-        """The covered window of an availability entry as real instants (UTC)."""
-        start = local_datetime(entry.date, entry.from_time or time(0), self.tz)
-        if entry.to_time is None:
-            end = local_datetime(entry.date + timedelta(days=1), time(0), self.tz)
-        elif entry.to_time <= (entry.from_time or time(0)):  # ends the next morning
-            end = local_datetime(entry.date + timedelta(days=1), entry.to_time, self.tz)
+        """The (first) covered window of an availability entry as real instants (UTC)."""
+        return self._window(entry.date, entry.from_time, entry.to_time)
+
+    def availability_windows(self, entry: Availability) -> list[tuple[datetime, datetime]]:
+        """Every covered window of an entry (one or two) as real instants (UTC)."""
+        windows = [self.availability_window(entry)]
+        if entry.from_time_2 is not None:
+            windows.append(self._window(entry.date, entry.from_time_2, entry.to_time_2))
+        return windows
+
+    def _window(self, day: date, start_time: time | None, end_time: time | None) -> tuple[datetime, datetime]:
+        start = local_datetime(day, start_time or time(0), self.tz)
+        if end_time is None:
+            end = local_datetime(day + timedelta(days=1), time(0), self.tz)
+        elif end_time <= (start_time or time(0)):  # ends the next morning
+            end = local_datetime(day + timedelta(days=1), end_time, self.tz)
         else:
-            end = local_datetime(entry.date, entry.to_time, self.tz)
+            end = local_datetime(day, end_time, self.tz)
         return start.astimezone(UTC), end.astimezone(UTC)
+
+    def one_shift_days(self) -> list[Availability]:
+        """Entries marked "albo": at most one shift that day."""
+        return [a for a in self.availability if a.one_shift and a.state != AvailabilityState.CANNOT]
 
     def availability_for(self, employee_id: str, slot: Slot) -> AvailabilityState:
         """The availability state that applies to `employee_id` working `slot` (NEUTRAL when none applies)."""
         entry = self.availability_by_key.get((employee_id, slot.date))
         if entry is None:
             return AvailabilityState.NEUTRAL
-        if entry.from_time is None and entry.to_time is None:
+        if not entry.has_hours:
             return entry.state
-        window_start, window_end = self.availability_window(entry)
+        windows = self.availability_windows(entry)
         if entry.state in (AvailabilityState.PREFER, AvailabilityState.NEUTRAL):
-            fits = window_start <= slot.start_utc and slot.end_utc <= window_end
+            fits = any(start <= slot.start_utc and slot.end_utc <= end for start, end in windows)
             return entry.state if fits else AvailabilityState.CANNOT
-        overlaps = slot.start_utc < window_end and window_start < slot.end_utc
+        overlaps = any(slot.start_utc < end and start < slot.end_utc for start, end in windows)
         return entry.state if overlaps else AvailabilityState.NEUTRAL
 
 

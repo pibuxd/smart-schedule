@@ -13,9 +13,13 @@ function periodDays(start: string, end: string): string[] {
   return days
 }
 
-function hoursOf(day: GridDayOut): string | null {
+/** Hours of a day: "6–10 lub 16–22" for the label; `short` ("6–10/16–22") fits inside a grid cell. */
+function hoursOf(day: GridDayOut, short = false): string | null {
   if (!day.from_time || !day.to_time) return null
-  return `${compactTime(day.from_time.slice(0, 5))}–${compactTime(day.to_time.slice(0, 5))}`
+  const first = `${compactTime(day.from_time.slice(0, 5))}–${compactTime(day.to_time.slice(0, 5))}`
+  if (!day.from_time_2 || !day.to_time_2) return first
+  const second = `${compactTime(day.from_time_2.slice(0, 5))}–${compactTime(day.to_time_2.slice(0, 5))}`
+  return short ? `${first}/${second}` : `${first} ${day.one_shift ? 'albo' : 'lub'} ${second}`
 }
 
 function cellLabel(iso: string, day: GridDayOut | undefined): string {
@@ -105,7 +109,7 @@ function Row({ employee, days }: { employee: GridEmployeeOut; days: string[] }) 
       </th>
       {days.map((iso) => {
         const day = marks.get(iso)
-        const hours = day ? hoursOf(day) : null
+        const hours = day ? hoursOf(day, true) : null
         const weekend = weekdayIndex(parseDate(iso)) >= 5
         return (
           <td key={iso} className={cn('border-b border-line p-0.5', weekend && 'bg-grid')}>

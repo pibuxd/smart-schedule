@@ -39,6 +39,10 @@ class AvailabilityDay(CompanyOwnedModel):
     state = models.CharField(max_length=16, choices=AvailabilityState.choices)
     from_time = models.TimeField(null=True, blank=True)
     to_time = models.TimeField(null=True, blank=True)
+    # A second window the same day ("6–10 lub 16–22"); `one_shift` ("albo"): at most one shift that day.
+    from_time_2 = models.TimeField(null=True, blank=True)
+    to_time_2 = models.TimeField(null=True, blank=True)
+    one_shift = models.BooleanField(default=False)
     source = models.CharField(max_length=16, choices=Source.choices, default=Source.MANUAL)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -49,6 +53,15 @@ class AvailabilityDay(CompanyOwnedModel):
         constraints = [
             models.UniqueConstraint(fields=["employee", "date"], name="availability_day_unique"),
             models.CheckConstraint(condition=HOURS_NOT_EMPTY, name="availability_day_hours_not_empty"),
+            models.CheckConstraint(
+                condition=Q(from_time_2__isnull=True, to_time_2__isnull=True)
+                | (
+                    Q(from_time_2__isnull=False, to_time_2__isnull=False)
+                    & ~Q(from_time_2=models.F("to_time_2"))
+                    & (Q(from_time__isnull=False) | Q(to_time__isnull=False))
+                ),
+                name="availability_day_second_window",
+            ),
         ]
 
     def __str__(self) -> str:

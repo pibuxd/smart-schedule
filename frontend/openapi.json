@@ -8704,6 +8704,35 @@
               }
             ],
             "title": "To Time"
+          },
+          "from_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Time 2"
+          },
+          "to_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Time 2"
+          },
+          "one_shift": {
+            "default": false,
+            "title": "One Shift",
+            "type": "boolean"
           }
         },
         "required": [
@@ -8879,6 +8908,35 @@
               }
             ],
             "title": "To Time"
+          },
+          "from_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Time 2"
+          },
+          "to_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Time 2"
+          },
+          "one_shift": {
+            "default": false,
+            "title": "One Shift",
+            "type": "boolean"
           }
         },
         "required": [
@@ -9203,6 +9261,35 @@
               }
             ],
             "title": "To Time"
+          },
+          "from_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Time 2"
+          },
+          "to_time_2": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Time 2"
+          },
+          "one_shift": {
+            "default": false,
+            "title": "One Shift",
+            "type": "boolean"
           },
           "late": {
             "title": "Late",

@@ -590,3 +590,12 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
   lokalu”, gdy asystent jest wyłączony. Po 2 minutach układania ekran mówi „Trwa dłużej niż zwykle”.
 - „Godziny” na pustym miesiącu proponują ostatni miesiąc z godzinami (`latest_month`). Teksty: „mogą pracować”,
   formy bez „(a)”, „Ułożyć grafik dla lokalu …?”, przykłady stanowisk nie tylko z piekarni.
+
+Czwarty PR (prośba Piotra z 15.11.2026: dyspozycja w dwóch przedziałach dnia z „lub/albo”):
+
+- `AvailabilityDay` ma drugi przedział (`from_time_2`, `to_time_2`, oba albo żaden, tylko gdy jest pierwszy) i `one_shift`.
+  „Lub” (`one_shift=False`): zmiana pasuje, gdy mieści się w którymkolwiek przedziale, można dostać dwie. „Albo”
+  (`one_shift=True`): dodatkowo najwyżej jedna zmiana zaczynająca się tego dnia, licząc zmiany z innych lokali
+  (twarde: walidator `Code.ONE_SHIFT`, solver `sum ≤ 1`). Przy „nie mogę” oba przedziały są zakazane, „albo” nic nie znaczy.
+- „Albo” bez drugiego przedziału nie jest zapisywane. Zapis dnia bez drugiego przedziału go czyści.
+- Powtarzanie co tydzień i wzorce zostają z jednym przedziałem; kopiowanie z poprzedniego miesiąca przenosi oba.
