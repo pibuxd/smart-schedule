@@ -561,6 +561,9 @@ Drugi PR (ekrany pracownika, punkty 12–17):
   a ile z innych, i dostaje powiadomienie `offer_claimed`, gdy ktoś się zgłosi.
 - Ekran kodu: stary błąd znika po pierwszej nowej cyfrze, wpisany kod zostaje; zamiast bladego wyłączonego przycisku
   jest licznik „Nowy kod możesz dostać za …”. „Weź zmianę” i „Usuń prośbę” pytają jeszcze raz.
+- Hipotezy do sprawdzenia w pilotażu (uwagi Prelinta do PR #24): czy osoby z innych lokali chcą powiadomień o oddanych
+  zmianach (jeśli nie: najpierw własny lokal, potem firma); czy próg 12 h dla ostrzeżenia o długim oknie pasuje
+  wszystkim (to tylko pytanie o zamienione godziny, nie limit; lokal z dłuższymi zmianami potwierdza je raz).
 
 Trzeci PR (ekrany kierownika, punkty 18–32):
 
