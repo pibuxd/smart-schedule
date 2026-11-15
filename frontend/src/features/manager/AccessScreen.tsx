@@ -45,18 +45,18 @@ export function AccessScreen() {
 function explanation(data: SubscriptionOut): string {
   const until = data.ends_at ? dayAndMonth(new Date(data.ends_at)) : ''
   if (data.read_only && !data.ends_at) {
-    return 'Ta firma nie ma jeszcze kodu dostępu, więc niczego nie można zmieniać. Wpisz kod poniżej.'
+    return 'Ta firma nie ma jeszcze kodu dostępu, więc niczego nie zmienisz. Wpisz kod niżej.'
   }
   if (data.read_only && data.trial) {
-    return `Okres próbny skończył się ${until}. Dane są bezpieczne i można je oglądać; żeby znów układać grafiki, wpisz kod.`
+    return `Okres próbny skończył się ${until}. Niczego nie usunęliśmy i wszystko możesz oglądać. Żeby znów układać grafiki, wpisz kod.`
   }
   if (data.read_only) {
-    return `Dostęp skończył się ${until}. Dane są bezpieczne i można je oglądać; żeby znów układać grafiki, wpisz nowy kod.`
+    return `Dostęp skończył się ${until}. Niczego nie usunęliśmy i wszystko możesz oglądać. Żeby znów układać grafiki, wpisz nowy kod.`
   }
   if (data.trial) {
-    return `Możesz używać wszystkiego do ${until}. Potem dane zostaną, ale do zmian potrzebny będzie kod dostępu.`
+    return `Do ${until} możesz używać wszystkiego. Potem niczego nie usuniemy, ale żeby coś zmienić, wpiszesz kod dostępu.`
   }
-  return `Dostęp trwa do ${until}. Kolejny kod przedłuży go od tej daty, więc nic nie przepadnie.`
+  return `Masz dostęp do ${until}. Kolejny kod przedłuży go od tego dnia, więc nic nie przepadnie.`
 }
 
 function RedeemForm({ companyId }: { companyId: string }) {
@@ -92,7 +92,7 @@ function RedeemForm({ companyId }: { companyId: string }) {
         maxLength={40}
         autoComplete="off"
         spellCheck={false}
-        hint="Spacje i myślniki nie mają znaczenia. Kod dotyczy całej firmy; pracownicy niczego nie wpisują."
+        hint="Spacje i myślniki możesz pominąć. Kod działa dla całej firmy. Pracownicy niczego nie wpisują."
       />
       {redeem.isError && <InlineError>{errorMessage(redeem.error, NETWORK_PROBLEM)}</InlineError>}
       {done && (

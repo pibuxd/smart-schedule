@@ -91,4 +91,29 @@ describe('EmployeesScreen', () => {
       { position_id: 'p2', experience: 1 },
     ])
   })
+
+  it('lets a manager who also works shifts add themselves with one button', async () => {
+    let added = false
+    const me = { ...person('e9', 'Teresa', 2), phone: '+48500100100', is_manager: true }
+    const calls = mockApi((method, path) => {
+      if (path === '/api/me') return [200, { id: 'u1', phone: '+48500100100', first_name: 'Teresa', last_name: 'Nowak', companies: [], pending_invitations: 0 }]
+      if (method === 'POST' && path.endsWith('/employees/me')) {
+        added = true
+        return [200, me]
+      }
+      if (path.endsWith('/employees')) return [200, added ? [person('e1', 'Ala', 1), me] : [person('e1', 'Ala', 1)]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Dodaj mnie jako pracownika' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/locations/l1/employees/me')).toBe(true))
+    expect(await screen.findByText('Teresa Nowak')).toBeInTheDocument()
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Dodaj mnie jako pracownika' })).not.toBeInTheDocument())
+  })
 })

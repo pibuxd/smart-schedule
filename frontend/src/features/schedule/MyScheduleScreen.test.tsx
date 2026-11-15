@@ -66,9 +66,9 @@ describe('MyScheduleScreen', () => {
     renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Oddaj tę zmianę' }))
     const sheet = await screen.findByRole('dialog')
-    expect(within(sheet).getByText('Do decyzji kierownika to nadal Twoja zmiana.')).toBeInTheDocument()
+    expect(within(sheet).getByText('Dopóki kierownik nie zdecyduje, to nadal Twoja zmiana.')).toBeInTheDocument()
     fireEvent.click(within(sheet).getByRole('button', { name: 'Oddaj zmianę' }))
-    expect(await within(sheet).findByText(/liczba osób: 3/)).toBeInTheDocument()
+    expect(await within(sheet).findByText(/mogą wziąć tę zmianę \(3\)/)).toBeInTheDocument()
     expect(calls.some((c) => c.method === 'POST' && c.url === '/api/me/shifts/a1/offer')).toBe(true)
   })
 
@@ -78,15 +78,15 @@ describe('MyScheduleScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Oddajesz: czeka na kierownika' }))
     const sheet = await screen.findByRole('dialog')
     expect(within(sheet).getByText(/Ktoś chce wziąć tę zmianę/)).toBeInTheDocument()
-    expect(within(sheet).getByRole('button', { name: 'Zostaję na tej zmianie' })).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Jednak nie oddaję' })).toBeInTheDocument()
   })
 
-  it('lists shifts to take and says "Biorę"', async () => {
+  it('lists shifts to take and asks for one', async () => {
     const calls = schedule([shift], [offer])
     renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
     const section = await screen.findByRole('region', { name: 'Zmiany do wzięcia' })
     expect(section).toHaveTextContent('Bochnia (inny lokal). Oddaje: Ola Kos')
-    fireEvent.click(within(section).getByRole('button', { name: 'Biorę' }))
+    fireEvent.click(within(section).getByRole('button', { name: 'Weź zmianę' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/offers/o1/claim')).toBe(true))
   })
 

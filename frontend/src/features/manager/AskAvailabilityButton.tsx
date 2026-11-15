@@ -37,8 +37,8 @@ export function AskAvailabilityButton({
           const { notified } = response.data as AskAvailabilityOut
           setDone(
             notified
-              ? `Powiadomienie w aplikacji wysłane (osób: ${notified}). Pracownicy zobaczą je w „Powiadomieniach”, gdy otworzą Grafikomat.`
-              : 'Nie ma komu wysłać: nikt nie jest przypisany do tego lokalu.',
+              ? `Wysłane (${notified}). Pracownicy zobaczą prośbę w „Powiadomieniach”, gdy otworzą Grafikomat.`
+              : 'Nie ma komu wysłać: w tym lokalu nie ma jeszcze pracowników.',
           )
           void queryClient.invalidateQueries()
         },

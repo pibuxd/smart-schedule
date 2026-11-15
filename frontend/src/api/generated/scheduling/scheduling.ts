@@ -823,7 +823,116 @@ export function useGenerationRun<TData = Awaited<ReturnType<typeof generationRun
 
 
 
-export type myScheduleResponse200 = {
+export type cancelGenerationRunResponse200 = {
+  data: GenerationRunOut
+  status: 200
+}
+
+export type cancelGenerationRunResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type cancelGenerationRunResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type cancelGenerationRunResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type cancelGenerationRunResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type cancelGenerationRunResponseSuccess = (cancelGenerationRunResponse200) & {
+  headers: Headers;
+};
+export type cancelGenerationRunResponseError = (cancelGenerationRunResponse402 | cancelGenerationRunResponse403 | cancelGenerationRunResponse404 | cancelGenerationRunResponse409) & {
+  headers: Headers;
+};
+
+export type cancelGenerationRunResponse = (cancelGenerationRunResponseSuccess | cancelGenerationRunResponseError)
+
+export const getCancelGenerationRunUrl = (runId: string,) => {
+
+
+
+
+  return `/api/generation-runs/${runId}/cancel`
+}
+
+/**
+ * Stop arranging: nothing is saved, the earlier draft stays, and the generation is not counted.
+ * @summary Cancel Generation Run
+ */
+export const cancelGenerationRun = async (runId: string, options?: Parameters<typeof apiFetch>[1]): Promise<cancelGenerationRunResponse> => {
+
+  return apiFetch<cancelGenerationRunResponse>(getCancelGenerationRunUrl(runId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelGenerationRunMutationKey = () => ['cancelGenerationRun'] as const;
+
+export const getCancelGenerationRunMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelGenerationRun>>, TError,CancelGenerationRunMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelGenerationRun>>, TError,CancelGenerationRunMutationVariables, TContext> => {
+
+const mutationKey = getCancelGenerationRunMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelGenerationRun>>, CancelGenerationRunMutationVariables> = (props) => {
+          const {runId} = props ?? {};
+
+          return  cancelGenerationRun(runId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelGenerationRunMutationResult = NonNullable<Awaited<ReturnType<typeof cancelGenerationRun>>>
+
+    export type CancelGenerationRunMutationError = ErrorOut
+    export type CancelGenerationRunMutationVariables = {runId: string}
+
+    /**
+ * Stop arranging: nothing is saved, the earlier draft stays, and the generation is not counted.
+ * @summary Cancel Generation Run
+ */
+export const useCancelGenerationRun = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelGenerationRun>>, TError,CancelGenerationRunMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof cancelGenerationRun>>,
+        TError,
+        CancelGenerationRunMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCancelGenerationRunMutationOptions(options), queryClient);
+    }
+    export type myScheduleResponse200 = {
   data: MyScheduleOut
   status: 200
 }

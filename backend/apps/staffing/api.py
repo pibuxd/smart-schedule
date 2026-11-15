@@ -479,6 +479,35 @@ def location_employees(request, location_id: UUID):
     return [_employee_out(p, positions[p.pk], levels[p.pk]) for p in profiles]
 
 
+@router.post(
+    "/locations/{location_id}/employees/me",
+    response={200: EmployeeOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def add_myself_as_employee(request, location_id: UUID):
+    """A manager who also works shifts adds themselves to the schedule of a location they manage, with every
+    position of the location (they can stand in for anyone; positions can be narrowed afterwards)."""
+    ctx, location, _ = _change(request, Location, location_id)
+    with transaction.atomic():
+        profile = ctx.qs(EmployeeProfile).select_related("home_location").filter(membership=ctx.membership).first()
+        if profile is None:
+            profile = EmployeeProfile.objects.for_company(ctx.company).create(
+                company=ctx.company, membership=ctx.membership, home_location=location
+            )
+            profile.positions.set(ctx.qs(Position).filter(location=location))
+        elif profile.home_location_id != location.pk:
+            raise HttpError(
+                409,
+                f"Jesteś już pracownikiem lokalu {profile.home_location.name}. Pracownik ma jeden lokal domowy.",
+            )
+        elif profile.is_active:
+            raise HttpError(409, "Jesteś już na liście pracowników tego lokalu.")
+        else:
+            profile.is_active = True
+            profile.save(update_fields=["is_active"])
+    profile = ctx.qs(EmployeeProfile).select_related("membership__user").get(pk=profile.pk)
+    return _employee_out(profile, _position_ids([profile])[profile.pk])
+
+
 @router.patch(
     "/employees/{employee_id}",
     response={200: EmployeeOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},

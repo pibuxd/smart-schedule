@@ -85,7 +85,7 @@ def notification_text(kind: str, payload: dict) -> str:
                 return f"Grafik {where} został poprawiony. Sprawdź swoje zmiany."
             return f"Jest nowy grafik {where}. Sprawdź swoje zmiany."
         case "shift_offered":
-            return f"{giver} oddaje zmianę: {shift}. Jeśli możesz ją wziąć, naciśnij „Biorę” w „Mój grafik”."
+            return f"{giver} oddaje zmianę: {shift}. Jeśli możesz ją wziąć, naciśnij „Weź zmianę” w „Mój grafik”."
         case "offer_made":
             if not p.get("able"):
                 return (

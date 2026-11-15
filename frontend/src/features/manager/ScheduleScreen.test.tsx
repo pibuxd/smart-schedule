@@ -161,7 +161,7 @@ describe('ScheduleScreen', () => {
     api()
     show()
     expect(await screen.findByText('Wersja 1')).toBeInTheDocument()
-    expect(screen.getByText('Grafik niekompletny: brakuje ludzi.')).toBeInTheDocument()
+    expect(screen.getByText('Nie wszystkie zmiany są obsadzone.')).toBeInTheDocument()
     expect(screen.getByText('91,3 %')).toBeInTheDocument()
     expect(screen.getByText('Do Twojej oceny: 2.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Anna Wróbel, 06:00–14:00, przypięta/ })).toBeInTheDocument()
@@ -193,7 +193,7 @@ describe('ScheduleScreen', () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Opublikuj' }))
     const sheet = await screen.findByRole('dialog')
-    expect(within(sheet).getByText(/Grafik jest niekompletny: 1 zmiana bez obsady/)).toBeInTheDocument()
+    expect(within(sheet).getByText(/W grafiku są dziury: 1 zmiana bez obsady/)).toBeInTheDocument()
     fireEvent.click(within(sheet).getByRole('button', { name: 'Opublikuj mimo braków' }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/versions/v1/publish')).toBe(true))
   })
@@ -201,7 +201,7 @@ describe('ScheduleScreen', () => {
   it('pins all unpinned manual changes in one go', async () => {
     const calls = api()
     show()
-    expect(await screen.findByText(/Ręczne poprawki bez przypięcia: 1\. Jeśli ułożysz grafik od nowa/)).toBeInTheDocument()
+    expect(await screen.findByText(/Ręczne poprawki bez przypięcia: 1\. Znikną, jeśli ułożysz grafik od nowa/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Przypnij poprawki (1)' }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/versions/v1/shifts/s2/pin')).toBe(true))
     expect(calls.find((c) => c.url.endsWith('/pin'))).toMatchObject({ body: { pinned: true } })
@@ -212,7 +212,7 @@ describe('ScheduleScreen', () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Opublikuj' }))
     const sheet = await screen.findByRole('dialog')
-    expect(within(sheet).getByText(/Ta poprawka zmienia zmiany tych osób: Anna Wróbel, Marek Zając/)).toBeInTheDocument()
+    expect(within(sheet).getByText(/Zmieniasz zmiany tych osób: Anna Wróbel, Marek Zając/)).toBeInTheDocument()
   })
 
   it('a published schedule can be looked at but corrected only through a new draft', async () => {

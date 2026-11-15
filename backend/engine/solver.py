@@ -23,9 +23,10 @@ from __future__ import annotations
 
 import calendar
 import math
+import threading
 import time as clock
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from enum import StrEnum
@@ -84,6 +85,7 @@ class SolveStatus(StrEnum):
     FEASIBLE = "feasible"  # the best schedule found within the time limit
     TIMEOUT_NO_SOLUTION = "timeout_no_solution"
     INFEASIBLE = "infeasible"  # pins, past days or "no exceptions" rules cannot all be kept
+    STOPPED = "stopped"  # the caller asked to stop (`should_stop`); no schedule is returned
 
 
 @dataclass(frozen=True)
@@ -752,6 +754,42 @@ def _solver(time_limit: float, workers: int, seed: int) -> cp_model.CpSolver:
     return solver
 
 
+# How often a running search asks the caller whether to stop.
+STOP_POLL_S = 1.0
+
+
+class _Search:
+    """Runs CP-SAT searches that the caller can stop: `should_stop` is asked before each search and then,
+    from a helper thread, every `STOP_POLL_S` while it runs; the search ends as soon as the answer is yes."""
+
+    def __init__(self, should_stop: Callable[[], bool] | None) -> None:
+        self.should_stop = should_stop
+        self.stopped = False
+
+    def run(self, solver: cp_model.CpSolver, model: cp_model.CpModel):
+        if self.should_stop is None:
+            return solver.solve(model)
+        if self.should_stop():
+            self.stopped = True
+            return cp_model.UNKNOWN
+        done = threading.Event()
+
+        def watch() -> None:
+            while not done.wait(STOP_POLL_S):
+                if self.should_stop():
+                    self.stopped = True
+                    solver.stop_search()
+                    return
+
+        watcher = threading.Thread(target=watch, name="solver-stop-watch", daemon=True)
+        watcher.start()
+        try:
+            return solver.solve(model)
+        finally:
+            done.set()
+            watcher.join()
+
+
 def _fixed_conflicts(problem: Problem, fixed: Mapping[str, str | None]) -> list[str]:
     """Hard violations that pins and past days already have on their own (no other shift can fix them)."""
     report = validate(problem, fixed)
@@ -804,11 +842,14 @@ def solve(
     weights: WeightProfile | None = None,
     diversity_from: Iterable[Schedule] = (),
     min_difference: float = 0.15,
+    should_stop: Callable[[], bool] | None = None,
 ) -> SolveResult:
     """Build the best schedule found within `time_limit_s` (fewest holes first, then the lowest penalty).
 
     `weights` replaces the problem's weight profile (variants with another manager share); every schedule in
     `diversity_from` must differ from the new one in at least `min_difference` of its assignments.
+    `should_stop` is asked about once a second while searching; when it says yes the search ends at once and
+    the result is `STOPPED` without a schedule (the manager cancelled the generation).
     """
     started = clock.monotonic()
     if weights is not None:
@@ -826,7 +867,10 @@ def solve(
     # Phase 1: as few holes as possible.
     builder.m.minimize(builder.holes())
     first = _solver(time_limit_s * PHASE_1_SHARE - (clock.monotonic() - started), workers, seed)
-    status = first.solve(builder.m)
+    search = _Search(should_stop)
+    status = search.run(first, builder.m)
+    if search.stopped:
+        return SolveResult(SolveStatus.STOPPED, None, time_ms=elapsed_ms())
     if status == cp_model.INFEASIBLE:
         return SolveResult(
             SolveStatus.INFEASIBLE,
@@ -850,7 +894,9 @@ def solve(
     builder.m.minimize(builder.objective())
     builder.hint(schedule)
     second = _solver(time_limit_s - (clock.monotonic() - started), workers, seed)
-    status = second.solve(builder.m)
+    status = search.run(second, builder.m)
+    if search.stopped:
+        return SolveResult(SolveStatus.STOPPED, None, time_ms=elapsed_ms())
     objective = None
     optimal = False
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):

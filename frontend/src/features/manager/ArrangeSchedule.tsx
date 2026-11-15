@@ -4,11 +4,12 @@ import { Wand2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import type { GenerationRunOut } from '../../api/generated/model'
-import { useGenerateSchedule, useGenerationRun } from '../../api/generated/scheduling/scheduling'
+import { useCancelGenerationRun, useGenerateSchedule, useGenerationRun } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
-import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
+import { useManager } from './ManagerContext'
 import { people, shifts } from './words'
 
 /** One location's period, as the "Ułóż grafik" sheet needs it. */
@@ -93,35 +94,35 @@ function ArrangeSheet({
       title={one ? `Ułożyć grafik: ${targets[0].locationName}?` : `Ułożyć grafik dla ${targets.length} lokali?`}
       description={
         one
-          ? 'Grafik ułoży się z dyspozycji, obsady i zasad lokalu. Potrwa to do pół minuty.'
-          : 'Każdy lokal ułoży się osobno, z własnymi zasadami. Każdy potrwa do pół minuty.'
+          ? 'Ułożymy grafik według dyspozycji, obsady i zasad lokalu. To trwa do pół minuty.'
+          : 'Każdy lokal układamy osobno, według jego zasad. Każdy trwa do pół minuty.'
       }
     >
       <div className="grid gap-4">
         {early.length > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
             {one
-              ? `Termin dyspozycji jeszcze nie minął, a bez dyspozycji: ${people(early[0].missing)}.`
+              ? `Termin dyspozycji jeszcze nie minął. Czekasz jeszcze na: ${people(early[0].missing)}.`
               : `W ${early.length} lokalach termin jeszcze nie minął, a nie wszyscy wpisali dyspozycje.`}{' '}
-            Możesz ułożyć grafik już teraz i ułożyć go ponownie później.
+            Możesz ułożyć grafik już teraz, a potem jeszcze raz.
           </p>
         )}
         {missing.length > 0 && early.length === 0 && (
           <p className="m-0">
-            Bez dyspozycji:{' '}
+            Dyspozycji nie wysłali:{' '}
             {missing.map((t) => (one ? people(t.missing) : `${t.locationName} (${people(t.missing)})`)).join(', ')}.
-            Liczymy ich jak „obojętnie”.
+            Przyjmiemy, że mogą pracować każdego dnia.
           </p>
         )}
         {manual.length > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2 text-ink">
-            Ułożenie od nowa usunie nieprzypięte ręczne poprawki:{' '}
+            Stracisz ręczne poprawki bez przypięcia:{' '}
             {manual.map((t) => (one ? t.manualChanges : `${t.locationName}: ${t.manualChanges}`)).join(', ')}.
-            Przypięte zmiany zostaną na miejscu.
+            Przypięte zmiany zostaną.
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Wynik zobaczysz jako szkic. Pracownicy zobaczą grafik dopiero, gdy go opublikujesz.
+          Dostaniesz szkic do poprawek. Pracownicy zobaczą grafik dopiero, gdy go opublikujesz.
         </p>
         {generate.isError && <InlineError>{errorMessage(generate.error, NETWORK_PROBLEM)}</InlineError>}
         <Button wide onClick={start} disabled={generate.isPending}>
@@ -134,30 +135,64 @@ function ArrangeSheet({
 
 const POLL_MS = 1500
 
-/** How a generation is going; polls until it ends, then refreshes the screen's data. */
+const ENDED = ['succeeded', 'failed', 'cancelled']
+
+/** How a generation is going, with "Anuluj"; polls until it ends, then refreshes the screen's data. */
 export function RunProgress({ runId, locationId, compact }: { runId: string; locationId?: string; compact?: boolean }) {
   const queryClient = useQueryClient()
+  const { readOnly } = useManager()
+  const cancel = useCancelGenerationRun()
   const run = useGenerationRun(runId, {
     query: {
       refetchInterval: (query) => {
         const data = query.state.data?.data as GenerationRunOut | undefined
-        return data && (data.status === 'succeeded' || data.status === 'failed') ? false : POLL_MS
+        return data && ENDED.includes(data.status) ? false : POLL_MS
       },
     },
   })
   const data = run.data?.data as GenerationRunOut | undefined
-  const finished = data?.status === 'succeeded' || data?.status === 'failed'
+  const finished = data !== undefined && ENDED.includes(data.status)
   useEffect(() => {
     if (finished) void queryClient.invalidateQueries({ predicate: (q) => !String(q.queryKey[0]).includes('generation-runs') })
   }, [finished, queryClient])
 
-  if (run.isError) return <InlineError>{errorMessage(run.error, 'Nie udało się sprawdzić, jak idzie układanie.')}</InlineError>
+  if (run.isError) return <InlineError>{errorMessage(run.error, 'Nie udało się sprawdzić, czy grafik jest już ułożony.')}</InlineError>
   if (!data || data.status === 'queued' || data.status === 'running') {
+    // A 409 means the run ended a moment ago: the next poll shows its result, so it is not an error to show.
+    const cancelFailed = cancel.isError && errorStatus(cancel.error) !== 409
     return (
-      <p role="status" className="m-0 flex items-center gap-2 font-semibold text-accent">
-        <span className="inline-block size-3 animate-pulse rounded-full bg-accent" aria-hidden="true" />
-        {data?.status === 'running' ? 'Układam grafik…' : 'Czekam w kolejce na ułożenie…'}
-        {!compact && <span className="font-normal text-ink-muted">To trwa do pół minuty.</span>}
+      <div className="grid justify-items-start gap-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p role="status" className="m-0 flex items-center gap-2 font-semibold text-accent">
+            <span className="inline-block size-3 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+            {cancel.isPending
+              ? 'Anuluję…'
+              : data?.status === 'running'
+                ? 'Układam grafik…'
+                : 'Grafik czeka w kolejce…'}
+            {!compact && !cancel.isPending && <span className="font-normal text-ink-muted">To trwa do pół minuty.</span>}
+          </p>
+          {!readOnly && (
+            <Button
+              variant="quiet"
+              size="normal"
+              disabled={cancel.isPending || cancel.isSuccess}
+              onClick={() =>
+                cancel.mutate({ runId }, { onSettled: () => void queryClient.invalidateQueries() })
+              }
+            >
+              Anuluj
+            </Button>
+          )}
+        </div>
+        {cancelFailed && <InlineError>{errorMessage(cancel.error, NETWORK_PROBLEM)}</InlineError>}
+      </div>
+    )
+  }
+  if (data.status === 'cancelled') {
+    return (
+      <p role="status" className="m-0 font-semibold">
+        Anulowane. Nic się nie zmieniło.
       </p>
     )
   }
