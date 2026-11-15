@@ -570,7 +570,9 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
 - Osobiste maksimum godzin (`personal_max_hours`) ma parametr `tolerance_pct` (domyślnie 10, od 0 do 50), jest domyślnie
   „bez wyjątków” i należy do zasad dobrej praktyki (nowy lokal dostaje ją włączoną). Migracja `rules.0005` robi ją twardą
   z zapasem 10% tam, gdzie już była, i dopisuje na końcu listy tam, gdzie jej nie było. Zwykła (miękka) wersja liczy
-  karę dopiero ponad maksimum z zapasem.
+  karę dopiero ponad maksimum z zapasem. Zasada robi się twarda także w działających lokalach (decyzja Piotra
+  15.11.2026); na dziś to tylko dane demo, a przed pilotażem trzeba uprzedzić kierowników, że osoby z maksimum mogą
+  zostawić więcej pustych zmian i że zasadę da się zmienić na zwykłą w „Zasady”.
 - Dni zamknięcia (`staffing.LocationClosure`: lokal, data, powód): generator nie tworzy w nie żadnych miejsc, ważniejsze
   niż wyjątek w obsadzie. Dni, które minęły, zostają jak w opublikowanym grafiku.
 - Pustą zmianę można przypiąć („Zostaw pustą na stałe”): `Problem.pinned` przyjmuje `None`, solver trzyma ją pustą,
@@ -585,11 +587,11 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
 - Lista pracowników podaje `draft_shifts` (zmiany od dziś w nieopublikowanym szkicu); wyłączenie osoby z takimi
   zmianami pokazuje ostrzeżenie.
 - Karta lokalu bez stanowisk, zmian, obsady lub pracowników (`setup_missing`) pokazuje kroki z linkami. Gdy firma ma jedną
-  grupę, nowy lokal domyślnie do niej trafia.
+  grupę, nowy lokal domyślnie do niej trafia, a pole mówi, że lokal w grupie używa jej zasad.
 - Menu kierownika: „Lokale” i „Pracownicy” (wszyscy z lokali kierownika, z wyszukiwarką; zmiany w lokalu osoby);
   „Mój grafik” tylko dla kierownika, który sam pracuje na zmianach (`works_shifts` w `/me`). Na telefonie menu to jeden
   przewijany wiersz.
-- Wynik grafiku zaczyna się jednym zdaniem oceny; link „Napisz polecenie asystentowi” zmienia się na „Zmień zasady
+- Wynik grafiku zaczyna się jednym zdaniem, które mówi o faktach („Wszystkie zmiany obsadzone…”), bez oceny „dobry”; link „Napisz polecenie asystentowi” zmienia się na „Zmień zasady
   lokalu”, gdy asystent jest wyłączony. Po 2 minutach układania ekran mówi „Trwa dłużej niż zwykle”.
 - „Godziny” na pustym miesiącu proponują ostatni miesiąc z godzinami (`latest_month`). Teksty: „mogą pracować”,
   formy bez „(a)”, „Ułożyć grafik dla lokalu …?”, przykłady stanowisk nie tylko z piekarni.

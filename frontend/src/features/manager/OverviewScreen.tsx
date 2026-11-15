@@ -390,7 +390,16 @@ function NewLocationSheet({
         <TextField label="Nazwa" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
         <TextField label="Adres (nieobowiązkowo)" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} />
         {data.groups.length > 0 && (
-          <SelectField label="Grupa lokali" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+          <SelectField
+            label="Grupa lokali"
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+            hint={
+              groupId
+                ? 'Lokal w grupie używa zasad tej grupy. Wybierz „Bez grupy”, jeśli ma mieć własne zasady.'
+                : 'Lokal bez grupy ma własne zasady.'
+            }
+          >
             <option value="">Bez grupy (własne zasady)</option>
             {data.groups.map((g) => (
               <option key={g.id} value={g.id}>
