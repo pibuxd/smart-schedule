@@ -24,8 +24,8 @@ from engine.validator import Code, ValidationReport, validate
 
 WISH_WORDS = {
     AvailabilityState.PREFER: "chętnie pracuje tego dnia",
-    AvailabilityState.NEUTRAL: "nie zaznaczył(a) nic szczególnego",
-    AvailabilityState.CANNOT: "zaznaczył(a) „nie mogę”",
+    AvailabilityState.NEUTRAL: "nie ma tego dnia nic zaznaczone",
+    AvailabilityState.CANNOT: "ma tego dnia zaznaczone „nie mogę”",
 }
 
 # Why someone cannot take a slot, in words for the summary of an empty slot.
@@ -174,7 +174,8 @@ def _summary(problem: Problem, slot_id: str, current: str | None, candidates: li
         text += f" (cel na miesiąc: {_hours(person.target_hours)} h)"
     text += "."
     if able:
-        text += f" Zamiast tej osoby może pracować jeszcze {_people(len(able))}."
+        could = "może" if len(able) == 1 else "mogą"
+        text += f" Zamiast tej osoby {could} pracować jeszcze {_people(len(able))}."
     else:
         text += " Nikt inny nie mógł wziąć tej zmiany."
     return text

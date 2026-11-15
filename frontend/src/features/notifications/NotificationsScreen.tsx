@@ -19,7 +19,15 @@ const LINKS = {
 } as const
 
 /** In-app notifications, newest first. Opening the screen marks them as seen; new ones stay highlighted once. */
-export function NotificationsScreen({ companyId, now = new Date() }: { companyId: string; now?: Date }) {
+export function NotificationsScreen({
+  companyId,
+  now = new Date(),
+  forManager = false,
+}: {
+  companyId: string
+  now?: Date
+  forManager?: boolean
+}) {
   const notifications = useMyNotifications({ company_id: companyId }, { query: { refetchInterval: NOTIFICATIONS_REFRESH_MS } })
   const markRead = useMarkNotificationsRead()
   const queryClient = useQueryClient()
@@ -55,7 +63,9 @@ export function NotificationsScreen({ companyId, now = new Date() }: { companyId
     return (
       <EmptyState title="Nie masz powiadomień">
         <p className="m-0">
-          Damy Ci tu znać, gdy kierownik poprosi o dyspozycje, pokaże nowy grafik albo ktoś odda zmianę, którą możesz wziąć.
+          {forManager
+            ? 'Damy Ci tu znać, gdy ktoś odda zmianę albo zgłosi się, żeby ją wziąć.'
+            : 'Damy Ci tu znać, gdy kierownik poprosi o dyspozycje, pokaże nowy grafik albo ktoś odda zmianę, którą możesz wziąć.'}
         </p>
       </EmptyState>
     )

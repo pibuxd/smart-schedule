@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { ClosureOut } from './closureOut';
 import type { PositionOut } from './positionOut';
 import type { ShiftTypeOut } from './shiftTypeOut';
 import type { StaffingCellOut } from './staffingCellOut';
@@ -14,4 +15,5 @@ export interface LocationSetupOut {
   shift_types: ShiftTypeOut[];
   staffing: StaffingCellOut[];
   exceptions: StaffingExceptionOut[];
+  closures: ClosureOut[];
 }

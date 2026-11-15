@@ -158,10 +158,18 @@ function LocationRow({ location, today, readOnly }: { location: LocationSummaryO
               </span>
             )}
           </>
+        ) : location.setup_missing.length > 0 ? (
+          <SetupSteps location={location} />
         ) : (
           <>
             <span className="font-semibold">Nie ma jeszcze dat grafiku</span>
-            <span className="text-sm text-ink-muted">Ustal, na jakie dni układasz grafik.</span>
+            <Link
+              to="/kierownik/lokal/$locationId/dyspozycje"
+              params={{ locationId: location.id }}
+              className="w-fit font-semibold text-accent underline underline-offset-4"
+            >
+              Ustal, na jakie dni układasz grafik
+            </Link>
           </>
         )}
       </div>
@@ -229,6 +237,51 @@ function LocationRow({ location, today, readOnly }: { location: LocationSummaryO
         </div>
       </div>
     </li>
+  )
+}
+
+const SETUP_STEPS: { step: LocationSummaryOut['setup_missing'][number]; text: string; to: 'ustawienia' | 'pracownicy' }[] = [
+  { step: 'positions', text: 'Dodaj stanowiska', to: 'ustawienia' },
+  { step: 'shift_types', text: 'Dodaj zmiany i ich godziny', to: 'ustawienia' },
+  { step: 'staffing', text: 'Ustaw, ile osób potrzeba w każdy dzień', to: 'ustawienia' },
+  { step: 'employees', text: 'Zaproś pracowników', to: 'pracownicy' },
+]
+
+/** A new location: the steps before its first schedule, each with a link to the screen where it is done. */
+function SetupSteps({ location }: { location: LocationSummaryOut }) {
+  const missing = new Set(location.setup_missing)
+  return (
+    <div className="grid gap-1">
+      <span className="font-semibold">Zanim ułożysz pierwszy grafik</span>
+      <ol className="m-0 grid gap-0.5 pl-5">
+        {SETUP_STEPS.map(({ step, text, to }) => (
+          <li key={step} className={missing.has(step) ? '' : 'text-ink-muted line-through'}>
+            {missing.has(step) ? (
+              <Link
+                to={to === 'ustawienia' ? '/kierownik/lokal/$locationId/ustawienia' : '/kierownik/lokal/$locationId/pracownicy'}
+                params={{ locationId: location.id }}
+                className="font-semibold text-accent underline underline-offset-4"
+              >
+                {text}
+              </Link>
+            ) : (
+              <>
+                {text} <span className="sr-only">(zrobione)</span>
+              </>
+            )}
+          </li>
+        ))}
+        <li>
+          <Link
+            to="/kierownik/lokal/$locationId/dyspozycje"
+            params={{ locationId: location.id }}
+            className="font-semibold text-accent underline underline-offset-4"
+          >
+            Ustal, na jakie dni układasz grafik
+          </Link>
+        </li>
+      </ol>
+    </div>
   )
 }
 
@@ -304,7 +357,8 @@ function NewLocationSheet({
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
-  const [groupId, setGroupId] = useState('')
+  // One group in the company: a new location most likely belongs to it too.
+  const [groupId, setGroupId] = useState(data.groups.length === 1 ? data.groups[0].id : '')
   const [period, setPeriod] = useState<'month' | 'week'>('month')
 
   const submit = (event: React.FormEvent) => {

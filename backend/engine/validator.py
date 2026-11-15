@@ -255,11 +255,13 @@ class _Checker:
         for slot in p.slots:
             employee_id = self.assignment.get(slot.id)
             pinned = p.pinned.get(slot.id)
-            if pinned is not None and employee_id != pinned:
+            if slot.id in p.pinned and employee_id != pinned:
                 self.hard.append(
                     Violation(
                         Code.PINNED,
-                        f"Zmiana {_slot_text(slot, p)} jest przypięta do: {self.name(pinned)}.",
+                        f"Zmiana {_slot_text(slot, p)} jest przypięta do: {self.name(pinned)}."
+                        if pinned is not None
+                        else f"Zmiana {_slot_text(slot, p)} jest przypięta jako pusta: ma zostać bez obsady.",
                         employee=pinned,
                         slots=(slot.id,),
                     )

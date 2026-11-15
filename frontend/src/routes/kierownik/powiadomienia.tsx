@@ -13,7 +13,7 @@ function ManagerNotificationsPage() {
   return (
     <div className="mx-auto grid w-full max-w-(--column) gap-4">
       <h1 className="m-0 text-xl font-extrabold">Powiadomienia</h1>
-      <NotificationsScreen companyId={companyId} />
+      <NotificationsScreen companyId={companyId} forManager />
     </div>
   )
 }

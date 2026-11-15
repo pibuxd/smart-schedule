@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import date
 from uuid import UUID
 
+from django.db.models import Max
 from django.http import HttpResponse
 from ninja import Router, Schema
 from ninja.errors import HttpError
@@ -45,6 +46,9 @@ class HoursReportOut(Schema):
     locations: list[LocationColumnOut]
     rows: list[EmployeeHoursOut]
     total: float
+    # The newest month with published shifts ("YYYY-MM"; None: nothing published yet), so an empty month can
+    # point there.
+    latest_month: str | None
 
 
 def _month(value: str) -> tuple[date, date]:
@@ -110,11 +114,21 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
             )
         )
     result.sort(key=lambda r: (r.home_location_name, r.name))
+    latest = (
+        ctx.qs(Assignment)
+        .filter(
+            employee__isnull=False,
+            shift__version__status=ScheduleVersion.Status.PUBLISHED,
+            shift__location__in=locations,
+        )
+        .aggregate(day=Max("shift__date"))["day"]
+    )
     return HoursReportOut(
         month=f"{first:%Y-%m}",
         locations=[LocationColumnOut(id=loc.pk, name=loc.name) for loc in used],
         rows=result,
         total=round(sum(r.total for r in result), 2),
+        latest_month=f"{latest:%Y-%m}" if latest else None,
     )
 
 

@@ -11,4 +11,5 @@ export interface MyCompanyOut {
   name: string;
   role: MyCompanyOutRole;
   read_only: boolean;
+  works_shifts?: boolean;
 }

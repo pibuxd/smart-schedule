@@ -160,7 +160,7 @@ def test_weight_profile_keeps_manager_voice_stronger(make_company):
 
 
 @pytest.mark.django_db
-def test_one_published_version_per_period_and_hole_cannot_be_pinned(make_company):
+def test_one_published_version_per_period(make_company):
     a = make_company()
     period = SchedulePeriod.objects.create(location=a["location"], start=date(2026, 12, 1), end=date(2026, 12, 31))
     violates(
@@ -183,8 +183,7 @@ def test_one_published_version_per_period_and_hole_cannot_be_pinned(make_company
         slot_key="2026-12-01|ranna|1",
     )
     assert shift.company_id == a["company"].id
-    violates(lambda: Assignment.objects.create(shift=shift, employee=None, pinned=True))
-    Assignment.objects.create(shift=shift, employee=a["employee"], pinned=True)
+    Assignment.objects.create(shift=shift, employee=None, pinned=True)  # an empty slot kept empty on purpose
 
 
 @pytest.mark.django_db

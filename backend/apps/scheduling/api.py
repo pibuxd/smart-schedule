@@ -211,6 +211,7 @@ def create_period(request, location_id: UUID, payload: PeriodIn):
             start=payload.start,
             end=payload.end,
             availability_deadline=payload.availability_deadline,
+            deadline_set_at=timezone.now(),
         )
     return Status(201, _period_out(period))
 
@@ -246,8 +247,10 @@ def update_period(request, period_id: UUID, payload: PeriodUpdateIn):
     ctx.require_manager_of(period.location)
     ctx.require_writable()
     _check_deadline(payload.availability_deadline, period.start)
-    period.availability_deadline = payload.availability_deadline
-    period.save(update_fields=["availability_deadline"])
+    if period.availability_deadline != payload.availability_deadline:
+        period.availability_deadline = payload.availability_deadline
+        period.deadline_set_at = timezone.now()
+        period.save(update_fields=["availability_deadline", "deadline_set_at"])
     return _period_out(period)
 
 
@@ -739,7 +742,7 @@ def _unmet_requests(loaded) -> list[UnmetRequestOut]:
             text = requests[measure.request_id].summary
         else:
             share = f"{kept:g}".replace(".", ",")
-            text = f"Dni „chętnie”: dostał(a) zmiany w {share} % z nich (tyle, ile się dało)."
+            text = f"Dni „chętnie”: zmiany są w {share} % z nich (tyle, ile się dało)."
         kind = "instruction" if measure.by_manager else measure.kind.value
         result.append(UnmetRequestOut(employee_name=names[measure.employee], text=text, kind=kind, percent_kept=kept))
     for request_id in loaded.report.unscored_requests:

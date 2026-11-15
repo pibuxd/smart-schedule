@@ -13,6 +13,7 @@ from apps.rules.models import RuleSetting
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.models import (
     EmployeeProfile,
+    LocationClosure,
     Position,
     PositionExperience,
     ShiftType,
@@ -63,6 +64,15 @@ class TestOverviewAndLocations:
     def test_employee_cannot_open_the_manager_panel(self, api, shop):
         response = api.login(shop["worker"]).get(f"/api/manager/overview?company_id={shop['company'].pk}")
         assert response.status_code == 403
+
+    def test_overview_lists_what_a_new_location_still_needs(self, api, shop):
+        as_manager(api, shop)
+        overview = f"/api/manager/overview?company_id={shop['company'].pk}"
+        [row] = api.get(overview).json()["locations"]
+        assert row["setup_missing"] == ["staffing"]
+        Location.objects.create(company=shop["company"], name="Nowy")
+        rows = {r["name"]: r for r in api.get(overview).json()["locations"]}
+        assert rows["Nowy"]["setup_missing"] == ["positions", "shift_types", "staffing", "employees"]
 
     def test_create_location_starts_with_good_practice_rules(self, api, shop):
         response = as_manager(api, shop).post(
@@ -210,6 +220,19 @@ class TestSettings:
         assert api.client.delete(f"/api/staffing-exceptions/{created.json()['id']}").status_code == 204
         assert not StaffingException.objects.exists()
 
+    def test_closed_days(self, api, shop):
+        as_manager(api, shop)
+        url = f"/api/locations/{shop['location'].pk}/closures"
+        day = shop["period"].start
+        created = api.post(url, {"date": str(day), "note": "  Remont  "})
+        assert created.status_code == 201 and created.json()["note"] == "Remont"
+        assert api.post(url, {"date": str(day)}).json()["detail"] == "Ten dzień jest już na liście dni zamknięcia."
+        assert api.post(url, {"date": "0001-01-01"}).status_code == 400
+        setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+        assert [c["date"] for c in setup["closures"]] == [str(day)]
+        assert api.client.delete(f"/api/closures/{created.json()['id']}").status_code == 204
+        assert not LocationClosure.objects.exists()
+
 
 class TestEmployees:
     def test_list_and_update(self, api, shop):
@@ -229,6 +252,30 @@ class TestEmployees:
         assert body["max_hours_month"] == 160
         cleared = api.patch(f"/api/employees/{row['id']}", {"max_hours_month": None}).json()
         assert cleared["max_hours_month"] is None and cleared["target_hours_month"] == 120
+
+    def test_name_and_phone_can_be_corrected(self, api, shop, make_company):
+        as_manager(api, shop)
+        url = f"/api/employees/{shop['employee'].pk}"
+        body = api.patch(url, {"first_name": " Anna ", "last_name": "Nowak", "phone": "600 100 200"}).json()
+        assert (body["first_name"], body["last_name"], body["phone"]) == ("Anna", "Nowak", "+48600100200")
+        shop["worker"].refresh_from_db()
+        assert shop["worker"].phone_e164 == "+48600100200"
+        assert api.patch(url, {"first_name": ""}).json()["detail"] == "Wpisz imię."
+        assert api.patch(url, {"phone": "123"}).status_code == 400
+        taken = api.patch(url, {"phone": shop["manager"].phone_e164})
+        assert taken.status_code == 409 and "inne konto" in taken.json()["detail"]
+        # The manager logs in with their number: it is not changed from the employee list.
+        assert api.get("/api/me").json()["companies"][0]["works_shifts"] is False  # no "Mój grafik" in the menu
+        me = api.post(f"/api/locations/{shop['location'].pk}/employees/me").json()
+        assert api.get("/api/me").json()["companies"][0]["works_shifts"] is True
+        assert api.patch(f"/api/employees/{me['id']}", {"phone": "600100201"}).status_code == 409
+        assert api.patch(f"/api/employees/{me['id']}", {"last_name": "Kowalska"}).json()["last_name"] == "Kowalska"
+        # A person who also works for another company changes their own account.
+        other = make_company("Inna")
+        Membership.objects.create(company=other["company"], user=shop["worker"])
+        shared = api.patch(url, {"first_name": "Ania"})
+        assert shared.status_code == 409 and "innej firmie" in shared.json()["detail"]
+        assert api.patch(url, {"first_name": "Anna", "max_hours_month": 100}).status_code == 200  # unchanged name
 
     def test_experience_level_is_set_by_the_manager(self, api, shop):
         as_manager(api, shop)
@@ -373,6 +420,19 @@ class TestAvailabilityOverview:
         assert [(d["state"], d["late"]) for d in person["days"]] == [("cannot", False), ("prefer", True)]
         assert person["days"][1]["from_time"] == "06:00:00"
         assert person["late_days"] == 1
+
+    def test_a_deadline_in_the_past_does_not_make_earlier_changes_late(self, api, shop):
+        period = shop["period"]
+        entered = AvailabilityDay.objects.create(employee=shop["employee"], date=period.start, state="cannot")
+        AvailabilityDay.objects.filter(pk=entered.pk).update(updated_at=timezone.now() - timedelta(days=1))
+        as_manager(api, shop)
+        yesterday = timezone.localdate() - timedelta(days=3)
+        assert api.patch(f"/api/periods/{period.pk}", {"availability_deadline": str(yesterday)}).status_code == 200
+        [person] = api.get(f"/api/periods/{period.pk}/availability").json()["employees"]
+        assert person["late_days"] == 0  # entered before the manager set the deadline
+        AvailabilityDay.objects.filter(pk=entered.pk).update(updated_at=timezone.now() + timedelta(minutes=1))
+        [person] = api.get(f"/api/periods/{period.pk}/availability").json()["employees"]
+        assert person["late_days"] == 1  # changed after it
 
     def test_deadline_set_by_the_manager(self, api, shop):
         as_manager(api, shop)
@@ -584,6 +644,9 @@ class TestIsolation:
         assert api.post(f"/api/periods/{shop['period'].pk}/ask-availability", {}).status_code == 404
         assert put(api, f"/api/scopes/location/{location}/rules", {"items": []}).status_code == 404
         assert put(api, f"/api/locations/{location}/staffing", {"cells": []}).status_code == 404
+        assert api.post(f"/api/locations/{location}/closures", {"date": str(shop["period"].start)}).status_code == 404
+        closure = LocationClosure.objects.create(location=shop["location"], date=shop["period"].start)
+        assert api.client.delete(f"/api/closures/{closure.pk}").status_code == 404
 
     def test_read_only_company_cannot_change_settings(self, api, shop, subscribe):
         subscribe(shop["company"], days=-1)

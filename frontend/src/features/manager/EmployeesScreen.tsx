@@ -18,7 +18,7 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { prettyPhone } from '../auth/phone'
 import { useManager } from './ManagerContext'
-import { EXPERIENCE } from './words'
+import { EXPERIENCE, shifts } from './words'
 
 export function EmployeesScreen({ locationId }: { locationId: string }) {
   const employees = useLocationEmployees(locationId)
@@ -196,6 +196,9 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
   const [max, setMax] = useState(employee.max_hours_month?.toString() ?? '')
   const [target, setTarget] = useState(employee.target_hours_month?.toString() ?? '')
   const [active, setActive] = useState(employee.is_active)
+  const [first, setFirst] = useState(employee.first_name)
+  const [last, setLast] = useState(employee.last_name)
+  const [phone, setPhone] = useState(prettyPhone(employee.phone))
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -203,6 +206,9 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
       {
         employeeId: employee.id,
         data: {
+          first_name: first,
+          last_name: last,
+          ...(phone !== prettyPhone(employee.phone) && { phone }),
           position_ids: chosen,
           experience,
           position_experience: chosen.map((id) => ({ position_id: id, experience: levels[id] ?? experience })),
@@ -223,6 +229,24 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
 
   return (
     <form onSubmit={submit} className="grid gap-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField label="Imię" value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} required />
+        <TextField label="Nazwisko" value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} />
+        <TextField
+          label="Numer telefonu"
+          type="tel"
+          inputMode="tel"
+          className="sm:col-span-2"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          disabled={employee.is_manager}
+          hint={
+            employee.is_manager
+              ? 'Kierownik loguje się tym numerem, więc tu go nie zmienisz.'
+              : 'Tym numerem ta osoba się loguje. Po zmianie kod przyjdzie na nowy numer.'
+          }
+        />
+      </div>
       <fieldset className="m-0 grid gap-1 border-0 p-0">
         <legend className="mb-1 font-semibold">Stanowiska</legend>
         {positions.length === 0 && (
@@ -320,6 +344,11 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
         checked={active}
         onChange={(e) => setActive(e.target.checked)}
       />
+      {!active && employee.is_active && (employee.draft_shifts ?? 0) > 0 && (
+        <p role="alert" className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
+          {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Po zapisaniu ułóż grafik od nowa albo przenieś je ręcznie.`}
+        </p>
+      )}
       {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
       <Button type="submit" wide disabled={update.isPending}>
         Zapisz

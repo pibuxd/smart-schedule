@@ -97,3 +97,9 @@ def test_csv_shows_names_that_look_like_formulas_as_text(api, shop, published):
     names = [line.split(";")[0] for line in text.strip().splitlines()[1:]]
     assert not any(name.lstrip('"').startswith("=") for name in names)
     assert any(name.lstrip('"').startswith("'=HYPERLINK") for name in names)
+
+
+def test_an_empty_month_points_to_the_newest_month_with_hours(api, shop, published):
+    api.login(shop["manager"])
+    body = api.get(f"/api/reports/hours?company_id={shop['company'].id}&month=2026-10").json()
+    assert body["rows"] == [] and body["latest_month"] == "2026-12"

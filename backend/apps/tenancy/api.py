@@ -269,9 +269,14 @@ class PeriodSummaryOut(Schema):
     experienced_short: list[ExperiencedShortOut]
 
 
+SetupStep = Literal["positions", "shift_types", "staffing", "employees"]
+
+
 class LocationSummaryOut(LocationOut):
     employees: int
     pending_invitations: int
+    # What a new location still lacks before the first schedule, in the order to do it (empty: ready).
+    setup_missing: list[SetupStep]
     # The current or next period (the latest one when every period has ended); None: no period yet.
     period: PeriodSummaryOut | None
 
@@ -357,6 +362,20 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
     )
 
 
+def _setup_missing(ctx, location: Location) -> list[SetupStep]:
+    from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule
+
+    checks: list[tuple[SetupStep, object]] = [
+        ("positions", Position),
+        ("shift_types", ShiftType),
+        ("staffing", StaffingRule),
+    ]
+    missing: list[SetupStep] = [step for step, model in checks if not ctx.qs(model).filter(location=location).exists()]
+    if not ctx.qs(EmployeeProfile).filter(home_location=location, is_active=True).exists():
+        missing.append("employees")
+    return missing
+
+
 @router.get("/manager/overview", response={200: ManagerOverviewOut, 403: ErrorOut, 404: ErrorOut})
 def manager_overview(request, company_id: UUID):
     """The manager's start screen: every location they run, the state of its current period and who is missing."""
@@ -381,6 +400,7 @@ def manager_overview(request, company_id: UUID):
                 .filter(location=location, status=InvitationStatus.PENDING)
                 .count(),
                 period=_period_summary(ctx, location, today),
+                setup_missing=_setup_missing(ctx, location),
             )
         )
     return ManagerOverviewOut(

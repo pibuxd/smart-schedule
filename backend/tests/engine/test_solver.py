@@ -485,6 +485,14 @@ def test_staffing_leaves_a_hole_rather_than_a_less_experienced_person():
     assert solved(problem([employee("ola"), oven], slots))[0].schedule == {"s": "jan"}
 
 
+def test_a_pinned_hole_stays_empty():
+    p = problem([employee("anna")], [slot("a", MON), slot("b", MON + timedelta(days=1))], pinned={"a": None})
+    result, _report = solved(p)
+    assert result.schedule == {"a": None, "b": "anna"}
+    broken = validate(p, {"a": "anna", "b": "anna"})
+    assert [v.code for v in broken.hard] == ["pinned"] and "przypięta jako pusta" in broken.hard[0].message
+
+
 @pytest.mark.parametrize(("tolerance", "holes"), [(10, 1), (25, 0)])
 def test_personal_maximum_keeps_the_tolerance(tolerance, holes):
     # Three 8 h shifts in November, maximum 20 h a month: 10 % to spare allows 22 h (two shifts), 25 % allows 25 h.
