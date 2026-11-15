@@ -574,7 +574,8 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
   15.11.2026); na dziś to tylko dane demo, a przed pilotażem trzeba uprzedzić kierowników, że osoby z maksimum mogą
   zostawić więcej pustych zmian i że zasadę da się zmienić na zwykłą w „Zasady”.
 - Dni zamknięcia (`staffing.LocationClosure`: lokal, data, powód): generator nie tworzy w nie żadnych miejsc, ważniejsze
-  niż wyjątek w obsadzie. Dni, które minęły, zostają jak w opublikowanym grafiku.
+  niż wyjątek w obsadzie. Dni, które minęły, zostają jak w opublikowanym grafiku. Gdy szkic ma jeszcze kogoś w dzień zamknięcia
+  (`ClosureOut.in_draft`), lista mówi, że trzeba ułożyć grafik od nowa.
 - Pustą zmianę można przypiąć („Zostaw pustą na stałe”): `Problem.pinned` przyjmuje `None`, solver trzyma ją pustą,
   walidator zgłasza wpisanie kogoś mimo przypięcia. Ręczne wpisanie osoby zdejmuje przypięcie jak dotąd.
 - Zmiana, której nikt nie może wziąć, nie dostaje przycisku „Wpisz mimo to”: wpisanie łamiące zasady bez wyjątków

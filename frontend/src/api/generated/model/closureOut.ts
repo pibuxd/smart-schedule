@@ -9,4 +9,6 @@ export interface ClosureOut {
   id: string;
   date: string;
   note: string;
+  /** An unpublished draft still has people on this day; arrange again to clear it. */
+  in_draft?: boolean;
 }

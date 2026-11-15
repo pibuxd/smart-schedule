@@ -650,6 +650,11 @@ function ClosuresSection({ locationId, setup }: { locationId: string; setup: Loc
               <span>
                 <b>{dayTitle(parseDate(c.date))}</b>
                 {c.note && <span className="text-ink-muted"> ({c.note})</span>}
+                {c.in_draft && (
+                  <span className="block text-sm text-ink-muted">
+                    Szkic grafiku ma jeszcze zmiany w ten dzień. Ułóż grafik od nowa, żeby zniknęły.
+                  </span>
+                )}
               </span>
               <Button variant="quiet" size="normal" disabled={readOnly || remove.isPending} onClick={() => remove.mutate({ closureId: c.id }, { onSuccess: refresh })}>
                 Usuń
