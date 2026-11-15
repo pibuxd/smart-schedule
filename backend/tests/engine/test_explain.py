@@ -1,7 +1,7 @@
 """Quick explanations of one slot and the list of people who could take it."""
 
 from dataclasses import replace
-from datetime import date
+from datetime import date, time
 
 from engine.explain import explain_slot
 from engine.problem import Availability, AvailabilityState, Request, RuleConfig
@@ -98,3 +98,21 @@ def test_nobody_with_the_position():
 
     assert explanation.candidates == ()
     assert "Nikt w tym lokalu nie pracuje na stanowisku Sprzedawca" in explanation.summary
+
+
+def test_empty_slot_names_the_albo_choice():
+    entry = Availability(
+        "anna",
+        MON,
+        AvailabilityState.NEUTRAL,
+        from_time=time(6),
+        to_time=time(10),
+        from_time_2=time(16),
+        to_time_2=time(22),
+        one_shift=True,
+    )
+    p = problem(
+        [employee("anna")], [slot("a", MON, "06:00", "10:00"), slot("b", MON, "16:00", "22:00")], availability=(entry,)
+    )
+    explanation = explain_slot(p, {"a": "anna", "b": None}, "b")
+    assert "dyspozycja „albo”: już ma zmianę tego dnia (1 osoba)" in explanation.summary
