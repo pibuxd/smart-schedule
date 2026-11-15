@@ -363,6 +363,8 @@ class TestMySchedule:
         expected = sum(8 for d in mine if d.strftime("%Y-%m") in months)  # past days count, drafts do not
         assert sum(m["hours"] for m in body["months"]) == expected
         assert body["months"][0]["month"] == today.strftime("%Y-%m")
+        # The list goes on to the end of the published period, so free days at the end are shown too.
+        assert body["published_until"] == str(today + timedelta(days=20))
 
     def test_empty_when_nothing_is_published(self, api, shop):
         api.login(shop["worker"])
@@ -370,6 +372,7 @@ class TestMySchedule:
         assert body["shifts"] == []
         assert body["months"] == [{"month": timezone.localdate().strftime("%Y-%m"), "hours": 0.0}]
         assert body["home_location_name"] == shop["location"].name
+        assert body["published_until"] is None
 
 
 def test_publish_helper_supersedes_the_previous_version(shop):

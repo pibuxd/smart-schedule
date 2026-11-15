@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { useMe } from '../../api/generated/auth/auth'
 import type { MeOut, MyCompanyOut } from '../../api/generated/model'
-import { errorStatus } from '../../lib/api-error'
+import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
 
 const COMPANY_KEY = 'grafikomat.company'
 
@@ -25,7 +25,7 @@ function storeCompany(id: string) {
 export type Session =
   | { state: 'loading' }
   | { state: 'logged-out' }
-  | { state: 'error'; retry: () => void }
+  | { state: 'error'; retry: () => void; message: string }
   | {
       state: 'ready'
       me: MeOut
@@ -41,7 +41,7 @@ export function useSession(): Session {
   if (me.isPending) return { state: 'loading' }
   if (me.isError) {
     if (errorStatus(me.error) === 401) return { state: 'logged-out' }
-    return { state: 'error', retry: () => void me.refetch() }
+    return { state: 'error', retry: () => void me.refetch(), message: errorMessage(me.error, NETWORK_PROBLEM) }
   }
   const data = me.data.data as MeOut
   const company = data.companies.find((c) => c.id === companyId) ?? data.companies[0]

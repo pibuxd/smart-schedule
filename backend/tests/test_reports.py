@@ -84,3 +84,16 @@ def test_a_total_is_marked_when_the_person_also_works_elsewhere(api, shop, publi
     api.login(shop["manager"])  # the owner runs both locations: nothing is missing
     body = api.get(f"/api/reports/hours?company_id={shop['company'].id}&month=2026-12").json()
     assert not any(r["elsewhere"] for r in body["rows"])
+
+
+def test_csv_shows_names_that_look_like_formulas_as_text(api, shop, published):
+    worker = shop["worker"]
+    worker.first_name, worker.last_name = '=HYPERLINK("http://example.com")', ""
+    worker.save()
+    api.login(shop["manager"])
+
+    text = api.get(f"/api/reports/hours.csv?company_id={shop['company'].id}&month=2026-12").content.decode("utf-8-sig")
+
+    names = [line.split(";")[0] for line in text.strip().splitlines()[1:]]
+    assert not any(name.lstrip('"').startswith("=") for name in names)
+    assert any(name.lstrip('"').startswith("'=HYPERLINK") for name in names)

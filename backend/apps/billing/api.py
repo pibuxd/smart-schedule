@@ -4,15 +4,13 @@ from datetime import datetime
 from uuid import UUID
 
 from django.conf import settings
-from django.db import transaction
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 
 from apps.billing.services import (
     CodeRejected,
-    check_code_attempt_limit,
+    code_attempt,
     generations_used_this_month,
-    record_code_attempt,
     redeem_code,
     subscription_state,
 )
@@ -69,13 +67,9 @@ def redeem_subscription_code(request, company_id: UUID, payload: RedeemIn):
     """Enter a free-access code. Extends access from its current end date; works also after it has expired."""
     ctx = tenant_context(request, company_id)
     ctx.require_manager()
-    ip = client_ip(request)
-    check_code_attempt_limit(ctx.user, ip)
     try:
-        with transaction.atomic():
+        with code_attempt(ctx.user, client_ip(request)):
             redeem_code(ctx.company, ctx.user, payload.code)
     except CodeRejected as exc:
-        record_code_attempt(ctx.user, ip, success=False)
         raise HttpError(400, str(exc)) from exc
-    record_code_attempt(ctx.user, ip, success=True)
     return _subscription_out(ctx)

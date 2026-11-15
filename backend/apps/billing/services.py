@@ -1,10 +1,13 @@
 """Subscription state of a company and redeeming free-access codes."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil
 
 from django.conf import settings
+from django.db import connection, transaction
 from django.utils import timezone
 from ninja.errors import HttpError
 
@@ -130,3 +133,31 @@ def check_code_attempt_limit(user, ip: str | None) -> None:
 
 def record_code_attempt(user, ip: str | None, success: bool) -> None:
     CodeAttempt.objects.create(user=user, ip=ip, success=success)
+
+
+def _lock(key: str) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [key])
+
+
+@contextmanager
+def code_attempt(user, ip: str | None) -> Iterator[None]:
+    """One try of a free-access code: checked against the limit, counted, and serialised per person and per IP,
+    so parallel requests cannot all pass the limit before any failure is written. The body runs in a savepoint;
+    a rejected code is undone, recorded, and re-raised after the transaction (so the failure is kept)."""
+    rejected: CodeRejected | None = None
+    with transaction.atomic():
+        _lock(f"access-code-user:{user.pk}")
+        if ip is not None:
+            _lock(f"access-code-ip:{ip}")
+        check_code_attempt_limit(user, ip)
+        try:
+            with transaction.atomic():
+                yield
+        except CodeRejected as exc:
+            rejected = exc
+            record_code_attempt(user, ip, success=False)
+        else:
+            record_code_attempt(user, ip, success=True)
+    if rejected is not None:
+        raise rejected

@@ -24,9 +24,46 @@ type PhoneForm = z.input<typeof phoneSchema>
 
 type Purpose = 'login' | 'register'
 
+const SENT_KEY = 'grafikomat.code-sent'
+
+/**
+ * The code step survives a page refresh (someone switches to their SMS app and back, the browser reloads):
+ * the number and the times are kept in this tab until the code expires.
+ */
+function readSent(purpose: Purpose): RequestCodeOut | null {
+  try {
+    const saved = JSON.parse(window.sessionStorage.getItem(SENT_KEY) ?? 'null') as
+      | { sent: RequestCodeOut; at: number; purpose: Purpose }
+      | null
+    if (!saved || saved.purpose !== purpose) return null
+    const passed = Math.floor((Date.now() - saved.at) / 1000)
+    if (passed < 0 || passed >= saved.sent.expires_in_s) return null
+    return {
+      ...saved.sent,
+      expires_in_s: saved.sent.expires_in_s - passed,
+      resend_after_s: Math.max(0, saved.sent.resend_after_s - passed),
+    }
+  } catch {
+    return null
+  }
+}
+
+function storeSent(sent: RequestCodeOut | null, purpose: Purpose) {
+  try {
+    if (sent) window.sessionStorage.setItem(SENT_KEY, JSON.stringify({ sent, at: Date.now(), purpose }))
+    else window.sessionStorage.removeItem(SENT_KEY)
+  } catch {
+    // Blocked storage: a refresh goes back to the phone number, as before.
+  }
+}
+
 /** Logging in, or (purpose "register") the first step of registering a new company: the phone number and the code. */
 export function LoginScreen({ purpose = 'login' }: { purpose?: Purpose }) {
-  const [sent, setSent] = useState<RequestCodeOut | null>(null)
+  const [sent, setSentState] = useState<RequestCodeOut | null>(() => readSent(purpose))
+  const setSent = (value: RequestCodeOut | null) => {
+    storeSent(value, purpose)
+    setSentState(value)
+  }
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-(--column) flex-col gap-6 px-4 pt-6 pb-8">
@@ -145,6 +182,7 @@ function CodeStep({
         { data: { phone: sent.phone, code: value } },
         {
           onSuccess: async () => {
+            storeSent(null, purpose)
             await queryClient.invalidateQueries({ queryKey: getMeQueryKey() })
             await navigate({ to: purpose === 'register' ? '/rejestracja' : '/' })
           },
@@ -163,7 +201,7 @@ function CodeStep({
         <h1 className="m-0 text-2xl font-extrabold">Wpisz kod z SMS-a</h1>
         <p className="m-0 text-ink-muted">
           Wysłaliśmy go na numer <b className="whitespace-nowrap text-ink">{prettyPhone(sent.phone)}</b>. Kod jest
-          ważny {Math.round(sent.expires_in_s / 60)} minut.
+          ważny {Math.max(1, Math.round(sent.expires_in_s / 60))} min.
         </p>
       </div>
       <CodeInput value={code} onChange={check} disabled={verify.isPending} invalid={verify.isError && !code} />

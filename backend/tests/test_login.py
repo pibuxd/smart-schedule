@@ -358,3 +358,27 @@ def test_system_check_warns_when_codes_go_to_the_log_outside_development(setting
 
     settings.DEBUG = True
     assert check(None) == []
+
+
+def test_registering_new_numbers_is_limited_per_address(api, sms_outbox, settings):
+    settings.REGISTER_NUMBERS_PER_IP_PER_HOUR = 2
+    User.objects.create_user("+48601700899")
+
+    assert request_code(api, "+48601700811", purpose="register").status_code == 200
+    assert request_code(api, "+48601700812", purpose="register").status_code == 200
+    assert request_code(api, "+48601700813", purpose="register").status_code == 429
+    # People with an account still get their code from this address.
+    assert request_code(api, "+48601700899").status_code == 200
+    assert len(sms_outbox) == 3
+
+
+def test_admin_login_is_refused_after_many_failures(client, settings):
+    from django.core.cache import cache
+
+    cache.clear()
+    settings.ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR = 2
+    form = {"username": "+48601700898", "password": "zle", "next": "/api/admin/"}
+    assert client.post("/api/admin/login/", form).status_code == 200
+    assert client.post("/api/admin/login/", form).status_code == 200
+    assert client.post("/api/admin/login/", form).status_code == 429
+    cache.clear()

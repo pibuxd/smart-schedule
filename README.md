@@ -60,7 +60,7 @@ Panel administratora Django: http://localhost:8080/api/admin/. Konto tworzy kome
 kody dostępu (Kody dostępu → Dodaj; kod widać w całości tylko raz) i może zmienić profil wag lokalu lub grupy.
 Nowa firma bez kodu ma 30 dni okresu próbnego, potem działa tylko do odczytu, dopóki kierownik nie wpisze kodu.
 
-Opis API: http://localhost:8080/api/docs.
+Opis API (tylko przy `DJANGO_DEBUG=1`): http://localhost:8080/api/docs.
 
 ### Asystent (Claude)
 

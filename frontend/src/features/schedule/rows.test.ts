@@ -27,6 +27,12 @@ describe('Mój grafik list', () => {
     expect(rows[2]).toMatchObject({ label: 'Tydzień 16–22 listopada' })
   })
 
+  it('goes on to the end of the published schedule, so a free last day is shown', () => {
+    const rows = buildRows(shift('2026-12-29'), [shift('2026-12-30')], '2026-12-31')
+    expect(rows.map((r) => r.kind)).toEqual(['shift', 'off'])
+    expect(buildRows(shift('2026-12-30'), [], '2026-12-31').map((r) => r.kind)).toEqual(['off'])
+  })
+
   it('names a few coworkers and counts the rest with the right Polish form', () => {
     expect(coworkersText(['Anna', 'Marek'])).toBe('Anna, Marek')
     expect(coworkersText(['A', 'B', 'C', 'D', 'E'])).toBe('A, B, C i 2 inne osoby')

@@ -6,12 +6,17 @@ export type Row =
   | { kind: 'shift'; key: string; shift: MyShiftOut; showDate: boolean }
   | { kind: 'off'; key: string; date: Date }
 
-/** All days from the first to the last shift: shifts, days off, and a line at each new week. */
-export function buildRows(first: MyShiftOut, shifts: MyShiftOut[]): Row[] {
+/**
+ * All days after the first shift up to the end of the published schedule (or the last shift, if later):
+ * shifts, days off, and a line at each new week. A free last day of the month is shown too.
+ */
+export function buildRows(first: MyShiftOut, shifts: MyShiftOut[], publishedUntil?: string | null): Row[] {
   const rows: Row[] = []
   const byDate = new Map<string, MyShiftOut[]>()
   for (const shift of shifts) byDate.set(shift.date, [...(byDate.get(shift.date) ?? []), shift])
-  const last = parseDate(shifts[shifts.length - 1].date)
+  const lastShift = parseDate((shifts[shifts.length - 1] ?? first).date)
+  const until = publishedUntil ? parseDate(publishedUntil) : lastShift
+  const last = until > lastShift ? until : lastShift
   let day = addDays(parseDate(first.date), 1)
   const firstOfList = day
   while (day <= last) {
