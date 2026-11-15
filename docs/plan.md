@@ -138,7 +138,7 @@ Katalog zasad w kodzie (`engine/rules_catalog.py`), np.: min. 11 h między zmian
 | `SchedulePeriod` | location, start, end, status (collecting/draft/published) | |
 | `ScheduleVersion` | period, number, status (draft/published/superseded), created_by, from_run, scores (JSON), is_complete | publikacja = nowa wersja, stare zostają |
 | `Shift` | version, location, date, shift_type, position, start_at, end_at, slot_key | slot obsady na jedną osobę; godziny skopiowane, żeby zmiana ustawień nie psuła starych grafików; `slot_key` (data, zmiana, stanowisko, numer miejsca) jest stały między wersjami |
-| `Assignment` | shift (jeden do jednego), employee (nullable = dziura), pinned, borrowed (z innego lokalu) | dziura nie może być przypięta |
+| `Assignment` | shift (jeden do jednego), employee (nullable = dziura), pinned, borrowed (z innego lokalu) | dziurę można przypiąć („zostaw pustą na stałe”, od PR #25) |
 | `AssignmentEvent` | location, period, slot_key, from_employee, to_employee, reason (generated/manual/offer/swap), at, by | historia; podstawa pod późniejsze zamiany |
 | `GenerationRun` | scope (location/group), period(s), status, started/finished, solver_status, time_ms, error | wynik: wersje z `ScheduleVersion.from_run` (generowanie dla grupy daje po jednej wersji na lokal) |
 
@@ -383,7 +383,7 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 
 Założenia:
 1. Ręcznie można zmieniać tylko najnowszy szkic okresu (jedyny wyjątek od etapu 9: zatwierdzona oddana zmiana przechodzi w opublikowanej wersji w miejscu, z wpisem w historii przypisań; zob. sekcja 18, punkt 4). Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
-2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmiana zostawiona bez obsady nie może być przypięta.
+2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmianę bez obsady można przypiąć jako pustą (od PR #25, patrz sekcja 22).
 3. W edytorze można wpisać tylko osoby z lokalu (z danym stanowiskiem); pożyczanie z innych lokali zostaje dla oddawania zmian (etap 9).
 4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły. Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
 5. Okres próbny dostaje tylko pierwsza firma danej osoby; kolejne firmy bez kodu są od razu tylko do odczytu.
@@ -538,7 +538,7 @@ Decyzja Piotra po przeglądzie konkurencji (raport: https://claude.ai/artifact/P
 
 Trzech testerów bez znajomości wymagań (pracownik na telefonie, kierownik kilku lokali, tester błędów i bezpieczeństwa)
 zgłosiło 32 uwagi; Piotr zatwierdził wszystkie. Raport: `/mnt/project-files/audyt/audyt-swiezym-okiem.md`.
-Poprawki w trzech PR-ach. Pierwszy (błędy i bezpieczeństwo) przyjmuje te założenia:
+Poprawki w czterech PR-ach (czwarty: dyspozycje w dwóch przedziałach dnia). Pierwszy (błędy i bezpieczeństwo) przyjmuje te założenia:
 
 - „Mój grafik” pokazuje dni do końca opublikowanego okresu lokalu domowego (`published_until`), więc wolny ostatni dzień
   też widać.
@@ -566,3 +566,40 @@ Drugi PR (ekrany pracownika, punkty 12–17):
   a ile z innych, i dostaje powiadomienie `offer_claimed`, gdy ktoś się zgłosi.
 - Ekran kodu: stary błąd znika po pierwszej nowej cyfrze, wpisany kod zostaje; zamiast bladego wyłączonego przycisku
   jest licznik „Nowy kod możesz dostać za …”. „Weź zmianę” i „Usuń prośbę” pytają jeszcze raz.
+- Hipotezy do sprawdzenia w pilotażu (uwagi Prelinta do PR #24): czy osoby z innych lokali chcą powiadomień o oddanych
+  zmianach (jeśli nie: najpierw własny lokal, potem firma); czy próg 12 h dla ostrzeżenia o długim oknie pasuje
+  wszystkim (to tylko pytanie o zamienione godziny, nie limit; lokal z dłuższymi zmianami potwierdza je raz).
+
+Trzeci PR (ekrany kierownika, punkty 18–32):
+
+- Osobiste maksimum godzin (`personal_max_hours`) ma parametr `tolerance_pct` (domyślnie 10, od 0 do 50), jest domyślnie
+  „bez wyjątków” i należy do zasad dobrej praktyki (nowy lokal dostaje ją włączoną). Migracja `rules.0005` robi ją twardą
+  z zapasem 10% tam, gdzie już była, i dopisuje na końcu listy tam, gdzie jej nie było. Zwykła (miękka) wersja liczy
+  karę dopiero ponad maksimum z zapasem. Zasada robi się twarda także w działających lokalach (decyzja Piotra
+  15.11.2026); na dziś to tylko dane demo, a przed pilotażem trzeba uprzedzić kierowników, że osoby z maksimum mogą
+  zostawić więcej pustych zmian i że zasadę da się zmienić na zwykłą w „Zasady”.
+- Dni zamknięcia (`staffing.LocationClosure`: lokal, data, powód): generator nie tworzy w nie żadnych miejsc, ważniejsze
+  niż wyjątek w obsadzie. Dni, które minęły, zostają jak w opublikowanym grafiku.
+- Pustą zmianę można przypiąć („Zostaw pustą na stałe”): `Problem.pinned` przyjmuje `None`, solver trzyma ją pustą,
+  walidator zgłasza wpisanie kogoś mimo przypięcia. Ręczne wpisanie osoby zdejmuje przypięcie jak dotąd.
+- Zmiana, której nikt nie może wziąć, nie dostaje przycisku „Wpisz mimo to”: wpisanie łamiące zasady bez wyjątków
+  i tak byłoby odrzucone, a grafiku z takim błędem nie da się opublikować. Okienko mówi, co można zrobić zamiast tego
+  (wyjątek w obsadzie, zasada zwykła zamiast „bez wyjątków”, stanowisko komuś jeszcze, zostawić pustą).
+- „Po terminie” liczy się od późniejszej z dwóch chwil: początku dnia po terminie albo chwili ustawienia terminu
+  (`SchedulePeriod.deadline_set_at`; puste w starszych okresach). Termin wpisany wstecz nie robi więc z wszystkich spóźnialskich.
+- Imię i nazwisko pracownika poprawia kierownik w „Zmień”, tylko gdy konto tej osoby nie należy do innej firmy. Numeru
+  nie: to login, więc zgodnie ze spec zmienia go superadmin (sesje wygasają, zaproszenia trzeba wysłać ponownie).
+- Lista pracowników podaje `draft_shifts` (zmiany od dziś w nieopublikowanym szkicu); wyłączenie osoby z takimi
+  zmianami pokazuje ostrzeżenie.
+- Karta lokalu bez stanowisk, zmian, obsady lub pracowników (`setup_missing`) pokazuje kroki z linkami. Gdy firma ma jedną
+  grupę, nowy lokal domyślnie do niej trafia, a pole mówi, że lokal w grupie używa jej zasad.
+- Menu kierownika: „Lokale” i „Pracownicy” (wszyscy z lokali kierownika, z wyszukiwarką; zmiany w lokalu osoby);
+  „Mój grafik” tylko dla kierownika, który sam pracuje na zmianach (`works_shifts` w `/me`). Na telefonie menu to jeden
+  przewijany wiersz.
+- Wynik grafiku zaczyna się jednym zdaniem, które mówi o faktach („Wszystkie zmiany obsadzone…”), bez oceny „dobry”; link „Napisz polecenie asystentowi” zmienia się na „Zmień zasady
+  lokalu”, gdy asystent jest wyłączony. Po 2 minutach układania ekran mówi „Trwa dłużej niż zwykle”.
+- „Godziny” na pustym miesiącu proponują ostatni miesiąc z godzinami (`latest_month`). Teksty: „mogą pracować”,
+  formy bez „(a)”, „Ułożyć grafik dla lokalu …?”, przykłady stanowisk nie tylko z piekarni.
+- Hipotezy do sprawdzenia w pilotażu (uwagi Prelinta do PR #25): czy kierownicy kilku lokali chcą wpisywać dni
+  zamknięcia raz dla całej grupy (dziś każdy lokal osobno) i czy w nagłej sytuacji proszą o jednorazowy wyjątek od
+  zasady „bez wyjątków” zamiast zmiany zasady dla całego lokalu.

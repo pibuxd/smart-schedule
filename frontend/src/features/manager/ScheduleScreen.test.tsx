@@ -189,6 +189,29 @@ describe('ScheduleScreen', () => {
     })
   })
 
+  it('keeps an empty shift empty on purpose and shows what to do when nobody can take it', async () => {
+    const calls = mockApi((method, path) => {
+      if (method === 'GET' && path === '/api/locations/l1/periods') return [200, [period]]
+      if (method === 'GET' && path === '/api/versions/v1') return [200, version]
+      if (method === 'GET' && path.endsWith('/explain')) {
+        return [200, { ...explanation, candidates: explanation.candidates.filter((c) => !c.possible) }]
+      }
+      if (method === 'POST' && path.endsWith('/pin')) return [200, { ok: true }]
+      return [404, { detail: 'Nie ma.' }]
+    })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /^Bez obsady/ }))
+    const sheet = await screen.findByRole('dialog')
+    expect(await within(sheet).findByText('Nikt nie może wziąć tej zmiany.')).toBeInTheDocument()
+    expect(within(sheet).getByRole('link', { name: 'zmniejszyć obsadę tego dnia' })).toHaveAttribute(
+      'href',
+      '/kierownik/lokal/l1/ustawienia',
+    )
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zostaw pustą na stałe' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/pin'))).toBe(true))
+    expect(calls.find((c) => c.url.endsWith('/pin'))!.body).toEqual({ pinned: true })
+  })
+
   it('publishes after a warning about unfilled shifts', async () => {
     const calls = api()
     show()

@@ -547,9 +547,11 @@ def _managed_period(request, period_id: UUID) -> tuple[TenantContext, SchedulePe
 
 
 def late_after(period: SchedulePeriod) -> datetime:
-    """Changes from this moment on are "after the deadline": the day after the deadline, midnight local time."""
+    """Changes from this moment on are "after the deadline": the day after the deadline, midnight local time, but
+    never before the deadline was set (a day in the past does not make everything entered so far late)."""
     tz = ZoneInfo(period.location.timezone)
-    return datetime.combine(period.deadline + timedelta(days=1), time(0), tzinfo=tz)
+    after = datetime.combine(period.deadline + timedelta(days=1), time(0), tzinfo=tz)
+    return max(after, period.deadline_set_at) if period.deadline_set_at else after
 
 
 @router.get("/periods/{period_id}/availability", response={200: AvailabilityGridOut, 403: ErrorOut, 404: ErrorOut})

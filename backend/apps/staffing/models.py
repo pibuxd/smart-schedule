@@ -150,6 +150,25 @@ class StaffingException(CompanyOwnedModel):
         return f"{self.date}: {self.shift_type.name} – {self.position.name} × {self.count}"
 
 
+class LocationClosure(CompanyOwnedModel):
+    """A day the location is closed: nobody is scheduled there, whatever the staffing table says."""
+
+    company_from = "location"
+
+    location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="closures")
+    date = models.DateField("data")
+    note = models.CharField("powód", max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "dzień zamknięcia"
+        verbose_name_plural = "dni zamknięcia"
+        ordering = ["location", "date"]
+        constraints = [models.UniqueConstraint(fields=["location", "date"], name="location_closure_unique_day")]
+
+    def __str__(self) -> str:
+        return f"{self.location.name}: zamknięte {self.date}"
+
+
 class Experience(models.IntegerChoices):
     """Set by the manager, never shown to the employee; used by the rule experience_mix."""
 

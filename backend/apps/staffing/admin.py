@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingException, StaffingRule
+from apps.staffing.models import (
+    EmployeeProfile,
+    LocationClosure,
+    Position,
+    ShiftType,
+    StaffingException,
+    StaffingRule,
+)
 from apps.tenancy.admin_base import CompanyOwnedAdmin
 
 
@@ -30,6 +37,14 @@ class StaffingExceptionAdmin(CompanyOwnedAdmin):
     list_display = ("location", "date", "shift_type", "position", "count", "note")
     list_filter = ("company", "location")
     list_select_related = ("company", "location", "shift_type", "position")
+    date_hierarchy = "date"
+
+
+@admin.register(LocationClosure)
+class LocationClosureAdmin(CompanyOwnedAdmin):
+    list_display = ("location", "date", "note")
+    list_filter = ("company", "location")
+    list_select_related = ("company", "location")
     date_hierarchy = "date"
 
 

@@ -16,6 +16,7 @@ const location = {
   archived: false,
   employees: 3,
   pending_invitations: 0,
+  setup_missing: [],
   period: {
     id: 'p1',
     start: '2026-12-01',
@@ -107,6 +108,24 @@ describe('OverviewScreen', () => {
     expect(await screen.findByText(/Termin dyspozycji jeszcze nie minął. Czekasz jeszcze na: 2 osoby/)).toBeInTheDocument()
     expect(screen.getByText(/Stracisz ręczne poprawki bez przypięcia: 3/)).toBeInTheDocument()
     expect(screen.getByText('Pracownicy jeszcze nie widzą grafiku')).toBeInTheDocument()
+  })
+
+  it('leads a new location step by step to its first schedule', async () => {
+    const fresh = { ...location, id: 'l2', name: 'Nowy lokal', period: null, setup_missing: ['staffing', 'employees'] }
+    mockApi(() => [200, { ...overview, locations: [fresh] }])
+    renderScreen(
+      <AsManager>
+        <OverviewScreen today={new Date(2026, 10, 12)} />
+      </AsManager>,
+    )
+    expect(await screen.findByText('Zanim ułożysz pierwszy grafik')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ustaw, ile osób potrzeba w każdy dzień' })).toHaveAttribute(
+      'href',
+      '/kierownik/lokal/l2/ustawienia',
+    )
+    expect(screen.getByRole('link', { name: 'Zaproś pracowników' })).toHaveAttribute('href', '/kierownik/lokal/l2/pracownicy')
+    expect(screen.queryByRole('link', { name: 'Dodaj stanowiska' })).not.toBeInTheDocument() // already done
+    expect(screen.getByRole('link', { name: 'Ustal, na jakie dni układasz grafik' })).toBeInTheDocument()
   })
 
   it('has an empty state and an error state', async () => {

@@ -160,7 +160,7 @@ def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], u
 
 
 def set_pinned(version: ScheduleVersion, shift_id: str, pinned: bool) -> Assignment:
-    """Pin a person to a slot: arranging the schedule again keeps them there."""
+    """Pin a person to a slot, or keep an empty slot empty: arranging the schedule again keeps it as it is."""
     with transaction.atomic():
         version = ScheduleVersion.objects.select_for_update().get(pk=version.pk)
         if not is_editable(version):
@@ -173,8 +173,6 @@ def set_pinned(version: ScheduleVersion, shift_id: str, pinned: bool) -> Assignm
         )
         if assignment is None:
             raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
-        if pinned and assignment.employee_id is None:
-            raise HttpError(400, "Nie można przypiąć pustej zmiany. Najpierw wpisz osobę.")
         assignment.pinned = pinned
         assignment.save(update_fields=["pinned"])
     return assignment

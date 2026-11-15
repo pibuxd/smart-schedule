@@ -29,6 +29,9 @@ class SchedulePeriod(CompanyOwnedModel):
     # The day the manager plans to arrange the schedule = the last day to mark availability.
     # Empty: the location's default (`availability_deadline_days` before the start).
     availability_deadline = models.DateField("termin dyspozycji", null=True, blank=True)
+    # When the deadline was last set (the period created or the deadline moved). Changes made before it are never
+    # "after the deadline", even when the manager picks a day that has already passed. Empty for older periods.
+    deadline_set_at = models.DateTimeField("termin ustawiony", null=True, blank=True)
     # When the manager last pressed "Poproś o dyspozycje" (each press notifies the employees again).
     availability_requested_at = models.DateTimeField("prośba o dyspozycje", null=True, blank=True)
 
@@ -170,6 +173,7 @@ class Assignment(CompanyOwnedModel):
     employee = models.ForeignKey(
         EmployeeProfile, on_delete=models.RESTRICT, null=True, blank=True, related_name="assignments"
     )
+    # Pinned: arranging again keeps it as it is (the person, or an empty slot the manager keeps empty).
     pinned = models.BooleanField("przypięte", default=False)
     borrowed = models.BooleanField("z innego lokalu", default=False)
     # Set by the manager by hand (not by the generator). Arranging again drops such changes unless pinned.
@@ -178,11 +182,6 @@ class Assignment(CompanyOwnedModel):
     class Meta:
         verbose_name = "przypisanie"
         verbose_name_plural = "przypisania"
-        constraints = [
-            models.CheckConstraint(
-                condition=Q(employee__isnull=False) | Q(pinned=False), name="assignment_hole_not_pinned"
-            ),
-        ]
 
 
 class AssignmentEvent(CompanyOwnedModel):

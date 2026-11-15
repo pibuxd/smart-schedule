@@ -4313,6 +4313,166 @@
         ]
       }
     },
+    "/api/locations/{location_id}/closures": {
+      "post": {
+        "operationId": "create_closure",
+        "summary": "Create Closure",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClosureOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "A day the location is closed: the generator schedules nobody there that day.",
+        "tags": [
+          "staffing"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClosureIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/closures/{closure_id}": {
+      "delete": {
+        "operationId": "delete_closure",
+        "summary": "Delete Closure",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "closure_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Closure Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "staffing"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/locations/{location_id}/employees": {
       "get": {
         "operationId": "location_employees",
@@ -4523,7 +4683,7 @@
             }
           }
         },
-        "description": "Positions, experience level, monthly maximum and target, or switching the person off (history stays).",
+        "description": "Name, positions, experience level, monthly maximum and target, or switching the person off\n(history stays).",
         "tags": [
           "staffing"
         ],
@@ -6255,6 +6415,11 @@
           "read_only": {
             "title": "Read Only",
             "type": "boolean"
+          },
+          "works_shifts": {
+            "default": false,
+            "title": "Works Shifts",
+            "type": "boolean"
           }
         },
         "required": [
@@ -6730,6 +6895,19 @@
             "title": "Pending Invitations",
             "type": "integer"
           },
+          "setup_missing": {
+            "items": {
+              "enum": [
+                "positions",
+                "shift_types",
+                "staffing",
+                "employees"
+              ],
+              "type": "string"
+            },
+            "title": "Setup Missing",
+            "type": "array"
+          },
           "period": {
             "anyOf": [
               {
@@ -6752,6 +6930,7 @@
           "archived",
           "employees",
           "pending_invitations",
+          "setup_missing",
           "period"
         ],
         "title": "LocationSummaryOut",
@@ -9364,6 +9543,31 @@
         "title": "RequestDecisionIn",
         "type": "object"
       },
+      "ClosureOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "note"
+        ],
+        "title": "ClosureOut",
+        "type": "object"
+      },
       "LocationSetupOut": {
         "properties": {
           "positions": {
@@ -9393,13 +9597,21 @@
             },
             "title": "Exceptions",
             "type": "array"
+          },
+          "closures": {
+            "items": {
+              "$ref": "#/components/schemas/ClosureOut"
+            },
+            "title": "Closures",
+            "type": "array"
           }
         },
         "required": [
           "positions",
           "shift_types",
           "staffing",
-          "exceptions"
+          "exceptions",
+          "closures"
         ],
         "title": "LocationSetupOut",
         "type": "object"
@@ -9841,6 +10053,26 @@
         "title": "StaffingExceptionIn",
         "type": "object"
       },
+      "ClosureIn": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "ClosureIn",
+        "type": "object"
+      },
       "EmployeeOut": {
         "properties": {
           "id": {
@@ -9913,6 +10145,11 @@
           "is_manager": {
             "title": "Is Manager",
             "type": "boolean"
+          },
+          "draft_shifts": {
+            "default": 0,
+            "title": "Draft Shifts",
+            "type": "integer"
           }
         },
         "required": [
@@ -9957,6 +10194,30 @@
       },
       "EmployeeIn": {
         "properties": {
+          "first_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
           "position_ids": {
             "anyOf": [
               {
@@ -10396,13 +10657,25 @@
           "total": {
             "title": "Total",
             "type": "number"
+          },
+          "latest_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Month"
           }
         },
         "required": [
           "month",
           "locations",
           "rows",
-          "total"
+          "total",
+          "latest_month"
         ],
         "title": "HoursReportOut",
         "type": "object"

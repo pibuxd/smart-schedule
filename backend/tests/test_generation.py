@@ -18,6 +18,7 @@ from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, Sc
 from apps.scheduling.problem_builder import BuildError, build_problem, slot_key
 from apps.staffing.models import (
     EmployeeProfile,
+    LocationClosure,
     Position,
     PositionExperience,
     ShiftType,
@@ -110,6 +111,21 @@ def test_slots_come_from_staffing_with_exceptions_and_flexible_hours(shop):
     assert len(slots) == 3 + 2 + 3 + 2 + 1 + 1  # Tue 2+1, Wed 2, Thu 3, Fri 2, Sat 1, Sun 1
     assert {s.location for s in slots.values()} == {str(location.id)}
     assert company.id == shop["period"].company_id
+
+
+@pytest.mark.django_db
+def test_closed_days_get_no_shifts(shop):
+    location = shop["location"]
+    LocationClosure.objects.create(location=location, date=MON + timedelta(days=2), note="Inwentaryzacja")
+    StaffingException.objects.create(  # a closure wins over a staffing exception on the same day
+        location=location,
+        date=MON + timedelta(days=2),
+        shift_type=shop["shift_type"],
+        position=shop["position"],
+        count=4,
+    )
+    slots = build_problem([shop["period"]], today=TODAY).problem.slots
+    assert slots and not any(s.date == MON + timedelta(days=2) for s in slots)
 
 
 @pytest.mark.django_db

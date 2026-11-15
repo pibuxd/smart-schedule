@@ -41,6 +41,8 @@ class MyCompanyOut(Schema):
     name: str
     role: Literal["owner", "manager", "employee"]
     read_only: bool
+    # Works shifts in this company (has an active employee profile): only then "Mój grafik" makes sense.
+    works_shifts: bool = False
 
 
 class MeOut(Schema):
@@ -57,9 +59,16 @@ class MeIn(Schema):
     last_name: str = Field(min_length=1, max_length=120)
 
 
+def _works_shifts(membership) -> bool:
+    try:
+        return membership.employee_profile.is_active
+    except Membership.employee_profile.RelatedObjectDoesNotExist:
+        return False
+
+
 def build_me(user) -> MeOut:
     memberships = Membership.objects.filter(user=user)  # tenant-ok: the person's own memberships
-    memberships = memberships.select_related("company").order_by("company__name")
+    memberships = memberships.select_related("company", "employee_profile").order_by("company__name")
     pending = Invitation.objects.filter(  # tenant-ok: invitations addressed to my phone number
         phone_e164=user.phone_e164, status=InvitationStatus.PENDING
     ).count()
@@ -74,6 +83,7 @@ def build_me(user) -> MeOut:
                 name=m.company.name,
                 role=m.role,
                 read_only=subscription_state(m.company_id).read_only,
+                works_shifts=_works_shifts(m),
             )
             for m in memberships
         ],

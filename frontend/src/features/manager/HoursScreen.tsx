@@ -58,17 +58,25 @@ export function HoursScreen({ today = new Date() }: { today?: Date }) {
           {errorMessage(report.error, 'Nie udało się policzyć godzin. Spróbuj jeszcze raz.')}
         </ErrorState>
       ) : (
-        <HoursTable data={report.data.data as HoursReportOut} />
+        <HoursTable data={report.data.data as HoursReportOut} onShowMonth={setMonth} />
       )}
     </div>
   )
 }
 
-function HoursTable({ data }: { data: HoursReportOut }) {
+function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: (month: string) => void }) {
   if (data.rows.length === 0) {
+    const latest = data.latest_month && data.latest_month !== data.month ? data.latest_month : null
     return (
       <EmptyState title="W tym miesiącu nie ma opublikowanych zmian">
         <p className="m-0">Godziny pojawią się tutaj, gdy opublikujesz grafik na ten miesiąc.</p>
+        {latest && (
+          <div>
+            <Button variant="secondary" size="normal" onClick={() => onShowMonth(latest)}>
+              Pokaż ostatni miesiąc z godzinami: {monthName(latest)}
+            </Button>
+          </div>
+        )}
       </EmptyState>
     )
   }

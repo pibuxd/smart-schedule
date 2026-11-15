@@ -94,7 +94,7 @@ function ArrangeSheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={one ? `Ułożyć grafik: ${targets[0].locationName}?` : `Ułożyć grafik dla ${targets.length} lokali?`}
+      title={one ? `Ułożyć grafik dla lokalu ${targets[0].locationName}?` : `Ułożyć grafik dla ${targets.length} lokali?`}
       description={
         one
           ? 'Ułożymy grafik według dyspozycji, obsady i zasad lokalu. To trwa do pół minuty.'
@@ -160,6 +160,20 @@ const POLL_MS = 1500
 const ENDED = ['succeeded', 'failed', 'cancelled']
 
 /** How a generation is going, with "Anuluj"; polls until it ends, then refreshes the screen's data. */
+// Arranging usually takes under half a minute; after this long the screen says so instead of waiting silently.
+const SLOW_RUN_MS = 2 * 60 * 1000
+
+/** True once `since` (an ISO time) is more than SLOW_RUN_MS ago; re-checked every few seconds. */
+function useTookLong(since: string | null): boolean {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!since) return
+    const timer = window.setInterval(() => setNow(Date.now()), 5000)
+    return () => window.clearInterval(timer)
+  }, [since])
+  return since !== null && now - new Date(since).getTime() > SLOW_RUN_MS
+}
+
 export function RunProgress({ runId, locationId, compact }: { runId: string; locationId?: string; compact?: boolean }) {
   const queryClient = useQueryClient()
   const { readOnly } = useManager()
@@ -174,6 +188,7 @@ export function RunProgress({ runId, locationId, compact }: { runId: string; loc
   })
   const data = run.data?.data as GenerationRunOut | undefined
   const finished = data !== undefined && ENDED.includes(data.status)
+  const slow = useTookLong(data && !finished ? data.created_at : null)
   useEffect(() => {
     if (finished) void queryClient.invalidateQueries({ predicate: (q) => !String(q.queryKey[0]).includes('generation-runs') })
   }, [finished, queryClient])
@@ -192,7 +207,7 @@ export function RunProgress({ runId, locationId, compact }: { runId: string; loc
               : data?.status === 'running'
                 ? 'Układam grafik…'
                 : 'Grafik czeka w kolejce…'}
-            {!compact && !cancel.isPending && <span className="font-normal text-ink-muted">To trwa do pół minuty.</span>}
+            {!compact && !cancel.isPending && !slow && <span className="font-normal text-ink-muted">To trwa do pół minuty.</span>}
           </p>
           {!readOnly && (
             <Button
@@ -207,6 +222,11 @@ export function RunProgress({ runId, locationId, compact }: { runId: string; loc
             </Button>
           )}
         </div>
+        {slow && !cancel.isPending && (
+          <p className="m-0 text-sm text-ink-muted">
+            Trwa dłużej niż zwykle. Możesz poczekać albo nacisnąć „Anuluj” i spróbować za chwilę.
+          </p>
+        )}
         {cancelFailed && <InlineError>{errorMessage(cancel.error, NETWORK_PROBLEM)}</InlineError>}
       </div>
     )

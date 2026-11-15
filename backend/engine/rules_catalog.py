@@ -63,7 +63,13 @@ RULES: tuple[RuleDefinition, ...] = (
     RuleDefinition(
         code="personal_max_hours",
         label="Osobiste maksimum godzin",
-        description="Nie przekraczaj maksimum godzin ustawionego dla pracownika.",
+        description=(
+            "Nie przekraczaj maksimum godzin ustawionego dla pracownika o więcej niż tyle procent "
+            "(0 = ani minuty ponad maksimum)."
+        ),
+        default_hard=True,
+        params={"tolerance_pct": 10},
+        good_practice=True,
     ),
     RuleDefinition(
         code="preferred_shift_type_for_position",

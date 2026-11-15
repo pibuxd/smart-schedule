@@ -17,9 +17,10 @@ const person = (id: string, first: string, experience: 1 | 2 | 3) => ({
   target_hours_month: null,
   is_active: true,
   is_manager: false,
+  draft_shifts: 0,
 })
 
-const setup = { positions: [{ id: 'p1', name: 'Kelner', employees: 2 }], shift_types: [], staffing: [], exceptions: [] }
+const setup = { positions: [{ id: 'p1', name: 'Kelner', employees: 2 }], shift_types: [], staffing: [], exceptions: [], closures: [] }
 
 describe('EmployeesScreen', () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -115,5 +116,31 @@ describe('EmployeesScreen', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/locations/l1/employees/me')).toBe(true))
     expect(await screen.findByText('Teresa Nowak')).toBeInTheDocument()
     await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Dodaj mnie jako pracownika' })).not.toBeInTheDocument())
+  })
+
+  it('corrects the name, and warns about shifts in the draft before switching someone off', async () => {
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 8 }]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      if (method === 'PATCH') return [200, person('e1', 'Alicja', 2)]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.change(within(sheet).getByLabelText('Imię'), { target: { value: 'Alicja' } })
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: /W grafiku/ }))
+    expect(within(sheet).getByRole('alert')).toHaveTextContent('Ta osoba ma 8 zmian w szkicu grafiku.')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
+    expect(body).toMatchObject({ first_name: 'Alicja', last_name: 'Nowak', is_active: false })
+    expect(body).not.toHaveProperty('phone') // the login number is changed only by the superadmin
   })
 })

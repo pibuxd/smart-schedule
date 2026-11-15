@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Pin, PinOff } from 'lucide-react'
 
 import type { CandidateOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
@@ -24,11 +25,13 @@ const WISH_LABEL: Record<CandidateOut['wish'], string> = {
  */
 export function ShiftSheet({
   versionId,
+  locationId,
   shift,
   editable,
   onClose,
 }: {
   versionId: string
+  locationId: string
   shift: VersionShiftOut | null
   editable: boolean
   onClose: () => void
@@ -40,18 +43,22 @@ export function ShiftSheet({
       title={shift ? `${shift.shift_type_name || 'Zmiana'} ${shift.start_time}–${shift.end_time}` : ''}
       description={shift ? `${shortDay(shift.date)}, ${shift.position_name}` : undefined}
     >
-      {shift && <ShiftDetails versionId={versionId} shift={shift} editable={editable && !shift.past} onDone={onClose} />}
+      {shift && (
+        <ShiftDetails versionId={versionId} locationId={locationId} shift={shift} editable={editable && !shift.past} onDone={onClose} />
+      )}
     </Sheet>
   )
 }
 
 function ShiftDetails({
   versionId,
+  locationId,
   shift,
   editable,
   onDone,
 }: {
   versionId: string
+  locationId: string
   shift: VersionShiftOut
   editable: boolean
   onDone: () => void
@@ -75,6 +82,17 @@ function ShiftDetails({
   const able = others.filter((c) => c.possible)
   const blocked = others.filter((c) => !c.possible)
   const refresh = () => void queryClient.invalidateQueries()
+
+  const togglePin = () =>
+    pin.mutate(
+      { versionId, shiftId: shift.id, data: { pinned: !shift.pinned } },
+      {
+        onSuccess: () => {
+          refresh()
+          onDone()
+        },
+      },
+    )
 
   const put = (employeeId: string | null) =>
     change.mutate(
@@ -105,17 +123,7 @@ function ShiftDetails({
                 variant="secondary"
                 size="normal"
                 disabled={pin.isPending}
-                onClick={() =>
-                  pin.mutate(
-                    { versionId, shiftId: shift.id, data: { pinned: !shift.pinned } },
-                    {
-                      onSuccess: () => {
-                        refresh()
-                        onDone()
-                      },
-                    },
-                  )
-                }
+                onClick={togglePin}
               >
                 {shift.pinned ? <PinOff aria-hidden="true" size={20} /> : <Pin aria-hidden="true" size={20} />}
                 {shift.pinned ? 'Odepnij' : 'Przypnij tę osobę'}
@@ -128,6 +136,47 @@ function ShiftDetails({
           {shift.pinned && (
             <p className="m-0 text-sm text-ink-muted">Przypięta: gdy ułożysz grafik od nowa, ta osoba zostanie na tej zmianie.</p>
           )}
+        </div>
+      )}
+
+      {!current && editable && (
+        <div className="grid gap-2 rounded-md border-2 border-dashed border-line bg-surface p-3">
+          <span className="font-semibold">Ta zmiana jest bez obsady.</span>
+          <span className="text-sm text-ink-muted">
+            {shift.pinned
+              ? 'Przypięta jako pusta: gdy ułożysz grafik od nowa, nikt jej nie dostanie.'
+              : 'Gdy ułożysz grafik od nowa, generator spróbuje ją obsadzić. Przypnij, jeśli ma zostać pusta.'}
+          </span>
+          <Button variant="secondary" size="normal" className="w-fit" disabled={pin.isPending} onClick={togglePin}>
+            {shift.pinned ? <PinOff aria-hidden="true" size={20} /> : <Pin aria-hidden="true" size={20} />}
+            {shift.pinned ? 'Odepnij' : 'Zostaw pustą na stałe'}
+          </Button>
+        </div>
+      )}
+
+      {!current && able.length === 0 && (
+        <div className="grid gap-1 rounded-md border border-line bg-surface p-3">
+          <span className="font-semibold">Nikt nie może wziąć tej zmiany.</span>
+          <span className="text-sm">
+            Każda osoba ma powód, np. dzień „nie mogę”, inną zmianę o tej porze albo zasadę bez wyjątków. Wpisanie
+            kogoś mimo to złamałoby te zasady, a takiego grafiku nie da się opublikować. Możesz:
+          </span>
+          <ul className="m-0 grid gap-1 pl-5 text-sm">
+            <li>
+              <Link to="/kierownik/lokal/$locationId/ustawienia" params={{ locationId }} className="font-semibold text-accent">
+                zmniejszyć obsadę tego dnia
+              </Link>{' '}
+              (wyjątek w obsadzie),
+            </li>
+            <li>
+              <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
+                zmienić zasadę
+              </Link>{' '}
+              z „bez wyjątków” na zwykłą,
+            </li>
+            <li>dodać komuś to stanowisko w „Pracownicy” albo zostawić zmianę pustą.</li>
+          </ul>
+          <span className="text-sm text-ink-muted">Powód przy każdej osobie jest niżej, w „Nie mogą wziąć tej zmiany”.</span>
         </div>
       )}
 

@@ -276,7 +276,13 @@ def test_manager_registers_a_company_with_a_code(api):
     user.refresh_from_db()
     assert user.full_name == "Marta Zając"
     assert api.get("/api/me").json()["companies"] == [
-        {"id": str(company.id), "name": "Piekarnia Pod Lipą", "role": "owner", "read_only": False}
+        {
+            "id": str(company.id),
+            "name": "Piekarnia Pod Lipą",
+            "role": "owner",
+            "read_only": False,
+            "works_shifts": False,
+        }
     ]
 
 

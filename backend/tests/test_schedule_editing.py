@@ -5,6 +5,7 @@ pins, publishing with history, and correcting a published schedule."""
 from datetime import timedelta
 
 import pytest
+from django.db import models
 from django.utils import timezone
 
 from apps.availability.models import AvailabilityDay
@@ -169,12 +170,15 @@ def test_pins_survive_arranging_again(api, shop, draft):
         url(draft, "/assignments"), {"changes": [{"shift_id": str(shift_of(draft, MON + timedelta(1)).shift_id)}]}
     )
     hole = Assignment.objects.get(shift__version=draft, employee__isnull=True)
-    assert api.post(url(draft, f"/shifts/{hole.shift_id}/pin"), {"pinned": True}).status_code == 400
+    # "Zostaw bez obsady" can be pinned too, so arranging again does not fill the slot.
+    assert api.post(url(draft, f"/shifts/{hole.shift_id}/pin"), {"pinned": True}).json()["pinned"] is True
 
     run = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST)
     second = run.versions.get()
     again = Assignment.objects.get(shift__version=second, shift__slot_key=taken.shift.slot_key)
     assert again.employee_id == taken.employee_id and again.pinned is True
+    empty = Assignment.objects.get(shift__version=second, shift__slot_key=hole.shift.slot_key)
+    assert empty.employee_id is None and empty.pinned is True
     draft.refresh_from_db()
     assert draft.status == ScheduleVersion.Status.SUPERSEDED  # the older draft is history now
 
@@ -284,3 +288,16 @@ def test_employee_cannot_see_the_draft(api, shop, draft):
     api.login(shop["worker"])
 
     assert api.get(url(draft)).status_code == 403
+
+
+def test_employee_list_counts_shifts_in_the_draft(api, shop, draft):
+    api.login(shop["manager"])
+    rows = api.get(f"/api/locations/{shop['location'].pk}/employees").json()
+    expected = {
+        str(e): n
+        for e, n in Assignment.objects.filter(shift__version=draft, employee__isnull=False)
+        .values_list("employee")
+        .annotate(n=models.Count("pk"))
+    }
+    assert {r["id"]: r["draft_shifts"] for r in rows if r["draft_shifts"]} == expected
+    assert sum(expected.values()) == 12  # switching someone off tells the manager about these shifts

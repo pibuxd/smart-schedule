@@ -30,7 +30,7 @@ describe('AccessScreen', () => {
       </AsManager>,
     )
     expect(await screen.findByText('Okres próbny: zostało 30 dni')).toBeInTheDocument()
-    expect(screen.getByText('Ułożenia grafiku w tym miesiącu: 2 z 20.')).toBeInTheDocument()
+    expect(screen.getByText(/Ułożenia grafiku w tym miesiącu: 2 z 20./)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Kod (12 znaków)'), { target: { value: 'ABCD-EFGH-JKMN' } })
     fireEvent.submit(screen.getByLabelText('Kod (12 znaków)').closest('form')!)
     await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true))
