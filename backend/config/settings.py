@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.marketplace",
     "apps.reports",
     "apps.notifications",
+    "apps.assistant",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -137,6 +138,16 @@ PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "tasks"
 SOLVER_TIME_LIMIT_S = int(env("SOLVER_TIME_LIMIT_S", "30"))
 SOLVER_WORKERS = int(env("SOLVER_WORKERS", "8"))
 GENERATION_MONTHLY_LIMIT = int(env("GENERATION_MONTHLY_LIMIT", "30"))
+
+# The assistant (Claude) reads employees' text requests and the manager's commands. Without a key it is off:
+# requests go to the manager as written and the manager sets rules by hand.
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_MODEL = env("ANTHROPIC_MODEL", "claude-opus-5-5")
+# Below this confidence a request is left to the manager instead of the generator.
+ASSISTANT_MIN_CONFIDENCE = float(env("ASSISTANT_MIN_CONFIDENCE", "0.6"))
+# Limits on calls to the assistant: commands of one company per month, text requests of one person per period.
+ASSISTANT_COMMANDS_MONTHLY_LIMIT = int(env("ASSISTANT_COMMANDS_MONTHLY_LIMIT", "200"))
+TEXT_REQUESTS_PER_PERIOD = int(env("TEXT_REQUESTS_PER_PERIOD", "10"))
 
 LOGGING = {
     "version": 1,
