@@ -78,7 +78,7 @@ _MONOTONE_RULES = frozenset(
         "min_weekly_rest",
     }
 )
-_MONOTONE_CODES = frozenset({Code.POSITION, Code.CANNOT, Code.OVERLAP, Code.EXPERIENCE})
+_MONOTONE_CODES = frozenset({Code.POSITION, Code.CANNOT, Code.OVERLAP, Code.EXPERIENCE, Code.ONE_SHIFT})
 
 
 class SolveStatus(StrEnum):
@@ -161,6 +161,7 @@ class _Builder:
         self._variables()
         self._intervals = {e.id: self._group_intervals(e.id) for e in problem.employees}
         self._no_overlap()
+        self._one_shift()
         self._experienced()
         self._rules()
         self._requests()
@@ -272,6 +273,15 @@ class _Builder:
     def _no_overlap(self) -> None:
         for employee_id, intervals in self._intervals.items():
             self._cliques(employee_id, intervals, timedelta(0))
+
+    def _one_shift(self) -> None:
+        """Days marked "albo": at most one shift that day (shifts already outside this problem count too)."""
+        for entry in self.p.one_shift_days():
+            day = [var for slot, var in self.x_of_emp.get(entry.employee, ()) if slot.date == entry.date]
+            if not day:
+                continue
+            outside = sum(1 for e in self.p.external_shifts if e.employee == entry.employee and e.date == entry.date)
+            self.m.add(sum(day) <= max(0, 1 - outside))
 
     def _cliques(self, employee_id: str, intervals: list[_Interval], rest: timedelta) -> None:
         """At most one interval worked among those whose [start, end + rest) contain a common start point.

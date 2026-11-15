@@ -43,6 +43,7 @@ class Code(StrEnum):
     UNKNOWN_EMPLOYEE = "unknown_employee"
     POSITION = "position"
     CANNOT = "cannot"
+    ONE_SHIFT = "one_shift"  # the person marked "albo": at most one shift that day
     OVERLAP = "overlap"
     EXPERIENCE = "experience"  # the staffing asks for experienced people and less experienced ones took their places
     PINNED = "pinned"
@@ -339,6 +340,22 @@ class _Checker:
                             slots=tuple(i.slot.id for i in (first, second) if i.slot is not None),
                         )
                     )
+
+    def check_one_shift(self) -> None:
+        p = self.p
+        for entry in p.one_shift_days():
+            own = [s for s in p.slots if s.date == entry.date and self.assignment.get(s.id) == entry.employee]
+            outside = sum(1 for e in p.external_shifts if e.employee == entry.employee and e.date == entry.date)
+            if own and len(own) + outside > 1:
+                self.hard.append(
+                    Violation(
+                        Code.ONE_SHIFT,
+                        f"{self.name(entry.employee)} może {entry.date:%d.%m} pracować tylko na jednej zmianie "
+                        "(dyspozycja „albo”), a ma ich więcej.",
+                        employee=entry.employee,
+                        slots=tuple(s.id for s in own),
+                    )
+                )
 
     # ----------------------------------------------------------------- catalog rules
 
@@ -752,6 +769,7 @@ class _Checker:
         self.check_basic()
         self.check_experienced()
         self.check_overlaps()
+        self.check_one_shift()
         rules = self.measure_rules()
         requests = self.measure_requests()
         holes = tuple(s.id for s in self.p.slots if self.assignment.get(s.id) is None)

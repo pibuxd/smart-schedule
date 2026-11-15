@@ -8,7 +8,17 @@ EMPLOYEE_SEARCH = ("employee__membership__user__first_name", "employee__membersh
 
 @admin.register(AvailabilityDay)
 class AvailabilityDayAdmin(CompanyOwnedAdmin):
-    list_display = ("employee", "date", "state", "from_time", "to_time", "source")
+    list_display = (
+        "employee",
+        "date",
+        "state",
+        "from_time",
+        "to_time",
+        "from_time_2",
+        "to_time_2",
+        "one_shift",
+        "source",
+    )
     list_filter = ("company", "state", "source")
     list_select_related = ("company", "employee__membership__user")
     search_fields = EMPLOYEE_SEARCH
