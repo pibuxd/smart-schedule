@@ -9550,6 +9550,12 @@
           "note": {
             "title": "Note",
             "type": "string"
+          },
+          "in_draft": {
+            "default": false,
+            "description": "An unpublished draft still has people on this day; arrange again to clear it.",
+            "title": "In Draft",
+            "type": "boolean"
           }
         },
         "required": [
