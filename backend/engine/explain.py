@@ -32,6 +32,7 @@ WISH_WORDS = {
 _BLOCK_WORDS = {
     Code.CANNOT: "zaznaczone „nie mogę”",
     Code.OVERLAP: "inna zmiana w tym czasie",
+    Code.EXPERIENCE: "obsada wymaga tu doświadczonej osoby",
     Code.RULE: "zasada „bez wyjątków”",
     Code.FROZEN: "ten dzień już minął",
 }

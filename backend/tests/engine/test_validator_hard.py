@@ -1,5 +1,6 @@
 """Hard rules for everyone: position, "cannot", overlaps, pins, frozen days, unknown ids."""
 
+from dataclasses import replace
 from datetime import date, time
 
 from engine.problem import Availability, ExternalShift, shift_bounds
@@ -129,3 +130,41 @@ def test_unknown_ids_in_schedule_are_reported_not_raised():
     report = validate(p, {"s1": "ghost", "nope": "anna"})
     assert codes(report) == [Code.UNKNOWN_EMPLOYEE, Code.UNKNOWN_SLOT]
     assert report.holes == ("s1",)
+
+
+# ----------------------------------------------------------------- staffing "of these, N experienced"
+
+
+def _pair(need: int = 1):
+    first, second = slot("s1", DAY), slot("s2", DAY)
+    marked = [replace(s, needs_experienced=i < need) for i, s in enumerate((first, second))]
+    people = [employee("stara", experience=3), employee("ola"), employee("nowa", experience=1)]
+    return problem(people, marked)
+
+
+def test_less_experienced_people_may_not_take_the_experienced_place():
+    report = validate(_pair(), {"s1": "ola", "s2": "nowa"})
+    assert codes(report) == [Code.EXPERIENCE]
+    assert "ma być doświadczona osoba" in report.hard[0].message
+    assert "Ola" in report.hard[0].message and "Nowa" in report.hard[0].message
+
+
+def test_it_does_not_matter_which_place_the_experienced_person_stands_on():
+    assert validate(_pair(), {"s1": "ola", "s2": "stara"}).ok
+    assert validate(_pair(), {"s1": "stara", "s2": "ola"}).ok
+
+
+def test_a_hole_is_fine_while_the_experienced_place_is_still_free():
+    assert validate(_pair(), {"s1": "ola", "s2": None}).ok
+    assert validate(_pair(), {"s1": None, "s2": "nowa"}).ok
+    assert codes(validate(_pair(need=2), {"s1": "ola"})) == [Code.EXPERIENCE]
+
+
+def test_the_level_on_the_position_of_the_shift_counts():
+    oven = replace(slot("b", DAY, position=BAKER), needs_experienced=True)
+    # Experienced in general, but a beginner at the oven.
+    jan = employee("jan", positions=("sales", BAKER), experience=3, experience_by_position={BAKER: 1})
+    ewa = employee("ewa", positions=("sales", BAKER), experience_by_position={BAKER: 3})
+    p = problem([jan, ewa], [oven])
+    assert codes(validate(p, {"b": "jan"})) == [Code.EXPERIENCE]
+    assert validate(p, {"b": "ewa"}).ok

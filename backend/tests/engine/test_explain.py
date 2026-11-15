@@ -1,5 +1,6 @@
 """Quick explanations of one slot and the list of people who could take it."""
 
+from dataclasses import replace
 from datetime import date
 
 from engine.explain import explain_slot
@@ -30,6 +31,13 @@ def test_empty_slot_names_why_nobody_could_take_it():
     assert explanation.summary.startswith("Nikt nie mógł wziąć tej zmiany")
     assert "zaznaczone „nie mogę” (1 osoba)" in explanation.summary
     assert "inna zmiana w tym czasie (1 osoba)" in explanation.summary
+
+
+def test_empty_slot_says_the_staffing_asks_for_an_experienced_person():
+    p = problem([employee("anna"), employee("ewa", experience=1)], [replace(slot("a", MON), needs_experienced=True)])
+    explanation = explain_slot(p, {"a": None}, "a")
+    assert "obsada wymaga tu doświadczonej osoby (2 osoby)" in explanation.summary
+    assert all("ma być doświadczona osoba" in c.blocked[0] for c in explanation.candidates)
 
 
 def test_assigned_slot_lists_the_person_first_and_who_else_could_work():

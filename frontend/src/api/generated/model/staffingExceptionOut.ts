@@ -11,6 +11,7 @@ export interface StaffingExceptionOut {
   shift_type_id: string;
   position_id: string;
   count: number;
+  experienced: number;
   start_time: string | null;
   end_time: string | null;
   note: string;

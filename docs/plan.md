@@ -109,6 +109,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `StaffingRule` | location, weekday, shift_type, position, count, start/end (tylko dla zmian z dowolnymi godzinami) | unikalne (location, weekday, shift_type, position) |
 | `StaffingException` | location, date, shift_type, position, count, start/end (opcjonalnie inne godziny) | np. Wigilia, dzień bez obsady (count=0) |
 | `EmployeeProfile` | membership, home_location, positions (M2M), experience (1 początkujący / 2 samodzielny / 3 doświadczony), max_hours_month, target_hours_month, is_active | zlecenie domyślne, stopień 2; stopnia nie widzi pracownik |
+| `PositionExperience` | employee, position, level (1–3) | stopień inny niż domyślny na jednym stanowisku; jeden wiersz na parę |
 
 ### Dyspozycyjność i prośby
 
@@ -513,3 +514,16 @@ Założenia:
 6. Limity: `ASSISTANT_COMMANDS_MONTHLY_LIMIT` (200 poleceń na firmę w miesiącu) i `TEXT_REQUESTS_PER_PERIOD` (10 próśb jednej osoby na okres). Tryb tylko do odczytu blokuje polecenia jak każdą zmianę.
 7. Nie włączamy automatycznego przełączania na inny model po odmowie; odmowa lub ucięta odpowiedź to po prostu "do decyzji menedżera" / "asystent nie dał rady".
 8. Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie.
+
+## 21. Stopień per stanowisko i doświadczeni w obsadzie (13.11.2026)
+
+Decyzja Piotra po przeglądzie konkurencji (raport: https://claude.ai/artifact/PyE6iDjvz9cUqPWGqXnL8c). Poziomy doświadczenia per stanowisko i wymóg poziomu na miejscu w obsadzie ma HotSchedules; Kadromierz każe rozbijać stanowisko na "młodszy" i "starszy".
+
+1. `PositionExperience` (employee, position, level): tylko wyjątki od `EmployeeProfile.experience`. Wiersz równy stopniowi domyślnemu nie jest zapisywany; odznaczenie stanowiska usuwa jego wyjątek. Istniejące dane nie wymagają migracji danych.
+2. `StaffingRule.experienced` i `StaffingException.experienced` (domyślnie 0, nie więcej niż `count`): ile osób z obsady ma być doświadczonych. Wyjątek na datę ma własną wartość; formularz wyjątku zostawiony pusty przyjmuje liczbę ze zwykłej obsady tego dnia (nie więcej niż liczba osób), żeby wymóg nie znikał po cichu. Wolne miejsce z powodu wymogu jest nazwane w wyjaśnieniu zmiany ("obsada wymaga tu doświadczonej osoby").
+3. Silnik: `Employee.experience_by_position` i `Employee.level(position)`; `Slot.needs_experienced` na pierwszych N miejscach grupy (lokal × dzień × typ zmiany × stanowisko). Wymóg liczony na grupę, nie na miejsce: liczba mniej doświadczonych osób w grupie nie może przekroczyć liczby miejsc bez wymogu. Dzięki temu nie ma znaczenia, na którym miejscu grupy stoi doświadczona osoba, a niepełna obsada nie jest błędem, dopóki zostaje miejsce dla doświadczonej.
+4. Walidator: twarde naruszenie `experience` (nie zasada katalogu, bo wynika z obsady). Solver: to samo jako ograniczenie; nigdy nie daje sprzeczności, bo miejsce może zostać luką. Przypięcie, które samo łamie wymóg, jest zgłaszane jak inne konflikty przypięć. Dni, które minęły, zachowują opublikowane zmiany bez wymogu.
+5. `experience_mix` i wyjaśnienia liczą stopień na stanowisku danej zmiany. Osoba pożyczona z innego lokalu ma stopień ze stanowiska o tej samej nazwie.
+6. API: `EmployeeOut.position_experience` (stopień na każdym stanowisku osoby) i `EmployeeIn.position_experience`; komórki obsady i wyjątki mają pole `experienced`. Pracownik nadal nie widzi żadnego stopnia.
+7. Ekrany: w arkuszu pracownika z co najmniej dwoma stanowiskami "Inny stopień na którymś stanowisku"; w obsadzie pole "w tym doświadczonych" przy komórce i przy wyjątku.
+8. Poza zakresem: opiekun dla nowej osoby (etap 10, polecenie do asystenta), podpowiedź awansu z godzin, etykiety uprawnień z datą ważności.

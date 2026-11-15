@@ -9339,6 +9339,10 @@
             "title": "Count",
             "type": "integer"
           },
+          "experienced": {
+            "title": "Experienced",
+            "type": "integer"
+          },
           "start_time": {
             "anyOf": [
               {
@@ -9369,6 +9373,7 @@
           "shift_type_id",
           "position_id",
           "count",
+          "experienced",
           "start_time",
           "end_time"
         ],
@@ -9399,6 +9404,10 @@
           },
           "count": {
             "title": "Count",
+            "type": "integer"
+          },
+          "experienced": {
+            "title": "Experienced",
             "type": "integer"
           },
           "start_time": {
@@ -9436,6 +9445,7 @@
           "shift_type_id",
           "position_id",
           "count",
+          "experienced",
           "start_time",
           "end_time",
           "note"
@@ -9535,6 +9545,13 @@
             "title": "Count",
             "type": "integer"
           },
+          "experienced": {
+            "default": 0,
+            "maximum": 50,
+            "minimum": 0,
+            "title": "Experienced",
+            "type": "integer"
+          },
           "start_time": {
             "anyOf": [
               {
@@ -9607,6 +9624,13 @@
             "maximum": 50,
             "minimum": 0,
             "title": "Count",
+            "type": "integer"
+          },
+          "experienced": {
+            "default": 0,
+            "maximum": 50,
+            "minimum": 0,
+            "title": "Experienced",
             "type": "integer"
           },
           "start_time": {
@@ -9685,6 +9709,13 @@
             "title": "Experience",
             "type": "integer"
           },
+          "position_experience": {
+            "items": {
+              "$ref": "#/components/schemas/PositionLevel"
+            },
+            "title": "Position Experience",
+            "type": "array"
+          },
           "max_hours_month": {
             "anyOf": [
               {
@@ -9723,12 +9754,37 @@
           "phone",
           "position_ids",
           "experience",
+          "position_experience",
           "max_hours_month",
           "target_hours_month",
           "is_active",
           "is_manager"
         ],
         "title": "EmployeeOut",
+        "type": "object"
+      },
+      "PositionLevel": {
+        "properties": {
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          },
+          "experience": {
+            "enum": [
+              1,
+              2,
+              3
+            ],
+            "title": "Experience",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position_id",
+          "experience"
+        ],
+        "title": "PositionLevel",
         "type": "object"
       },
       "EmployeeIn": {
@@ -9763,6 +9819,20 @@
               }
             ],
             "title": "Experience"
+          },
+          "position_experience": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PositionLevel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Experience"
           },
           "max_hours_month": {
             "anyOf": [
