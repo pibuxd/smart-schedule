@@ -515,6 +515,11 @@ Założenia:
 7. Nie włączamy automatycznego przełączania na inny model po odmowie; odmowa lub ucięta odpowiedź to po prostu "do decyzji menedżera" / "asystent nie dał rady".
 8. Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie.
 
+Uzupełnienie 15.11.2026 (po teście Piotra na serwerze, dwie prośby bez interpretacji):
+
+- Nowy typ prośby i polecenia `chce_pracowac` (`RequestType.WANT_WORK`): daty lub dni tygodnia, `min_days` (w ilu z tych dni; brak = we wszystkich) i `shifts_per_day` (1–3). Stopień złamania = brakujące dni / `min_days`, gdzie dzień liczy się, gdy osoba ma w nim co najmniej `shifts_per_day` zmian. W solverze kara za każdy brakujący dzień. Dwie zmiany jednego dnia da się spełnić tylko wtedy, gdy zasady odpoczynku na to pozwalają; jeśli „Odpoczynek między zmianami” jest „bez wyjątków”, prośba zostanie niespełniona.
+- `TextRequest.unread_reason` (`off` / `unsure` / `failed`): kierownik widzi, dlaczego prośba nie ma interpretacji. `POST /requests/{id}/reread` (`reread_request`) daje asystentowi prośbę, która przyszła przy wyłączonym asystencie albo przy błędzie. Migracja oznacza istniejące prośby bez interpretacji jako `off`.
+
 ## 21. Stopień per stanowisko i doświadczeni w obsadzie (13.11.2026)
 
 Decyzja Piotra po przeglądzie konkurencji (raport: https://claude.ai/artifact/PyE6iDjvz9cUqPWGqXnL8c). Poziomy doświadczenia per stanowisko i wymóg poziomu na miejscu w obsadzie ma HotSchedules; Kadromierz każe rozbijać stanowisko na "młodszy" i "starszy".

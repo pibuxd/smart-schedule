@@ -721,6 +721,15 @@ class _Checker:
                     return None
                 worked = {s.date for s in own}
                 return len(worked & request.dates) / len(request.dates)
+            case RequestType.WANT_WORK:
+                if not request.dates:
+                    return None
+                need = request.wanted_days()
+                per_day: dict[date, int] = defaultdict(int)
+                for s in own:
+                    per_day[s.date] += 1
+                good = sum(1 for count in per_day.values() if count >= request.shifts_per_day)
+                return max(0, need - good) / need
             case _:
                 return None
 

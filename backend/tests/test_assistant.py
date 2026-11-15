@@ -56,6 +56,8 @@ def reading(**changes) -> llm.RequestReading:
         "shift_type": None,
         "avoid_shift_type": False,
         "max_hours": None,
+        "min_days": None,
+        "shifts_per_day": None,
         "dates": [],
         "weekdays": [5],
         "level": "wazne",
@@ -84,6 +86,8 @@ def instruction(**changes) -> llm.NewInstruction:
         "shift_type": None,
         "avoid_shift_type": False,
         "max_hours": None,
+        "min_days": None,
+        "shifts_per_day": None,
         "dates": [],
         "weekdays": [],
         "place": 1,
@@ -179,6 +183,53 @@ class TestRequests:
         assert services.interpret_request(request_id) == "needs_manager"
         row = TextRequest.objects.get(pk=request_id)
         assert row.interpretation is None
+
+    def test_wish_to_work_one_of_two_days_or_two_shifts_reaches_the_generator(self, api, shop, with_key, monkeypatch):
+        start = shop["period"].start
+        days = [(start + timedelta(days=11)).isoformat(), (start + timedelta(days=12)).isoformat()]
+        answer = reading(type="chce_pracowac", weekdays=[], dates=days, min_days=1, summary="Praca 12 albo 13.")
+        monkeypatch.setattr(llm, "read_request", lambda text, context: answer)
+        api.login(shop["worker"])
+        request_id = send_request(api, shop, "chce albo 12stego albo 13stego").json()["id"]
+        assert services.interpret_request(request_id) == "interpreted"
+        [request] = build_problem([shop["period"]]).problem.requests
+        assert (request.type, request.min_days, request.shifts_per_day) == ("want_work", 1, 1)
+        assert sorted(d.isoformat() for d in request.dates) == days
+
+        two = reading(type="chce_pracowac", weekdays=[], dates=days[:1], shifts_per_day=2, summary="Dwie zmiany.")
+        monkeypatch.setattr(llm, "read_request", lambda text, context: two)
+        request_id = send_request(api, shop, "21 stycznia dwie zmiany pod rząd").json()["id"]
+        assert services.interpret_request(request_id) == "interpreted"
+        wish = next(r for r in build_problem([shop["period"]]).problem.requests if r.id == request_id)
+        assert (wish.type, wish.min_days, wish.shifts_per_day) == ("want_work", None, 2)
+
+    def test_manager_sees_why_a_request_was_not_read_and_can_hand_it_over_again(self, api, shop, settings, monkeypatch):
+        api.login(shop["worker"])
+        request_id = send_request(api, shop).json()["id"]  # no key yet
+        api.login(shop["manager"])
+        url = f"/api/periods/{shop['period'].pk}/requests"
+        [listed] = api.get(url).json()
+        assert (listed["unread_reason"], listed["can_reread"]) == ("off", False)  # still no key
+        assert api.post(f"/api/requests/{request_id}/reread").status_code == 409
+
+        settings.ANTHROPIC_API_KEY = "test-key"
+        [listed] = api.get(url).json()
+        assert listed["can_reread"] is True
+        body = api.post(f"/api/requests/{request_id}/reread").json()
+        assert (body["status"], body["unread_reason"], body["can_reread"]) == ("new", "", False)
+        assert ProcrastinateJob.objects.filter(task_name="assistant.interpret_text_request").count() == 1
+        monkeypatch.setattr(llm, "read_request", lambda text, context: reading(confidence=0.2))
+        assert services.interpret_request(request_id) == "needs_manager"
+        [listed] = api.get(url).json()
+        assert (listed["unread_reason"], listed["can_reread"]) == ("unsure", False)  # it did read it
+
+    def test_only_a_manager_of_the_location_hands_a_request_over(self, api, shop, make_company, with_key):
+        api.login(shop["worker"])
+        request_id = send_request(api, shop).json()["id"]
+        TextRequest.objects.filter(pk=request_id).update(status="needs_manager", unread_reason="off")
+        assert api.post(f"/api/requests/{request_id}/reread").status_code == 403
+        api.login(make_company("Inna")["manager"])
+        assert api.post(f"/api/requests/{request_id}/reread").status_code == 404
 
     def test_a_failed_call_leaves_the_request_to_the_manager(self, api, shop, with_key, monkeypatch):
         def broken(text, context):

@@ -1,8 +1,9 @@
 """The structure a sentence becomes: one wish about one person, of a type from a closed list.
 
 Used for an employee's text request (`TextRequest.interpretation`) and for a manager's instruction
-(`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, wolne_dni, inne),
-subject_employee (id), shift_type (id), avoid, max_hours, dates (ISO), weekdays (0 = Monday).
+(`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, wolne_dni,
+chce_pracowac, inne), subject_employee (id), shift_type (id), avoid, max_hours, min_days, shifts_per_day,
+dates (ISO), weekdays (0 = Monday).
 
 What the assistant returns is never trusted as is: names are matched against the location's own lists and
 anything that cannot be checked makes the reading unusable (`clean` returns None).
@@ -14,7 +15,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date, timedelta
 from typing import Any
 
-TYPES = ("unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni", "inne")
+TYPES = ("unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni", "chce_pracowac", "inne")
 LEVELS = ("bardzo_wazne", "wazne", "mile_widziane")
 
 _WEEKDAYS = ("w poniedziałki", "we wtorki", "w środy", "w czwartki", "w piątki", "w soboty", "w niedziele")
@@ -57,6 +58,8 @@ def clean(
     max_hours: float | None = None,
     dates: Iterable[str] = (),
     weekdays: Iterable[int] = (),
+    min_days: int | None = None,
+    shifts_per_day: int | None = None,
     people: Mapping[str, str],
     shift_types: Mapping[str, str],
 ) -> dict[str, Any] | None:
@@ -87,6 +90,17 @@ def clean(
         data["max_hours"] = float(max_hours)
     elif type == "wolne_dni" and not days and not week:
         return None
+    elif type == "chce_pracowac":
+        if not days and not week:
+            return None
+        if min_days is not None and (not isinstance(min_days, int) or min_days < 1):
+            return None
+        if shifts_per_day is not None and (not isinstance(shifts_per_day, int) or not 1 <= shifts_per_day <= 3):
+            return None
+        if min_days is not None and days and not week and min_days >= len(days):
+            min_days = None  # "all of them" said as a number
+        data["min_days"] = min_days
+        data["shifts_per_day"] = shifts_per_day or 1
     return data
 
 
@@ -148,5 +162,13 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             return f"{who}: najwyżej {shown} godz.{when or ' w okresie grafiku'}"
         case "wolne_dni":
             return f"{who}: wolne{when}"
+        case "chce_pracowac":
+            shifts = data.get("shifts_per_day") or 1
+            what = {1: "praca", 2: "dwie zmiany jednego dnia", 3: "trzy zmiany jednego dnia"}.get(shifts, "praca")
+            need = data.get("min_days")
+            if need:
+                which = "jeden z tych dni" if need == 1 else f"{need} z tych dni"
+                return f"{who}: {what}{when} ({which})"
+            return f"{who}: {what}{when}"
         case _:
             return f"{who}: do Twojej oceny"

@@ -118,6 +118,17 @@ class TextRequest(CompanyOwnedModel):
         blank=True,
         help_text="type, subject_employee, dates, level, confidence, summary",
     )
+
+    class UnreadReason(models.TextChoices):
+        NONE = "", "—"
+        OFF = "off", "asystent wyłączony"
+        UNSURE = "unsure", "asystent nie był pewny"
+        FAILED = "failed", "błąd asystenta"
+
+    # Why a request is left to the manager without an interpretation (empty when it was understood or is new).
+    unread_reason = models.CharField(
+        "dlaczego bez interpretacji", max_length=8, choices=UnreadReason.choices, default="", blank=True
+    )
     employee_corrected = models.BooleanField("poprawiona przez pracownika", default=False)
     manager_priority = models.CharField(
         "ważność wg menedżera", max_length=8, choices=ManagerPriority.choices, default=ManagerPriority.NORMAL

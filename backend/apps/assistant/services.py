@@ -90,7 +90,8 @@ def queue_request(text_request: TextRequest) -> None:
     if not llm.is_enabled():
         text_request.status = TextRequest.Status.NEEDS_MANAGER
         text_request.interpretation = None
-        text_request.save(update_fields=["status", "interpretation", "updated_at"])
+        text_request.unread_reason = TextRequest.UnreadReason.OFF
+        text_request.save(update_fields=["status", "interpretation", "unread_reason", "updated_at"])
         return
     from apps.assistant.tasks import interpret_text_request  # tasks import this module
 
@@ -104,11 +105,14 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         return "skipped"  # deleted, already read, or edited since (the newer job reads it)
     today = today or timezone.localdate()
     status, interpretation = TextRequest.Status.NEEDS_MANAGER, None
+    reason = TextRequest.UnreadReason.OFF
     if llm.is_enabled():
+        reason = TextRequest.UnreadReason.FAILED
         context, people, shift_types = request_context(row, today)
         try:
             reading = llm.read_request(row.text, context)
             status, interpretation = _checked_request(reading, row.period, people, shift_types)
+            reason = TextRequest.UnreadReason.NONE if interpretation else TextRequest.UnreadReason.UNSURE
         except llm.AssistantError as exc:
             logger.warning("request %s left to the manager: %s", row.pk, exc)
         except Exception:
@@ -117,7 +121,7 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
     updated = TextRequest.objects.for_company(row.company_id).filter(
         pk=row.pk, status=TextRequest.Status.NEW, text=row.text
     )
-    updated.update(status=status, interpretation=interpretation, updated_at=timezone.now())
+    updated.update(status=status, interpretation=interpretation, unread_reason=reason, updated_at=timezone.now())
     return status
 
 
@@ -133,6 +137,8 @@ def _checked_request(
         max_hours=reading.max_hours,
         dates=[d for d in reading.dates if period.start.isoformat() <= d <= period.end.isoformat()],
         weekdays=reading.weekdays,
+        min_days=reading.min_days,
+        shifts_per_day=reading.shifts_per_day,
         people=people,
         shift_types=shift_types,
     )
@@ -361,6 +367,8 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
             max_hours=new.max_hours,
             dates=new.dates,
             weekdays=new.weekdays,
+            min_days=new.min_days,
+            shifts_per_day=new.shifts_per_day,
             people=others,
             shift_types=shift_types,
         )

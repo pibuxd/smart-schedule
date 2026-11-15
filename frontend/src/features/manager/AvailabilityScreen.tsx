@@ -2,7 +2,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { CalendarPlus } from 'lucide-react'
 import { useState } from 'react'
 
-import { useAvailabilityGrid, usePeriodRequests, useUpdateRequest } from '../../api/generated/availability/availability'
+import {
+  useAvailabilityGrid,
+  usePeriodRequests,
+  useRereadRequest,
+  useUpdateRequest,
+} from '../../api/generated/availability/availability'
 import type {
   AvailabilityGridOut,
   LocationOut,
@@ -330,7 +335,13 @@ const PRIORITY: { value: ManagerRequestOutManagerPriority; label: string }[] = [
 ]
 
 function RequestsSection({ periodId }: { periodId: string }) {
-  const requests = usePeriodRequests(periodId)
+  const requests = usePeriodRequests(periodId, {
+    query: {
+      // While the assistant reads a request (a few seconds), look again.
+      refetchInterval: (query) =>
+        ((query.state.data?.data as ManagerRequestOut[] | undefined) ?? []).some((r) => r.status === 'new') ? 2000 : false,
+    },
+  })
   if (requests.isPending) return <Loading>Wczytuję prośby…</Loading>
   if (requests.isError) {
     return (
@@ -363,11 +374,23 @@ function RequestsSection({ periodId }: { periodId: string }) {
 function requestNote(request: ManagerRequestOut): string {
   if (request.summary) return `Jak to zrozumiał asystent: ${request.summary} Generator weźmie to pod uwagę.`
   if (request.status === 'new') return 'Asystent właśnie czyta tę prośbę.'
-  return 'Tej prośby asystent nie umiał zamienić na coś, co generator sprawdzi sam. Przeczytaj ją i, jeśli chcesz ją spełnić, popraw grafik ręcznie albo napisz polecenie asystentowi w „Zasadach”.'
+  const yourself =
+    'przeczytaj ją sam i, jeśli chcesz ją spełnić, popraw grafik ręcznie albo napisz polecenie asystentowi w „Zasadach”.'
+  if (request.unread_reason === 'off') {
+    return request.can_reread
+      ? `Ta prośba przyszła, kiedy asystent był wyłączony, więc jeszcze jej nie czytał. Daj mu ją albo ${yourself}`
+      : `Asystent jest wyłączony, więc generator nie bierze tej prośby pod uwagę. Możesz ${yourself}`
+  }
+  if (request.unread_reason === 'failed') {
+    return `Asystent nie zdołał przeczytać tej prośby (błąd połączenia). Spróbuj jeszcze raz albo ${yourself}`
+  }
+  if (request.employee_corrected) return `Pracownik napisał, że asystent źle to zrozumiał. Możesz ${yourself}`
+  return `Asystent przeczytał tę prośbę, ale nie umiał zamienić jej na coś, co generator sprawdzi sam. Możesz ${yourself}`
 }
 
-function RequestCard({ request }: { request: ManagerRequestOut }) {
+export function RequestCard({ request }: { request: ManagerRequestOut }) {
   const update = useUpdateRequest()
+  const reread = useRereadRequest()
   const queryClient = useQueryClient()
   const { readOnly } = useManager()
   const change = (data: { manager_priority?: ManagerRequestOutManagerPriority; manager_rejected?: boolean }) =>
@@ -381,9 +404,24 @@ function RequestCard({ request }: { request: ManagerRequestOut }) {
       </div>
       <p className={rejected ? 'm-0 text-ink-muted line-through' : 'm-0'}>„{request.text}”</p>
       <p className="m-0 text-sm text-ink-muted">{requestNote(request)}</p>
-      {request.employee_corrected && request.status !== 'new' && (
+      {request.employee_corrected && request.summary && (
         <p className="m-0 text-sm text-ink-muted">Pracownik poprawił tę prośbę po tym, jak przeczytał ją asystent.</p>
       )}
+      {request.can_reread && !readOnly && (
+        <div>
+          <Button
+            variant="secondary"
+            size="normal"
+            disabled={reread.isPending}
+            onClick={() =>
+              reread.mutate({ requestId: request.id }, { onSuccess: () => void queryClient.invalidateQueries() })
+            }
+          >
+            {reread.isPending ? 'Wysyłam…' : 'Daj asystentowi do przeczytania'}
+          </Button>
+        </div>
+      )}
+      {reread.isError && <InlineError>{errorMessage(reread.error, NETWORK_PROBLEM)}</InlineError>}
       {!rejected && (
         <fieldset className="m-0 flex flex-wrap gap-1 border-0 p-0" disabled={readOnly || update.isPending}>
           <legend className="sr-only">Ważność prośby</legend>

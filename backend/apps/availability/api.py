@@ -525,6 +525,11 @@ class ManagerRequestOut(Schema):
     summary: str | None
     # The person said the assistant got it wrong, or rewrote the request.
     employee_corrected: bool
+    # Why there is no summary: "off" = the assistant was switched off when the request came, "unsure" = it read
+    # the request but could not turn it into a setting, "failed" = the call failed; "" otherwise.
+    unread_reason: Literal["", "off", "unsure", "failed"]
+    # The assistant is on now and has not really read this request yet: the manager can hand it over again.
+    can_reread: bool
     manager_priority: PriorityName
     manager_rejected: bool
     created_at: datetime
@@ -606,9 +611,20 @@ def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
         status=row.status,
         summary=_summary(row),
         employee_corrected=row.employee_corrected,
+        unread_reason=row.unread_reason,
+        can_reread=_can_reread(row),
         manager_priority=row.manager_priority,
         manager_rejected=row.manager_rejected,
         created_at=row.created_at,
+    )
+
+
+def _can_reread(row: TextRequest) -> bool:
+    return (
+        llm.is_enabled()
+        and row.status == TextRequest.Status.NEEDS_MANAGER
+        and row.unread_reason in (TextRequest.UnreadReason.OFF, TextRequest.UnreadReason.FAILED)
+        and not row.manager_rejected
     )
 
 
@@ -631,4 +647,24 @@ def update_request(request, request_id: UUID, payload: RequestDecisionIn):
     if payload.manager_rejected is not None:
         row.manager_rejected = payload.manager_rejected
     row.save(update_fields=["manager_priority", "manager_rejected", "updated_at"])
+    return _manager_request_out(row)
+
+
+@router.post(
+    "/requests/{request_id}/reread",
+    response={200: ManagerRequestOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def reread_request(request, request_id: UUID):
+    """Hand a request to the assistant again: one that came while it was switched off, or when the call failed."""
+    ctx, row = context_for(request, TextRequest, request_id)
+    ctx.require_manager_of(row.period.location)
+    ctx.require_writable()
+    if not _can_reread(row):
+        raise HttpError(409, "Tej prośby nie da się teraz dać asystentowi. Odśwież stronę.")
+    with transaction.atomic():
+        row.status = TextRequest.Status.NEW
+        row.interpretation = None
+        row.unread_reason = TextRequest.UnreadReason.NONE
+        row.save(update_fields=["status", "interpretation", "unread_reason", "updated_at"])
+        queue_request(row)
     return _manager_request_out(row)

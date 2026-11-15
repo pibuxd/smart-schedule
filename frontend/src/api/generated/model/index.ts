@@ -83,6 +83,7 @@ export * from './managerOverviewParams';
 export * from './managerRequestOut';
 export * from './managerRequestOutManagerPriority';
 export * from './managerRequestOutStatus';
+export * from './managerRequestOutUnreadReason';
 export * from './markReadIn';
 export * from './meIn';
 export * from './meOut';
