@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { ExperiencedShortOut } from './experiencedShortOut';
 import type { PeriodOutLatestVersionStatus } from './periodOutLatestVersionStatus';
 import type { PeriodOutStatus } from './periodOutStatus';
 
@@ -21,4 +22,5 @@ export interface PeriodOut {
   active_run_id: string | null;
   manual_changes: number;
   missing_availability: number;
+  experienced_short: ExperiencedShortOut[];
 }

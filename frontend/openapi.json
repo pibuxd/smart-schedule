@@ -6462,6 +6462,35 @@
         "title": "InvitationIn",
         "type": "object"
       },
+      "ExperiencedShortOut": {
+        "properties": {
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          },
+          "position_name": {
+            "title": "Position Name",
+            "type": "string"
+          },
+          "needed": {
+            "title": "Needed",
+            "type": "integer"
+          },
+          "available": {
+            "title": "Available",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position_id",
+          "position_name",
+          "needed",
+          "available"
+        ],
+        "title": "ExperiencedShortOut",
+        "type": "object"
+      },
       "GroupOut": {
         "properties": {
           "id": {
@@ -6795,6 +6824,13 @@
           "manual_changes": {
             "title": "Manual Changes",
             "type": "integer"
+          },
+          "experienced_short": {
+            "items": {
+              "$ref": "#/components/schemas/ExperiencedShortOut"
+            },
+            "title": "Experienced Short",
+            "type": "array"
           }
         },
         "required": [
@@ -6810,7 +6846,8 @@
           "latest_version_id",
           "latest_version_status",
           "active_run_id",
-          "manual_changes"
+          "manual_changes",
+          "experienced_short"
         ],
         "title": "PeriodSummaryOut",
         "type": "object"
@@ -7189,6 +7226,13 @@
           "missing_availability": {
             "title": "Missing Availability",
             "type": "integer"
+          },
+          "experienced_short": {
+            "items": {
+              "$ref": "#/components/schemas/ExperiencedShortOut"
+            },
+            "title": "Experienced Short",
+            "type": "array"
           }
         },
         "required": [
@@ -7204,7 +7248,8 @@
           "latest_version_status",
           "active_run_id",
           "manual_changes",
-          "missing_availability"
+          "missing_availability",
+          "experienced_short"
         ],
         "title": "PeriodOut",
         "type": "object"

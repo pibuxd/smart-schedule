@@ -581,3 +581,61 @@ def test_cancel_is_for_managers_of_a_writable_company_only(api, shop, make_compa
     assert api.post(f"/api/generation-runs/{run.pk}/cancel").status_code == 402
     run.refresh_from_db()
     assert run.status == GenerationRun.Status.QUEUED
+
+
+@pytest.mark.django_db
+def test_period_warns_when_staffing_needs_more_experienced_people_than_the_location_has(api, shop):
+    location, seller, period = shop["location"], shop["position"], shop["period"]
+    api.login(shop["manager"])
+    periods = lambda: api.get(f"/api/locations/{location.id}/periods").json()  # noqa: E731
+    overview = lambda: api.get(f"/api/manager/overview?company_id={shop['company'].id}").json()  # noqa: E731
+    assert periods()[0]["experienced_short"] == []
+
+    # Mondays need 1 experienced seller and nobody is experienced.
+    StaffingRule.objects.filter(location=location, weekday=0).update(experienced=1)
+    assert periods()[0]["experienced_short"] == [
+        {"position_id": str(seller.id), "position_name": seller.name, "needed": 1, "available": 0}
+    ]
+    assert overview()["locations"][0]["period"]["experienced_short"][0]["needed"] == 1
+
+    # One experienced person is enough for the usual days, but not for a day that needs two at once.
+    ewa, jan = shop["people"][1], shop["people"][2]
+    EmployeeProfile.objects.filter(pk=ewa.pk).update(experience=3)
+    assert periods()[0]["experienced_short"] == []
+    StaffingException.objects.create(
+        location=location,
+        date=MON + timedelta(days=2),
+        shift_type=shop["shift_type"],
+        position=seller,
+        count=3,
+        experienced=2,
+    )
+    assert [(row["needed"], row["available"]) for row in periods()[0]["experienced_short"]] == [(2, 1)]
+
+    # The level on the position counts, not the person's default; people who left do not count.
+    EmployeeProfile.objects.filter(pk=jan.pk).update(experience=3)
+    PositionExperience.objects.create(employee=jan, position=seller, level=2)
+    assert len(periods()[0]["experienced_short"]) == 1
+    PositionExperience.objects.filter(employee=jan).update(level=3)
+    EmployeeProfile.objects.filter(pk=jan.pk).update(experience=1)
+    assert periods()[0]["experienced_short"] == []
+    EmployeeProfile.objects.filter(pk=jan.pk).update(is_active=False)
+    assert len(periods()[0]["experienced_short"]) == 1
+
+    # An exception outside the period, or one that replaces the only Monday, changes what is needed.
+    StaffingException.objects.all().delete()
+    StaffingException.objects.create(
+        location=location,
+        date=period.end + timedelta(days=3),
+        shift_type=shop["shift_type"],
+        position=seller,
+        count=3,
+        experienced=3,
+    )
+    assert periods()[0]["experienced_short"] == []
+    EmployeeProfile.objects.filter(pk=ewa.pk).update(experience=2)
+    assert len(periods()[0]["experienced_short"]) == 1
+    StaffingException.objects.create(
+        location=location, date=MON, shift_type=shop["shift_type"], position=seller, count=2
+    )
+    assert periods()[0]["experienced_short"] == []

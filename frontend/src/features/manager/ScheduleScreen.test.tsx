@@ -18,6 +18,7 @@ const period = {
   latest_version_status: 'draft',
   active_run_id: null,
   manual_changes: 0,
+  experienced_short: [],
   missing_availability: 0,
 }
 

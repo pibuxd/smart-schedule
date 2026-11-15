@@ -20,6 +20,7 @@ from apps.billing.services import (
 )
 from apps.core.http import client_ip
 from apps.core.schemas import ErrorOut
+from apps.staffing.shortage import ExperiencedShortOut, experienced_shortage
 from apps.tenancy import invitations
 from apps.tenancy.context import context_for, tenant_context
 from apps.tenancy.models import Company, Invitation, InvitationStatus, Location, LocationGroup, Membership, Role
@@ -271,6 +272,8 @@ class PeriodSummaryOut(Schema):
     latest_version_status: Literal["draft", "published", "superseded"] | None
     active_run_id: UUID | None
     manual_changes: int
+    # Positions where one shift needs more experienced people than the location has (a warning before arranging).
+    experienced_short: list[ExperiencedShortOut]
 
 
 class LocationSummaryOut(LocationOut):
@@ -357,6 +360,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
         .values_list("pk", flat=True)
         .first(),
         manual_changes=manual_changes(latest),
+        experienced_short=experienced_shortage(period.company_id, location.pk, period.start, period.end),
     )
 
 
