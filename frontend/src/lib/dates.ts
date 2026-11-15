@@ -103,3 +103,10 @@ export function periodWords(startIso: string, endIso: string): string {
   if (start.getMonth() === end.getMonth()) return `${start.getDate()}–${end.getDate()} ${monthGenitive(end)}`
   return `${dayAndMonth(start)} – ${dayAndMonth(end)}`
 }
+
+/** Hours from `from` to `to`, going past midnight when `to` is earlier ("20:00"–"16:00" = 20). */
+export function spanHours(from: string, to: string): number {
+  const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5))
+  const span = (minutes(to) - minutes(from) + 24 * 60) % (24 * 60)
+  return Math.round((span / 60) * 10) / 10
+}

@@ -80,6 +80,7 @@ export function RequestsSection({
   const refresh = () => queryClient.invalidateQueries({ queryKey: getMyRequestsQueryKey(params) })
   const create = useCreateMyRequest({ mutation: { onSuccess: refresh } })
   const remove = useDeleteMyRequest({ mutation: { onSuccess: refresh } })
+  const [removing, setRemoving] = useState<string | null>(null)
   const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } })
   const [text, setText] = useState('')
   const list = (requests.data?.data as MyRequestOut[] | undefined) ?? []
@@ -110,17 +111,34 @@ export function RequestsSection({
               />
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-ink-muted">Wysłane do kierownika</span>
-                {editable && (
-                  <Button
-                    variant="quiet"
-                    size="normal"
-                    className="whitespace-nowrap"
-                    disabled={remove.isPending}
-                    onClick={() => remove.mutate({ requestId: request.id })}
-                  >
-                    Usuń prośbę
-                  </Button>
-                )}
+                {editable &&
+                  (removing === request.id ? (
+                    <span className="flex flex-wrap items-center justify-end gap-1">
+                      <span className="text-sm font-semibold">Usunąć tę prośbę?</span>
+                      <Button
+                        variant="quiet"
+                        size="normal"
+                        disabled={remove.isPending}
+                        onClick={() =>
+                          remove.mutate({ requestId: request.id }, { onSettled: () => setRemoving(null) })
+                        }
+                      >
+                        Tak, usuń
+                      </Button>
+                      <Button variant="quiet" size="normal" onClick={() => setRemoving(null)}>
+                        Nie
+                      </Button>
+                    </span>
+                  ) : (
+                    <Button
+                      variant="quiet"
+                      size="normal"
+                      className="whitespace-nowrap"
+                      onClick={() => setRemoving(request.id)}
+                    >
+                      Usuń prośbę
+                    </Button>
+                  ))}
               </div>
             </li>
           ))}

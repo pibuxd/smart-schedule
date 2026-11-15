@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 Purpose = Literal["login", "register"]
 
-UNKNOWN_PHONE = "Nie znamy tego numeru. Poproś kierownika o zaproszenie albo załóż firmę, jeśli sam układasz grafik."
+UNKNOWN_PHONE = (
+    "Nie znamy tego numeru. Sprawdź, czy jest wpisany dobrze. "
+    "Jeśli tak, poproś kierownika o zaproszenie. Prowadzisz lokal? Załóż firmę."
+)
 TOO_MANY_CODES = "Za dużo kodów w krótkim czasie. Spróbuj ponownie za godzinę."
 TOO_MANY_REGISTRATIONS = (
     "Z tej sieci w ostatniej godzinie zakładano już kilka nowych kont. "

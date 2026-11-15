@@ -10372,6 +10372,11 @@
           "notified": {
             "title": "Notified",
             "type": "integer"
+          },
+          "notified_here": {
+            "default": 0,
+            "title": "Notified Here",
+            "type": "integer"
           }
         },
         "required": [

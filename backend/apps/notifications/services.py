@@ -68,6 +68,11 @@ def shift_words(payload: dict) -> str:
     return ", ".join(parts)
 
 
+def _people_dative(count: int) -> str:
+    """'1 osobie', '38 osobom'."""
+    return f"{count} osobie" if count == 1 else f"{count} osobom"
+
+
 def notification_text(kind: str, payload: dict) -> str:
     p = payload or {}
     shift = shift_words(p)
@@ -92,13 +97,17 @@ def notification_text(kind: str, payload: dict) -> str:
                     f"{giver} oddaje zmianę {shift}, ale nikt inny nie może jej teraz wziąć. "
                     "Do decyzji ta osoba nadal ma tę zmianę; może warto porozmawiać."
                 )
-            return f"{giver} oddaje zmianę {shift}. Powiadomienie dostały osoby, które mogą ją wziąć ({p['able']})."
+            return f"{giver} oddaje zmianę {shift}. Daliśmy znać {_people_dative(p['able'])}, które mogą ją wziąć."
         case "borrowed":
             return (
                 f"{taker} (Twój lokal) bierze zmianę w innym lokalu: {shift}. Zatwierdził to kierownik tamtego lokalu."
             )
         case "shift_claimed":
             return f"{taker} chce wziąć zmianę od: {giver} ({shift}). Zatwierdź albo odrzuć w „Oddane zmiany”."
+        case "offer_claimed":
+            return (
+                f"{taker} chce wziąć Twoją zmianę {shift}. Teraz zdecyduje kierownik. Do decyzji to nadal Twoja zmiana."
+            )
         case "claim_approved":
             return f"Kierownik zatwierdził: bierzesz zmianę {shift}. Jest już w Twoim grafiku."
         case "claim_rejected":

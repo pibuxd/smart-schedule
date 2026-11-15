@@ -456,8 +456,17 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
  */
 function ToolBar({ tool, onChange }: { tool: Tool; onChange: (tool: Tool) => void }) {
   return (
-    <div className="sticky bottom-[calc(65px+env(safe-area-inset-bottom))] z-20 -mx-4 border-t border-line bg-paper px-4 pt-2 pb-2.5 md:bottom-0">
-      <p className="m-0 mb-1.5 text-sm font-semibold" id="tool-label">
+    <div
+      className={
+        'sticky bottom-[calc(65px+env(safe-area-inset-bottom))] z-20 -mx-4 border-t border-line bg-paper px-4 pt-2 pb-2.5 md:bottom-0 ' +
+        // A short phone screen keeps more of the calendar in sight; lying on its side, the bar scrolls with the page.
+        '[@media(max-height:800px)]:pt-1.5 [@media(max-height:800px)]:pb-1.5 [@media(max-height:500px)]:static'
+      }
+    >
+      <p
+        className={cn('m-0 mb-1.5 text-sm font-semibold', tool !== 'hours' && '[@media(max-height:800px)]:sr-only')}
+        id="tool-label"
+      >
         {tool === 'hours' ? 'Stuknij dzień, żeby ustawić godziny.' : 'Wybierz, a potem zaznacz dni:'}
       </p>
       <div role="group" aria-labelledby="tool-label" className="grid grid-cols-3 gap-1.5">
@@ -469,6 +478,7 @@ function ToolBar({ tool, onChange }: { tool: Tool; onChange: (tool: Tool) => voi
             onClick={() => onChange(t)}
             className={cn(
               'grid min-h-16 min-w-0 cursor-pointer place-items-center gap-0.5 rounded-md border-2 border-line bg-surface px-0.5 py-1.5 text-sm font-semibold',
+              '[@media(max-height:800px)]:flex [@media(max-height:800px)]:min-h-(--touch) [@media(max-height:800px)]:justify-center [@media(max-height:800px)]:gap-1.5 [@media(max-height:800px)]:py-1',
               tool === t && 'border-accent bg-accent-soft ring-3 ring-accent-soft',
             )}
           >

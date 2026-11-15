@@ -43,6 +43,8 @@ class OfferMadeOut(Schema):
     status: OfferStatus
     # How many people were told that they can take it.
     notified: int
+    # Of them, people whose home is the shift's location.
+    notified_here: int = 0
 
 
 class AvailableOfferOut(Schema):
@@ -119,8 +121,8 @@ def offer_my_shift(request, assignment_id: UUID):
     if assignment.employee_id != profile.pk:
         raise HttpError(404, "Nie znaleziono.")
     ctx.require_writable()
-    offer, notified = services.offer_shift(assignment, profile)
-    return Status(201, OfferMadeOut(id=offer.pk, status=offer.status, notified=notified))
+    offer, notified, here = services.offer_shift(assignment, profile)
+    return Status(201, OfferMadeOut(id=offer.pk, status=offer.status, notified=notified, notified_here=here))
 
 
 @router.post("/offers/{offer_id}/cancel", response={200: OfferMadeOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})

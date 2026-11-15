@@ -40,7 +40,7 @@ const offer = {
 function schedule(shifts: unknown[], offers: unknown[] = []) {
   return mockApi((method, path) => {
     if (path === '/api/me/offers') return [200, offers]
-    if (method === 'POST' && path === '/api/me/shifts/a1/offer') return [201, { id: 'o9', status: 'open', notified: 3 }]
+    if (method === 'POST' && path === '/api/me/shifts/a1/offer') return [201, { id: 'o9', status: 'open', notified: 3, notified_here: 1 }]
     if (method === 'POST' && path === '/api/offers/o1/claim') return [201, { ...offer, my_claim_id: 'c1', my_claim_status: 'pending' }]
     return [200, { home_location_name: 'Wieliczka – Rynek', shifts, months: [{ month: '2026-11', hours: 112 }] }]
   })
@@ -68,7 +68,7 @@ describe('MyScheduleScreen', () => {
     const sheet = await screen.findByRole('dialog')
     expect(within(sheet).getByText('Dopóki kierownik nie zdecyduje, to nadal Twoja zmiana.')).toBeInTheDocument()
     fireEvent.click(within(sheet).getByRole('button', { name: 'Oddaj zmianę' }))
-    expect(await within(sheet).findByText(/mogą wziąć tę zmianę \(3\)/)).toBeInTheDocument()
+    expect(await within(sheet).findByText(/Daliśmy znać 3 osobom: 1 z Twojego lokalu i 2 z innych lokali firmy/)).toBeInTheDocument()
     expect(calls.some((c) => c.method === 'POST' && c.url === '/api/me/shifts/a1/offer')).toBe(true)
   })
 
@@ -87,6 +87,8 @@ describe('MyScheduleScreen', () => {
     const section = await screen.findByRole('region', { name: 'Zmiany do wzięcia' })
     expect(section).toHaveTextContent('Bochnia (inny lokal). Oddaje: Ola Kos')
     fireEvent.click(within(section).getByRole('button', { name: 'Weź zmianę' }))
+    expect(calls.some((c) => c.url === '/api/offers/o1/claim')).toBe(false) // one more tap first
+    fireEvent.click(within(section).getByRole('button', { name: 'Tak, zgłoś mnie' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/offers/o1/claim')).toBe(true))
   })
 

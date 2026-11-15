@@ -68,6 +68,7 @@ def test_offer_tells_everyone_who_could_take_the_shift(api, market):
     # that morning, not the baker, not the giver.
     assert told("shift_offered") == {user_of(m["free"]).pk, user_of(m["elsewhere"]).pk}
     assert response.json()["notified"] == 2
+    assert response.json()["notified_here"] == 1  # the free seller works here, the other one elsewhere
     assert told("offer_made") == {m["manager"].pk}
     note = Notification.objects.get(kind="offer_made")
     assert note.payload["able"] == 2
@@ -118,6 +119,7 @@ def test_claim_and_approval_move_the_shift_with_history(api, market):
     api.login(user_of(m["free"]))
     second = api.post(f"/api/offers/{offer_id}/claim").json()["my_claim_id"]
     assert told("shift_claimed") == {m["manager"].pk}
+    assert told("offer_claimed") == {user_of(m["giver"]).pk}  # the giver knows someone volunteered
     assert ShiftOffer.objects.get().status == "claimed"
 
     api.login(m["manager"])

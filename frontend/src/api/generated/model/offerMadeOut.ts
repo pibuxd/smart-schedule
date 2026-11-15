@@ -10,4 +10,5 @@ export interface OfferMadeOut {
   id: string;
   status: OfferMadeOutStatus;
   notified: number;
+  notified_here?: number;
 }

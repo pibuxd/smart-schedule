@@ -183,6 +183,8 @@ function CodeStep({
 
   const check = (value: string) => {
     setCode(value)
+    // A new digit starts a new try: the old "wrong code" message would only confuse.
+    if (verify.isError) verify.reset()
     if (value.length === 6 && !verify.isPending) {
       verify.mutate(
         { data: { phone: sent.phone, code: value } },
@@ -192,7 +194,6 @@ function CodeStep({
             await queryClient.invalidateQueries({ queryKey: getMeQueryKey() })
             await navigate({ to: purpose === 'register' ? '/rejestracja' : '/' })
           },
-          onError: () => setCode(''),
         },
       )
     }
@@ -210,7 +211,7 @@ function CodeStep({
           ważny {Math.max(1, Math.round(sent.expires_in_s / 60))} min.
         </p>
       </div>
-      <CodeInput value={code} onChange={check} disabled={verify.isPending} invalid={verify.isError && !code} />
+      <CodeInput value={code} onChange={check} disabled={verify.isPending} invalid={verify.isError} />
       {verify.isPending ? (
         <p role="status" className="m-0 text-ink-muted">
           Sprawdzam kod…
@@ -222,10 +223,16 @@ function CodeStep({
       )}
       {resend.isError && <InlineError>{errorMessage(resend.error, NETWORK_PROBLEM)}</InlineError>}
       <div className="mt-auto grid gap-1">
+        {left > 0 && (
+          <p className="m-0 text-center font-semibold" role="timer">
+            Nowy kod możesz dostać za {minutes}:{seconds}.
+          </p>
+        )}
+        {left === 0 && (
         <Button
           variant="secondary"
           wide
-          disabled={left > 0 || resend.isPending}
+          disabled={resend.isPending}
           onClick={() =>
             resend.mutate(
               { data: { phone: sent.phone, purpose } },
@@ -239,8 +246,9 @@ function CodeStep({
             )
           }
         >
-          {left > 0 ? `Wyślij kod jeszcze raz za ${minutes}:${seconds}` : 'Wyślij kod jeszcze raz'}
+          Wyślij kod jeszcze raz
         </Button>
+        )}
         <Button variant="quiet" size="normal" wide onClick={onChangePhone}>
           Zmień numer telefonu
         </Button>

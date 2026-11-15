@@ -548,3 +548,16 @@ Poprawki w trzech PR-ach. Pierwszy (błędy i bezpieczeństwo) przyjmuje te zał
 - Rejestracja: jeden adres IP może w godzinę wysłać kody najwyżej na 5 nowych numerów (`REGISTER_NUMBERS_PER_IP_PER_HOUR`); komunikat podpowiada inną sieć (wspólne wifi).
 - `/api/docs` i `/api/openapi.json` tylko przy `DJANGO_DEBUG=1`; logowanie do admina: najwyżej 10 nieudanych prób na adres
   na godzinę (`ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR`, licznik w pamięci procesu).
+
+Drugi PR (ekrany pracownika, punkty 12–17):
+
+- „Kiedy mogę”: na niskim ekranie (do 800 px wysokości) pasek wyboru stanu jest niższy, a położony telefon
+  (do 500 px) nie ma przyklejonych pasków, bo zabierały cały kalendarz.
+- Okno godzin dłuższe niż 12 h przez północ (np. 20:00–16:00) wymaga potwierdzenia i ma przycisk „Zamień”;
+  zmiana w ustawieniach lokalu dłuższa niż 12 h wymaga zaznaczenia „Tak, ta zmiana trwa … godz.”.
+- Kto może wziąć oddaną zmianę, liczymy jak dotąd (stanowisko o tej samej nazwie w firmie + walidator). Audyt pokazał,
+  że koledzy z lokalu częściej odpadają, bo mają już opublikowany grafik (np. zmiana w tym samym czasie, piąty dzień
+  z rzędu), a osoby z lokali bez grafiku wyglądają na wolne. Dlatego oddający widzi teraz, ile osób jest z jego lokalu,
+  a ile z innych, i dostaje powiadomienie `offer_claimed`, gdy ktoś się zgłosi.
+- Ekran kodu: stary błąd znika po pierwszej nowej cyfrze, wpisany kod zostaje; zamiast bladego wyłączonego przycisku
+  jest licznik „Nowy kod możesz dostać za …”. „Weź zmianę” i „Usuń prośbę” pytają jeszcze raz.

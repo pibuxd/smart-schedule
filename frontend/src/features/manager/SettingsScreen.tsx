@@ -29,7 +29,7 @@ import { CheckField, inputClass, Section, SelectField, Tag, TextField } from '..
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
-import { dayTitle, parseDate, shortTime, WEEKDAY_HEADERS } from '../../lib/dates'
+import { dayTitle, parseDate, shortTime, spanHours, WEEKDAY_HEADERS } from '../../lib/dates'
 import { useManager } from './ManagerContext'
 
 const hhmm = (value: string | null | undefined) => (value ? value.slice(0, 5) : '')
@@ -341,6 +341,7 @@ function ShiftTypeForm({
   }
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
+    if (tooLong) return
     const data: ShiftTypeIn = {
       name,
       kind,
@@ -353,6 +354,10 @@ function ShiftTypeForm({
   }
   const error = create.error ?? update.error ?? remove.error
   const night = start && end && end < start
+  const length = start && end ? spanHours(start, end) : 0
+  // A 23-hour shift is more likely a typo than a plan: ask once before saving.
+  const [longConfirmed, setLongConfirmed] = useState(false)
+  const tooLong = kind === 'fixed' && length > 12 && !longConfirmed
   return (
     <form onSubmit={submit} className="grid gap-4">
       <TextField label="Nazwa" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} placeholder="np. Ranna" />
@@ -371,7 +376,17 @@ function ShiftTypeForm({
         <TextField label="Od" type="time" value={start} onChange={(e) => setStart(e.target.value)} required={kind === 'fixed'} />
         <TextField label="Do" type="time" value={end} onChange={(e) => setEnd(e.target.value)} required={kind === 'fixed'} />
       </div>
-      {night && <p className="m-0 text-sm text-ink-muted">Ta zmiana kończy się następnego dnia rano.</p>}
+      {night && !(kind === 'fixed' && length > 12) && (
+        <p className="m-0 text-sm text-ink-muted">Ta zmiana kończy się następnego dnia rano.</p>
+      )}
+      {kind === 'fixed' && length > 12 && (
+        <CheckField
+          label={`Tak, ta zmiana trwa ${String(length).replace('.', ',')} godz.`}
+          hint={night ? 'Kończy się następnego dnia. Sprawdź, czy godziny nie są zamienione.' : 'Sprawdź, czy godziny są dobre.'}
+          checked={longConfirmed}
+          onChange={(e) => setLongConfirmed(e.target.checked)}
+        />
+      )}
       <CheckField
         label="Zmiana zamykająca"
         hint="Zamknięcia lokalu dzielimy po równo między pracowników."
@@ -382,7 +397,7 @@ function ShiftTypeForm({
         <p className="m-0 text-sm text-ink-muted">Nowe godziny działają w grafikach, które ułożysz od teraz. Gotowe grafiki się nie zmienią.</p>
       )}
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
-      <Button type="submit" wide disabled={create.isPending || update.isPending}>
+      <Button type="submit" wide disabled={create.isPending || update.isPending || tooLong}>
         Zapisz zmianę
       </Button>
       {shiftType && (
