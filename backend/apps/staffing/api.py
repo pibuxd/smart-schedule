@@ -5,7 +5,6 @@ from datetime import date, time
 from typing import Literal
 from uuid import UUID
 
-from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, ProtectedError, RestrictedError
 from django.utils import timezone
@@ -13,7 +12,6 @@ from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
-from apps.accounts.models import normalize_phone
 from apps.core.schemas import ErrorOut
 from apps.scheduling.models import Assignment, ScheduleVersion
 from apps.staffing.models import (
@@ -157,10 +155,10 @@ class EmployeeOut(Schema):
 
 
 class EmployeeIn(Schema):
-    # Name and phone number belong to the person's account: changed only when the account is in this company alone.
+    # The name belongs to the person's account: changed only when the account is in this company alone. The phone
+    # number is the login, so only the superadmin changes it (docs/spec.md, "Zmiana numeru telefonu").
     first_name: str | None = Field(None, max_length=80)
     last_name: str | None = Field(None, max_length=80)
-    phone: str | None = Field(None, max_length=32)
     position_ids: list[UUID] | None = None
     experience: ExperienceLevel | None = None
     # Levels for single positions; replaces what was set before. A position left out gets the default level.
@@ -579,29 +577,20 @@ def add_myself_as_employee(request, location_id: UUID):
 
 
 def _changed_account(ctx: TenantContext, profile: EmployeeProfile, payload: EmployeeIn):
-    """The person's account with the new name or phone number applied (not saved), or None when neither changes.
+    """The person's account with the new name applied (not saved), or None when it does not change.
 
-    The account is shared by every company the person works for, and the phone number is how they log in, so:
-    nothing changes when the person also has another company; the number of a manager (or your own) is not
-    changed here."""
+    The account is shared by every company the person works for, so nothing changes when the person also has
+    another company."""
     user = profile.membership.user
     first = payload.first_name.strip() if payload.first_name is not None else user.first_name
     last = payload.last_name.strip() if payload.last_name is not None else user.last_name
-    phone = user.phone_e164
-    if payload.phone is not None and payload.phone.strip():
-        try:
-            phone = normalize_phone(payload.phone)
-        except ValidationError as exc:
-            raise HttpError(400, exc.messages[0]) from exc
-    if (first, last, phone) == (user.first_name, user.last_name, user.phone_e164):
+    if (first, last) == (user.first_name, user.last_name):
         return None
     if not first:
         raise HttpError(400, "Wpisz imię.")
     if user.memberships.exclude(company=ctx.company).exists():  # tenant-ok: only checks other companies exist
-        raise HttpError(409, "Ta osoba ma konto także w innej firmie, więc imię i numer może zmienić tylko ona sama.")
-    if phone != user.phone_e164 and (profile.membership.is_manager or user.pk == ctx.user.pk or user.is_staff):
-        raise HttpError(409, "Numeru kierownika nie zmienisz tutaj. Kierownik loguje się tym numerem.")
-    user.first_name, user.last_name, user.phone_e164 = first, last, phone
+        raise HttpError(409, "Ta osoba ma konto także w innej firmie, więc imię może zmienić tylko ona sama.")
+    user.first_name, user.last_name = first, last
     return user
 
 
@@ -610,7 +599,7 @@ def _changed_account(ctx: TenantContext, profile: EmployeeProfile, payload: Empl
     response={200: EmployeeOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
 )
 def update_employee(request, employee_id: UUID, payload: EmployeeIn):
-    """Name and phone number, positions, experience level, monthly maximum and target, or switching the person off
+    """Name, positions, experience level, monthly maximum and target, or switching the person off
     (history stays)."""
     ctx, profile = context_for(request, EmployeeProfile, employee_id)
     ctx.require_manager_of(profile.home_location)
@@ -633,7 +622,7 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
     user = _changed_account(ctx, profile, payload)
     with transaction.atomic():
         if user is not None:
-            _unique(user.save, "Ten numer ma już inne konto w Grafikomacie. Sprawdź, czy jest wpisany dobrze.")
+            user.save(update_fields=["first_name", "last_name"])
         profile.save()
         if "position_ids" in sent and payload.position_ids is not None:
             positions = list(ctx.qs(Position).filter(pk__in=payload.position_ids, location=profile.home_location))

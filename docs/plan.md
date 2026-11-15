@@ -580,8 +580,8 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
   (wyjątek w obsadzie, zasada zwykła zamiast „bez wyjątków”, stanowisko komuś jeszcze, zostawić pustą).
 - „Po terminie” liczy się od późniejszej z dwóch chwil: początku dnia po terminie albo chwili ustawienia terminu
   (`SchedulePeriod.deadline_set_at`; puste w starszych okresach). Termin wpisany wstecz nie robi więc z wszystkich spóźnialskich.
-- Imię, nazwisko i numer pracownika poprawia kierownik w „Zmień”, tylko gdy konto tej osoby nie należy do innej firmy;
-  numeru kierownika (i własnego) tam się nie zmienia, bo nim się loguje. Zajęty numer daje 409.
+- Imię i nazwisko pracownika poprawia kierownik w „Zmień”, tylko gdy konto tej osoby nie należy do innej firmy. Numeru
+  nie: to login, więc zgodnie ze spec zmienia go superadmin (sesje wygasają, zaproszenia trzeba wysłać ponownie).
 - Lista pracowników podaje `draft_shifts` (zmiany od dziś w nieopublikowanym szkicu); wyłączenie osoby z takimi
   zmianami pokazuje ostrzeżenie.
 - Karta lokalu bez stanowisk, zmian, obsady lub pracowników (`setup_missing`) pokazuje kroki z linkami. Gdy firma ma jedną

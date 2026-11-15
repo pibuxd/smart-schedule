@@ -1795,7 +1795,7 @@ export const getUpdateEmployeeUrl = (employeeId: string,) => {
 }
 
 /**
- * Name and phone number, positions, experience level, monthly maximum and target, or switching the person off
+ * Name, positions, experience level, monthly maximum and target, or switching the person off
  * (history stays).
  * @summary Update Employee
  */
@@ -1864,7 +1864,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateEmployeeMutationVariables = {employeeId: string;data: EmployeeIn}
 
     /**
- * Name and phone number, positions, experience level, monthly maximum and target, or switching the person off
+ * Name, positions, experience level, monthly maximum and target, or switching the person off
  * (history stays).
  * @summary Update Employee
  */

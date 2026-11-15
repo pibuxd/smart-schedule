@@ -253,24 +253,18 @@ class TestEmployees:
         cleared = api.patch(f"/api/employees/{row['id']}", {"max_hours_month": None}).json()
         assert cleared["max_hours_month"] is None and cleared["target_hours_month"] == 120
 
-    def test_name_and_phone_can_be_corrected(self, api, shop, make_company):
+    def test_name_can_be_corrected_but_not_the_login_number(self, api, shop, make_company):
         as_manager(api, shop)
         url = f"/api/employees/{shop['employee'].pk}"
         body = api.patch(url, {"first_name": " Anna ", "last_name": "Nowak", "phone": "600 100 200"}).json()
-        assert (body["first_name"], body["last_name"], body["phone"]) == ("Anna", "Nowak", "+48600100200")
-        shop["worker"].refresh_from_db()
-        assert shop["worker"].phone_e164 == "+48600100200"
+        assert (body["first_name"], body["last_name"]) == ("Anna", "Nowak")
+        # The phone number is the login: only the superadmin changes it (spec), so it is ignored here.
+        assert body["phone"] == shop["worker"].phone_e164
         assert api.patch(url, {"first_name": ""}).json()["detail"] == "Wpisz imię."
-        assert api.patch(url, {"phone": "123"}).status_code == 400
-        taken = api.patch(url, {"phone": shop["manager"].phone_e164})
-        assert taken.status_code == 409 and "inne konto" in taken.json()["detail"]
-        # The manager logs in with their number: it is not changed from the employee list.
         assert api.get("/api/me").json()["companies"][0]["works_shifts"] is False  # no "Mój grafik" in the menu
-        me = api.post(f"/api/locations/{shop['location'].pk}/employees/me").json()
+        api.post(f"/api/locations/{shop['location'].pk}/employees/me")
         assert api.get("/api/me").json()["companies"][0]["works_shifts"] is True
-        assert api.patch(f"/api/employees/{me['id']}", {"phone": "600100201"}).status_code == 409
-        assert api.patch(f"/api/employees/{me['id']}", {"last_name": "Kowalska"}).json()["last_name"] == "Kowalska"
-        # A person who also works for another company changes their own account.
+        # A person who also works for another company changes their own name.
         other = make_company("Inna")
         Membership.objects.create(company=other["company"], user=shop["worker"])
         shared = api.patch(url, {"first_name": "Ania"})
