@@ -37,6 +37,7 @@ export * from './employeeInExperience';
 export * from './employeeOut';
 export * from './employeeOutExperience';
 export * from './errorOut';
+export * from './experiencedShortOut';
 export * from './generatedVersionOut';
 export * from './generateIn';
 export * from './generationRunOut';

@@ -3,14 +3,14 @@ import { Link } from '@tanstack/react-router'
 import { Wand2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import type { GenerationRunOut } from '../../api/generated/model'
+import type { ExperiencedShortOut, GenerationRunOut } from '../../api/generated/model'
 import { useCancelGenerationRun, useGenerateSchedule, useGenerationRun } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
 import { useManager } from './ManagerContext'
-import { people, shifts } from './words'
+import { people, shifts, shortDay } from './words'
 
 /** One location's period, as the "Ułóż grafik" sheet needs it. */
 export type ArrangeTarget = {
@@ -23,6 +23,8 @@ export type ArrangeTarget = {
   // Manual changes in the newest version that arranging again drops (pins stay).
   manualChanges: number
   hasVersion: boolean
+  // Positions where one shift needs more experienced people than the location has.
+  experiencedShort: ExperiencedShortOut[]
 }
 
 /**
@@ -74,6 +76,7 @@ function ArrangeSheet({
   const early = targets.filter((t) => !t.deadlinePassed && t.missing > 0)
   const missing = targets.filter((t) => t.missing > 0)
   const manual = targets.filter((t) => t.manualChanges > 0)
+  const short = targets.filter((t) => t.experiencedShort.length > 0)
 
   const start = () =>
     generate.mutate(
@@ -120,6 +123,25 @@ function ArrangeSheet({
             {manual.map((t) => (one ? t.manualChanges : `${t.locationName}: ${t.manualChanges}`)).join(', ')}.
             Przypięte zmiany zostaną.
           </p>
+        )}
+        {short.length > 0 && (
+          <div className="grid gap-1 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+            <p className="m-0 font-semibold">Masz za mało doświadczonych osób.</p>
+            <ul className="m-0 grid gap-1 pl-5">
+              {short.flatMap((t) =>
+                t.experiencedShort.map((row) => (
+                  <li key={`${t.periodId}-${row.position_id}`}>
+                    {one ? '' : `${t.locationName}, `}
+                    {row.position_name}: zmiana {row.shift_name} ({shortDay(row.day)}) potrzebuje {row.needed}, a w tym lokalu {row.available === 0 ? 'nie masz żadnej' : `masz ${row.available}`}.
+                  </li>
+                )),
+              )}
+            </ul>
+            <p className="m-0">
+              Te miejsca w grafiku zostaną wolne. Możesz najpierw zmienić stopień w „Pracownicy” albo obsadę w
+              „Ustawienia lokalu”.
+            </p>
+          </div>
         )}
         <p className="m-0 text-sm text-ink-muted">
           Dostaniesz szkic do poprawek. Pracownicy zobaczą grafik dopiero, gdy go opublikujesz.

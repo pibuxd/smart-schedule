@@ -37,5 +37,6 @@ export function arrangeTarget(location: LocationSummaryOut, today: Date): Arrang
     deadlinePassed: daysUntil(period.deadline, today) < 0,
     manualChanges: period.manual_changes,
     hasVersion: period.latest_version_id !== null,
+    experiencedShort: period.experienced_short,
   }
 }

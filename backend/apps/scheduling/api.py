@@ -18,6 +18,7 @@ from apps.scheduling.generation import ACTIVE, cancel_generation, request_genera
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
 from apps.staffing.models import EmployeeProfile
+from apps.staffing.shortage import ExperiencedShortOut, experienced_shortage
 from apps.tenancy.context import context_for
 from apps.tenancy.models import Location
 
@@ -61,6 +62,8 @@ class PeriodOut(Schema):
     manual_changes: int
     # Active employees of the location who have not sent their availability ("Gotowe") for this period.
     missing_availability: int
+    # Positions where one shift needs more experienced people than the location has (a warning before arranging).
+    experienced_short: list[ExperiencedShortOut]
 
 
 class AskAvailabilityIn(Schema):
@@ -134,6 +137,7 @@ def _period_out(period: SchedulePeriod) -> PeriodOut:
         active_run_id=active.first(),
         manual_changes=manual_changes(latest),
         missing_availability=_missing_availability(period),
+        experienced_short=experienced_shortage(period.company_id, period.location_id, period.start, period.end),
     )
 
 
