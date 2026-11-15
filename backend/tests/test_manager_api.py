@@ -259,6 +259,11 @@ class TestSettings:
         version.save()
         setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
         assert [(c["in_draft"], c["in_published"]) for c in setup["closures"]] == [(False, True), (False, False)]
+        past = timezone.localdate() - timedelta(days=3)
+        Shift.objects.filter(pk=shift.pk).update(date=past)
+        LocationClosure.objects.create(company=shop["location"].company, location=shop["location"], date=past)
+        setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+        assert not any(c["in_draft"] or c["in_published"] for c in setup["closures"])
 
 
 class TestEmployees:

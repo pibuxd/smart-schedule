@@ -533,7 +533,8 @@ def location_employees(request, location_id: UUID):
 
 
 def _closures_out(ctx: TenantContext, location: Location, closures=None) -> list[ClosureOut]:
-    """Closed days, each saying whether a draft or the published schedule still has someone working that day."""
+    """Closed days, each saying whether a draft or the published schedule still has someone working that day.
+    Past days are frozen (arranging again keeps them), so they never get the warning."""
     if closures is None:
         closures = list(ctx.qs(LocationClosure).filter(location=location).order_by("date"))
     worked = set(
@@ -541,6 +542,7 @@ def _closures_out(ctx: TenantContext, location: Location, closures=None) -> list
         .filter(
             shift__location=location,
             shift__date__in=[c.date for c in closures],
+            shift__date__gte=timezone.localdate(),
             shift__version__status__in=[ScheduleVersion.Status.DRAFT, ScheduleVersion.Status.PUBLISHED],
             employee__isnull=False,
         )
