@@ -43,6 +43,7 @@ uv run python manage.py seed_demo [--reset]              # demo data: 4 bakeries
 # log in: POST /api/auth/request-code, the code is printed by runserver ("SMS to +48…")
 DJANGO_DEBUG=1 uv run python manage.py runserver          # API on :8000
 DJANGO_DEBUG=1 uv run python manage.py procrastinate worker   # all queues (in Docker: `worker` + `solver`)
+uv run python manage.py assistant_misses --days 30 > misses.csv   # what the assistant could not turn into settings
 uv run python manage.py generate_schedule --company 6a1e0000-0000-4000-8000-000000000001  # try the generator now
 uv run pytest                                             # tests (need Postgres)
 DJANGO_DEBUG=1 uv run pytest tests/engine                 # engine tests only, no database needed

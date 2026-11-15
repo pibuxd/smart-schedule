@@ -13,6 +13,8 @@ from apps.accounts.models import User
 from apps.assistant import llm, readings, services
 from apps.assistant.models import AssistantCommand, ManagerInstruction
 from apps.availability.models import TextRequest
+from apps.notifications.models import Notification
+from apps.notifications.services import notification_text
 from apps.rules.models import RuleSetting
 from apps.scheduling.models import SchedulePeriod
 from apps.scheduling.problem_builder import build_problem
@@ -56,6 +58,8 @@ def reading(**changes) -> llm.RequestReading:
         "shift_type": None,
         "avoid_shift_type": False,
         "max_hours": None,
+        "min_days": None,
+        "shifts_per_day": None,
         "dates": [],
         "weekdays": [5],
         "level": "wazne",
@@ -84,6 +88,8 @@ def instruction(**changes) -> llm.NewInstruction:
         "shift_type": None,
         "avoid_shift_type": False,
         "max_hours": None,
+        "min_days": None,
+        "shifts_per_day": None,
         "dates": [],
         "weekdays": [],
         "place": 1,
@@ -179,6 +185,56 @@ class TestRequests:
         assert services.interpret_request(request_id) == "needs_manager"
         row = TextRequest.objects.get(pk=request_id)
         assert row.interpretation is None
+
+    def test_wish_to_work_one_of_two_days_or_two_shifts_reaches_the_generator(self, api, shop, with_key, monkeypatch):
+        start = shop["period"].start
+        days = [(start + timedelta(days=11)).isoformat(), (start + timedelta(days=12)).isoformat()]
+        answer = reading(type="chce_pracowac", weekdays=[], dates=days, min_days=1, summary="Praca 12 albo 13.")
+        monkeypatch.setattr(llm, "read_request", lambda text, context: answer)
+        api.login(shop["worker"])
+        request_id = send_request(api, shop, "chce albo 12stego albo 13stego").json()["id"]
+        assert services.interpret_request(request_id) == "interpreted"
+        [request] = build_problem([shop["period"]]).problem.requests
+        assert (request.type, request.min_days, request.shifts_per_day) == ("want_work", 1, 1)
+        assert sorted(d.isoformat() for d in request.dates) == days
+
+        two = reading(type="chce_pracowac", weekdays=[], dates=days[:1], shifts_per_day=2, summary="Dwie zmiany.")
+        monkeypatch.setattr(llm, "read_request", lambda text, context: two)
+        request_id = send_request(api, shop, "21 stycznia dwie zmiany pod rząd").json()["id"]
+        assert services.interpret_request(request_id) == "interpreted"
+        wish = next(r for r in build_problem([shop["period"]]).problem.requests if r.id == request_id)
+        assert (wish.type, wish.min_days, wish.shifts_per_day) == ("want_work", None, 2)
+
+    def test_manager_sees_why_a_request_was_not_read_and_can_hand_it_over_again(self, api, shop, settings, monkeypatch):
+        api.login(shop["worker"])
+        request_id = send_request(api, shop).json()["id"]  # no key yet
+        api.login(shop["manager"])
+        url = f"/api/periods/{shop['period'].pk}/requests"
+        [listed] = api.get(url).json()
+        assert (listed["unread_reason"], listed["can_reread"]) == ("off", False)  # still no key
+        assert api.post(f"/api/requests/{request_id}/reread").status_code == 409
+
+        settings.ANTHROPIC_API_KEY = "test-key"
+        [listed] = api.get(url).json()
+        assert listed["can_reread"] is True
+        body = api.post(f"/api/requests/{request_id}/reread").json()
+        assert (body["status"], body["unread_reason"], body["can_reread"]) == ("new", "", False)
+        # The employee wrote it when only the manager read requests: they are told it went to the assistant.
+        told = Notification.objects.get(user=shop["worker"], kind="request_to_assistant")
+        assert "asystentowi AI" in notification_text(told.kind, told.payload)
+        assert ProcrastinateJob.objects.filter(task_name="assistant.interpret_text_request").count() == 1
+        monkeypatch.setattr(llm, "read_request", lambda text, context: reading(confidence=0.2))
+        assert services.interpret_request(request_id) == "needs_manager"
+        [listed] = api.get(url).json()
+        assert (listed["unread_reason"], listed["can_reread"]) == ("unsure", False)  # it did read it
+
+    def test_only_a_manager_of_the_location_hands_a_request_over(self, api, shop, make_company, with_key):
+        api.login(shop["worker"])
+        request_id = send_request(api, shop).json()["id"]
+        TextRequest.objects.filter(pk=request_id).update(status="needs_manager", unread_reason="off")
+        assert api.post(f"/api/requests/{request_id}/reread").status_code == 403
+        api.login(make_company("Inna")["manager"])
+        assert api.post(f"/api/requests/{request_id}/reread").status_code == 404
 
     def test_a_failed_call_leaves_the_request_to_the_manager(self, api, shop, with_key, monkeypatch):
         def broken(text, context):
@@ -519,3 +575,51 @@ def test_a_refusal_or_cut_off_answer_is_an_error(settings, monkeypatch):
     monkeypatch.setattr(llm, "get_client", lambda: client)
     with pytest.raises(llm.AssistantError):
         llm.plan_command("x", "y")
+
+
+# ----------------------------------------------------------------- list of misses (superadmin)
+
+
+class TestMisses:
+    def test_unusable_answers_and_errors_are_kept_and_exported(self, api, shop, with_key, monkeypatch):
+        import csv
+        import io
+
+        from django.core.management import call_command
+
+        api.login(shop["worker"])
+        unsure = send_request(api, shop, "coś niejasnego").json()["id"]
+        monkeypatch.setattr(llm, "read_request", lambda text, context: reading(confidence=0.2))
+        services.interpret_request(unsure)
+        row = TextRequest.objects.get(pk=unsure)
+        assert row.unread_reason == "unsure" and row.assistant_answer["why"] == "pewność 0.20"
+        assert row.assistant_answer["type"] == "wolne_dni"
+
+        def broken(text, context):
+            raise llm.AssistantError("rate limit")
+
+        failed = send_request(api, shop, "prośba przy błędzie").json()["id"]
+        monkeypatch.setattr(llm, "read_request", broken)
+        services.interpret_request(failed)
+        assert TextRequest.objects.get(pk=failed).assistant_answer == {"error": "rate limit"}
+
+        understood = send_request(api, shop, "Wolałabym nie pracować w piątki.").json()["id"]
+        monkeypatch.setattr(llm, "read_request", lambda text, context: reading())
+        services.interpret_request(understood)
+        assert TextRequest.objects.get(pk=understood).assistant_answer is None
+
+        api.login(shop["manager"])
+        asked = command(api, shop, "zrób coś").json()["id"]
+        monkeypatch.setattr(llm, "plan_command", lambda text, context: plan(question="Co dokładnie?"))
+        services.run_command(asked)
+        assert AssistantCommand.objects.get(pk=asked).assistant_answer["question"] == "Co dokładnie?"
+
+        out = io.StringIO()
+        call_command("assistant_misses", stdout=out)
+        rows = list(csv.DictReader(io.StringIO(out.getvalue())))
+        assert {(r["kind"], r["text"], r["reason"]) for r in rows} == {
+            ("request", "coś niejasnego", "unsure"),
+            ("request", "prośba przy błędzie", "failed"),
+            ("command", "zrób coś", "question"),
+        }
+        assert "pewność 0.20" in next(r for r in rows if r["text"] == "coś niejasnego")["assistant_answer"]

@@ -90,6 +90,14 @@ Gdy asystent jest włączony, ekran „Coś jeszcze?” mówi pracownikowi, że 
 Do Claude wysyłana jest tylko treść prośby lub polecenia, daty okresu, nazwy zmian, stanowisk i zasad oraz imiona
 osób z jednego lokalu (bez nazwisk, numerów telefonów i grafiku).
 
+Co asystent nie umiał zamienić na ustawienia (prośby bez interpretacji, polecenia z pytaniem, uwagą albo
+błędem), razem z jego odpowiedzią i powodem, zapisuje się w bazie. W panelu administratora widać to w
+„Prośby” (filtr „dlaczego bez interpretacji”) i „Polecenia dla asystenta”. Plik CSV do przejrzenia:
+
+```bash
+docker compose exec api python manage.py assistant_misses --days 30 > misses.csv
+```
+
 ### Bez Dockera (dla programistów)
 
 Backend, worker i frontend osobno: komendy są w [CLAUDE.md](CLAUDE.md), sekcja „Commands”. Testy backendu nie

@@ -722,3 +722,25 @@ def test_manager_instruction_beats_an_employee_request():
     for d in range(3):
         assert {result.schedule[f"m{d}.0"], result.schedule[f"m{d}.1"]} != {"anna", "ewa"}
     assert score(p, report).manager_rules == 100
+
+
+def test_want_work_one_of_two_days():
+    # "albo 12, albo 13": Anna wants one of days 1 and 2; nothing else pulls her there.
+    people = [employee("anna"), employee("ola")]
+    slots = [slot(f"d{d}", day(d)) for d in range(3)]
+    requests = [Request("wish", "anna", "want_work", dates=frozenset({day(1), day(2)}), min_days=1)]
+    p = problem(people, slots, requests=requests)
+    result, report = solved(p)
+    assert "anna" in {result.schedule["d1"], result.schedule["d2"]}
+    assert score(p, report).employee_requests == 100
+
+
+def test_want_work_two_shifts_on_one_day():
+    # "21 stycznia dwie zmiany pod rząd": both shifts of that day go to Anna (no rest rule switched on).
+    people = [employee("anna"), employee("ola")]
+    slots = [slot("am", day(0)), slot("pm", day(0), "14:00", "22:00")]
+    requests = [Request("wish", "anna", "want_work", dates=frozenset({day(0)}), shifts_per_day=2)]
+    p = problem(people, slots, requests=requests)
+    result, report = solved(p)
+    assert (result.schedule["am"], result.schedule["pm"]) == ("anna", "anna")
+    assert score(p, report).employee_requests == 100

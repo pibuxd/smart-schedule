@@ -6,6 +6,7 @@
  */
 import type { ManagerRequestOutManagerPriority } from './managerRequestOutManagerPriority';
 import type { ManagerRequestOutStatus } from './managerRequestOutStatus';
+import type { ManagerRequestOutUnreadReason } from './managerRequestOutUnreadReason';
 
 export interface ManagerRequestOut {
   id: string;
@@ -15,6 +16,8 @@ export interface ManagerRequestOut {
   status: ManagerRequestOutStatus;
   summary: string | null;
   employee_corrected: boolean;
+  unread_reason: ManagerRequestOutUnreadReason;
+  can_reread: boolean;
   manager_priority: ManagerRequestOutManagerPriority;
   manager_rejected: boolean;
   created_at: string;

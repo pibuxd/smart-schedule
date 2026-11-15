@@ -719,6 +719,21 @@ class _Builder:
                     by_day[slot.date].append(var)
                 for day, vars_ in by_day.items():
                     self.add_penalty(weight / len(request.dates), self._or(vars_, f"day_off[{request.id},{day}]"))
+            case RequestType.WANT_WORK:
+                if not request.dates:
+                    return
+                need = request.wanted_days()
+                by_day = defaultdict(list)
+                for slot, var in own:
+                    by_day[slot.date].append(var)
+                good = []
+                for day, vars_ in by_day.items():
+                    kept = self.m.new_bool_var(f"want_work[{request.id},{day}]")
+                    self.m.add(request.shifts_per_day * kept <= sum(vars_))
+                    good.append(kept)
+                short = self.m.new_int_var(0, need, f"want_work_short[{request.id}]")
+                self.m.add(short >= need - sum(good))
+                self.add_penalty(weight / need, short)
             case _:
                 return
 

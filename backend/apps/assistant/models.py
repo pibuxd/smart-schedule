@@ -58,6 +58,8 @@ class AssistantCommand(CompanyOwnedModel):
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
     # The checked plan: reply, question, rule_changes, new_instructions, remove_instructions, notes.
     plan = models.JSONField("plan", null=True, blank=True)
+    # The assistant's own answer before checking, or {"error": ...}: kept for the superadmin's list of misses.
+    assistant_answer = models.JSONField("odpowiedź asystenta", null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(default=timezone.now)
     decided_at = models.DateTimeField(null=True, blank=True)

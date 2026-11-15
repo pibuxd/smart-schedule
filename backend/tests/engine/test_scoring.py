@@ -176,3 +176,23 @@ def test_manager_instructions_count_with_the_manager_rules_by_their_place():
     scores = score(p, report)
     assert scores.manager_rules == pytest.approx(100 * (1 - 0.75 / 1.75), abs=0.01)
     assert scores.employee_requests == 0
+
+
+@pytest.mark.parametrize(
+    ("worked", "min_days", "shifts", "expected"),
+    [
+        ({"a1"}, 1, 1, 100.0),  # one of the two days is enough
+        (set(), 1, 1, 0.0),
+        ({"a1"}, None, 1, 50.0),  # both days wanted, one worked
+        ({"a1"}, 1, 2, 0.0),  # two shifts wanted that day, one worked
+        ({"a1", "b1"}, 1, 2, 100.0),
+    ],
+)
+def test_want_work_degree(worked, min_days, shifts, expected):
+    slots = [slot("a1", day(1)), slot("b1", day(1), "14:00", "22:00"), slot("a2", day(2))]
+    request = Request(
+        "w", "anna", "want_work", dates=frozenset({day(1), day(2)}), min_days=min_days, shifts_per_day=shifts
+    )
+    p = problem([employee("anna"), employee("ola")], slots, requests=(request,))
+    assignment = {s.id: ("anna" if s.id in worked else "ola") for s in slots}
+    assert score(p, validate(p, assignment)).employee_requests == expected

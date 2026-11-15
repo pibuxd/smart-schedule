@@ -3393,6 +3393,85 @@
         ]
       }
     },
+    "/api/requests/{request_id}/reread": {
+      "post": {
+        "operationId": "reread_request",
+        "summary": "Reread Request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerRequestOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Hand a request to the assistant again: one that came while it was switched off, or when the call failed.",
+        "tags": [
+          "availability"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/locations/{location_id}/setup": {
       "get": {
         "operationId": "location_setup",
@@ -9468,6 +9547,20 @@
             "title": "Employee Corrected",
             "type": "boolean"
           },
+          "unread_reason": {
+            "enum": [
+              "",
+              "off",
+              "unsure",
+              "failed"
+            ],
+            "title": "Unread Reason",
+            "type": "string"
+          },
+          "can_reread": {
+            "title": "Can Reread",
+            "type": "boolean"
+          },
           "manager_priority": {
             "enum": [
               "lower",
@@ -9495,6 +9588,8 @@
           "status",
           "summary",
           "employee_corrected",
+          "unread_reason",
+          "can_reread",
           "manager_priority",
           "manager_rejected",
           "created_at"

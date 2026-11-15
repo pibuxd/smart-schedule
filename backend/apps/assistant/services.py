@@ -90,7 +90,8 @@ def queue_request(text_request: TextRequest) -> None:
     if not llm.is_enabled():
         text_request.status = TextRequest.Status.NEEDS_MANAGER
         text_request.interpretation = None
-        text_request.save(update_fields=["status", "interpretation", "updated_at"])
+        text_request.unread_reason = TextRequest.UnreadReason.OFF
+        text_request.save(update_fields=["status", "interpretation", "unread_reason", "updated_at"])
         return
     from apps.assistant.tasks import interpret_text_request  # tasks import this module
 
@@ -103,27 +104,41 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
     if row is None or row.status != TextRequest.Status.NEW or (text is not None and row.text != text):
         return "skipped"  # deleted, already read, or edited since (the newer job reads it)
     today = today or timezone.localdate()
-    status, interpretation = TextRequest.Status.NEEDS_MANAGER, None
+    status, interpretation, answer = TextRequest.Status.NEEDS_MANAGER, None, None
+    reason = TextRequest.UnreadReason.OFF
     if llm.is_enabled():
+        reason = TextRequest.UnreadReason.FAILED
         context, people, shift_types = request_context(row, today)
         try:
             reading = llm.read_request(row.text, context)
-            status, interpretation = _checked_request(reading, row.period, people, shift_types)
+            status, interpretation, why = _checked_request(reading, row.period, people, shift_types)
+            reason = TextRequest.UnreadReason.NONE if interpretation else TextRequest.UnreadReason.UNSURE
+            if interpretation is None:
+                answer = {"why": why, **reading.model_dump(mode="json")}
         except llm.AssistantError as exc:
             logger.warning("request %s left to the manager: %s", row.pk, exc)
-        except Exception:
+            answer = {"error": str(exc)}
+        except Exception as exc:
             # Whatever goes wrong, the request must not stay "being read" forever: the manager reads it.
             logger.exception("request %s left to the manager after an unexpected error", row.pk)
+            answer = {"error": type(exc).__name__}
     updated = TextRequest.objects.for_company(row.company_id).filter(
         pk=row.pk, status=TextRequest.Status.NEW, text=row.text
     )
-    updated.update(status=status, interpretation=interpretation, updated_at=timezone.now())
+    updated.update(
+        status=status,
+        interpretation=interpretation,
+        unread_reason=reason,
+        assistant_answer=answer,
+        updated_at=timezone.now(),
+    )
     return status
 
 
 def _checked_request(
     reading: llm.RequestReading, period: SchedulePeriod, people: dict[str, str], shift_types: dict[str, str]
-) -> tuple[str, dict[str, Any] | None]:
+) -> tuple[str, dict[str, Any] | None, str]:
+    """(status, interpretation, why it could not be used: "" when it could)."""
     confidence = min(1.0, max(0.0, float(reading.confidence)))
     data = readings.clean(
         type=reading.type,
@@ -133,17 +148,28 @@ def _checked_request(
         max_hours=reading.max_hours,
         dates=[d for d in reading.dates if period.start.isoformat() <= d <= period.end.isoformat()],
         weekdays=reading.weekdays,
+        min_days=reading.min_days,
+        shifts_per_day=reading.shifts_per_day,
         people=people,
         shift_types=shift_types,
     )
-    if reading.dates and data is not None and not data["dates"] and not data["weekdays"]:
-        data = None  # only days outside this period
+    why = ""
+    if reading.type == "inne":
+        why = "typ inne"
+    elif data is None:
+        why = "osoba, zmiana, godziny lub dni nie pasują do lokalu"
+    elif reading.dates and not data["dates"] and not data["weekdays"]:
+        data, why = None, "dni spoza okresu"
+    elif confidence < settings.ASSISTANT_MIN_CONFIDENCE:
+        why = f"pewność {confidence:.2f}"
     summary = reading.summary.strip()[:300]
-    if data is None or confidence < settings.ASSISTANT_MIN_CONFIDENCE or not summary:
+    if not why and not summary:
+        why = "brak opisu"
+    if why:
         # Not sure enough: the manager reads the request as written, with no interpretation.
-        return TextRequest.Status.NEEDS_MANAGER, None
+        return TextRequest.Status.NEEDS_MANAGER, None, why
     data.update(level=reading.level, confidence=round(confidence, 2), summary=summary)
-    return TextRequest.Status.INTERPRETED, data
+    return TextRequest.Status.INTERPRETED, data, ""
 
 
 # --------------------------------------------------------------------------------------------- manager commands
@@ -248,19 +274,22 @@ def run_command(command_id: str, today: date | None = None) -> str:
     if command is None or command.status != AssistantCommand.Status.QUEUED:
         return "skipped"
     today = today or timezone.localdate()
-    status, plan = AssistantCommand.Status.FAILED, None
+    status, plan, raw = AssistantCommand.Status.FAILED, None, None
     try:
         sc = rules_scope(_SystemContext(command.company), command.location)
         answer = llm.plan_command(command.text, command_context(command.location, sc, today))
+        raw = answer.model_dump(mode="json")
         status, plan = AssistantCommand.Status.READY, check_plan(command.location, sc, answer)
     except llm.AssistantError as exc:
         logger.warning("assistant command %s failed: %s", command.pk, exc)
-    except Exception:
+        raw = {"error": str(exc)}
+    except Exception as exc:
         # Whatever goes wrong, the manager must get an answer instead of waiting forever.
         logger.exception("assistant command %s failed with an unexpected error", command.pk)
+        raw = {**(raw or {}), "error": type(exc).__name__}
     AssistantCommand.objects.for_company(command.company_id).filter(
         pk=command.pk, status=AssistantCommand.Status.QUEUED
-    ).update(status=status, plan=plan)
+    ).update(status=status, plan=plan, assistant_answer=raw)
     return status
 
 
@@ -361,6 +390,8 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
             max_hours=new.max_hours,
             dates=new.dates,
             weekdays=new.weekdays,
+            min_days=new.min_days,
+            shifts_per_day=new.shifts_per_day,
             people=others,
             shift_types=shift_types,
         )

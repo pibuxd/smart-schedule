@@ -57,12 +57,24 @@ from engine.problem import (
 # How far around the period published shifts of the same people are read (rest, days in a row, weekly rest).
 EXTERNAL_MARGIN = timedelta(days=7)
 
+
+def _min_days(data) -> int | None:
+    value = data.get("min_days")
+    return value if isinstance(value, int) and value >= 1 else None
+
+
+def _shifts_per_day(data) -> int:
+    value = data.get("shifts_per_day")
+    return value if isinstance(value, int) and 1 <= value <= 3 else 1
+
+
 REQUEST_TYPES = {
     "unikaj_osoby": RequestType.AVOID_PERSON,
     "preferuj_osobe": RequestType.PREFER_PERSON,
     "typ_zmiany": RequestType.SHIFT_TYPE,
     "limit_godzin": RequestType.HOURS_LIMIT,
     "wolne_dni": RequestType.DAYS_OFF,
+    "chce_pracowac": RequestType.WANT_WORK,
     "inne": RequestType.OTHER,
 }
 
@@ -404,6 +416,8 @@ class _Reader:
                     shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
                     avoid=bool(data.get("avoid", False)),
                     max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+                    min_days=_min_days(data),
+                    shifts_per_day=_shifts_per_day(data),
                     summary=str(data.get("summary") or row.text[:200]),
                 )
             )
@@ -446,6 +460,8 @@ class _Reader:
                     shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
                     avoid=bool(data.get("avoid", False)),
                     max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+                    min_days=_min_days(data),
+                    shifts_per_day=_shifts_per_day(data),
                     summary=readings.describe(data, names.get(employee_id, "?"), names, shift_names),
                     by_manager=True,
                     rank=places[row.location_id],

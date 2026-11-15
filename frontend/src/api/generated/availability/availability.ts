@@ -1829,3 +1829,112 @@ export const useUpdateRequest = <TError = ErrorOut,
       > => {
       return useMutation(getUpdateRequestMutationOptions(options), queryClient);
     }
+    export type rereadRequestResponse200 = {
+  data: ManagerRequestOut
+  status: 200
+}
+
+export type rereadRequestResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type rereadRequestResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type rereadRequestResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type rereadRequestResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type rereadRequestResponseSuccess = (rereadRequestResponse200) & {
+  headers: Headers;
+};
+export type rereadRequestResponseError = (rereadRequestResponse402 | rereadRequestResponse403 | rereadRequestResponse404 | rereadRequestResponse409) & {
+  headers: Headers;
+};
+
+export type rereadRequestResponse = (rereadRequestResponseSuccess | rereadRequestResponseError)
+
+export const getRereadRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/requests/${requestId}/reread`
+}
+
+/**
+ * Hand a request to the assistant again: one that came while it was switched off, or when the call failed.
+ * @summary Reread Request
+ */
+export const rereadRequest = async (requestId: string, options?: Parameters<typeof apiFetch>[1]): Promise<rereadRequestResponse> => {
+
+  return apiFetch<rereadRequestResponse>(getRereadRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRereadRequestMutationKey = () => ['rereadRequest'] as const;
+
+export const getRereadRequestMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rereadRequest>>, TError,RereadRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rereadRequest>>, TError,RereadRequestMutationVariables, TContext> => {
+
+const mutationKey = getRereadRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rereadRequest>>, RereadRequestMutationVariables> = (props) => {
+          const {requestId} = props ?? {};
+
+          return  rereadRequest(requestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RereadRequestMutationResult = NonNullable<Awaited<ReturnType<typeof rereadRequest>>>
+
+    export type RereadRequestMutationError = ErrorOut
+    export type RereadRequestMutationVariables = {requestId: string}
+
+    /**
+ * Hand a request to the assistant again: one that came while it was switched off, or when the call failed.
+ * @summary Reread Request
+ */
+export const useRereadRequest = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rereadRequest>>, TError,RereadRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof rereadRequest>>,
+        TError,
+        RereadRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRereadRequestMutationOptions(options), queryClient);
+    }

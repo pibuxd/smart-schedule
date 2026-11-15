@@ -43,6 +43,9 @@ class RequestType(StrEnum):
     SHIFT_TYPE = "shift_type"
     HOURS_LIMIT = "hours_limit"
     DAYS_OFF = "days_off"  # "wolę nie pracować w te dni" (soft; a hard "nie mogę" is marked in the calendar)
+    # "chcę pracować": on at least `min_days` of `dates`, with at least `shifts_per_day` shifts on each such day
+    # ("albo 12, albo 13 stycznia" = min_days 1; "21 stycznia dwie zmiany pod rząd" = shifts_per_day 2).
+    WANT_WORK = "want_work"
     OTHER = "other"  # read by the manager, not scored
 
 
@@ -232,6 +235,8 @@ class Request:
     shift_type: str | None = None  # shift_type
     avoid: bool = False  # shift_type: True = "not this shift type", False = "only this shift type"
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
+    min_days: int | None = None  # want_work: how many of `dates` (None = all of them)
+    shifts_per_day: int = 1  # want_work: shifts wanted on each of those days
     summary: str = ""
     # True for a manager's instruction about `employee` ("Ania nie z Kasią"). It counts with the manager's
     # rules, not with employee requests; `rank` is its place on the manager's list (1 = most important).
@@ -246,6 +251,10 @@ class Request:
 
     def covers(self, day: date) -> bool:
         return not self.dates or day in self.dates
+
+    def wanted_days(self) -> int:
+        """want_work: how many of the request's days should be worked (at least 1, at most all of them)."""
+        return max(1, min(self.min_days or len(self.dates), len(self.dates)))
 
 
 @dataclass(frozen=True)

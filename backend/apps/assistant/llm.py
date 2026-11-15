@@ -16,8 +16,12 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-RequestTypeName = Literal["unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni", "inne"]
-InstructionTypeName = Literal["unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni"]
+RequestTypeName = Literal[
+    "unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni", "chce_pracowac", "inne"
+]
+InstructionTypeName = Literal[
+    "unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni", "chce_pracowac"
+]
 LevelName = Literal["bardzo_wazne", "wazne", "mile_widziane"]
 
 
@@ -33,6 +37,10 @@ class RequestReading(BaseModel):
     shift_type: str | None = Field(description="Shift name exactly as on the list (typ_zmiany); else null.")
     avoid_shift_type: bool = Field(description="typ_zmiany: true = does NOT want this shift, false = wants only it.")
     max_hours: float | None = Field(description="limit_godzin: most hours in the given days or the whole period.")
+    min_days: int | None = Field(
+        description='chce_pracowac: on how many of the given days ("albo 12, albo 13" = 1); null = all of them.'
+    )
+    shifts_per_day: int | None = Field(description="chce_pracowac: shifts wanted on each such day (1–3); null = 1.")
     dates: list[str] = Field(description="Concrete days as YYYY-MM-DD, inside the schedule period. May be empty.")
     weekdays: list[int] = Field(description="Repeating weekdays, 1 = Monday … 7 = Sunday. May be empty.")
     level: LevelName
@@ -61,6 +69,8 @@ class NewInstruction(BaseModel):
     shift_type: str | None
     avoid_shift_type: bool
     max_hours: float | None
+    min_days: int | None
+    shifts_per_day: int | None
     dates: list[str]
     weekdays: list[int]
     place: int = Field(description="Place among the manager's instructions, 1 = most important.")
@@ -86,6 +96,8 @@ Typy:
 - typ_zmiany: chce tylko danej zmiany z listy albo nie chce jej wcale.
 - limit_godzin: nie chce pracować więcej niż podaną liczbę godzin (w podanych dniach albo w całym okresie).
 - wolne_dni: woli nie pracować w podane dni albo dni tygodnia.
+- chce_pracowac: chce pracować w podane dni albo dni tygodnia. "Albo 12, albo 13" to dwa dni i min_days = 1
+  (wystarczy jeden z nich). Kilka zmian jednego dnia (np. "dwie zmiany pod rząd 21 stycznia") to shifts_per_day.
 - inne: wszystko, co nie pasuje do powyższych, dotyczy osoby lub zmiany spoza list, zawiera kilka różnych życzeń
   naraz albo jest niejasne. Taką prośbę przeczyta sam kierownik.
 
@@ -107,7 +119,8 @@ Masz dwa narzędzia:
    zmianę, oznaczyć „bez wyjątków” i przesunąć na liście.
 2. Polecenia o konkretnych osobach, gdy żadna zasada z katalogu tego nie wyrazi: unikaj_osoby (dwie osoby
    osobno), preferuj_osobe (dwie osoby razem), typ_zmiany (osoba tylko na danej zmianie albo bez niej),
-   limit_godzin, wolne_dni (daty lub dni tygodnia).
+   limit_godzin, wolne_dni (daty lub dni tygodnia), chce_pracowac (osoba ma pracować w podane dni; min_days =
+   w ilu z nich, shifts_per_day = ile zmian danego dnia).
 Jeśli da się użyć zasady z katalogu, użyj zasady.
 
 Ważność wyraża się wyłącznie miejscem na liście: wyżej znaczy ważniej, a każda rzecz ma inne miejsce. Nie ma
