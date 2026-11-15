@@ -72,10 +72,10 @@ export function AvailabilityOverviewScreen({ locationId, today = new Date() }: {
       ) : (
         <EmptyState title="Nie ma jeszcze okresu grafiku">
           <p className="m-0">
-            Ustal daty okresu i termin, do którego pracownicy wpisują dyspozycje. Potem poproś ich o to jednym
+            Ustal, na jakie dni układasz grafik i do kiedy pracownicy wpisują dyspozycje. Potem poproś ich o to jednym
             przyciskiem.
           </p>
-          <Button onClick={() => setAdding(true)}>Ustal okres grafiku</Button>
+          <Button onClick={() => setAdding(true)}>Ustal daty grafiku</Button>
         </EmptyState>
       )}
       <NewPeriodSheet open={adding} onOpenChange={setAdding} locationId={locationId} periods={list} onCreated={setChosen} />
@@ -114,11 +114,11 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
         <div className="grid content-start gap-2">
           <Progress done={total - missing.length} total={total} />
           {collecting && total > 0 && missing.length === 0 && (
-            <p className="m-0 font-semibold text-accent">Wszyscy wpisali dyspozycje. Można układać grafik.</p>
+            <p className="m-0 font-semibold text-accent">Wszyscy wysłali dyspozycje. Możesz układać grafik.</p>
           )}
           {collecting && passed && missing.length > 0 && (
             <p className="m-0 font-semibold text-accent">
-              Termin minął. Można układać grafik; osoby bez dyspozycji mogą dostać zmianę każdego dnia.
+              Termin minął. Możesz układać grafik. Kto nie wysłał dyspozycji, może dostać zmianę w każdy dzień.
             </p>
           )}
           {period.availability_requested_at && (
@@ -140,7 +140,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
       {missing.length > 0 && (
         <Section
           title={`Jeszcze nie wysłali (${missing.length})`}
-          description="Liczy się przycisk „Gotowe, wysyłam kierownikowi”. Ktoś mógł już zaznaczyć dni, ale go nie nacisnął."
+          description="Te osoby nie nacisnęły jeszcze „Wyślij kierownikowi”. Mogły już zaznaczyć część dni."
         >
           <p className="m-0">{namesList(missing.map((e) => e.name), 12)}</p>
         </Section>
@@ -149,7 +149,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
       {late.length > 0 && (
         <Section
           title="Zmienione po terminie"
-          description="Pracownicy mogą poprawiać dyspozycje aż do ułożenia grafiku. Te dni zmienili po terminie; w siatce mają znak zegara."
+          description="Pracownicy mogą zmieniać dyspozycje, dopóki nie ułożysz grafiku. Dni zmienione po terminie mają w tabeli znak zegara."
         >
           <ul className="m-0 grid list-none gap-1 p-0">
             {late.map((e) => (
@@ -161,11 +161,11 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
         </Section>
       )}
 
-      <Section title="Siatka dyspozycji" description="Przewiń tabelę w bok, żeby zobaczyć kolejne dni.">
+      <Section title="Kto kiedy może" description="Przewiń tabelę w bok, żeby zobaczyć kolejne dni.">
         <GridLegend />
         {total === 0 ? (
           <EmptyState title="Nikt jeszcze nie pracuje w tym lokalu">
-            <p className="m-0">Zaproś pracowników na karcie „Pracownicy”. Po przyjęciu zaproszenia pojawią się tutaj.</p>
+            <p className="m-0">Zaproś pracowników w zakładce „Pracownicy”. Pojawią się tutaj, gdy przyjmą zaproszenie.</p>
           </EmptyState>
         ) : (
           <AvailabilityGrid data={data} />
@@ -213,7 +213,7 @@ function DeadlineEditor({ period, today, disabled }: { period: PeriodOut; today:
   return (
     <form onSubmit={save} className="grid gap-2">
       <TextField
-        label="Termin dyspozycji (dzień, w którym ułożysz grafik)"
+        label="Do kiedy pracownicy wpisują dyspozycje"
         type="date"
         value={value}
         max={period.start}
@@ -255,7 +255,7 @@ function NewPeriodSheet({
       open={open}
       onOpenChange={onOpenChange}
       title="Nowy okres grafiku"
-      description="Wpisz daty grafiku i dzień, w którym będziesz go układać. Do tego dnia pracownicy wpisują dyspozycje."
+      description="Wpisz, na jakie dni układasz grafik i do kiedy pracownicy wpisują dyspozycje."
     >
       {data && (
         <NewPeriodForm
@@ -311,11 +311,11 @@ function NewPeriodForm({
         max={start}
         onChange={(e) => setDeadline(e.target.value)}
         required
-        hint="Ostatni dzień na wpisanie dyspozycji. Grafik ułożysz po nim, gdy będziesz mieć komplet."
+        hint="Ostatni dzień na wpisanie dyspozycji. Potem układasz grafik."
       />
       {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
       <Button type="submit" wide disabled={create.isPending}>
-        Utwórz okres
+        Zapisz
       </Button>
     </form>
   )
@@ -343,10 +343,10 @@ function RequestsSection({ periodId }: { periodId: string }) {
   return (
     <Section
       title={`Prośby pracowników (${list.length})`}
-      description="Sprawy, których nie da się zaznaczyć w kalendarzu. Widzisz je tylko Ty. Możesz prośbę odrzucić albo uznać za ważniejszą lub mniej ważną."
+      description="To, czego pracownicy nie mogli zaznaczyć w kalendarzu. Widzisz je tylko Ty. Każdą prośbę możesz odrzucić albo oznaczyć jako ważniejszą lub mniej ważną."
     >
       {list.length === 0 ? (
-        <EmptyState title="Nikt nie dopisał prośby">
+        <EmptyState title="Nikt nie napisał prośby">
           <p className="m-0">Gdy pracownik napisze coś w „Coś jeszcze?”, zobaczysz to tutaj.</p>
         </EmptyState>
       ) : (

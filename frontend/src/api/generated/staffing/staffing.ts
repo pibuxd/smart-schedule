@@ -1410,7 +1410,118 @@ export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationE
 
 
 
-export type updateEmployeeResponse200 = {
+export type addMyselfAsEmployeeResponse200 = {
+  data: EmployeeOut
+  status: 200
+}
+
+export type addMyselfAsEmployeeResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type addMyselfAsEmployeeResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type addMyselfAsEmployeeResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type addMyselfAsEmployeeResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type addMyselfAsEmployeeResponseSuccess = (addMyselfAsEmployeeResponse200) & {
+  headers: Headers;
+};
+export type addMyselfAsEmployeeResponseError = (addMyselfAsEmployeeResponse402 | addMyselfAsEmployeeResponse403 | addMyselfAsEmployeeResponse404 | addMyselfAsEmployeeResponse409) & {
+  headers: Headers;
+};
+
+export type addMyselfAsEmployeeResponse = (addMyselfAsEmployeeResponseSuccess | addMyselfAsEmployeeResponseError)
+
+export const getAddMyselfAsEmployeeUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/employees/me`
+}
+
+/**
+ * A manager who also works shifts adds themselves to the schedule of a location they manage, with every
+ * position of the location (they can stand in for anyone; positions can be narrowed afterwards).
+ * @summary Add Myself As Employee
+ */
+export const addMyselfAsEmployee = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<addMyselfAsEmployeeResponse> => {
+
+  return apiFetch<addMyselfAsEmployeeResponse>(getAddMyselfAsEmployeeUrl(locationId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAddMyselfAsEmployeeMutationKey = () => ['addMyselfAsEmployee'] as const;
+
+export const getAddMyselfAsEmployeeMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addMyselfAsEmployee>>, TError,AddMyselfAsEmployeeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addMyselfAsEmployee>>, TError,AddMyselfAsEmployeeMutationVariables, TContext> => {
+
+const mutationKey = getAddMyselfAsEmployeeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addMyselfAsEmployee>>, AddMyselfAsEmployeeMutationVariables> = (props) => {
+          const {locationId} = props ?? {};
+
+          return  addMyselfAsEmployee(locationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddMyselfAsEmployeeMutationResult = NonNullable<Awaited<ReturnType<typeof addMyselfAsEmployee>>>
+
+    export type AddMyselfAsEmployeeMutationError = ErrorOut
+    export type AddMyselfAsEmployeeMutationVariables = {locationId: string}
+
+    /**
+ * A manager who also works shifts adds themselves to the schedule of a location they manage, with every
+ * position of the location (they can stand in for anyone; positions can be narrowed afterwards).
+ * @summary Add Myself As Employee
+ */
+export const useAddMyselfAsEmployee = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addMyselfAsEmployee>>, TError,AddMyselfAsEmployeeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof addMyselfAsEmployee>>,
+        TError,
+        AddMyselfAsEmployeeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAddMyselfAsEmployeeMutationOptions(options), queryClient);
+    }
+    export type updateEmployeeResponse200 = {
   data: EmployeeOut
   status: 200
 }

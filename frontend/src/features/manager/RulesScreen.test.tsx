@@ -54,7 +54,7 @@ describe('RulesScreen', () => {
         <RulesScreen scope="location" scopeId="l1" />
       </AsManager>,
     )
-    const save = await screen.findByRole('button', { name: 'Sprawdź skutek i zapisz' })
+    const save = await screen.findByRole('button', { name: 'Sprawdź i zapisz' })
     expect(save).toBeDisabled()
     expect(screen.getAllByText('z grupy')).toHaveLength(2)
 

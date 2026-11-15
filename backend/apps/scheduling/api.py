@@ -14,7 +14,7 @@ from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
 from apps.scheduling.editing import manual_changes
-from apps.scheduling.generation import ACTIVE, request_generation
+from apps.scheduling.generation import ACTIVE, cancel_generation, request_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
 from apps.staffing.models import EmployeeProfile
@@ -27,7 +27,7 @@ router = Router(tags=["scheduling"])
 MAX_PERIOD_DAYS = 62
 
 PeriodStatus = Literal["collecting", "draft", "published"]
-RunStatus = Literal["queued", "running", "succeeded", "failed"]
+RunStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 SolverStatus = Literal["", "optimal", "feasible", "timeout_no_solution", "infeasible"]
 
 
@@ -293,6 +293,16 @@ def generation_run(request, run_id: UUID):
     for period in run.periods.select_related("location"):
         ctx.require_manager_of(period.location)
     return _run_out(run)
+
+
+@router.post(
+    "/generation-runs/{run_id}/cancel",
+    response={200: GenerationRunOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def cancel_generation_run(request, run_id: UUID):
+    """Stop arranging: nothing is saved, the earlier draft stays, and the generation is not counted."""
+    ctx, run = context_for(request, GenerationRun, run_id)
+    return _run_out(cancel_generation(ctx, run))
 
 
 # --- The employee's "Mój grafik" -------------------------------------------------------------------------

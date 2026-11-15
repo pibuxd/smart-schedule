@@ -16,6 +16,7 @@ export function AvailabilityCalendar({
   end,
   marks,
   disabled,
+  locked,
   onPaint,
   onStroke,
   onOpenDay,
@@ -24,6 +25,8 @@ export function AvailabilityCalendar({
   end: string
   marks: Marks
   disabled: boolean
+  /** Days that cannot be changed (past days, days with an arranged schedule): dimmed, taps do nothing. */
+  locked?: Set<string>
   /** Called for each day as the finger passes, so it changes colour at once. */
   onPaint: (date: string) => void
   onStroke: () => void
@@ -73,21 +76,22 @@ export function AvailabilityCalendar({
       </div>
       {calendarWeeks(start, end).map((week) => (
         <div role="row" key={week.find(Boolean) ?? ''} className="contents">
-          {week.map((date, i) =>
-            date ? (
+          {week.map((date, i) => {
+            const off = disabled || (locked?.has(date ?? '') ?? false)
+            return date ? (
               <DayCell
                 key={date}
                 date={date}
                 mark={markOf(marks, date)}
-                disabled={disabled}
+                disabled={off}
                 onPointerDown={(event) => {
-                  if (disabled || onOpenDay) return
+                  if (off || onOpenDay) return
                   event.preventDefault()
                   painting.current = true
                   onPaint(date)
                 }}
                 onClick={(event) => {
-                  if (disabled) return
+                  if (off) return
                   if (onOpenDay) onOpenDay(date)
                   else if (event.detail === 0) {
                     // Keyboard (Enter/Space) or a screen reader: paint this one day.
@@ -98,8 +102,8 @@ export function AvailabilityCalendar({
               />
             ) : (
               <div role="gridcell" key={`empty-${i}`} aria-hidden="true" />
-            ),
-          )}
+            )
+          })}
         </div>
       ))}
     </div>
@@ -127,19 +131,19 @@ function DayCell({
         type="button"
         data-date={date}
         data-state={mark.state}
-        aria-label={`${dayTitle(day)}: ${describeMark(mark)}`}
+        aria-label={`${dayTitle(day)}: ${describeMark(mark)}${disabled ? ', nie da się zmienić' : ''}`}
         aria-disabled={disabled || undefined}
         className={cn(
           `avail-${mark.state}`,
           'grid h-full min-h-16 w-full min-w-0 cursor-pointer grid-rows-[auto_1fr_auto] justify-items-center rounded-sm border-2 px-0 py-1',
           'transition-colors duration-75',
-          disabled && 'cursor-default opacity-75',
+          disabled && 'cursor-default opacity-45',
         )}
         onPointerDown={onPointerDown}
         onClick={onClick}
       >
         <span className="text-base leading-tight font-extrabold text-ink tabular-nums">{day.getDate()}</span>
-        <span className={cn('self-center', mark.state === 'neutral' && 'text-line')}>
+        <span className="self-center">
           <StateIcon state={mark.state} size={hours ? 16 : 20} />
         </span>
         {hours && <span className="text-center text-cell font-semibold tabular-nums">{hours}</span>}

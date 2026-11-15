@@ -85,11 +85,10 @@ export function RequestsSection({
         Coś jeszcze?
       </h2>
       <p className="m-0 text-sm text-ink-muted">
-        Napisz to, czego nie da się zaznaczyć w kalendarzu, na przykład w które dni wolisz mieć wolne albo z kim nie
-        chcesz mieć zmiany. Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny. Prośbę zobaczy tylko
-        kierownik.
+        Napisz to, czego nie zaznaczysz w kalendarzu. Na przykład: w które dni wolisz mieć wolne albo z kim nie chcesz
+        pracować. Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny. Przeczyta to tylko kierownik.
       </p>
-      {requests.isError && <InlineError>Nie udało się wczytać Twoich próśb. Odśwież stronę za chwilę.</InlineError>}
+      {requests.isError && <InlineError>Nie udało się wczytać Twoich próśb. Spróbuj za chwilę.</InlineError>}
       {list.length > 0 && (
         <ul className="m-0 grid list-none gap-2 p-0">
           {list.map((request) => (
@@ -143,7 +142,7 @@ export function RequestsSection({
           {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
           {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
           <Button variant="secondary" type="submit" wide disabled={create.isPending || !text.trim()}>
-            {create.isPending ? 'Wysyłam…' : 'Wyślij prośbę do kierownika'}
+            {create.isPending ? 'Wysyłam…' : 'Wyślij prośbę'}
           </Button>
         </form>
       )}

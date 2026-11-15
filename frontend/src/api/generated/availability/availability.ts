@@ -26,10 +26,13 @@ import type {
 import type {
   AvailabilityGridOut,
   AvailabilityIn,
+  CalendarIn,
   ErrorOut,
   ManagerRequestOut,
   MyAvailabilityOut,
   MyAvailabilityParams,
+  MyCalendarOut,
+  MyCalendarParams,
   MyRequestOut,
   MyRequestsParams,
   PatternIn,
@@ -322,6 +325,273 @@ export const useSaveMyAvailability = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getSaveMyAvailabilityMutationOptions(options), queryClient);
+    }
+    export type myCalendarResponse200 = {
+  data: MyCalendarOut
+  status: 200
+}
+
+export type myCalendarResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type myCalendarResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type myCalendarResponseSuccess = (myCalendarResponse200) & {
+  headers: Headers;
+};
+export type myCalendarResponseError = (myCalendarResponse400 | myCalendarResponse404) & {
+  headers: Headers;
+};
+
+export type myCalendarResponse = (myCalendarResponseSuccess | myCalendarResponseError)
+
+export const getMyCalendarUrl = (params: MyCalendarParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/me/calendar?${stringifiedParams}` : `/api/me/calendar`
+}
+
+/**
+ * My availability between two dates (a month on the screen). Open all the time: no period is needed.
+ * @summary My Calendar
+ */
+export const myCalendar = async (params: MyCalendarParams, options?: Parameters<typeof apiFetch>[1]): Promise<myCalendarResponse> => {
+
+  return apiFetch<myCalendarResponse>(getMyCalendarUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getMyCalendarQueryKey = (params?: MyCalendarParams,) => {
+    return [
+    `/api/me/calendar`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getMyCalendarQueryOptions = <TData = Awaited<ReturnType<typeof myCalendar>>, TError = ErrorOut>(params: MyCalendarParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof myCalendar>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMyCalendarQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof myCalendar>>> = ({ signal }) => myCalendar(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof myCalendar>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MyCalendarQueryResult = NonNullable<Awaited<ReturnType<typeof myCalendar>>>
+export type MyCalendarQueryError = ErrorOut
+
+
+/**
+ * My availability between two dates (a month on the screen). Open all the time: no period is needed.
+ * @summary My Calendar
+ */
+export function useMyCalendar<TData = Awaited<ReturnType<typeof myCalendar>>, TError = ErrorOut>(
+ params: MyCalendarParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof myCalendar>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof myCalendar>>,
+          TError,
+          Awaited<ReturnType<typeof myCalendar>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * My availability between two dates (a month on the screen). Open all the time: no period is needed.
+ * @summary My Calendar
+ */
+export function useMyCalendar<TData = Awaited<ReturnType<typeof myCalendar>>, TError = ErrorOut>(
+ params: MyCalendarParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof myCalendar>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof myCalendar>>,
+          TError,
+          Awaited<ReturnType<typeof myCalendar>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * My availability between two dates (a month on the screen). Open all the time: no period is needed.
+ * @summary My Calendar
+ */
+export function useMyCalendar<TData = Awaited<ReturnType<typeof myCalendar>>, TError = ErrorOut>(
+ params: MyCalendarParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof myCalendar>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * My availability between two dates (a month on the screen). Open all the time: no period is needed.
+ * @summary My Calendar
+ */
+export function useMyCalendar<TData = Awaited<ReturnType<typeof myCalendar>>, TError = ErrorOut>(
+ params: MyCalendarParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof myCalendar>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMyCalendarQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type saveMyCalendarResponse204 = {
+  data: void
+  status: 204
+}
+
+export type saveMyCalendarResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type saveMyCalendarResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type saveMyCalendarResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type saveMyCalendarResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type saveMyCalendarResponseSuccess = (saveMyCalendarResponse204) & {
+  headers: Headers;
+};
+export type saveMyCalendarResponseError = (saveMyCalendarResponse400 | saveMyCalendarResponse402 | saveMyCalendarResponse404 | saveMyCalendarResponse409) & {
+  headers: Headers;
+};
+
+export type saveMyCalendarResponse = (saveMyCalendarResponseSuccess | saveMyCalendarResponseError)
+
+export const getSaveMyCalendarUrl = () => {
+
+
+
+
+  return `/api/me/calendar`
+}
+
+/**
+ * Save marked days, with or without a request from the manager (saved at once after every tap or drag).
+ * @summary Save My Calendar
+ */
+export const saveMyCalendar = async (calendarIn: CalendarIn, options?: Parameters<typeof apiFetch>[1]): Promise<saveMyCalendarResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<saveMyCalendarResponse>(getSaveMyCalendarUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(calendarIn)
+  }
+);}
+
+
+
+
+
+export const getSaveMyCalendarMutationKey = () => ['saveMyCalendar'] as const;
+
+export const getSaveMyCalendarMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveMyCalendar>>, TError,SaveMyCalendarMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveMyCalendar>>, TError,SaveMyCalendarMutationVariables, TContext> => {
+
+const mutationKey = getSaveMyCalendarMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveMyCalendar>>, SaveMyCalendarMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveMyCalendar(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveMyCalendarMutationResult = NonNullable<Awaited<ReturnType<typeof saveMyCalendar>>>
+    export type SaveMyCalendarMutationBody = CalendarIn
+    export type SaveMyCalendarMutationError = ErrorOut
+    export type SaveMyCalendarMutationVariables = {data: CalendarIn}
+
+    /**
+ * Save marked days, with or without a request from the manager (saved at once after every tap or drag).
+ * @summary Save My Calendar
+ */
+export const useSaveMyCalendar = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveMyCalendar>>, TError,SaveMyCalendarMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof saveMyCalendar>>,
+        TError,
+        SaveMyCalendarMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveMyCalendarMutationOptions(options), queryClient);
     }
     export type repeatMyAvailabilityResponse200 = {
   data: MyAvailabilityOut

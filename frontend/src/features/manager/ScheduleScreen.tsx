@@ -63,7 +63,7 @@ export function ScheduleScreen({ locationId, today = new Date() }: { locationId:
   if (!period) {
     return (
       <EmptyState title="Nie ma jeszcze okresu grafiku">
-        <p className="m-0">Najpierw ustal daty okresu i termin dyspozycji na karcie „Dyspozycje”.</p>
+        <p className="m-0">Najpierw ustal daty grafiku i termin dyspozycji w zakładce „Dyspozycje”.</p>
         <Link
           to="/kierownik/lokal/$locationId/dyspozycje"
           params={{ locationId }}
@@ -118,7 +118,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           </span>
           {period.status === 'collecting' && (
             <p className="m-0 text-sm text-ink-muted">
-              Bez dyspozycji: {period.missing_availability}. Grafik układasz sam, gdy uznasz, że czas.
+              Dyspozycji nie wysłało jeszcze: {period.missing_availability}. Grafik układasz sam, kiedy chcesz.
             </p>
           )}
         </div>
@@ -135,7 +135,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           )}
           {period.latest_version_id && !period.active_run_id && (
             <span className="max-w-[40ch] text-sm text-ink-muted sm:text-right">
-              Ułożenie od nowa zostawia przypięte zmiany i dni, które minęły; resztę układa od początku.
+              „Ułóż od nowa” zostawia przypięte zmiany i dni, które minęły. Resztę układa od początku.
             </span>
           )}
         </div>
@@ -151,8 +151,8 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
         !period.active_run_id && (
           <EmptyState title="Grafik nie jest jeszcze ułożony">
             <p className="m-0">
-              Gdy minie termin dyspozycji albo wszyscy je wpiszą, naciśnij „Ułóż grafik”. Zobaczysz szkic, który możesz
-              poprawić, zanim pokażesz go pracownikom.
+              Gdy minie termin dyspozycji albo wszyscy je wyślą, naciśnij „Ułóż grafik”. Dostaniesz szkic, który
+              możesz poprawić, zanim pokażesz go pracownikom.
             </p>
           </EmptyState>
         )
@@ -178,7 +178,7 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
       <Scores scores={data.scores} />
       {data.hard_problems.length > 0 && (
         <div role="alert" className="grid gap-1 rounded-md border border-cannot bg-cannot-soft p-3 text-cannot">
-          <span className="font-semibold">Ten grafik łamie reguły, więc nie można go opublikować:</span>
+          <span className="font-semibold">Tego grafiku nie można opublikować, bo łamie zasady:</span>
           {data.hard_problems.map((p) => (
             <span key={p}>{p}</span>
           ))}
@@ -226,7 +226,7 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
         </div>
         <span className="text-sm text-ink-muted">
           {data.status === 'draft'
-            ? 'Pracownicy jeszcze tego nie widzą. Kliknij zmianę, żeby zobaczyć, kto może ją wziąć; przeciągnij osobę na inną zmianę, żeby je zamienić.'
+            ? 'Pracownicy jeszcze tego nie widzą. Kliknij zmianę, żeby zobaczyć, kto może ją wziąć. Przeciągnij osobę na inną zmianę, żeby zamienić dwie osoby.'
             : data.status === 'published'
               ? 'Ten grafik widzą pracownicy w „Mój grafik”.'
               : 'Starsza wersja, tylko do podglądu.'}
@@ -297,7 +297,7 @@ function UnpinnedChanges({ data }: { data: VersionOut }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
       <p className="m-0">
-        Ręczne poprawki bez przypięcia: {unpinned.length}. Jeśli ułożysz grafik od nowa, znikną. Przypięte zostaną na
+        Ręczne poprawki bez przypięcia: {unpinned.length}. Znikną, jeśli ułożysz grafik od nowa. Przypięte zostaną na
         miejscu.
       </p>
       <Button variant="secondary" size="normal" disabled={pinning} onClick={() => void pinAll()}>
@@ -317,22 +317,22 @@ function PublishSheet({ data, open, onOpenChange }: { data: VersionOut; open: bo
     <Sheet open={open} onOpenChange={onOpenChange} title="Opublikować grafik?">
       <div className="grid gap-4">
         <p className="m-0">
-          Pracownicy zobaczą swoje zmiany w „Mój grafik” od razu po publikacji.
+          Pracownicy od razu zobaczą swoje zmiany w „Mój grafik”.
           {data.period.published_version_id ? ' Poprzednia wersja zostanie w historii.' : ''}
         </p>
         {data.changed_people.length > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
-            Ta poprawka zmienia zmiany tych osób: {data.changed_people.join(', ')}. Dostaną powiadomienie, ale
-            warto im też powiedzieć, bo mogły już zaplanować czas według poprzedniej wersji.
+            Zmieniasz zmiany tych osób: {data.changed_people.join(', ')}. Dostaną powiadomienie, ale
+            powiedz im też sam, bo mogły już coś zaplanować.
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Pracownicy lokalu dostaną powiadomienie w aplikacji. SMS-ów ani e-maili nie wysyłamy, więc kto rzadko
-          zagląda do Grafikomatu, może potrzebować też słowa od Ciebie.
+          Pracownicy dostaną powiadomienie w aplikacji. Nie wysyłamy SMS-ów ani e-maili, więc komuś, kto rzadko
+          zagląda do Grafikomatu, powiedz o grafiku sam.
         </p>
         {holes > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2">
-            Grafik jest niekompletny: {shiftsWord(holes)} bez obsady. Możesz go opublikować i obsadzić te zmiany później.
+            W grafiku są dziury: {shiftsWord(holes)} bez obsady. Możesz go opublikować i obsadzić te zmiany później.
           </p>
         )}
         {publish.isError && <InlineError>{errorMessage(publish.error, NETWORK_PROBLEM)}</InlineError>}
@@ -373,7 +373,7 @@ function Scores({ scores }: { scores: ScoresOut }) {
         <span className="text-2xl font-extrabold">
           {scores.holes} <span className="text-base font-semibold">z {scores.slots}</span>
         </span>
-        <span className="text-sm">{incomplete ? 'Grafik niekompletny: brakuje ludzi.' : 'Wszystkie zmiany obsadzone.'}</span>
+        <span className="text-sm">{incomplete ? 'Nie wszystkie zmiany są obsadzone.' : 'Wszystkie zmiany obsadzone.'}</span>
       </div>
       <ScoreBox
         label="Zasady kierownika"
@@ -471,7 +471,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   if (data.shifts.length === 0) {
     return (
       <EmptyState title="W tym grafiku nie ma zmian">
-        <p className="m-0">Ustaw obsadę w ustawieniach lokalu i ułóż grafik ponownie.</p>
+        <p className="m-0">Ustaw obsadę w ustawieniach lokalu i ułóż grafik jeszcze raz.</p>
       </EmptyState>
     )
   }
@@ -766,7 +766,7 @@ function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: str
       )}
       <h2 className="m-0 text-lg font-extrabold">Niespełnione prośby</h2>
       {scored.length === 0 ? (
-        <p className="m-0 text-ink-muted">Grafik spełnia wszystkie prośby, które da się sprawdzić.</p>
+        <p className="m-0 text-ink-muted">Wszystkie prośby, które umiemy sprawdzić, są spełnione.</p>
       ) : (
         <ul className="m-0 grid list-none gap-1 p-0">
           {scored.slice(0, 12).map((r, i) => (
@@ -781,7 +781,7 @@ function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: str
       {yours.length > 0 && (
         <>
           <h3 className="m-0 mt-2 text-base font-extrabold">Do Twojej oceny</h3>
-          <p className="m-0 text-sm text-ink-muted">Tych próśb grafik nie umie sprawdzić sam; zobacz, czy są spełnione.</p>
+          <p className="m-0 text-sm text-ink-muted">Tych próśb nie umiemy sprawdzić. Zobacz sam, czy są spełnione.</p>
           <ul className="m-0 grid list-none gap-1 p-0">
             {yours.map((r, i) => (
               <li key={`${r.employee_name}-u${i}`} className="rounded-sm border border-dashed border-line bg-surface px-3 py-2">

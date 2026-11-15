@@ -13,7 +13,7 @@ import { shortDay } from './words'
 
 const WISH_LABEL: Record<CandidateOut['wish'], string> = {
   prefer: 'chętnie',
-  neutral: 'bez zaznaczenia',
+  neutral: 'mogę',
   cannot: 'nie mogę',
 }
 
@@ -89,7 +89,7 @@ function ShiftDetails({
 
   return (
     <div className="grid gap-5">
-      {shift.past && <p className="m-0 text-ink-muted">Ten dzień już minął, więc tej zmiany nie można zmienić.</p>}
+      {shift.past && <p className="m-0 text-ink-muted">Ten dzień już minął, więc tej zmiany nie zmienisz.</p>}
       <p className="m-0">{data.summary}</p>
       {data.shift.problems.map((problem) => (
         <InlineError key={problem}>{problem}</InlineError>
@@ -126,7 +126,7 @@ function ShiftDetails({
             </div>
           )}
           {shift.pinned && (
-            <p className="m-0 text-sm text-ink-muted">Przypięta: przy ponownym układaniu ta osoba zostanie na tej zmianie.</p>
+            <p className="m-0 text-sm text-ink-muted">Przypięta: gdy ułożysz grafik od nowa, ta osoba zostanie na tej zmianie.</p>
           )}
         </div>
       )}
@@ -177,7 +177,7 @@ function ShiftDetails({
 }
 
 const REASON_LABEL: Record<SlotEventOut['reason'], string> = {
-  generated: 'ułożone przez generator',
+  generated: 'ułożone automatycznie',
   manual: 'zmiana ręczna',
   offer: 'oddana zmiana',
   swap: 'zamiana',

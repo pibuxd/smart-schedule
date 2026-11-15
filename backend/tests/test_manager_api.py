@@ -244,6 +244,34 @@ class TestEmployees:
             assert "experience" not in response.content.decode() and "początkując" not in response.content.decode()
         assert api.get(f"/api/locations/{shop['location'].pk}/employees").status_code == 403
 
+    def test_manager_adds_themselves_as_an_employee(self, api, shop, make_company):
+        api.login(shop["manager"])
+        url = f"/api/locations/{shop['location'].pk}/employees/me"
+
+        me = api.post(url)
+
+        assert me.status_code == 200, me.content
+        body = me.json()
+        assert body["is_manager"] and body["is_active"]
+        assert body["position_ids"] == [str(shop["position"].pk)]  # every position: stands in for anyone
+        assert len(api.get(f"/api/locations/{shop['location'].pk}/employees").json()) == 2
+        assert api.get(f"/api/me/schedule?company_id={shop['company'].pk}").status_code == 200
+        assert api.post(url).status_code == 409  # already on the list
+        # Switched off earlier: adding again switches the same profile back on.
+        api.patch(f"/api/employees/{body['id']}", {"is_active": False})
+        again = api.post(url).json()
+        assert again["id"] == body["id"] and again["is_active"]
+
+    def test_only_a_manager_of_the_location_can_add_themselves(self, api, shop, make_company, subscribe):
+        url = f"/api/locations/{shop['location'].pk}/employees/me"
+        api.login(shop["worker"])
+        assert api.post(url).status_code == 403
+        api.login(make_company("Obca")["manager"])
+        assert api.post(url).status_code == 404
+        subscribe(shop["company"], days=-1)
+        api.login(shop["manager"])
+        assert api.post(url).status_code == 402
+
     def test_target_above_max_is_refused(self, api, shop):
         response = as_manager(api, shop).patch(
             f"/api/employees/{shop['employee'].pk}", {"max_hours_month": 80, "target_hours_month": 100}

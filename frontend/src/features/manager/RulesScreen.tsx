@@ -124,8 +124,8 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
           {scope === 'group' ? `Zasady wspólne: ${data.name}` : 'Zasady lokalu'}
         </h2>
         <p className="m-0 max-w-[75ch] text-ink-muted">
-          Wyżej na liście = ważniejsza. Gdy dwóch zasad nie da się spełnić naraz, wygrywa ta wyżej. „Bez wyjątków”
-          zaznaczaj tylko tam, gdzie złamanie zasady jest gorsze niż nieobsadzona zmiana.
+          Im wyżej na liście, tym ważniejsza zasada. Gdy dwóch zasad nie da się spełnić naraz, wygrywa ta wyżej.
+          „Bez wyjątków” zaznacz tylko tam, gdzie lepiej zostawić zmianę bez obsady, niż złamać zasadę.
         </p>
         {scope === 'location' && data.group && (
           <p className="m-0 max-w-[75ch] text-ink-muted">
@@ -178,12 +178,12 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
         )}
       >
         <Button onClick={check} disabled={!dirty || readOnly || preview.isPending}>
-          Sprawdź skutek i zapisz
+          Sprawdź i zapisz
         </Button>
         <Button variant="quiet" size="normal" disabled={!dirty} onClick={() => setItems(data.items)}>
           Cofnij zmiany
         </Button>
-        {!dirty && <span className="text-ink-muted">Brak niezapisanych zmian.</span>}
+        {!dirty && <span className="text-ink-muted">Wszystko zapisane.</span>}
       </div>
 
       <Sheet open={checking} onOpenChange={setChecking} title="Co się zmieni?">
@@ -208,17 +208,17 @@ function PreviewText({ result }: { result: PreviewOut }) {
   if (!result.period) {
     return (
       <p className="m-0">
-        Nie ma jeszcze ułożonego grafiku, więc nie da się pokazać skutku na prawdziwych danych. Zasady zadziałają przy
-        najbliższym układaniu.
+        Nie ma jeszcze żadnego grafiku, więc nie pokażemy, co ta zmiana da. Zasady zadziałają, gdy ułożysz
+        następny grafik.
       </p>
     )
   }
   return (
     <div className="grid gap-3">
-      <p className="m-0 text-ink-muted">Sprawdziłem ostatni grafik ({result.period}) z nowymi zasadami, bez układania go od nowa. To nie jest
-        prognoza: przy następnym układaniu grafik może się zmienić bardziej, niż tu widać.</p>
+      <p className="m-0 text-ink-muted">Tak ostatni grafik ({result.period}) wypada przy nowych zasadach. Nie układaliśmy go od nowa, więc
+        następny grafik może się zmienić bardziej, niż tu widać.</p>
       {result.lines.length === 0 ? (
-        <p className="m-0">Ta zmiana nie zmienia oceny ostatniego grafiku.</p>
+        <p className="m-0">Dla ostatniego grafiku to niczego nie zmienia.</p>
       ) : (
         <ul className="m-0 grid gap-2 pl-5">
           {result.lines.map((line) => (

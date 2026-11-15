@@ -29,6 +29,11 @@
   --color-prefer-not-soft: #fff1cc;
   --color-prefer: #12663f;
   --color-prefer-soft: #dff2e6;
+  /* "Chętnie" is the fuller green, "Mogę" the pale one. */
+  --color-prefer-fill: #b4e0c4;
+  --color-can: #2f7d55;
+  --color-can-line: #9fcfb3;
+  --color-can-soft: #edf8f0;
 
   --font-*: initial;
   --font-sans: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible', 'Segoe UI', Roboto, system-ui, sans-serif;
@@ -114,15 +119,16 @@
       repeating-linear-gradient(-45deg, transparent 0 6px, rgb(179 38 30 / 0.16) 6px 8px),
       var(--color-cannot-soft);
   }
+  /* "Mogę": the state of every day until the employee changes it. Pale green, thin tick. */
   .avail-neutral {
-    color: var(--color-ink-muted);
-    border-color: var(--color-line);
-    border-style: dashed;
-    background: var(--color-surface);
+    color: var(--color-can);
+    border-color: var(--color-can-line);
+    background: var(--color-can-soft);
   }
+  /* "Chętnie": fuller green, double tick. */
   .avail-prefer {
     color: var(--color-prefer);
     border-color: var(--color-prefer);
-    background: var(--color-prefer-soft);
+    background: var(--color-prefer-fill);
   }
 }

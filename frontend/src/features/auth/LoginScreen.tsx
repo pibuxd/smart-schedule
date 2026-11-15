@@ -61,8 +61,8 @@ function PhoneStep({ purpose, onSent }: { purpose: Purpose; onSent: (sent: Reque
         <h1 className="m-0 text-2xl font-extrabold">{purpose === 'register' ? 'Załóż firmę' : 'Zaloguj się'}</h1>
         <p className="m-0 text-ink-muted">
           {purpose === 'register'
-            ? 'Wpisz swój numer telefonu. Wyślemy SMS z kodem, a potem podasz nazwę firmy. Pracowników zaprosisz później.'
-            : 'Wpisz swój numer telefonu. Wyślemy na niego SMS z kodem.'}
+            ? 'Wpisz swój numer telefonu. Wyślemy Ci SMS z kodem. Potem podasz nazwę firmy, a pracowników zaprosisz później.'
+            : 'Wpisz swój numer telefonu. Wyślemy Ci SMS z kodem.'}
         </p>
       </div>
       <div className="grid gap-2">

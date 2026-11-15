@@ -29,8 +29,8 @@ export function HoursScreen({ today = new Date() }: { today?: Date }) {
         <div className="grid gap-1">
           <h1 className="m-0 text-2xl font-extrabold">Godziny w miesiącu</h1>
           <p className="m-0 max-w-[62ch] text-ink-muted">
-            Liczymy zmiany z opublikowanych grafików w lokalach, którymi zarządzasz. Szkice się nie liczą. To plan, nie
-            ewidencja czasu pracy: przed wypłatą sprawdź, czy ktoś się nie zamienił albo nie pracował dłużej.
+            Liczymy zmiany z opublikowanych grafików w Twoich lokalach, bez szkiców. To plan, a nie ewidencja czasu
+            pracy. Przed wypłatą sprawdź, czy ktoś się nie zamienił albo nie pracował dłużej.
           </p>
         </div>
         <a
@@ -68,7 +68,7 @@ function HoursTable({ data }: { data: HoursReportOut }) {
   if (data.rows.length === 0) {
     return (
       <EmptyState title="W tym miesiącu nie ma opublikowanych zmian">
-        <p className="m-0">Godziny pojawią się tutaj, gdy opublikujesz grafik obejmujący ten miesiąc.</p>
+        <p className="m-0">Godziny pojawią się tutaj, gdy opublikujesz grafik na ten miesiąc.</p>
       </EmptyState>
     )
   }
@@ -94,7 +94,7 @@ function HoursTable({ data }: { data: HoursReportOut }) {
                   <span className="block text-sm text-ink-muted">{row.home_location_name}</span>
                   {row.elsewhere && (
                     <span className="block text-sm font-semibold text-prefer-not">
-                      Pracuje też w lokalach, których nie prowadzisz: suma niepełna.
+                      Pracuje też w lokalach, których nie prowadzisz, więc suma jest niepełna.
                     </span>
                   )}
                 </td>

@@ -206,6 +206,76 @@ class TestRequests:
         assert TextRequest.objects.filter(pk=theirs.pk).exists()
 
 
+class TestOpenCalendar:
+    """ "Kiedy mogę" is always open: days can be marked ahead, also when the manager has not asked."""
+
+    def put(self, api, company, *days):
+        payload = {"company_id": str(company.pk), "days": list(days)}
+        return api.client.put("/api/me/calendar", payload, content_type="application/json")
+
+    def get(self, api, company, start, end):
+        return api.get(f"/api/me/calendar?company_id={company.pk}&start={start}&end={end}")
+
+    def test_marking_ahead_without_any_period(self, api, shop):
+        shop["period"].delete()
+        api.login(shop["worker"])
+        today = timezone.localdate()
+        day = today + timedelta(days=90)
+
+        saved = self.put(api, shop["company"], {"date": str(day), "state": "cannot", "from_time": "08:00"})
+
+        assert saved.status_code == 204, saved.content
+        body = self.get(api, shop["company"], day - timedelta(days=3), day + timedelta(days=3)).json()
+        assert body["period"] is None and body["submitted_at"] is None and body["locked"] == []
+        assert body["days"] == [{"date": str(day), "state": "cannot", "from_time": "08:00:00", "to_time": None}]
+
+    def test_past_days_and_arranged_periods_are_locked(self, api, shop):
+        period = shop["period"]
+        api.login(shop["worker"])
+        today = timezone.localdate()
+        assert (
+            self.put(api, shop["company"], {"date": str(today - timedelta(days=1)), "state": "cannot"}).status_code
+            == 409
+        )
+        assert self.put(api, shop["company"], {"date": str(period.start), "state": "prefer"}).status_code == 204
+
+        period.status = SchedulePeriod.Status.DRAFT
+        period.save()
+
+        refused = self.put(api, shop["company"], {"date": str(period.start), "state": "cannot"})
+        assert refused.status_code == 409 and "już ułożony" in refused.json()["detail"]
+        after = period.end + timedelta(days=1)  # the days after the arranged period stay open
+        assert self.put(api, shop["company"], {"date": str(after), "state": "cannot"}).status_code == 204
+        body = self.get(api, shop["company"], period.end - timedelta(days=1), after).json()
+        assert body["locked"] == [str(period.end - timedelta(days=1)), str(period.end)]
+        yesterday = self.get(api, shop["company"], today - timedelta(days=2), today).json()
+        assert yesterday["locked"] == [str(today - timedelta(days=2)), str(today - timedelta(days=1))]
+
+    def test_calendar_names_the_period_the_manager_asked_about(self, api, shop):
+        api.login(shop["worker"])
+        start = shop["period"].start
+        api.post(
+            "/api/me/availability/submit", {"company_id": str(shop["company"].pk), "period_id": str(shop["period"].pk)}
+        )
+        body = self.get(api, shop["company"], start, start + timedelta(days=6)).json()
+        assert body["period"]["id"] == str(shop["period"].pk) and body["submitted_at"] is not None
+
+    def test_limits_read_only_and_other_companies(self, api, shop, make_company, subscribe):
+        api.login(shop["worker"])
+        today = timezone.localdate()
+        far = today + timedelta(days=400)
+        assert self.put(api, shop["company"], {"date": str(far), "state": "cannot"}).status_code == 400
+        same = {"date": str(today), "state": "prefer", "from_time": "08:00", "to_time": "08:00"}
+        assert self.put(api, shop["company"], same).status_code == 400
+        assert self.get(api, shop["company"], today, today + timedelta(days=62)).status_code == 400
+        other = make_company("Kawiarnia")
+        assert self.get(api, other["company"], today, today).status_code == 404
+        assert self.put(api, other["company"], {"date": str(today), "state": "cannot"}).status_code == 404
+        subscribe(shop["company"], days=-1)
+        assert self.put(api, shop["company"], {"date": str(today), "state": "cannot"}).status_code == 402
+        assert self.get(api, shop["company"], today, today).status_code == 200
+
+
 def _user(first="Anna", last="Wróbel"):
     from apps.accounts.models import User
 

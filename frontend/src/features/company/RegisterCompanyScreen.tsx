@@ -74,7 +74,7 @@ export function RegisterCompanyScreen({ me, onCreated }: { me: MeOut; onCreated:
           hint={
             firstCompany
               ? 'Bez kodu masz 30 dni na wypróbowanie wszystkiego. Kod możesz wpisać też później, w panelu kierownika.'
-              : 'Okres próbny dostaje tylko pierwsza firma. Bez kodu ta firma będzie tylko do oglądania, dopóki go nie wpiszesz.'
+              : 'Okres próbny ma tylko pierwsza firma. W tej bez kodu niczego nie zmienisz, dopóki go nie wpiszesz.'
           }
         />
         {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
