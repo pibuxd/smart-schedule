@@ -122,6 +122,13 @@ class TestRequests:
         built = build_problem([shop["period"]])
         assert [r.type for r in built.problem.requests] == ["other"]  # left to the manager, not scored
 
+    def test_the_screen_is_told_when_the_assistant_reads_requests(self, api, shop, settings):
+        api.login(shop["worker"])
+        url = f"/api/me/availability?company_id={shop['company'].pk}"
+        assert api.get(url).json()["period"]["assistant_reads"] is False
+        settings.ANTHROPIC_API_KEY = "test-key"
+        assert api.get(url).json()["period"]["assistant_reads"] is True
+
     def test_with_a_key_the_request_is_saved_and_queued_together(self, api, shop, with_key):
         api.login(shop["worker"])
         body = send_request(api, shop).json()

@@ -86,6 +86,7 @@ Z kluczem:
   weekendy są ważniejsze niż cel godzin”. Dostaje plan prostymi zdaniami i skutek na ostatnim grafiku. Dopiero
   „Zatwierdź zmiany” cokolwiek zmienia. Potem układa grafik od nowa.
 
+Gdy asystent jest włączony, ekran „Coś jeszcze?” mówi pracownikowi, że prośbę czyta też asystent AI.
 Do Claude wysyłana jest tylko treść prośby lub polecenia, daty okresu, nazwy zmian, stanowisk i zasad oraz imiona
 osób z jednego lokalu (bez nazwisk, numerów telefonów i grafiku).
 

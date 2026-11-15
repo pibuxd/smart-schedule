@@ -410,7 +410,7 @@ function AvailabilityEditor({
         </>
       )}
 
-      {period && <RequestsSection companyId={companyId} periodId={period.id} editable={!readOnly && period.editable} />}
+      {period && <RequestsSection companyId={companyId} periodId={period.id} editable={!readOnly && period.editable} assistantReads={period.assistant_reads} />}
 
       {openDay && (
         <DayHoursSheet
