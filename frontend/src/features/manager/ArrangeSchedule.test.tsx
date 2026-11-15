@@ -80,8 +80,8 @@ describe('ArrangeButton', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ułóż grafik' }))
     const sheet = await screen.findByRole('dialog')
     expect(sheet).toHaveTextContent('Masz za mało doświadczonych osób.')
-    expect(sheet).toHaveTextContent('Kelner: na jednej zmianie potrzeba 2, a masz 1.')
-    expect(sheet).toHaveTextContent('Barista: na jednej zmianie potrzeba 1, a nie masz żadnej.')
+    expect(sheet).toHaveTextContent('Kelner: na jednej zmianie potrzeba 2, a w tym lokalu masz 1.')
+    expect(sheet).toHaveTextContent('Barista: na jednej zmianie potrzeba 1, a w tym lokalu nie masz żadnej.')
 
     fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż grafik' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))).toBe(true))

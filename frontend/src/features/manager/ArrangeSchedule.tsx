@@ -132,7 +132,7 @@ function ArrangeSheet({
                 t.experiencedShort.map((row) => (
                   <li key={`${t.periodId}-${row.position_id}`}>
                     {one ? '' : `${t.locationName}, `}
-                    {row.position_name}: na jednej zmianie potrzeba {row.needed}, a {row.available === 0 ? 'nie masz żadnej' : `masz ${row.available}`}.
+                    {row.position_name}: na jednej zmianie potrzeba {row.needed}, a w tym lokalu {row.available === 0 ? 'nie masz żadnej' : `masz ${row.available}`}.
                   </li>
                 )),
               )}
