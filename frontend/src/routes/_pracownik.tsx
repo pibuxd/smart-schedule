@@ -48,7 +48,7 @@ function EmployeeLayout() {
 
   return (
     <EmployeeContext.Provider value={{ companyId: company.id, readOnly: company.read_only }}>
-      <div className="pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0">
+      <div className="pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0 [@media(max-height:500px)]:pb-0">
         <header className="mx-auto grid max-w-(--column) gap-3 px-4 pt-4">
           <div className="flex min-w-0 items-center justify-between gap-3 text-base text-ink-muted">
             <span className="min-w-0 truncate">
@@ -98,7 +98,9 @@ function EmployeeLayout() {
           aria-label="Ekrany"
           className={
             'fixed inset-x-0 bottom-0 z-30 grid grid-cols-[repeat(3,minmax(max-content,1fr))] border-t border-line bg-surface ' +
-            'pb-[env(safe-area-inset-bottom)] md:static md:mx-auto md:mt-4 md:max-w-(--column) md:rounded-md md:border'
+            'pb-[env(safe-area-inset-bottom)] md:static md:mx-auto md:mt-4 md:max-w-(--column) md:rounded-md md:border ' +
+            // A phone lying on its side has no room for a fixed bar: the tabs stay at the top of the page.
+            '[@media(max-height:500px)]:static'
           }
         >
           {TABS.map(({ to, label, Icon }) => (

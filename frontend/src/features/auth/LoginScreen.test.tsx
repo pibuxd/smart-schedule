@@ -5,7 +5,10 @@ import { mockApi, renderScreen } from '../../test/render'
 import { LoginScreen } from './LoginScreen'
 
 describe('LoginScreen', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    window.sessionStorage.clear()
+  })
 
   it('asks for 9 digits before sending anything', async () => {
     const calls = mockApi(() => [200, {}])
@@ -40,6 +43,23 @@ describe('LoginScreen', () => {
     fireEvent.change(screen.getByLabelText('Kod z SMS-a, 6 cyfr'), { target: { value: '123456' } })
     expect(await screen.findByRole('alert')).toHaveTextContent('Zostały 4 próby')
     expect(calls[1].body).toEqual({ phone: '+48512345678', code: '123456' })
-    expect(screen.getByRole('button', { name: /Wyślij kod jeszcze raz za/ })).toBeDisabled()
+    expect(screen.getByRole('timer')).toHaveTextContent('Nowy kod możesz dostać za 1:00')
+    expect(screen.queryByRole('button', { name: /Wyślij kod jeszcze raz/ })).not.toBeInTheDocument()
+    // The typed code stays, and the old message goes away as soon as a digit changes.
+    expect(screen.getByLabelText('Kod z SMS-a, 6 cyfr')).toHaveValue('123456')
+    fireEvent.change(screen.getByLabelText('Kod z SMS-a, 6 cyfr'), { target: { value: '12345' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('keeps the code step after a page refresh', async () => {
+    mockApi(() => [200, { phone: '+48512345678', expires_in_s: 300, resend_after_s: 60 }])
+    const first = renderScreen(<LoginScreen />)
+    fireEvent.change(await screen.findByLabelText('Numer telefonu'), { target: { value: '512345678' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij kod SMS' }))
+    expect(await screen.findByText('Wpisz kod z SMS-a')).toBeInTheDocument()
+    first.unmount()
+    renderScreen(<LoginScreen />)
+    expect(await screen.findByText('Wpisz kod z SMS-a')).toBeInTheDocument()
+    expect(screen.getByText('+48 512 345 678')).toBeInTheDocument()
   })
 })

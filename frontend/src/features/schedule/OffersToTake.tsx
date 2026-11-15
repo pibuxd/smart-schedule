@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 
 import { useAvailableOffers, useClaimOffer, useWithdrawMyClaim } from '../../api/generated/marketplace/marketplace'
 import type { AvailableOfferOut } from '../../api/generated/model'
@@ -42,6 +43,8 @@ function OfferCard({ offer, readOnly }: { offer: AvailableOfferOut; readOnly: bo
   const { shift } = offer
   const waiting = offer.my_claim_status === 'pending'
   const error = claim.error ?? withdraw.error
+  // One more tap before the manager gets a request: an accidental touch should not sign someone up for a shift.
+  const [asking, setAsking] = useState(false)
 
   return (
     <li className="grid gap-3 rounded-lg border-2 border-accent bg-surface p-4">
@@ -73,12 +76,24 @@ function OfferCard({ offer, readOnly }: { offer: AvailableOfferOut; readOnly: bo
             Zrezygnuj
           </Button>
         </>
+      ) : asking ? (
+        <div className="grid gap-2">
+          <p className="m-0 font-semibold">Wziąć tę zmianę? Kierownik dostanie Twoje zgłoszenie.</p>
+          <Button
+            wide
+            disabled={claim.isPending || readOnly}
+            onClick={() =>
+              claim.mutate({ offerId: offer.id }, { onSuccess: refresh, onSettled: () => setAsking(false) })
+            }
+          >
+            Tak, zgłoś mnie
+          </Button>
+          <Button variant="quiet" size="normal" wide onClick={() => setAsking(false)}>
+            Nie, jednak nie
+          </Button>
+        </div>
       ) : (
-        <Button
-          wide
-          disabled={claim.isPending || readOnly}
-          onClick={() => claim.mutate({ offerId: offer.id }, { onSuccess: refresh })}
-        >
+        <Button wide disabled={readOnly} onClick={() => setAsking(true)}>
           Weź zmianę
         </Button>
       )}

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
 import { cn } from '../../lib/cn'
-import { dayTitle, parseDate, shortTime } from '../../lib/dates'
+import { dayTitle, parseDate, shortTime, spanHours } from '../../lib/dates'
 import { type AvailabilityState, type Mark, overnight } from './marks'
 import { StatePicker } from './StatePicker'
 
@@ -36,6 +36,8 @@ export function DayHoursSheet({
   const restricting = state === 'cannot'
   const draft: Mark = limited ? { state, from, to } : { state, from: null, to: null }
   const empty = limited && from === to
+  // "Od 20:00 do 16:00" is more likely swapped fields than a 20-hour night, so it needs a second look.
+  const longNight = limited && !empty && overnight(draft) && spanHours(from, to) > 12
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()} title={dayTitle(parseDate(date))}>
@@ -54,7 +56,7 @@ export function DayHoursSheet({
               <input
                 type="radio"
                 name="hours-kind"
-                className="size-5 accent-accent"
+                className="size-5 flex-none accent-accent"
                 checked={limited === option}
                 onChange={() => setLimited(option)}
               />
@@ -77,22 +79,41 @@ export function DayHoursSheet({
               <TimeSelect id="hours-from" label="Od" value={from} onChange={setFrom} asEnd={false} />
               <TimeSelect id="hours-to" label="Do" value={to} onChange={setTo} asEnd />
             </div>
-            {(empty || overnight(draft)) && (
-              <p className={cn('m-0 text-sm', empty ? 'text-cannot' : 'text-ink-muted')}>
-                {empty
-                  ? 'Początek i koniec są takie same. Zmień jedną z godzin.'
-                  : 'Do rana następnego dnia, na przykład na nockę.'}
-              </p>
+            {longNight ? (
+              <div role="alert" className="grid gap-2 rounded-md border-2 border-cannot bg-cannot-soft px-3 py-2">
+                <p className="m-0 font-semibold text-cannot">
+                  To {spanHours(from, to)} godzin: od {shortTime(from)} do {shortTime(to)} następnego dnia. Może godziny
+                  są zamienione?
+                </p>
+                <Button
+                  variant="secondary"
+                  size="normal"
+                  onClick={() => {
+                    setFrom(to)
+                    setTo(from)
+                  }}
+                >
+                  Zamień: od {shortTime(to)} do {shortTime(from)}
+                </Button>
+              </div>
+            ) : (
+              (empty || overnight(draft)) && (
+                <p className={cn('m-0 text-sm', empty ? 'text-cannot' : 'text-ink-muted')}>
+                  {empty
+                    ? 'Początek i koniec są takie same. Zmień jedną z godzin.'
+                    : `Do ${shortTime(to)} następnego dnia, na przykład na nockę.`}
+                </p>
+              )
             )}
             {!restricting && !empty && (
-              <p className="m-0 rounded-md border-2 border-cannot bg-cannot-soft px-3 py-2 font-semibold text-cannot">
+              <p className="m-0 rounded-md border border-line bg-paper px-3 py-2">
                 Zmiany spoza godzin {shortTime(from)}–{to === '00:00' ? '24:00' : shortTime(to)} tego dnia nie dostaniesz.
               </p>
             )}
           </div>
         )}
         <Button wide disabled={empty} onClick={() => onSave(draft)}>
-          Zapisz ten dzień
+          {longNight ? `Tak, do ${shortTime(to)} następnego dnia. Zapisz` : 'Zapisz ten dzień'}
         </Button>
       </div>
     </Sheet>
@@ -113,7 +134,7 @@ function TimeSelect({
   asEnd: boolean
 }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
       <label htmlFor={id} className="font-semibold">
         {label}
       </label>
@@ -121,7 +142,7 @@ function TimeSelect({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-(--touch-main) rounded-md border-2 border-ink bg-surface px-3 text-lg tabular-nums"
+        className="min-h-(--touch-main) w-full min-w-0 rounded-md border-2 border-ink bg-surface px-3 text-lg tabular-nums"
       >
         {TIMES.map((time) => (
           <option key={time} value={time}>

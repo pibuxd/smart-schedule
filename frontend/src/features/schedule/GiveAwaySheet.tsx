@@ -34,15 +34,15 @@ function GiveAway({ shift, onClose }: { shift: MyShiftOut; onClose: () => void }
   const offer = useOfferMyShift()
   const cancel = useCancelMyOffer()
   const queryClient = useQueryClient()
-  const [sent, setSent] = useState<number | null>(null)
+  const [sent, setSent] = useState<OfferMadeOut | null>(null)
   const refresh = () => void queryClient.invalidateQueries()
 
   if (sent !== null) {
     return (
       <div className="grid gap-4">
         <p role="status" className="m-0">
-          {sent > 0
-            ? `Daliśmy znać osobom, które mogą wziąć tę zmianę (${sent}). Gdy ktoś się zgłosi, kierownik zdecyduje, a Ty dostaniesz powiadomienie.`
+          {sent.notified > 0
+            ? `${toldText(sent.notified, sent.notified_here ?? 0)} Gdy ktoś się zgłosi, dostaniesz powiadomienie. Potem zdecyduje kierownik.`
             : 'Teraz nikt nie może wziąć tej zmiany: inni pracują, zaznaczyli „nie mogę” albo mają inne stanowisko. Zmiana czeka w „Zmiany do wzięcia”. Najlepiej porozmawiaj też z kierownikiem.'}
         </p>
         <p className="m-0 font-semibold">Dopóki kierownik nie zdecyduje, to nadal Twoja zmiana.</p>
@@ -101,7 +101,7 @@ function GiveAway({ shift, onClose }: { shift: MyShiftOut; onClose: () => void }
             { assignmentId: shift.id },
             {
               onSuccess: (response) => {
-                setSent((response.data as OfferMadeOut).notified)
+                setSent(response.data as OfferMadeOut)
                 refresh()
               },
             },
@@ -112,4 +112,16 @@ function GiveAway({ shift, onClose }: { shift: MyShiftOut; onClose: () => void }
       </Button>
     </div>
   )
+}
+
+function dative(count: number): string {
+  return count === 1 ? '1 osobie' : `${count} osobom`
+}
+
+/** "Daliśmy znać 38 osobom: 2 z Twojego lokalu i 36 z innych lokali firmy." */
+function toldText(all: number, here: number): string {
+  const elsewhere = all - here
+  if (elsewhere === 0) return `Daliśmy znać ${dative(all)} z Twojego lokalu, które mogą wziąć tę zmianę.`
+  if (here === 0) return `Daliśmy znać ${dative(all)} z innych lokali firmy. Z Twojego lokalu nikt nie może teraz jej wziąć.`
+  return `Daliśmy znać ${dative(all)}: ${here} z Twojego lokalu i ${elsewhere} z innych lokali firmy.`
 }

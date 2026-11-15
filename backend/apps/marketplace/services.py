@@ -136,8 +136,9 @@ def _require_current(offer: ShiftOffer) -> None:
 # ----------------------------------------------------------------------------------------------- the giver
 
 
-def offer_shift(assignment: Assignment, profile: EmployeeProfile) -> tuple[ShiftOffer, int]:
-    """'Oddaj zmianę': returns the offer and how many people were told about it."""
+def offer_shift(assignment: Assignment, profile: EmployeeProfile) -> tuple[ShiftOffer, int, int]:
+    """'Oddaj zmianę': returns the offer, how many people were told about it, and how many of them work
+    in the shift's own location (the giver wants to know whether colleagues or people from elsewhere can come)."""
     with transaction.atomic():
         assignment = (
             Assignment.objects.for_company(profile.company_id)
@@ -158,10 +159,11 @@ def offer_shift(assignment: Assignment, profile: EmployeeProfile) -> tuple[Shift
         able = [v.employee for v in check_people(offer) if v.possible]
         payload = offer_payload(offer)
         told = notify(offer.company_id, [p.membership.user_id for p in able], "shift_offered", payload)
+        told_here = len({p.membership.user_id for p in able if p.home_location_id == assignment.shift.location_id})
         # The managers know early, especially when nobody can take it (the giver still has to come).
         managers = set(location_manager_ids(assignment.shift.location)) - {profile.membership.user_id}
         notify(offer.company_id, managers, "offer_made", {**payload, "able": told})
-    return offer, told
+    return offer, told, told_here
 
 
 def cancel_offer(offer: ShiftOffer, profile: EmployeeProfile) -> ShiftOffer:
@@ -213,6 +215,7 @@ def claim_offer(offer: ShiftOffer, profile: EmployeeProfile) -> ShiftClaim:
         offer.save(update_fields=["status"])
         payload = {**offer_payload(offer), "claimed_by_name": person_name(profile)}
         notify(offer.company_id, location_manager_ids(offer.assignment.shift.location), "shift_claimed", payload)
+        notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_claimed", payload)
     return claim
 
 
