@@ -421,7 +421,8 @@ export function RequestCard({ request }: { request: ManagerRequestOut }) {
           </Button>
           <p className="m-0 mt-1 text-sm text-ink-muted">
             Treść prośby trafi wtedy do Claude, zewnętrznej usługi.
-            {request.unread_reason === 'off' && ' Pracownik pisał ją, kiedy asystent był wyłączony, więc mógł o tym nie wiedzieć.'}
+            {request.unread_reason === 'off' &&
+              ' Pracownik pisał ją, kiedy asystent był wyłączony, więc dostanie o tym powiadomienie.'}
           </p>
         </div>
       )}

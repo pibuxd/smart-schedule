@@ -26,6 +26,7 @@ from apps.availability.models import (
     TextRequest,
 )
 from apps.core.schemas import ErrorOut
+from apps.notifications.services import notify
 from apps.scheduling.models import SchedulePeriod
 from apps.staffing.me import employee_context
 from apps.staffing.models import EmployeeProfile
@@ -674,10 +675,14 @@ def reread_request(request, request_id: UUID):
     ctx.require_writable()
     if not _can_reread(row):
         raise HttpError(409, "Tej prośby nie da się teraz dać asystentowi. Odśwież stronę.")
+    was_off = row.unread_reason == TextRequest.UnreadReason.OFF
     with transaction.atomic():
         row.status = TextRequest.Status.NEW
         row.interpretation = None
         row.unread_reason = TextRequest.UnreadReason.NONE
         row.save(update_fields=["status", "interpretation", "unread_reason", "updated_at"])
         queue_request(row)
+        if was_off:
+            # The person wrote it when the screen said only the manager reads it: tell them it went further.
+            notify(ctx.company.pk, [row.employee.membership.user_id], "request_to_assistant", {"text": row.text[:80]})
     return _manager_request_out(row)

@@ -116,6 +116,11 @@ def notification_text(kind: str, payload: dict) -> str:
             return f"Kierownik zatwierdził: Twoją zmianę {shift} bierze {taker}. Nie musisz na nią przychodzić."
         case "offer_cancelled":
             return f"{giver} jednak zostaje na zmianie {shift}. Nie musisz jej brać."
+        case "request_to_assistant":
+            return (
+                f"Kierownik dał Twoją prośbę „{p.get('text', '')}” do przeczytania asystentowi AI (Claude, "
+                "zewnętrzna usługa), żeby generator mógł ją uwzględnić."
+            )
         case "offer_expired":
             return f"Oddanie zmiany {shift} jest nieaktualne, bo grafik się zmienił. Sprawdź „Mój grafik”."
     return "Masz nowe powiadomienie."

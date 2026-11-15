@@ -13,6 +13,8 @@ from apps.accounts.models import User
 from apps.assistant import llm, readings, services
 from apps.assistant.models import AssistantCommand, ManagerInstruction
 from apps.availability.models import TextRequest
+from apps.notifications.models import Notification
+from apps.notifications.services import notification_text
 from apps.rules.models import RuleSetting
 from apps.scheduling.models import SchedulePeriod
 from apps.scheduling.problem_builder import build_problem
@@ -217,6 +219,9 @@ class TestRequests:
         assert listed["can_reread"] is True
         body = api.post(f"/api/requests/{request_id}/reread").json()
         assert (body["status"], body["unread_reason"], body["can_reread"]) == ("new", "", False)
+        # The employee wrote it when only the manager read requests: they are told it went to the assistant.
+        told = Notification.objects.get(user=shop["worker"], kind="request_to_assistant")
+        assert "asystentowi AI" in notification_text(told.kind, told.payload)
         assert ProcrastinateJob.objects.filter(task_name="assistant.interpret_text_request").count() == 1
         monkeypatch.setattr(llm, "read_request", lambda text, context: reading(confidence=0.2))
         assert services.interpret_request(request_id) == "needs_manager"
