@@ -10,5 +10,6 @@ export interface MyRequestOut {
   id: string;
   text: string;
   status: MyRequestOutStatus;
+  summary: string | null;
   created_at: string;
 }

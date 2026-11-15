@@ -1,7 +1,7 @@
 """The three numbers the manager sees, computed the same way for every schedule (generated or edited by hand).
 
 - unfilled slots (a schedule with any is "incomplete" and must not look good),
-- "manager rules" in % (location rules, good-practice rules, target hours),
+- "manager rules" in % (location rules, good-practice rules, target hours, the manager's instructions about people),
 - "employee requests" in % ("chętnie" from the calendar and text requests).
 
 A group score is 100 × (1 − Σ wᵢ·vᵢ / Σ wᵢ) with vᵢ the degree (0–1) to which item i is broken.
@@ -76,7 +76,8 @@ def score(problem: Problem, report: ValidationReport, location: str | None = Non
         for m in report.rules
         if not m.hard and m.instances and _in(location, m.location)
     ]
-    requests = [(r.weight, r.degree) for r in report.requests if _in(location, r.location)]
+    rules += [(r.weight, r.degree) for r in report.requests if r.by_manager and _in(location, r.location)]
+    requests = [(r.weight, r.degree) for r in report.requests if not r.by_manager and _in(location, r.location)]
     slots = [s for s in problem.slots if _in(location, s.location)]
     ids = {s.id for s in slots}
     request_by_id = {r.id: r for r in problem.requests}

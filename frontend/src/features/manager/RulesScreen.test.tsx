@@ -46,6 +46,7 @@ describe('RulesScreen', () => {
     }
     const calls = mockApi((_method, path) => {
       if (path.endsWith('/preview')) return [200, preview]
+      if (path.endsWith('/instructions')) return [200, { assistant_enabled: true, items: [] }]
       return [200, rules]
     })
     renderScreen(
@@ -75,7 +76,9 @@ describe('RulesScreen', () => {
   })
 
   it('"bez wyjątków" needs the rule switched on', async () => {
-    mockApi(() => [200, rules])
+    mockApi((_method, path) =>
+      path.endsWith('/instructions') ? [200, { assistant_enabled: false, items: [] }] : [200, rules],
+    )
     renderScreen(
       <AsManager>
         <RulesScreen scope="location" scopeId="l1" />
