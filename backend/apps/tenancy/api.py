@@ -464,7 +464,13 @@ def create_location(request, payload: LocationIn):
         if location.group_id is None:
             good = [rule for rule in RULES if rule.good_practice]
             RuleSetting.objects.for_company(ctx.company).bulk_create(
-                RuleSetting(company=ctx.company, location=location, rule_code=rule.code, position=place)
+                RuleSetting(
+                    company=ctx.company,
+                    location=location,
+                    rule_code=rule.code,
+                    position=place,
+                    is_hard=rule.default_hard,
+                )
                 for place, rule in enumerate(good, start=1)
             )
     return Status(201, _location_out(location))

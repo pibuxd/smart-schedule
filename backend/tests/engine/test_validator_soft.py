@@ -133,12 +133,41 @@ class TestHours:
     def test_personal_maximum(self):
         slots = self.slots(3)
         employees = [employee("anna", max_hours_month=16), employee("ola")]
-        p = problem(employees, slots, start=self.month[0], end=self.month[1], rules=(rule("personal_max_hours"),))
+        p = problem(
+            employees,
+            slots,
+            start=self.month[0],
+            end=self.month[1],
+            rules=(rule("personal_max_hours", tolerance_pct=0),),
+        )
         m = measure(validate(p, {s.id: "anna" for s in slots}), "personal_max_hours")
         assert m.instances == 1  # only people with a maximum
         assert m.degree == pytest.approx(0.5)
         assert "24 h" in m.violations[0].message
         assert validate(p, {"d0": "anna", "d1": "anna", "d2": "ola"}).rules[0].degree == 0
+
+    def test_personal_maximum_with_tolerance(self):
+        # 8 h shifts, maximum 20 h: 24 h is 20 % over. With the default 10 % to spare (22 h) it breaks the rule,
+        # with 20 % it does not.
+        slots = self.slots(3)
+        employees = [employee("anna", max_hours_month=20)]
+        everything = {s.id: "anna" for s in slots}
+
+        def check(**params):
+            p = problem(
+                employees,
+                slots,
+                start=self.month[0],
+                end=self.month[1],
+                rules=(rule("personal_max_hours", hard=True, **params),),
+            )
+            return validate(p, everything)
+
+        default = check()
+        assert not default.ok
+        assert "o ponad 10% więcej niż swoje maksimum (20 h" in default.hard[0].message
+        assert measure(default, "personal_max_hours").degree == pytest.approx(2 / 20)
+        assert check(tolerance_pct=20).ok
 
 
 class TestOtherRules:

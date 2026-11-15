@@ -485,6 +485,21 @@ def test_staffing_leaves_a_hole_rather_than_a_less_experienced_person():
     assert solved(problem([employee("ola"), oven], slots))[0].schedule == {"s": "jan"}
 
 
+@pytest.mark.parametrize(("tolerance", "holes"), [(10, 1), (25, 0)])
+def test_personal_maximum_keeps_the_tolerance(tolerance, holes):
+    # Three 8 h shifts in November, maximum 20 h a month: 10 % to spare allows 22 h (two shifts), 25 % allows 25 h.
+    slots = [slot(f"d{i}", date(2026, 11, 2) + timedelta(days=i)) for i in range(3)]
+    p = problem(
+        [employee("anna", max_hours_month=20)],
+        slots,
+        start=date(2026, 11, 1),
+        end=date(2026, 11, 30),
+        rules=[RuleConfig("personal_max_hours", LOC, rank=1, hard=True, params={"tolerance_pct": tolerance})],
+    )
+    result, _report = solved(p)
+    assert result.holes == holes
+
+
 # ----------------------------------------------------------------- hard rules never broken (random problems)
 
 HARD_SAFE_RULES = [
@@ -492,7 +507,7 @@ HARD_SAFE_RULES = [
     ("max_consecutive_days", {"days": 4}),
     ("fair_weekends", {}),
     ("fair_closings", {}),
-    ("personal_max_hours", {}),
+    ("personal_max_hours", {"tolerance_pct": 0}),  # the tightest setting; the default 10 % is tested above
     ("same_shift_type_in_week", {}),
     ("max_shifts_per_week", {"shifts": 4}),
     ("max_hours_per_day", {"max_hours": 8}),

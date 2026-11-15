@@ -614,7 +614,7 @@ def _bakery_rules(group: LocationGroup, locations: list[Location]) -> None:
         ("max_consecutive_days", {"days": 5}, False),
         ("fair_closings", {}, False),
         ("same_shift_type_in_week", {}, False),
-        ("personal_max_hours", {}, False),
+        ("personal_max_hours", {"tolerance_pct": 10}, True),
         ("experience_mix", {}, False),
         ("max_hours_per_day", {}, False),
         ("min_weekly_rest", {}, False),

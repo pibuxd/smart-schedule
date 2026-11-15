@@ -52,6 +52,7 @@ from engine.validator import (
     Code,
     RequestKind,
     experience_shifts,
+    max_hours_tolerance,
     validate,
 )
 
@@ -437,6 +438,7 @@ class _Builder:
                 hours = sum(per_month.get(month, []))
                 bound = monthly * share * 60
                 if attr == "max_hours_month":
+                    bound *= 1 + max_hours_tolerance(rule)
                     if hard:
                         if per_month.get(month):
                             self.m.add(hours <= math.floor(bound))

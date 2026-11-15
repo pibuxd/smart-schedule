@@ -79,9 +79,12 @@ class TestOverviewAndLocations:
             "fair_weekends",
             "fair_closings",
             "experience_mix",
+            "personal_max_hours",
             "max_hours_per_day",
             "min_weekly_rest",
         ]
+        hard = RuleSetting.objects.get(location=location, rule_code="personal_max_hours")
+        assert hard.is_hard  # Piotr's decision: the personal maximum is kept, with 10 % to spare
         again = api.post("/api/locations", {"company_id": str(shop["company"].pk), "name": "Skawina"})
         assert again.status_code == 409
 
