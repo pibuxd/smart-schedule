@@ -419,6 +419,10 @@ export function RequestCard({ request }: { request: ManagerRequestOut }) {
           >
             {reread.isPending ? 'Wysyłam…' : 'Daj asystentowi do przeczytania'}
           </Button>
+          <p className="m-0 mt-1 text-sm text-ink-muted">
+            Treść prośby trafi wtedy do Claude, zewnętrznej usługi. Pracownik pisał ją, kiedy asystent był wyłączony, więc
+            mógł o tym nie wiedzieć.
+          </p>
         </div>
       )}
       {reread.isError && <InlineError>{errorMessage(reread.error, NETWORK_PROBLEM)}</InlineError>}
