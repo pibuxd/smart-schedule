@@ -595,3 +595,6 @@ Trzeci PR (ekrany kierownika, punkty 18–32):
   lokalu”, gdy asystent jest wyłączony. Po 2 minutach układania ekran mówi „Trwa dłużej niż zwykle”.
 - „Godziny” na pustym miesiącu proponują ostatni miesiąc z godzinami (`latest_month`). Teksty: „mogą pracować”,
   formy bez „(a)”, „Ułożyć grafik dla lokalu …?”, przykłady stanowisk nie tylko z piekarni.
+- Hipotezy do sprawdzenia w pilotażu (uwagi Prelinta do PR #25): czy kierownicy kilku lokali chcą wpisywać dni
+  zamknięcia raz dla całej grupy (dziś każdy lokal osobno) i czy w nagłej sytuacji proszą o jednorazowy wyjątek od
+  zasady „bez wyjątków” zamiast zmiany zasady dla całego lokalu.
