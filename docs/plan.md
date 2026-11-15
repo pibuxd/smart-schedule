@@ -519,6 +519,7 @@ Uzupełnienie 15.11.2026 (po teście Piotra na serwerze, dwie prośby bez interp
 
 - Nowy typ prośby i polecenia `chce_pracowac` (`RequestType.WANT_WORK`): daty lub dni tygodnia, `min_days` (w ilu z tych dni; brak = we wszystkich) i `shifts_per_day` (1–3). Stopień złamania = brakujące dni / `min_days`, gdzie dzień liczy się, gdy osoba ma w nim co najmniej `shifts_per_day` zmian. W solverze kara za każdy brakujący dzień. Dwie zmiany jednego dnia da się spełnić tylko wtedy, gdy zasady odpoczynku na to pozwalają; jeśli „Odpoczynek między zmianami” jest „bez wyjątków”, prośba zostanie niespełniona.
 - `TextRequest.unread_reason` (`off` / `unsure` / `failed`): kierownik widzi, dlaczego prośba nie ma interpretacji. `POST /requests/{id}/reread` (`reread_request`) daje asystentowi prośbę, która przyszła przy wyłączonym asystencie albo przy błędzie. Migracja oznacza istniejące prośby bez interpretacji jako `off`.
+- Lista pomyłek asystenta (pomysł Piotra 15.11.2026): `TextRequest.assistant_answer` i `AssistantCommand.assistant_answer` trzymają nieużytą odpowiedź modelu z powodem (`why`) albo błąd. Superadmin widzi je w panelu administratora, a `manage.py assistant_misses --days N` wypisuje CSV: prośby do decyzji kierownika oraz polecenia, które skończyły się błędem, pytaniem, uwagą albo brakiem zmian. Plik ma treść pisaną przez ludzi, więc jest tylko dla superadmina.
 
 ## 21. Stopień per stanowisko i doświadczeni w obsadzie (13.11.2026)
 

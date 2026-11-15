@@ -15,7 +15,7 @@ def mark_unread(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("availability", "0003_remove_prefer_not"),
+        ("availability", "0004_second_window"),
     ]
 
     operations = [
@@ -34,6 +34,11 @@ class Migration(migrations.Migration):
                 max_length=8,
                 verbose_name="dlaczego bez interpretacji",
             ),
+        ),
+        migrations.AddField(
+            model_name="textrequest",
+            name="assistant_answer",
+            field=models.JSONField(blank=True, null=True, verbose_name="odpowiedź asystenta (nieużyta)"),
         ),
         migrations.RunPython(mark_unread, migrations.RunPython.noop),
     ]

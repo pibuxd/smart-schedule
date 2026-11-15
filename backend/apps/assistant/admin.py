@@ -15,3 +15,4 @@ class AssistantCommandAdmin(admin.ModelAdmin):
     list_display = ("location", "status", "text", "created_at")
     list_filter = ("status", "company")
     raw_id_fields = ("location", "created_by")
+    readonly_fields = ("assistant_answer",)

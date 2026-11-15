@@ -570,3 +570,51 @@ def test_a_refusal_or_cut_off_answer_is_an_error(settings, monkeypatch):
     monkeypatch.setattr(llm, "get_client", lambda: client)
     with pytest.raises(llm.AssistantError):
         llm.plan_command("x", "y")
+
+
+# ----------------------------------------------------------------- list of misses (superadmin)
+
+
+class TestMisses:
+    def test_unusable_answers_and_errors_are_kept_and_exported(self, api, shop, with_key, monkeypatch):
+        import csv
+        import io
+
+        from django.core.management import call_command
+
+        api.login(shop["worker"])
+        unsure = send_request(api, shop, "coś niejasnego").json()["id"]
+        monkeypatch.setattr(llm, "read_request", lambda text, context: reading(confidence=0.2))
+        services.interpret_request(unsure)
+        row = TextRequest.objects.get(pk=unsure)
+        assert row.unread_reason == "unsure" and row.assistant_answer["why"] == "pewność 0.20"
+        assert row.assistant_answer["type"] == "wolne_dni"
+
+        def broken(text, context):
+            raise llm.AssistantError("rate limit")
+
+        failed = send_request(api, shop, "prośba przy błędzie").json()["id"]
+        monkeypatch.setattr(llm, "read_request", broken)
+        services.interpret_request(failed)
+        assert TextRequest.objects.get(pk=failed).assistant_answer == {"error": "rate limit"}
+
+        understood = send_request(api, shop, "Wolałabym nie pracować w piątki.").json()["id"]
+        monkeypatch.setattr(llm, "read_request", lambda text, context: reading())
+        services.interpret_request(understood)
+        assert TextRequest.objects.get(pk=understood).assistant_answer is None
+
+        api.login(shop["manager"])
+        asked = command(api, shop, "zrób coś").json()["id"]
+        monkeypatch.setattr(llm, "plan_command", lambda text, context: plan(question="Co dokładnie?"))
+        services.run_command(asked)
+        assert AssistantCommand.objects.get(pk=asked).assistant_answer["question"] == "Co dokładnie?"
+
+        out = io.StringIO()
+        call_command("assistant_misses", stdout=out)
+        rows = list(csv.DictReader(io.StringIO(out.getvalue())))
+        assert {(r["kind"], r["text"], r["reason"]) for r in rows} == {
+            ("request", "coś niejasnego", "unsure"),
+            ("request", "prośba przy błędzie", "failed"),
+            ("command", "zrób coś", "question"),
+        }
+        assert "pewność 0.20" in next(r for r in rows if r["text"] == "coś niejasnego")["assistant_answer"]

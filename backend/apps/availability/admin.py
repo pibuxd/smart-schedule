@@ -43,8 +43,9 @@ class AvailabilitySubmissionAdmin(CompanyOwnedAdmin):
 
 @admin.register(TextRequest)
 class TextRequestAdmin(CompanyOwnedAdmin):
-    list_display = ("employee", "text", "status", "manager_priority", "manager_rejected", "created_at")
-    list_filter = ("company", "status", "manager_priority")
+    list_display = ("employee", "text", "status", "unread_reason", "manager_priority", "manager_rejected", "created_at")
+    list_filter = ("company", "status", "unread_reason", "manager_priority")
+    readonly_fields = ("assistant_answer",)
     list_select_related = ("company", "employee__membership__user")
     search_fields = ("text", *EMPLOYEE_SEARCH)
     raw_id_fields = ("employee", "period")
