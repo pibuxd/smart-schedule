@@ -12,9 +12,11 @@ import type {
   StaffingExceptionOut,
 } from '../../api/generated/model'
 import {
+  useCreateClosure,
   useCreatePosition,
   useCreateShiftType,
   useCreateStaffingException,
+  useDeleteClosure,
   useDeletePosition,
   useDeleteShiftType,
   useDeleteStaffingException,
@@ -68,6 +70,7 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
         <ShiftTypesSection locationId={locationId} setup={data} />
       </div>
       <StaffingSection key={JSON.stringify(data.staffing)} locationId={locationId} setup={data} />
+      <ClosuresSection locationId={locationId} setup={data} />
       <ExceptionsSection locationId={locationId} setup={data} />
       <ArchiveSection location={info} />
     </div>
@@ -198,7 +201,7 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
   const error = create.error ?? rename.error ?? remove.error
 
   return (
-    <Section title="Stanowiska" description="Np. Sprzedawca, Piekarz, Kierownik zmiany.">
+    <Section title="Stanowiska" description="Np. Sprzedawca, Kelner, Kucharz, Kierownik zmiany.">
       <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
         {setup.positions.length === 0 && <li className="px-4 py-3 text-ink-muted">Nie ma jeszcze stanowisk.</li>}
         {setup.positions.map((p) => (
@@ -610,6 +613,71 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
   )
 }
 
+// --------------------------------------------------------------------------------------------- closed days
+
+function ClosuresSection({ locationId, setup }: { locationId: string; setup: LocationSetupOut }) {
+  const { readOnly } = useManager()
+  const create = useCreateClosure()
+  const remove = useDeleteClosure()
+  const queryClient = useQueryClient()
+  const [date, setDate] = useState('')
+  const [note, setNote] = useState('')
+  const refresh = () => void queryClient.invalidateQueries()
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
+    create.mutate(
+      { locationId, data: { date, note } },
+      {
+        onSuccess: () => {
+          setDate('')
+          setNote('')
+          refresh()
+        },
+      },
+    )
+  }
+
+  return (
+    <Section
+      title="Dni zamknięcia"
+      description="Dni, w które lokal jest zamknięty, np. święta albo remont. Tego dnia nikt nie dostanie zmiany w tym lokalu."
+    >
+      {setup.closures.length > 0 ? (
+        <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
+          {setup.closures.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-1.5 last:border-b-0">
+              <span>
+                <b>{dayTitle(parseDate(c.date))}</b>
+                {c.note && <span className="text-ink-muted"> ({c.note})</span>}
+              </span>
+              <Button variant="quiet" size="normal" disabled={readOnly || remove.isPending} onClick={() => remove.mutate({ closureId: c.id }, { onSuccess: refresh })}>
+                Usuń
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="m-0 text-ink-muted">Lokal nie ma zaplanowanych dni zamknięcia.</p>
+      )}
+      <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-start">
+        <TextField label="Dzień" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <TextField label="Powód (nieobowiązkowo)" className="sm:col-span-2" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="np. Boże Narodzenie" />
+        <div className="grid gap-2 sm:col-span-2 lg:col-span-4">
+          {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
+          {remove.isError && <InlineError>{errorMessage(remove.error, NETWORK_PROBLEM)}</InlineError>}
+          <div>
+            <Button type="submit" variant="secondary" size="normal" disabled={create.isPending || readOnly}>
+              <Plus aria-hidden="true" size={20} />
+              Dodaj dzień zamknięcia
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Section>
+  )
+}
+
 // --------------------------------------------------------------------------------------------- exceptions
 
 function ExceptionsSection({ locationId, setup }: { locationId: string; setup: LocationSetupOut }) {
@@ -675,7 +743,7 @@ function ExceptionsSection({ locationId, setup }: { locationId: string; setup: L
   return (
     <Section
       title="Wyjątki w obsadzie"
-      description="Inna obsada w wybrany dzień, np. w Wigilię albo gdy lokal jest zamknięty (0 osób). Zastępuje zwykłą obsadę tego dnia."
+      description="Inna obsada w wybrany dzień, np. w Wigilię. Zastępuje zwykłą obsadę tego dnia. Gdy lokal jest zamknięty cały dzień, dodaj go wyżej, w dniach zamknięcia."
     >
       {setup.exceptions.length > 0 && (
         <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">

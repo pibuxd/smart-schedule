@@ -136,6 +136,16 @@ def _slot_text(slot: Slot, problem: Problem) -> str:
     return f"{slot.date:%d.%m}{name} {_hm(slot.start, problem)}–{_hm(slot.end, problem)}"
 
 
+def max_hours_tolerance(rule: RuleConfig) -> float:
+    """personal_max_hours: how far above the personal maximum is still fine, as a fraction (10 % -> 0.1)."""
+    return max(0.0, float(rule.params["tolerance_pct"])) / 100
+
+
+def _tolerance_text(rule: RuleConfig) -> str:
+    pct = round(max_hours_tolerance(rule) * 100)
+    return f"o ponad {pct}% " if pct else ""
+
+
 def _hours_text(hours: float) -> str:
     """8 -> "8 h", 10.9833 -> "10 h 59 min" (rounded to the minute)."""
     minutes = round(hours * 60)
@@ -245,11 +255,13 @@ class _Checker:
         for slot in p.slots:
             employee_id = self.assignment.get(slot.id)
             pinned = p.pinned.get(slot.id)
-            if pinned is not None and employee_id != pinned:
+            if slot.id in p.pinned and employee_id != pinned:
                 self.hard.append(
                     Violation(
                         Code.PINNED,
-                        f"Zmiana {_slot_text(slot, p)} jest przypięta do: {self.name(pinned)}.",
+                        f"Zmiana {_slot_text(slot, p)} jest przypięta do: {self.name(pinned)}."
+                        if pinned is not None
+                        else f"Zmiana {_slot_text(slot, p)} jest przypięta jako pusta: ma zostać bez obsady.",
                         employee=pinned,
                         slots=(slot.id,),
                     )
@@ -421,14 +433,15 @@ class _Checker:
             expected = sum(monthly * share for share in shares.values())
             total = sum(hours.values())
             if attr == "max_hours_month":
-                excess = sum(max(0.0, hours.get(m, 0.0) - monthly * share - _EPS) for m, share in shares.items())
+                allowed = monthly * (1 + max_hours_tolerance(rule))
+                excess = sum(max(0.0, hours.get(m, 0.0) - allowed * share - _EPS) for m, share in shares.items())
                 degree = min(1.0, excess / expected) if expected else (1.0 if excess > _EPS else 0.0)
                 if excess > _EPS:
                     found.append(
                         Violation(
                             Code.RULE,
-                            f"{employee.name} ma {_hours_text(total)}, więcej niż swoje maksimum "
-                            f"({_hours_text(expected)} w tym okresie).",
+                            f"{employee.name} ma {_hours_text(total)}, {_tolerance_text(rule)}więcej niż swoje "
+                            f"maksimum ({_hours_text(expected)} w tym okresie).",
                             employee=employee.id,
                         )
                     )

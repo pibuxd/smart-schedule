@@ -15,7 +15,8 @@ import { AlertTriangle, CalendarPlus, Hand, Pin, Send, SquarePen } from 'lucide-
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
-import type { CheckOut, PeriodOut, ScoresOut, VersionOut, VersionShiftOut } from '../../api/generated/model'
+import { useLocationInstructions } from '../../api/generated/assistant/assistant'
+import type { CheckOut, InstructionsOut, PeriodOut, ScoresOut, VersionOut, VersionShiftOut } from '../../api/generated/model'
 import {
   useChangeAssignments,
   useCheckScheduleChanges,
@@ -37,6 +38,7 @@ import { useManager } from './ManagerContext'
 import { pickPeriod } from './periods'
 import { buildGrid, percent, swapChanges } from './schedule-grid'
 import { ShiftSheet } from './ShiftSheet'
+import { verdict } from './verdict'
 import { daysUntil, PERIOD_STATUS, periodTitle, shifts as shiftsWord } from './words'
 
 const VERSION_STATUS: Record<VersionOut['status'], string> = {
@@ -176,6 +178,7 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
   return (
     <div className="grid gap-6">
       <VersionHeader data={data} onShowVersion={onShowVersion} />
+      <p className="m-0 text-lg font-semibold">{verdict(data)}</p>
       <Scores scores={data.scores} />
       {data.hard_problems.length > 0 && (
         <div role="alert" className="grid gap-1 rounded-md border border-cannot bg-cannot-soft p-3 text-cannot">
@@ -567,7 +570,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
           )}
         </DragOverlay>
       </DndContext>
-      <ShiftSheet versionId={data.id} shift={open} editable={editable} onClose={() => setOpen(null)} />
+      <ShiftSheet versionId={data.id} locationId={data.location_id} shift={open} editable={editable} onClose={() => setOpen(null)} />
     </section>
   )
 }
@@ -741,6 +744,8 @@ function RulesList({ data }: { data: VersionOut }) {
 }
 
 function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: string }) {
+  const instructions = useLocationInstructions(locationId)
+  const assistantOn = (instructions.data?.data as InstructionsOut | undefined)?.assistant_enabled ?? false
   const orders = data.unmet_requests.filter((r) => r.kind === 'instruction')
   const scored = data.unmet_requests.filter((r) => r.kind !== 'unscored' && r.kind !== 'instruction')
   const yours = data.unmet_requests.filter((r) => r.kind === 'unscored')
@@ -749,7 +754,7 @@ function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: str
       <p className="m-0 rounded-sm border border-line bg-surface px-3 py-2">
         Chcesz coś zmienić w tym, jak układa się grafik?{' '}
         <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
-          Napisz polecenie asystentowi
+          {assistantOn ? 'Napisz polecenie asystentowi' : 'Zmień zasady lokalu'}
         </Link>
         , a potem ułóż grafik od nowa.
       </p>

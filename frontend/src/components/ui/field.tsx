@@ -30,19 +30,26 @@ export function TextField({
 
 export function SelectField({
   label,
+  hint,
   children,
   className,
   ...props
-}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; children: ReactNode }) {
+}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; hint?: ReactNode; children: ReactNode }) {
   const id = useId()
+  const hintId = useId()
   return (
     <div className={cn('grid content-start gap-1', className)}>
       <label htmlFor={id} className="text-sm font-semibold">
         {label}
       </label>
-      <select id={id} className={inputClass} {...props}>
+      <select id={id} className={inputClass} aria-describedby={hint ? hintId : undefined} {...props}>
         {children}
       </select>
+      {hint && (
+        <p id={hintId} className="m-0 text-sm text-ink-muted">
+          {hint}
+        </p>
+      )}
     </div>
   )
 }

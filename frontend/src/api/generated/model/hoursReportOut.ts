@@ -12,4 +12,5 @@ export interface HoursReportOut {
   locations: LocationColumnOut[];
   rows: EmployeeHoursOut[];
   total: number;
+  latest_month: string | null;
 }

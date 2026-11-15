@@ -24,6 +24,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ClosureIn,
+  ClosureOut,
   EmployeeIn,
   EmployeeOut,
   ErrorOut,
@@ -1273,6 +1275,235 @@ export const useDeleteStaffingException = <TError = ErrorOut,
       > => {
       return useMutation(getDeleteStaffingExceptionMutationOptions(options), queryClient);
     }
+    export type createClosureResponse201 = {
+  data: ClosureOut
+  status: 201
+}
+
+export type createClosureResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type createClosureResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type createClosureResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type createClosureResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type createClosureResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type createClosureResponseSuccess = (createClosureResponse201) & {
+  headers: Headers;
+};
+export type createClosureResponseError = (createClosureResponse400 | createClosureResponse402 | createClosureResponse403 | createClosureResponse404 | createClosureResponse409) & {
+  headers: Headers;
+};
+
+export type createClosureResponse = (createClosureResponseSuccess | createClosureResponseError)
+
+export const getCreateClosureUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/closures`
+}
+
+/**
+ * A day the location is closed: the generator schedules nobody there that day.
+ * @summary Create Closure
+ */
+export const createClosure = async (locationId: string,
+    closureIn: ClosureIn, options?: Parameters<typeof apiFetch>[1]): Promise<createClosureResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<createClosureResponse>(getCreateClosureUrl(locationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(closureIn)
+  }
+);}
+
+
+
+
+
+export const getCreateClosureMutationKey = () => ['createClosure'] as const;
+
+export const getCreateClosureMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createClosure>>, TError,CreateClosureMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createClosure>>, TError,CreateClosureMutationVariables, TContext> => {
+
+const mutationKey = getCreateClosureMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createClosure>>, CreateClosureMutationVariables> = (props) => {
+          const {locationId,data} = props ?? {};
+
+          return  createClosure(locationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateClosureMutationResult = NonNullable<Awaited<ReturnType<typeof createClosure>>>
+    export type CreateClosureMutationBody = ClosureIn
+    export type CreateClosureMutationError = ErrorOut
+    export type CreateClosureMutationVariables = {locationId: string;data: ClosureIn}
+
+    /**
+ * A day the location is closed: the generator schedules nobody there that day.
+ * @summary Create Closure
+ */
+export const useCreateClosure = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createClosure>>, TError,CreateClosureMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createClosure>>,
+        TError,
+        CreateClosureMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateClosureMutationOptions(options), queryClient);
+    }
+    export type deleteClosureResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteClosureResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type deleteClosureResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type deleteClosureResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type deleteClosureResponseSuccess = (deleteClosureResponse204) & {
+  headers: Headers;
+};
+export type deleteClosureResponseError = (deleteClosureResponse402 | deleteClosureResponse403 | deleteClosureResponse404) & {
+  headers: Headers;
+};
+
+export type deleteClosureResponse = (deleteClosureResponseSuccess | deleteClosureResponseError)
+
+export const getDeleteClosureUrl = (closureId: string,) => {
+
+
+
+
+  return `/api/closures/${closureId}`
+}
+
+/**
+ * @summary Delete Closure
+ */
+export const deleteClosure = async (closureId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deleteClosureResponse> => {
+
+  return apiFetch<deleteClosureResponse>(getDeleteClosureUrl(closureId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteClosureMutationKey = () => ['deleteClosure'] as const;
+
+export const getDeleteClosureMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClosure>>, TError,DeleteClosureMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteClosure>>, TError,DeleteClosureMutationVariables, TContext> => {
+
+const mutationKey = getDeleteClosureMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteClosure>>, DeleteClosureMutationVariables> = (props) => {
+          const {closureId} = props ?? {};
+
+          return  deleteClosure(closureId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteClosureMutationResult = NonNullable<Awaited<ReturnType<typeof deleteClosure>>>
+
+    export type DeleteClosureMutationError = ErrorOut
+    export type DeleteClosureMutationVariables = {closureId: string}
+
+    /** @summary Delete Closure */
+export const useDeleteClosure = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClosure>>, TError,DeleteClosureMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteClosure>>,
+        TError,
+        DeleteClosureMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteClosureMutationOptions(options), queryClient);
+    }
     export type locationEmployeesResponse200 = {
   data: EmployeeOut[]
   status: 200
@@ -1564,7 +1795,8 @@ export const getUpdateEmployeeUrl = (employeeId: string,) => {
 }
 
 /**
- * Positions, experience level, monthly maximum and target, or switching the person off (history stays).
+ * Name, positions, experience level, monthly maximum and target, or switching the person off
+ * (history stays).
  * @summary Update Employee
  */
 export const updateEmployee = async (employeeId: string,
@@ -1632,7 +1864,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateEmployeeMutationVariables = {employeeId: string;data: EmployeeIn}
 
     /**
- * Positions, experience level, monthly maximum and target, or switching the person off (history stays).
+ * Name, positions, experience level, monthly maximum and target, or switching the person off
+ * (history stays).
  * @summary Update Employee
  */
 export const useUpdateEmployee = <TError = ErrorOut,

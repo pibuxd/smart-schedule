@@ -42,6 +42,7 @@ const PARAM_LABEL: Record<string, string> = {
   shifts: 'Zmian w tygodniu najwyżej',
   max_hours: 'Godzin w ciągu dnia najwyżej',
   rest_hours: 'Godzin wolnego bez przerwy co najmniej',
+  tolerance_pct: 'Zapas ponad maksimum, w procentach',
   count: 'Ile osób co najmniej',
   position: 'Stanowisko',
   shift_type: 'Zmiana',
@@ -400,7 +401,7 @@ function ParamInput({
         id={id}
         type="number"
         inputMode="numeric"
-        min={1}
+        min={name === 'tolerance_pct' ? 0 : 1}
         className={cn(inputClass, 'w-24 tabular-nums')}
         value={typeof value === 'number' ? value : ''}
         disabled={disabled}

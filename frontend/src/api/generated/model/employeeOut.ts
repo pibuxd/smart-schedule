@@ -19,4 +19,5 @@ export interface EmployeeOut {
   target_hours_month: number | null;
   is_active: boolean;
   is_manager: boolean;
+  draft_shifts?: number;
 }

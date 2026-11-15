@@ -32,6 +32,7 @@ from apps.rules.services import merge, rule_configs
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.models import (
     EmployeeProfile,
+    LocationClosure,
     Position,
     PositionExperience,
     ShiftType,
@@ -160,7 +161,12 @@ class _Reader:
                 frozen_days = {day for day in _days(self.start, self.end) if day < self.today}
                 by_day = self._published_slots(published)
                 slots += [slot for day in sorted(frozen_days) for slot in by_day.get(day, [])]
-            slots += self._staffing_slots(period.location, frozen_days)
+            closed = set(
+                self.qs(LocationClosure)
+                .filter(location=period.location, date__range=(self.start, self.end))
+                .values_list("date", flat=True)
+            )
+            slots += self._staffing_slots(period.location, frozen_days | closed)
         return slots
 
     def _published_slots(self, version: ScheduleVersion) -> dict[date, list[Slot]]:
@@ -260,7 +266,7 @@ class _Reader:
             return {}
         rows = self.qs(Assignment).filter(shift__version=version, shift__slot_key__in=keys)
         if pinned_only:
-            rows = rows.filter(pinned=True, employee__isnull=False)
+            rows = rows.filter(pinned=True)  # a pinned hole stays empty
         return {
             key: str(employee) if employee else None
             for key, employee in rows.values_list("shift__slot_key", "employee")
@@ -465,11 +471,11 @@ class _Reader:
         slots = self.slots()
         keys = {s.id for s in slots}
         published: dict[str, str | None] = {}
-        pinned: dict[str, str] = {}
+        pinned: dict[str, str | None] = {}
         for period in self.periods:
             published.update(self.assignments(self.published.get(period.id), keys))
             pinned.update(self.assignments(self.latest.get(period.id), keys, pinned_only=True))
-        referenced = {e for e in published.values() if e} | set(pinned.values())
+        referenced = {e for e in (*published.values(), *pinned.values()) if e}
         employees = self.employees(referenced)
         employee_ids = [e.id for e in employees]
         problem = Problem(

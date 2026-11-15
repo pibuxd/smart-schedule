@@ -318,8 +318,8 @@ class Problem:
     requests: tuple[Request, ...] = ()
     weights: WeightProfile = field(default_factory=WeightProfile)
     timezone: str = DEFAULT_TIMEZONE
-    # slot id -> employee id that the manager pinned there.
-    pinned: Mapping[str, str] = field(default_factory=dict)
+    # slot id -> employee id that the manager pinned there, or None for a slot the manager keeps empty on purpose.
+    pinned: Mapping[str, str | None] = field(default_factory=dict)
     # The published schedule being replaced (slot id -> employee id or None for a hole), for stability and freezing.
     published: Mapping[str, str | None] = field(default_factory=dict)
     # Slots dated before this day keep their published assignment (days that have passed).
@@ -361,7 +361,7 @@ class Problem:
         if len({(r.location, r.code) for r in self.rules}) != len(self.rules):
             raise ProblemError("A rule is configured twice for one location")
         for slot_id, employee_id in self.pinned.items():
-            if slot_id not in self.slot_by_id or employee_id not in known:
+            if slot_id not in self.slot_by_id or (employee_id is not None and employee_id not in known):
                 raise ProblemError(f"Pin on {slot_id} refers to an unknown slot or employee")
 
     @cached_property

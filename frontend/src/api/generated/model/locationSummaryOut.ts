@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LocationSummaryOutSchedulePeriod } from './locationSummaryOutSchedulePeriod';
+import type { LocationSummaryOutSetupMissingItem } from './locationSummaryOutSetupMissingItem';
 import type { PeriodSummaryOut } from './periodSummaryOut';
 
 export interface LocationSummaryOut {
@@ -18,5 +19,6 @@ export interface LocationSummaryOut {
   archived: boolean;
   employees: number;
   pending_invitations: number;
+  setup_missing: LocationSummaryOutSetupMissingItem[];
   period: PeriodSummaryOut | null;
 }
