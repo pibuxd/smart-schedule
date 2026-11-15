@@ -7,6 +7,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
@@ -194,6 +195,7 @@ def create_period(request, location_id: UUID, payload: PeriodIn):
     ctx.require_writable()
     if payload.end < payload.start:
         raise HttpError(400, "Koniec okresu nie może być przed jego początkiem.")
+    _check_period_dates(payload.start, payload.end)
     if payload.end - payload.start >= timedelta(days=MAX_PERIOD_DAYS):
         raise HttpError(400, f"Okres grafiku może mieć najwyżej {MAX_PERIOD_DAYS} dni.")
     if payload.availability_deadline is not None:
@@ -213,9 +215,25 @@ def create_period(request, location_id: UUID, payload: PeriodIn):
     return Status(201, _period_out(period))
 
 
+# Periods are planned around today: a typo like year 0001 or 9999 would break date arithmetic everywhere.
+PERIOD_PAST_DAYS = 366
+PERIOD_FUTURE_DAYS = 2 * 366
+DEADLINE_BEFORE_START_DAYS = 120
+
+
+def _check_period_dates(start: date, end: date) -> None:
+    today = timezone.localdate()
+    if start < today - timedelta(days=PERIOD_PAST_DAYS):
+        raise HttpError(400, "Okres grafiku może zaczynać się najwcześniej rok temu. Sprawdź rok.")
+    if end > today + timedelta(days=PERIOD_FUTURE_DAYS):
+        raise HttpError(400, "Okres grafiku może kończyć się najpóźniej za dwa lata. Sprawdź rok.")
+
+
 def _check_deadline(deadline: date, start: date) -> None:
     if deadline > start:
         raise HttpError(400, "Termin dyspozycji musi być najpóźniej w pierwszym dniu okresu.")
+    if deadline < start - timedelta(days=DEADLINE_BEFORE_START_DAYS):
+        raise HttpError(400, "Termin dyspozycji może być najwcześniej 120 dni przed początkiem okresu. Sprawdź rok.")
 
 
 @router.patch(
@@ -343,6 +361,8 @@ class MonthHoursOut(Schema):
 class MyScheduleOut(Schema):
     home_location_name: str
     shifts: list[MyShiftOut]
+    # Last day covered by a published schedule of my location (days off up to it are shown too); None = none.
+    published_until: date | None = None
     # Hours of published shifts in each month that the list touches (and the current month).
     months: list[MonthHoursOut]
 
@@ -426,9 +446,22 @@ def my_schedule(request, company_id: UUID):
         key = assignment.shift.date.strftime("%Y-%m")
         if key in totals:
             totals[key] += _hours(assignment.shift)
+    published_until = (
+        ctx.qs(SchedulePeriod)
+        .filter(
+            location_id=profile.home_location_id,
+            versions__status=ScheduleVersion.Status.PUBLISHED,
+            end__gte=today,
+            start__lte=today + timedelta(days=MY_SCHEDULE_DAYS),
+        )
+        .aggregate(until=Max("end"))["until"]
+    )
+    if published_until:
+        published_until = min(published_until, today + timedelta(days=MY_SCHEDULE_DAYS))
     return MyScheduleOut(
         home_location_name=profile.home_location.name,
         shifts=shifts,
+        published_until=published_until,
         months=[MonthHoursOut(month=m, hours=round(h, 2)) for m, h in totals.items()],
     )
 

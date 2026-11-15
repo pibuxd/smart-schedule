@@ -183,10 +183,19 @@ def set_pinned(version: ScheduleVersion, shift_id: str, pinned: bool) -> Assignm
 # ----------------------------------------------------------------------------------------------- drafts, publishing
 
 
+def lock_period(version: ScheduleVersion) -> None:
+    """Lock the company row, then the period. Generation also locks the company first, so publishing while a
+    schedule is being queued waits instead of deadlocking (same lock order everywhere)."""
+    from apps.tenancy.models import Company
+
+    Company.objects.select_for_update().filter(pk=version.company_id).first()
+    SchedulePeriod.objects.select_for_update().filter(pk=version.period_id).first()
+
+
 def start_draft(version: ScheduleVersion, user) -> ScheduleVersion:
     """A new draft copy of `version` to correct (the newest draft itself when there already is one)."""
     with transaction.atomic():
-        SchedulePeriod.objects.select_for_update().filter(pk=version.period_id).first()
+        lock_period(version)
         newest = latest_version(version.period)
         if newest is not None and newest.status == ScheduleVersion.Status.DRAFT:
             return newest
@@ -240,7 +249,7 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
     """Make the draft the published schedule of its period. Holes are allowed (the screen warns); hard problems
     are not. The previous published version and older drafts become history."""
     with transaction.atomic():
-        SchedulePeriod.objects.select_for_update().filter(pk=version.period_id).first()
+        lock_period(version)
         version = ScheduleVersion.objects.select_related("period__location").get(pk=version.pk)
         if not is_editable(version):
             raise HttpError(409, "Opublikować można tylko najnowszy szkic grafiku.")

@@ -7599,6 +7599,18 @@
             "title": "Shifts",
             "type": "array"
           },
+          "published_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Until"
+          },
           "months": {
             "items": {
               "$ref": "#/components/schemas/MonthHoursOut"

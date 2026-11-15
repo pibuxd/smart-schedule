@@ -1,3 +1,4 @@
+from django.conf import settings
 from ninja import NinjaAPI
 from ninja.errors import AuthenticationError
 from ninja.security import django_auth
@@ -23,7 +24,15 @@ class GrafikomatAPI(NinjaAPI):
 
 
 # Every endpoint needs a logged-in session (with a CSRF check on unsafe methods) unless it says `auth=None`.
-api = GrafikomatAPI(title="Grafikomat API", version="0.1.0", urls_namespace="api", auth=django_auth)
+# The interactive docs and the schema are served only in development; the frontend reads the committed openapi.json.
+api = GrafikomatAPI(
+    title="Grafikomat API",
+    version="0.1.0",
+    urls_namespace="api",
+    auth=django_auth,
+    docs_url="/docs" if settings.DEBUG else None,
+    openapi_url="/openapi.json" if settings.DEBUG else None,
+)
 api.add_router("/", core_router)
 api.add_router("/", accounts_router)
 api.add_router("/", tenancy_router)

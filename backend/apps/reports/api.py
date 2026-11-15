@@ -124,6 +124,14 @@ def hours_report(request, company_id: UUID, month: str):
     return _report(request, company_id, month)
 
 
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _text(value: str) -> str:
+    """A name a spreadsheet must show as text: a leading = + - @ would make Excel run it as a formula."""
+    return "'" + value if value.startswith(FORMULA_START) else value
+
+
 def _number(value: float) -> str:
     return f"{value:.2f}".replace(".", ",")
 
@@ -134,13 +142,15 @@ def hours_report_csv(request, company_id: UUID, month: str):
     report = _report(request, company_id, month)
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(["Osoba", "Lokal domowy", "Zmiany", *[loc.name for loc in report.locations], "Razem", "Uwagi"])
+    writer.writerow(
+        ["Osoba", "Lokal domowy", "Zmiany", *[_text(loc.name) for loc in report.locations], "Razem", "Uwagi"]
+    )
     for row in report.rows:
         by_location = {h.location_id: h.hours for h in row.by_location}
         writer.writerow(
             [
-                row.name,
-                row.home_location_name,
+                _text(row.name),
+                _text(row.home_location_name),
                 row.shifts,
                 *[_number(by_location.get(loc.id, 0.0)) for loc in report.locations],
                 _number(row.total),

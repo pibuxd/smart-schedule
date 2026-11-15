@@ -29,6 +29,10 @@ Purpose = Literal["login", "register"]
 
 UNKNOWN_PHONE = "Nie znamy tego numeru. Poproś kierownika o zaproszenie albo załóż firmę, jeśli sam układasz grafik."
 TOO_MANY_CODES = "Za dużo kodów w krótkim czasie. Spróbuj ponownie za godzinę."
+TOO_MANY_REGISTRATIONS = (
+    "Z tej sieci w ostatniej godzinie zakładano już kilka nowych kont. "
+    "Spróbuj za godzinę albo z innej sieci, na przykład z internetu w telefonie."
+)
 BAD_CODE = "Ten kod jest nieprawidłowy."
 NO_ACTIVE_CODE = "Kod wygasł. Poproś o nowy."
 TOO_MANY_ATTEMPTS = "Za dużo błędnych prób. Poproś o nowy kod."
@@ -81,6 +85,8 @@ def request_login_code(raw_phone: str, purpose: Purpose, ip: str | None) -> Issu
         # The IP limit is checked before we say whether a number is known, and refused numbers count
         # against it too, so the answer cannot be used to test a long list of numbers.
         allowed = may_receive_code(phone, purpose)
+        if allowed and ip and _is_new_number(phone):
+            _check_new_numbers_limit(ip, hour_ago)
         if allowed:
             _issue_code(phone, ip, now)
         elif ip:
@@ -97,6 +103,30 @@ def request_login_code(raw_phone: str, purpose: Purpose, ip: str | None) -> Issu
         # Raised after the block, so the row above is kept.
         raise HttpError(404, UNKNOWN_PHONE)
     return IssuedCode(phone, settings.LOGIN_CODE_TTL_S, settings.LOGIN_CODE_RESEND_AFTER_S)
+
+
+def _is_new_number(phone: str) -> bool:
+    """A number with no account and no invitation: only "register a company" sends codes to it."""
+    return (
+        not User.objects.filter(phone_e164=phone).exists()
+        and not Invitation.objects.filter(phone_e164=phone, status=InvitationStatus.PENDING).exists()
+    )
+
+
+def _check_new_numbers_limit(ip: str, hour_ago) -> None:
+    """Registering sends an SMS to any +48 number, so one address may do it only a few times an hour
+    (protects the SMS budget and strangers' phones). Numbers that became accounts no longer count."""
+    recent = (
+        LoginCode.objects.filter(ip=ip, created_at__gt=hour_ago)
+        .exclude(code_hash="")
+        .exclude(phone_e164__in=User.objects.values("phone_e164"))
+        .exclude(phone_e164__in=Invitation.objects.filter(status=InvitationStatus.PENDING).values("phone_e164"))
+        .values("phone_e164")
+        .distinct()
+        .count()
+    )
+    if recent >= settings.REGISTER_NUMBERS_PER_IP_PER_HOUR:
+        raise HttpError(429, TOO_MANY_REGISTRATIONS)
 
 
 def _issue_code(phone: str, ip: str | None, now) -> None:

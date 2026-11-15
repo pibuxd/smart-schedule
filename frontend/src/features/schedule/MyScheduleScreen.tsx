@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
 import {
+  dayTitle,
   hoursText,
   inMonth,
   monthGenitive,
@@ -61,7 +62,15 @@ export function MyScheduleScreen({
           </p>
         </EmptyState>
       )}
-      {next && rest.length > 0 && <UpcomingList first={next} shifts={rest} onGive={give} />}
+      {next && (rest.length > 0 || (data.published_until ?? next.date) > next.date) && (
+        <UpcomingList first={next} shifts={rest} publishedUntil={data.published_until} onGive={give} />
+      )}
+      {data.published_until && (
+        <p className="m-0 text-ink-muted">
+          Grafik jest opublikowany do {dayTitle(parseDate(data.published_until))}. Dalsze dni pokażemy, gdy kierownik
+          opublikuje kolejny grafik.
+        </p>
+      )}
       <div className="grid gap-2">
         {data.months.map((month) => (
           <div
@@ -167,13 +176,15 @@ function DateCell({ date }: { date: Date }) {
 function UpcomingList({
   first,
   shifts,
+  publishedUntil,
   onGive,
 }: {
   first: MyShiftOut
   shifts: MyShiftOut[]
+  publishedUntil?: string | null
   onGive?: (shift: MyShiftOut) => void
 }) {
-  const rows = buildRows(first, shifts)
+  const rows = buildRows(first, shifts, publishedUntil)
   return (
     <section aria-labelledby="upcoming" className="grid gap-3">
       <h2 id="upcoming" className="m-0 text-lg font-extrabold">
@@ -193,7 +204,10 @@ function UpcomingList({
           ) : (
             <li
               key={row.key}
-              className="grid grid-cols-[52px_1fr_auto] items-center gap-3 border-t border-grid px-4 py-3 first:border-t-0"
+              className={
+                'grid items-center gap-x-3 gap-y-2 border-t border-grid px-4 py-3 first:border-t-0 ' +
+                (row.shift.offer_status ? 'grid-cols-[52px_1fr]' : 'grid-cols-[52px_1fr_auto]')
+              }
             >
               {row.showDate ? <DateCell date={parseDate(row.shift.date)} /> : <span />}
               <div className="min-w-0">
@@ -206,7 +220,13 @@ function UpcomingList({
                   {row.shift.coworkers.length > 0 && `. Z Tobą: ${coworkersText(row.shift.coworkers, 2)}`}
                 </div>
               </div>
-              <GiveButton shift={row.shift} onGive={onGive} />
+              {row.shift.offer_status ? (
+                <div className="col-start-2">
+                  <GiveButton shift={row.shift} onGive={onGive} />
+                </div>
+              ) : (
+                <GiveButton shift={row.shift} onGive={onGive} />
+              )}
             </li>
           ),
         )}

@@ -23,6 +23,16 @@ function readCookie(name: string): string | undefined {
     ?.split('=')[1]
 }
 
+/** JSON from the API; anything else (an HTML error page, a proxy's "Bad Gateway") is kept out of the body. */
+function parseBody(text: string): unknown {
+  if (!text) return undefined
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
+}
+
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export async function apiFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -35,7 +45,7 @@ export async function apiFetch<T>(url: string, options: RequestInit = {}): Promi
 
   const response = await fetch(url, { ...options, headers, credentials: 'same-origin' })
   const text = await response.text()
-  const body: unknown = text ? JSON.parse(text) : undefined
+  const body = parseBody(text)
 
   if (!response.ok) {
     throw new ApiError(response.status, body)

@@ -31,9 +31,7 @@ function EmployeeLayout() {
   if (session.state === 'error') {
     return (
       <main className="mx-auto max-w-(--column) px-4 py-10">
-        <ErrorState onRetry={session.retry}>
-          Nie udało się połączyć z serwerem. Sprawdź internet i spróbuj jeszcze raz.
-        </ErrorState>
+        <ErrorState onRetry={session.retry}>{session.message}</ErrorState>
       </main>
     )
   }

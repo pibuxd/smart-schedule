@@ -13,8 +13,7 @@ from apps.accounts.login import parse_phone
 from apps.billing.models import Subscription
 from apps.billing.services import (
     CodeRejected,
-    check_code_attempt_limit,
-    record_code_attempt,
+    code_attempt,
     redeem_code,
     start_trial,
 )
@@ -113,13 +112,10 @@ def create_company(request, payload: CompanyIn):
     if not name:
         raise HttpError(400, "Podaj nazwę firmy.")
     code = payload.code.strip()
-    ip = client_ip(request)
-    if code:
-        check_code_attempt_limit(user, ip)
 
     subscription = None
     try:
-        with transaction.atomic():
+        with code_attempt(user, client_ip(request)) if code else transaction.atomic():
             company = Company.objects.create(name=name, created_by=user)  # tenant-ok: a new company
             Membership.objects.create(company=company, user=user, role=Role.OWNER)  # tenant-ok: its first member
             subscription = redeem_code(company, user, code) if code else start_trial(company, user)
@@ -133,10 +129,7 @@ def create_company(request, payload: CompanyIn):
             if changed:
                 user.save(update_fields=changed)
     except CodeRejected as exc:
-        record_code_attempt(user, ip, success=False)
         raise HttpError(400, str(exc)) from exc
-    if code:
-        record_code_attempt(user, ip, success=True)
 
     out = CompanyOut(
         id=company.id,

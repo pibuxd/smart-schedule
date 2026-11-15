@@ -396,6 +396,20 @@ class TestAvailabilityOverview:
         )
         assert response.status_code == 201 and response.json()["deadline"] == str(start - timedelta(days=3))
 
+    @pytest.mark.parametrize(
+        ("start", "end"), [("0001-01-02", "0001-01-03"), ("9999-12-30", "9999-12-31"), ("2010-01-01", "2010-01-07")]
+    )
+    def test_period_dates_far_from_today_are_refused(self, api, shop, start, end):
+        url = f"/api/locations/{shop['location'].pk}/periods"
+        response = as_manager(api, shop).post(url, {"start": start, "end": end})
+        assert response.status_code == 400 and "Sprawdź rok" in response.json()["detail"]
+        assert api.get(url).status_code == 200
+
+    def test_deadline_far_before_the_period_is_refused(self, api, shop):
+        period = shop["period"]
+        response = as_manager(api, shop).patch(f"/api/periods/{period.pk}", {"availability_deadline": "0001-01-01"})
+        assert response.status_code == 400
+
     def test_ask_for_availability_notifies_everyone_or_only_missing(self, api, shop):
         ewa = User.objects.create_user(next_phone(), first_name="Ewa")
         EmployeeProfile.objects.create(

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError, RestrictedError
+from django.utils import timezone
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
@@ -399,6 +400,8 @@ def create_staffing_exception(request, location_id: UUID, payload: StaffingExcep
     _check_hours(payload.start_time, payload.end_time, False, f"Zmiana „{st.name}”")
     if payload.experienced > payload.count:
         raise HttpError(400, TOO_MANY_EXPERIENCED)
+    if abs((payload.date - timezone.localdate()).days) > 2 * 366:
+        raise HttpError(400, "Wyjątek może dotyczyć dnia najwyżej dwa lata od dziś. Sprawdź rok.")
     exc = StaffingException(
         company=ctx.company,
         location=location,

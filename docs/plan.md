@@ -528,3 +528,23 @@ Decyzja Piotra po przeglądzie konkurencji (raport: https://claude.ai/artifact/P
 7. Ekrany: w arkuszu pracownika z co najmniej dwoma stanowiskami "Inny stopień na którymś stanowisku"; w obsadzie pole "w tym doświadczonych" przy komórce i przy wyjątku.
 8. Poza zakresem: opiekun dla nowej osoby (etap 10, polecenie do asystenta), podpowiedź awansu z godzin, etykiety uprawnień z datą ważności.
 9. Ostrzeżenie przed układaniem (decyzja Piotra z 15.11.2026): `apps/staffing/shortage.py` liczy dla okresu, na których stanowiskach największy wymóg "w tym doświadczonych" na jednej zmianie (zwykła obsada dni tygodnia z okresu i wyjątki na daty) przekracza liczbę aktywnych osób lokalu z tym stanowiskiem i stopniem "doświadczony" na nim. Wynik jest w `PeriodOut.experienced_short` i `PeriodSummaryOut.experienced_short` (stanowisko, ile potrzeba, ile jest, pierwszy dzień i zmiana z tym wymogiem). Arkusz "Ułóż grafik" pokazuje to jako ostrzeżenie i nie blokuje układania. Założenia: liczymy tylko pewny brak (jedna zmiana, bez sumowania zmian jednego dnia, bez dyspozycji i urlopów), więc brak ostrzeżenia nie gwarantuje pełnej obsady; osoby z innych lokali nie są wliczane, bo generator sam ich nie pożycza.
+
+## 22. Poprawki po audycie świeżym okiem (15.11.2026)
+
+Trzech testerów bez znajomości wymagań (pracownik na telefonie, kierownik kilku lokali, tester błędów i bezpieczeństwa)
+zgłosiło 32 uwagi; Piotr zatwierdził wszystkie. Raport: `/mnt/project-files/audyt/audyt-swiezym-okiem.md`.
+Poprawki w trzech PR-ach. Pierwszy (błędy i bezpieczeństwo) przyjmuje te założenia:
+
+- „Mój grafik” pokazuje dni do końca opublikowanego okresu lokalu domowego (`published_until`), więc wolny ostatni dzień
+  też widać.
+- Okres grafiku zaczyna się najwcześniej rok temu i kończy najpóźniej za dwa lata; termin dyspozycji najwyżej 120 dni
+  przed początkiem; wyjątek w obsadzie najwyżej dwa lata od dziś. Chroni przed literówką w roku (0001, 9999), która psuła
+  obliczenia dat.
+- Błąd serwera (odpowiedź bez `detail`, 5xx) nie każe sprawdzać internetu; 401 w trakcie pracy przenosi do logowania.
+- Ekran kodu SMS przetrwa odświeżenie strony (numer i czasy w `sessionStorage` karty, do wygaśnięcia kodu).
+- Publikacja blokuje najpierw firmę, potem okres, jak układanie grafiku (bez zakleszczeń).
+- CSV godzin: nazwy zaczynające się od `= + - @` dostają apostrof (Excel nie wykona formuły).
+- Kody dostępu: sprawdzenie limitu i zapis próby pod blokadą per osoba i per IP (równoległe próby nie omijają limitu).
+- Rejestracja: jeden adres IP może w godzinę wysłać kody najwyżej na 5 nowych numerów (`REGISTER_NUMBERS_PER_IP_PER_HOUR`); komunikat podpowiada inną sieć (wspólne wifi).
+- `/api/docs` i `/api/openapi.json` tylko przy `DJANGO_DEBUG=1`; logowanie do admina: najwyżej 10 nieudanych prób na adres
+  na godzinę (`ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR`, licznik w pamięci procesu).
