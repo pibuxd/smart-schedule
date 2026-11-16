@@ -622,3 +622,24 @@ Czwarty PR (prośba Piotra z 15.11.2026: dyspozycja w dwóch przedziałach dnia 
   i jak często „albo” zostawia zmiany bez obsady.
 - Dzień zamknięcia mówi też, gdy opublikowany grafik ma kogoś w ten dzień (`ClosureOut.in_published`), i przypomina,
   że ułożenie od nowa zostawia tylko przypięte zmiany.
+
+## 23. Przejęcie oddanej zmiany bez zatwierdzania (15.11.2026)
+
+Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi oddaną zmianę, bez kierownika.
+
+- Ustawienie `Location.handover_without_approval` (domyślnie wyłączone), zmieniane przez `PATCH /api/locations/{id}`;
+  przełącznik "Przejęcie oddanej zmiany bez zatwierdzania" na dole ekranu "Zasady" lokalu, zapisywany od razu.
+  To nie jest zasada z `engine/rules_catalog.py`: katalog opisuje ocenę grafiku przez walidator i solver, a to
+  ustawienie zmienia tylko tok oddawania zmian. Dlatego nie ma go w grupie lokali (każdy lokal osobno) ani w podglądzie
+  "Co się zmieni?".
+- Przy włączonym ustawieniu `claim_offer` sprawdza osobę tak samo jak dotąd (walidator, bez nowych twardych problemów)
+  i od razu wykonuje to samo co zatwierdzenie (`_hand_over`): przeniesienie w opublikowanym grafiku i w najnowszym
+  szkicu, przypięcie, `AssignmentEvent` z powodem "oddana zmiana", gdzie "kto" to sam biorący, nowe wyniki grafiku.
+  `ShiftClaim.auto_approved` zaznacza takie przejęcie (na liście "Oddane zmiany": "Wzięta bez zatwierdzania").
+- Powiadomienia: biorący `claim_taken`, oddający `offer_taken_auto`, kierownicy lokalu `handover_done`, kierownicy
+  lokalu domowego osoby z innego lokalu `borrowed` (z dopiskiem, że bez zatwierdzania).
+- Założenie: jeśli ktoś czekał już na decyzję kierownika, zanim ustawienie włączono, kolejne "Weź zmianę" przy tym
+  oddaniu też czeka na kierownika (pierwszy chętny nie traci miejsca). Nowe oddania działają już bez zatwierdzania.
+- Teksty dla pracownika zależą od ustawienia lokalu zmiany (`at_once`, `handover_at_once`): "Pierwsza osoba, która ją
+  weźmie, dostaje ją od razu", "Tak, biorę", "Zmiana jest Twoja".
+

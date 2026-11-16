@@ -92,6 +92,34 @@ describe('MyScheduleScreen', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/offers/o1/claim')).toBe(true))
   })
 
+  it('takes a shift at once when the location hands shifts over without approval', async () => {
+    let taken = false
+    const calls = mockApi((method, path) => {
+      if (path === '/api/me/offers') return [200, taken ? [] : [{ ...offer, at_once: true }]]
+      if (method === 'POST' && path === '/api/offers/o1/claim') {
+        taken = true
+        return [201, { ...offer, my_claim_id: 'c1', my_claim_status: 'approved', at_once: true }]
+      }
+      return [200, { home_location_name: 'Wieliczka – Rynek', shifts: [shift], months: [{ month: '2026-11', hours: 112 }] }]
+    })
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
+    const section = await screen.findByRole('region', { name: 'Zmiany do wzięcia' })
+    fireEvent.click(within(section).getByRole('button', { name: 'Weź zmianę' }))
+    expect(within(section).getByText(/Od razu będzie Twoja/)).toBeInTheDocument()
+    fireEvent.click(within(section).getByRole('button', { name: 'Tak, biorę' }))
+    expect(await screen.findByText('Zmiana jest Twoja.')).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'POST' && c.url === '/api/offers/o1/claim')).toBe(true)
+  })
+
+  it('says the first taker gets my shift when the location needs no approval', async () => {
+    schedule([{ ...shift, handover_at_once: true }])
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Oddaj tę zmianę' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText(/Pierwsza osoba, która ją weźmie, dostaje ją od razu/)).toBeInTheDocument()
+    expect(within(sheet).getByText('Dopóki nikt jej nie weźmie, to nadal Twoja zmiana.')).toBeInTheDocument()
+  })
+
   it('hides giving away in read-only mode', async () => {
     schedule([shift])
     renderScreen(<MyScheduleScreen companyId="c1" readOnly today={new Date(2026, 10, 12)} />)

@@ -354,6 +354,8 @@ class MyShiftOut(Schema):
     # "Oddaj zmianę": my active offer of this shift (open = nobody yet, claimed = waiting for the manager).
     offer_id: UUID | None = None
     offer_status: Literal["open", "claimed"] | None = None
+    # The location hands given-away shifts over without the manager ("Weź zmianę" moves it at once).
+    handover_at_once: bool = False
 
 
 class MonthHoursOut(Schema):
@@ -439,6 +441,7 @@ def my_schedule(request, company_id: UUID):
                 coworkers=names,
                 offer_id=offers.get(assignment.pk, (None, None))[0],
                 offer_status=offers.get(assignment.pk, (None, None))[1],
+                handover_at_once=shift.location.handover_without_approval,
             )
         )
 

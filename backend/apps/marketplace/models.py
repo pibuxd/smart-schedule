@@ -57,6 +57,8 @@ class ShiftClaim(CompanyOwnedModel):
     )
     created_at = models.DateTimeField(default=timezone.now)
     decided_at = models.DateTimeField(null=True, blank=True)
+    # Approved by the location's rule "przejęcie bez zatwierdzania", not by a manager.
+    auto_approved = models.BooleanField("bez zatwierdzania", default=False)
 
     class Meta:
         verbose_name = "chęć wzięcia zmiany"

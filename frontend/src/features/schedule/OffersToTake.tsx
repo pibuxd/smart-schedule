@@ -11,31 +11,56 @@ import { dayTitle, parseDate, shortTime } from '../../lib/dates'
 /**
  * "Zmiany do wzięcia": shifts that colleagues give away and that I can take (the server checks my calendar,
  * my other shifts and the position). "Weź zmianę" asks the manager; the shift is mine only after they approve.
+ * When the shift's location hands shifts over without approval (`at_once`), it is mine right away.
  * Hidden when there is nothing to take, so the schedule stays the first thing on the screen.
  */
 export function OffersToTake({ companyId, readOnly }: { companyId: string; readOnly: boolean }) {
   const offers = useAvailableOffers({ company_id: companyId })
-  if (offers.isPending) return null
+  const [taken, setTaken] = useState(false)
+  const note = taken ? <TakenNote onClose={() => setTaken(false)} /> : null
+  if (offers.isPending) return note
   if (offers.isError) {
     return <InlineError>{errorMessage(offers.error, 'Nie udało się sprawdzić, czy są zmiany do wzięcia.')}</InlineError>
   }
   const list = offers.data.data as AvailableOfferOut[]
-  if (list.length === 0) return null
+  if (list.length === 0) return note
   return (
     <section aria-labelledby="to-take" className="grid gap-3">
+      {note}
       <h2 id="to-take" className="m-0 text-lg font-extrabold">
         Zmiany do wzięcia
       </h2>
       <ul className="m-0 grid list-none gap-3 p-0">
         {list.map((offer) => (
-          <OfferCard key={offer.id} offer={offer} readOnly={readOnly} />
+          <OfferCard key={offer.id} offer={offer} readOnly={readOnly} onTaken={() => setTaken(true)} />
         ))}
       </ul>
     </section>
   )
 }
 
-function OfferCard({ offer, readOnly }: { offer: AvailableOfferOut; readOnly: boolean }) {
+/** Shown in place of the list after a shift became mine at once (the card itself is gone from the list). */
+function TakenNote({ onClose }: { onClose: () => void }) {
+  return (
+    <div role="status" className="grid gap-2 rounded-lg border-2 border-accent bg-accent-soft p-4">
+      <b className="text-lg">Zmiana jest Twoja.</b>
+      <p className="m-0">Masz ją już w swoim grafiku. Przyjdź do pracy o tej godzinie.</p>
+      <Button variant="secondary" size="normal" onClick={onClose}>
+        Rozumiem
+      </Button>
+    </div>
+  )
+}
+
+function OfferCard({
+  offer,
+  readOnly,
+  onTaken,
+}: {
+  offer: AvailableOfferOut
+  readOnly: boolean
+  onTaken: () => void
+}) {
   const claim = useClaimOffer()
   const withdraw = useWithdrawMyClaim()
   const queryClient = useQueryClient()
@@ -78,15 +103,28 @@ function OfferCard({ offer, readOnly }: { offer: AvailableOfferOut; readOnly: bo
         </>
       ) : asking ? (
         <div className="grid gap-2">
-          <p className="m-0 font-semibold">Wziąć tę zmianę? Kierownik dostanie Twoje zgłoszenie.</p>
+          <p className="m-0 font-semibold">
+            {offer.at_once
+              ? 'Wziąć tę zmianę? Od razu będzie Twoja i trzeba będzie na nią przyjść.'
+              : 'Wziąć tę zmianę? Kierownik dostanie Twoje zgłoszenie.'}
+          </p>
           <Button
             wide
             disabled={claim.isPending || readOnly}
             onClick={() =>
-              claim.mutate({ offerId: offer.id }, { onSuccess: refresh, onSettled: () => setAsking(false) })
+              claim.mutate(
+                { offerId: offer.id },
+                {
+                  onSuccess: (response) => {
+                    if ((response.data as AvailableOfferOut).my_claim_status === 'approved') onTaken()
+                    refresh()
+                  },
+                  onSettled: () => setAsking(false),
+                },
+              )
             }
           >
-            Tak, zgłoś mnie
+            {offer.at_once ? 'Tak, biorę' : 'Tak, zgłoś mnie'}
           </Button>
           <Button variant="quiet" size="normal" wide onClick={() => setAsking(false)}>
             Nie, jednak nie

@@ -8,6 +8,9 @@
 - `approve_claim`: checked once more against the published schedule as it is now, then the published shift (and
   the newest draft, if it still has the giver there) moves to the new person, pinned, with a history row
   (`AssignmentEvent`, reason "offer"). The giver, the taker and the other volunteers are told.
+- With the location rule "przejęcie oddanej zmiany bez zatwierdzania" (`Location.handover_without_approval`),
+  "Biorę" hands the shift over at once in the same way (`_hand_over`), when nobody else is already waiting for
+  the manager. The giver, the taker and the managers are told.
 - `refresh_after_publish`: a newly published version keeps open offers whose giver still has the shift and
   ends the others.
 
@@ -188,7 +191,8 @@ def cancel_offer(offer: ShiftOffer, profile: EmployeeProfile) -> ShiftOffer:
 
 
 def claim_offer(offer: ShiftOffer, profile: EmployeeProfile) -> ShiftClaim:
-    """'Biorę': allowed only to someone who can take the shift now; the managers decide."""
+    """'Biorę': allowed only to someone who can take the shift now; the managers decide, or with the location's
+    rule "bez zatwierdzania" the shift is the taker's at once (the returned claim is then approved)."""
     with transaction.atomic():
         offer = offer_query(offer.company_id).select_for_update(of=("self",)).get(pk=offer.pk)
         _require_current(offer)
@@ -199,6 +203,10 @@ def claim_offer(offer: ShiftOffer, profile: EmployeeProfile) -> ShiftClaim:
             return claim
         if claim is not None and claim.status == ShiftClaim.Status.REJECTED:
             raise HttpError(409, "Kierownik już nie zatwierdził Ci tej zmiany.")
+        auto = takes_without_approval(offer)
+        if auto:
+            # Same lock as the manager's approval: no schedule edit or publication between the check and the move.
+            SchedulePeriod.objects.select_for_update().filter(pk=offer.assignment.shift.version.period_id).first()
         verdicts = check_people(offer, [profile])
         if not verdicts:
             raise HttpError(409, "Nie pracujesz na tym stanowisku, więc nie możesz wziąć tej zmiany.")
@@ -211,12 +219,24 @@ def claim_offer(offer: ShiftOffer, profile: EmployeeProfile) -> ShiftClaim:
             claim.created_at = timezone.now()
             claim.decided_at = None
             claim.save(update_fields=["status", "created_at", "decided_at"])
+        if auto:
+            # The location's rule: the first person who can take it gets it, no manager in between.
+            _hand_over(offer, claim, profile, by=profile.membership.user, auto=True)
+            return claim
         offer.status = ShiftOffer.Status.CLAIMED
         offer.save(update_fields=["status"])
         payload = {**offer_payload(offer), "claimed_by_name": person_name(profile)}
         notify(offer.company_id, location_manager_ids(offer.assignment.shift.location), "shift_claimed", payload)
         notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_claimed", payload)
     return claim
+
+
+def takes_without_approval(offer: ShiftOffer) -> bool:
+    """'Weź zmianę' moves the shift at once: the location says so and nobody is already waiting for the manager
+    (someone who said 'Biorę' before the rule was switched on keeps their place in the queue)."""
+    if not offer.assignment.shift.location.handover_without_approval:
+        return False
+    return not offer.claims.filter(status=ShiftClaim.Status.PENDING).exists()
 
 
 def _reopen_if_nobody_waits(offer: ShiftOffer) -> None:
@@ -252,6 +272,72 @@ def _move(assignment: Assignment, to: EmployeeProfile) -> None:
     assignment.save(update_fields=["employee", "borrowed", "manual", "pinned"])
 
 
+def _hand_over(offer: ShiftOffer, claim: ShiftClaim, taker: EmployeeProfile, by, auto: bool) -> None:
+    """Move the published shift (and the newest draft's copy) to the taker, pinned, with a history row; close the
+    offer and tell everyone. The caller holds the locks and has checked the taker with the validator.
+    `auto`: the location's rule approved it ("bez zatwierdzania"); `by` is then the taker's own user."""
+    now = timezone.now()
+    published = offer.assignment
+    shift = published.shift
+    _move(published, taker)
+    newest = (
+        ScheduleVersion.objects.for_company(offer.company_id)
+        .filter(period_id=shift.version.period_id)
+        .order_by("-number")
+        .first()
+    )
+    if newest is not None and newest.status == ScheduleVersion.Status.DRAFT:
+        draft_row = (
+            Assignment.objects.for_company(offer.company_id)
+            .filter(shift__version=newest, shift__slot_key=shift.slot_key, employee_id=offer.offered_by_id)
+            .select_related("shift")
+            .first()
+        )
+        if draft_row is not None:
+            _move(draft_row, taker)
+    AssignmentEvent.objects.create(
+        company_id=offer.company_id,
+        location_id=shift.location_id,
+        period_id=shift.version.period_id,
+        slot_key=shift.slot_key,
+        from_employee_id=offer.offered_by_id,
+        to_employee=taker,
+        reason=AssignmentEvent.Reason.OFFER,
+        by=by,
+        at=now,
+    )
+    built, schedule = build_problem_for_version(shift.version)
+    report = validate(built.problem, schedule)
+    save_scores(shift.version, score(built.problem, report, location=str(shift.location_id)))
+
+    claim.status = ShiftClaim.Status.APPROVED
+    claim.auto_approved = auto
+    claim.decided_by = None if auto else by
+    claim.decided_at = now
+    claim.save(update_fields=["status", "auto_approved", "decided_by", "decided_at"])
+    others = offer.claims.filter(status=ShiftClaim.Status.PENDING).exclude(pk=claim.pk)
+    other_users = list(others.values_list("employee__membership__user_id", flat=True))
+    others.update(status=ShiftClaim.Status.REJECTED, decided_by=None if auto else by, decided_at=now)
+    offer.status = ShiftOffer.Status.APPROVED
+    offer.decided_at = now
+    offer.save(update_fields=["status", "decided_at"])
+
+    payload = {**offer_payload(offer), "claimed_by_name": person_name(taker)}
+    managers = set(location_manager_ids(shift.location))
+    if auto:
+        notify(offer.company_id, [taker.membership.user_id], "claim_taken", payload)
+        notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_taken_auto", payload)
+        notify(offer.company_id, managers - {taker.membership.user_id}, "handover_done", payload)
+    else:
+        notify(offer.company_id, [taker.membership.user_id], "claim_approved", payload)
+        notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_taken", payload)
+    notify(offer.company_id, other_users, "claim_rejected", payload)
+    if taker.home_location_id != shift.location_id:
+        # The taker's own manager learns that they work elsewhere that day.
+        home = set(location_manager_ids(taker.home_location)) - managers
+        notify(offer.company_id, home, "borrowed", {**payload, "auto": auto})
+
+
 def approve_claim(claim: ShiftClaim, user) -> ShiftOffer:
     """The taker gets the shift in the published schedule (checked again now)."""
     with transaction.atomic():
@@ -271,59 +357,7 @@ def approve_claim(claim: ShiftClaim, user) -> ShiftOffer:
             reasons = " ".join(verdicts[0].problems) if verdicts else "Ta osoba nie pracuje już na tym stanowisku."
             raise HttpError(409, "Tej osoby nie można wpisać na tę zmianę: " + reasons)
 
-        now = timezone.now()
-        published = offer.assignment
-        shift = published.shift
-        _move(published, taker)
-        newest = (
-            ScheduleVersion.objects.for_company(offer.company_id)
-            .filter(period_id=shift.version.period_id)
-            .order_by("-number")
-            .first()
-        )
-        if newest is not None and newest.status == ScheduleVersion.Status.DRAFT:
-            draft_row = (
-                Assignment.objects.for_company(offer.company_id)
-                .filter(shift__version=newest, shift__slot_key=shift.slot_key, employee_id=offer.offered_by_id)
-                .select_related("shift")
-                .first()
-            )
-            if draft_row is not None:
-                _move(draft_row, taker)
-        AssignmentEvent.objects.create(
-            company_id=offer.company_id,
-            location_id=shift.location_id,
-            period_id=shift.version.period_id,
-            slot_key=shift.slot_key,
-            from_employee_id=offer.offered_by_id,
-            to_employee=taker,
-            reason=AssignmentEvent.Reason.OFFER,
-            by=user,
-            at=now,
-        )
-        built, schedule = build_problem_for_version(shift.version)
-        report = validate(built.problem, schedule)
-        save_scores(shift.version, score(built.problem, report, location=str(shift.location_id)))
-
-        claim.status = ShiftClaim.Status.APPROVED
-        claim.decided_by = user
-        claim.decided_at = now
-        claim.save(update_fields=["status", "decided_by", "decided_at"])
-        others = offer.claims.filter(status=ShiftClaim.Status.PENDING).exclude(pk=claim.pk)
-        other_users = list(others.values_list("employee__membership__user_id", flat=True))
-        others.update(status=ShiftClaim.Status.REJECTED, decided_by=user, decided_at=now)
-        offer.status = ShiftOffer.Status.APPROVED
-        offer.decided_at = now
-        offer.save(update_fields=["status", "decided_at"])
-
-        payload = {**offer_payload(offer), "claimed_by_name": person_name(taker)}
-        notify(offer.company_id, [taker.membership.user_id], "claim_approved", payload)
-        notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_taken", payload)
-        notify(offer.company_id, other_users, "claim_rejected", payload)
-        if taker.home_location_id != shift.location_id:
-            # The taker's own manager learns that they work elsewhere that day.
-            home = set(location_manager_ids(taker.home_location)) - set(location_manager_ids(shift.location))
-            notify(offer.company_id, home, "borrowed", payload)
+        _hand_over(offer, claim, taker, by=user, auto=False)
     return offer
 
 

@@ -11,4 +11,5 @@ export interface OfferMadeOut {
   status: OfferMadeOutStatus;
   notified: number;
   notified_here?: number;
+  at_once?: boolean;
 }

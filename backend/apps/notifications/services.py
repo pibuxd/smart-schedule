@@ -99,6 +99,11 @@ def notification_text(kind: str, payload: dict) -> str:
                 )
             return f"{giver} oddaje zmianę {shift}. Daliśmy znać {_people_dative(p['able'])}, które mogą ją wziąć."
         case "borrowed":
+            if p.get("auto"):
+                return (
+                    f"{taker} (Twój lokal) bierze zmianę w innym lokalu: {shift}. "
+                    "Tamten lokal przekazuje oddane zmiany bez zatwierdzania."
+                )
             return (
                 f"{taker} (Twój lokal) bierze zmianę w innym lokalu: {shift}. Zatwierdził to kierownik tamtego lokalu."
             )
@@ -114,6 +119,15 @@ def notification_text(kind: str, payload: dict) -> str:
             return f"Kierownik nie zatwierdził wzięcia zmiany {shift}. Ta zmiana nie jest Twoja."
         case "offer_taken":
             return f"Kierownik zatwierdził: Twoją zmianę {shift} bierze {taker}. Nie musisz na nią przychodzić."
+        case "claim_taken":
+            return f"Bierzesz zmianę {shift}. Jest już w Twoim grafiku."
+        case "offer_taken_auto":
+            return f"Twoją zmianę {shift} bierze {taker}. Nie musisz na nią przychodzić."
+        case "handover_done":
+            return (
+                f"{taker} bierze zmianę od: {giver} ({shift}). Grafik już się zmienił, bo w zasadach lokalu "
+                "przejęcie oddanej zmiany jest bez zatwierdzania."
+            )
         case "offer_cancelled":
             return f"{giver} jednak zostaje na zmianie {shift}. Nie musisz jej brać."
         case "request_to_assistant":

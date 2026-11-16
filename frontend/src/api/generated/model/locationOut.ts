@@ -14,5 +14,6 @@ export interface LocationOut {
   group_name: string | null;
   schedule_period: LocationOutSchedulePeriod;
   availability_deadline_days: number;
+  handover_without_approval: boolean;
   archived: boolean;
 }

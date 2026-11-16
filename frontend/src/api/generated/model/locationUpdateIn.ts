@@ -12,5 +12,6 @@ export interface LocationUpdateIn {
   group_id?: string | null;
   schedule_period?: LocationUpdateInSchedulePeriod;
   availability_deadline_days?: number | null;
+  handover_without_approval?: boolean | null;
   archived?: boolean | null;
 }

@@ -1427,7 +1427,8 @@ export const getUpdateLocationUrl = (locationId: string,) => {
 }
 
 /**
- * Name, address, group, period length, default deadline; archiving (owner only) instead of deleting.
+ * Name, address, group, period length, default deadline, handing over given-away shifts without approval;
+ * archiving (owner only) instead of deleting.
  * @summary Update Location
  */
 export const updateLocation = async (locationId: string,
@@ -1495,7 +1496,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateLocationMutationVariables = {locationId: string;data: LocationUpdateIn}
 
     /**
- * Name, address, group, period length, default deadline; archiving (owner only) instead of deleting.
+ * Name, address, group, period length, default deadline, handing over given-away shifts without approval;
+ * archiving (owner only) instead of deleting.
  * @summary Update Location
  */
 export const useUpdateLocation = <TError = ErrorOut,

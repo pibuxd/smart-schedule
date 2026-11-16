@@ -45,6 +45,8 @@ class OfferMadeOut(Schema):
     notified: int
     # Of them, people whose home is the shift's location.
     notified_here: int = 0
+    # The location hands given-away shifts over without the manager: the first person who takes it gets it.
+    at_once: bool = False
 
 
 class AvailableOfferOut(Schema):
@@ -56,6 +58,9 @@ class AvailableOfferOut(Schema):
     # My "Biorę", if I said it: waiting for the manager.
     my_claim_id: UUID | None
     my_claim_status: ClaimStatus | None
+    # "Weź zmianę" makes the shift mine at once (the location's rule "bez zatwierdzania"); my_claim_status is then
+    # "approved" right after taking it.
+    at_once: bool = False
 
 
 class ClaimOut(Schema):
@@ -77,6 +82,8 @@ class ManagerOfferOut(Schema):
     created_at: datetime
     decided_at: datetime | None
     claims: list[ClaimOut]
+    # Taken without the manager's approval (the location's rule).
+    auto_approved: bool = False
 
 
 class ManagerOffersOut(Schema):
@@ -122,7 +129,10 @@ def offer_my_shift(request, assignment_id: UUID):
         raise HttpError(404, "Nie znaleziono.")
     ctx.require_writable()
     offer, notified, here = services.offer_shift(assignment, profile)
-    return Status(201, OfferMadeOut(id=offer.pk, status=offer.status, notified=notified, notified_here=here))
+    at_once = assignment.shift.location.handover_without_approval
+    return Status(
+        201, OfferMadeOut(id=offer.pk, status=offer.status, notified=notified, notified_here=here, at_once=at_once)
+    )
 
 
 @router.post("/offers/{offer_id}/cancel", response={200: OfferMadeOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})
@@ -157,6 +167,7 @@ def available_offers(request, company_id: UUID):
                 away=offer.assignment.shift.location_id != profile.home_location_id,
                 my_claim_id=claim.pk if waiting else None,
                 my_claim_status=claim.status if waiting else None,
+                at_once=services.takes_without_approval(offer) if not waiting else False,
             )
         )
     return result
@@ -164,7 +175,8 @@ def available_offers(request, company_id: UUID):
 
 @router.post("/offers/{offer_id}/claim", response={201: AvailableOfferOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})
 def claim_offer(request, offer_id: UUID):
-    """'Biorę': the managers of the location decide; the shift is not mine until they approve."""
+    """'Biorę': the managers of the location decide; the shift is not mine until they approve. With the location's
+    rule "bez zatwierdzania" it is mine at once (status "approved")."""
     ctx, offer, profile = _my_offer(request, offer_id)
     ctx.require_writable()
     claim = services.claim_offer(offer, profile)
@@ -178,6 +190,7 @@ def claim_offer(request, offer_id: UUID):
             away=offer.assignment.shift.location_id != profile.home_location_id,
             my_claim_id=claim.pk,
             my_claim_status=claim.status,
+            at_once=claim.auto_approved,
         ),
     )
 
@@ -236,6 +249,7 @@ def manager_offers(request, company_id: UUID):
             created_at=o.created_at,
             decided_at=o.decided_at,
             claims=_claims_out(o, check=o.status == ShiftOffer.Status.CLAIMED),
+            auto_approved=any(c.auto_approved for c in o.claims.all()),
         )
         for o in active + recent
     ]

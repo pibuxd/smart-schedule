@@ -21,4 +21,5 @@ export interface MyShiftOut {
   coworkers: string[];
   offer_id?: string | null;
   offer_status?: MyShiftOutOfferStatus;
+  handover_at_once?: boolean;
 }

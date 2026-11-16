@@ -2,7 +2,7 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
-import { RulesScreen } from './RulesScreen'
+import { HandoverRule, RulesScreen } from './RulesScreen'
 import { AsManager } from './test-utils'
 
 const item = (code: string, label: string, extra = {}) => ({
@@ -88,5 +88,26 @@ describe('RulesScreen', () => {
     const hard = screen.getAllByRole('checkbox', { name: /Bez wyjątków/ })
     expect(hard[2]).toBeDisabled()
     expect(hard[0]).toBeEnabled()
+  })
+
+  it('switches handing over given-away shifts without approval and saves it at once', async () => {
+    const location = { id: 'l1', name: 'Wieliczka', handover_without_approval: false }
+    const calls = mockApi((method, _path, body) => {
+      if (method === 'PATCH') return [200, { ...location, ...(body as object) }]
+      return [200, location]
+    })
+    renderScreen(
+      <AsManager>
+        <HandoverRule locationId="l1" />
+      </AsManager>,
+    )
+    const box = await screen.findByRole('checkbox', { name: /Przejęcie oddanej zmiany bez zatwierdzania/ })
+    expect(box).not.toBeChecked()
+    fireEvent.click(box)
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    const patch = calls.find((c) => c.method === 'PATCH')!
+    expect(patch.url).toBe('/api/locations/l1')
+    expect(patch.body).toEqual({ handover_without_approval: true })
+    expect(await screen.findByText('Zapisane.')).toBeInTheDocument()
   })
 })
