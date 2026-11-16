@@ -41,7 +41,8 @@ export function OffersScreen() {
         <h1 className="m-0 text-2xl font-extrabold">Oddane zmiany</h1>
         <p className="m-0 max-w-[62ch] text-ink-muted">
           Gdy pracownik oddaje zmianę, dajemy znać osobom, które mogą ją wziąć. Gdy ktoś się zgłosi, decydujesz tutaj.
-          Po zatwierdzeniu grafik od razu się zmienia, a zmiana jest przypięta do nowej osoby.
+          Po zatwierdzeniu grafik od razu się zmienia, a zmiana jest przypięta do nowej osoby. W „Zasadach” lokalu
+          możesz włączyć przejęcie bez zatwierdzania.
         </p>
       </div>
       {offers.isPending ? (
@@ -111,7 +112,9 @@ function OfferCard({ offer, readOnly }: { offer: ManagerOfferOut; readOnly: bool
           </span>
           <span className="text-sm text-ink-muted">Oddaje: {offer.offered_by_name}</span>
         </div>
-        <span className={`font-semibold ${waiting ? 'text-accent' : 'text-ink-muted'}`}>{STATUS[offer.status]}</span>
+        <span className={`font-semibold ${waiting ? 'text-accent' : 'text-ink-muted'}`}>
+          {offer.auto_approved ? 'Wzięta bez zatwierdzania' : STATUS[offer.status]}
+        </span>
       </div>
       {pending.length > 0 && (
         <ul className="m-0 grid list-none gap-2 p-0">
@@ -122,7 +125,9 @@ function OfferCard({ offer, readOnly }: { offer: ManagerOfferOut; readOnly: bool
       )}
       {decided.length > 0 && (
         <p className="m-0 text-sm text-ink-muted">
-          {decided.map((c) => `${c.name} (${CLAIM_STATUS[c.status]})`).join(', ')}
+          {decided
+            .map((c) => `${c.name} (${offer.auto_approved && c.status === 'approved' ? 'bierze' : CLAIM_STATUS[c.status]})`)
+            .join(', ')}
         </p>
       )}
     </li>

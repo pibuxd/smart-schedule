@@ -14,4 +14,5 @@ export interface AvailableOfferOut {
   away: boolean;
   my_claim_id: string | null;
   my_claim_status: AvailableOfferOutMyClaimStatus;
+  at_once?: boolean;
 }

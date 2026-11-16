@@ -308,3 +308,110 @@ def test_home_manager_learns_about_borrowing(api, market):
         "bierze zmianę w innym lokalu"
         in api.login(boss).get(f"/api/me/notifications?company_id={m['company'].id}").json()["notifications"][0]["text"]
     )
+
+
+# --- "Przejęcie oddanej zmiany bez zatwierdzania" (a location rule) ----------------------------------------------
+
+
+def switch_on_handover(api, m, value=True):
+    api.login(m["manager"])
+    response = api.patch(f"/api/locations/{m['location'].pk}", {"handover_without_approval": value})
+    assert response.status_code == 200 and response.json()["handover_without_approval"] is value
+
+
+def test_handover_rule_is_off_by_default_and_only_managers_switch_it(api, market):
+    m = market
+    assert Location.objects.get(pk=m["location"].pk).handover_without_approval is False
+    api.login(user_of(m["free"]))
+    refused = api.patch(f"/api/locations/{m['location'].pk}", {"handover_without_approval": True})
+    assert refused.status_code in (403, 404)
+    assert Location.objects.get(pk=m["location"].pk).handover_without_approval is False
+
+
+def test_rule_hands_the_shift_over_at_once(api, market):
+    m = market
+    switch_on_handover(api, m)
+    made = offer(api, m).json()
+    assert made["at_once"] is True
+    mine = api.get(f"/api/me/schedule?company_id={m['company'].id}").json()["shifts"]
+    assert next(s for s in mine if s["id"] == str(m["row"].pk))["handover_at_once"] is True
+
+    api.login(user_of(m["free"]))
+    listed = api.get(f"/api/me/offers?company_id={m['company'].id}").json()
+    assert [o["at_once"] for o in listed] == [True]
+    taken = api.post(f"/api/offers/{made['id']}/claim")
+
+    assert taken.status_code == 201 and taken.json()["my_claim_status"] == "approved"
+    row = Assignment.objects.get(pk=m["row"].pk)
+    assert row.employee_id == m["free"].pk and row.pinned and row.manual and not row.borrowed
+    assert ShiftOffer.objects.get().status == "approved"
+    claim = ShiftClaim.objects.get()
+    assert claim.auto_approved and claim.decided_by_id is None
+    event = AssignmentEvent.objects.get(reason="offer")
+    assert (event.from_employee_id, event.to_employee_id, event.by_id) == (
+        m["giver"].pk,
+        m["free"].pk,
+        user_of(m["free"]).pk,
+    )
+    # Everyone involved is told; nobody is asked to decide.
+    assert told("claim_taken") == {user_of(m["free"]).pk}
+    assert told("offer_taken_auto") == {user_of(m["giver"]).pk}
+    assert told("handover_done") == {m["manager"].pk}
+    assert told("shift_claimed") == set() and told("claim_approved") == set()
+    # Nobody else can take it any more.
+    api.login(user_of(m["elsewhere"]))
+    assert api.get(f"/api/me/offers?company_id={m['company'].id}").json() == []
+    assert api.post(f"/api/offers/{made['id']}/claim").status_code == 409
+    # The manager sees it among decided offers, marked as taken without approval.
+    api.login(m["manager"])
+    listing = api.get(f"/api/manager/offers?company_id={m['company'].id}").json()
+    assert listing["waiting"] == 0 and listing["offers"][0]["auto_approved"] is True
+    assert api.get(f"/api/versions/{m['version'].pk}").json()["hard_problems"] == []
+
+
+def test_rule_still_refuses_someone_who_cannot_take_it(api, market):
+    m = market
+    switch_on_handover(api, m)
+    offer_id = offer(api, m).json()["id"]
+    api.login(user_of(m["busy"]))  # already works at that time
+
+    refused = api.post(f"/api/offers/{offer_id}/claim")
+
+    assert refused.status_code == 409
+    assert Assignment.objects.get(pk=m["row"].pk).employee_id == m["giver"].pk
+    assert ShiftOffer.objects.get().status == "open"
+
+
+def test_rule_keeps_a_volunteer_who_was_already_waiting_first(api, market):
+    m = market
+    offer_id = offer(api, m).json()["id"]
+    api.login(user_of(m["elsewhere"]))
+    api.post(f"/api/offers/{offer_id}/claim")  # waits for the manager
+    switch_on_handover(api, m)
+
+    api.login(user_of(m["free"]))
+    listed = api.get(f"/api/me/offers?company_id={m['company'].id}").json()
+    assert listed[0]["at_once"] is False
+    later = api.post(f"/api/offers/{offer_id}/claim")
+
+    assert later.json()["my_claim_status"] == "pending"  # the manager still decides between the two
+    assert Assignment.objects.get(pk=m["row"].pk).employee_id == m["giver"].pk
+
+
+def test_rule_tells_the_home_manager_of_a_borrowed_taker(api, market):
+    from apps.accounts.models import User
+    from apps.tenancy.models import Membership
+    from tests.conftest import next_phone
+
+    m = market
+    boss = User.objects.create_user(next_phone(), first_name="Kierownik Rynku")
+    Membership.objects.create(company=m["company"], user=boss, role="manager").locations.set([m["other"]])
+    switch_on_handover(api, m)
+    offer_id = offer(api, m).json()["id"]
+    api.login(user_of(m["elsewhere"]))
+
+    assert api.post(f"/api/offers/{offer_id}/claim").json()["my_claim_status"] == "approved"
+    assert Assignment.objects.get(pk=m["row"].pk).borrowed
+    assert told("borrowed") == {boss.pk}
+    text = api.login(boss).get(f"/api/me/notifications?company_id={m['company'].id}").json()["notifications"][0]["text"]
+    assert "bez zatwierdzania" in text

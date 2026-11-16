@@ -441,7 +441,8 @@ export const getClaimOfferUrl = (offerId: string,) => {
 }
 
 /**
- * 'Biorę': the managers of the location decide; the shift is not mine until they approve.
+ * 'Biorę': the managers of the location decide; the shift is not mine until they approve. With the location's
+ * rule "bez zatwierdzania" it is mine at once (status "approved").
  * @summary Claim Offer
  */
 export const claimOffer = async (offerId: string, options?: Parameters<typeof apiFetch>[1]): Promise<claimOfferResponse> => {
@@ -494,7 +495,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ClaimOfferMutationVariables = {offerId: string}
 
     /**
- * 'Biorę': the managers of the location decide; the shift is not mine until they approve.
+ * 'Biorę': the managers of the location decide; the shift is not mine until they approve. With the location's
+ * rule "bez zatwierdzania" it is mine at once (status "approved").
  * @summary Claim Offer
  */
 export const useClaimOffer = <TError = ErrorOut,

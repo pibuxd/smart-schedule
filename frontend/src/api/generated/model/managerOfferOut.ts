@@ -16,4 +16,5 @@ export interface ManagerOfferOut {
   created_at: string;
   decided_at: string | null;
   claims: ClaimOut[];
+  auto_approved?: boolean;
 }

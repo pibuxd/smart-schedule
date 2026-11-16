@@ -11,7 +11,7 @@ import { dayTitle, parseDate, shortTime } from '../../lib/dates'
 
 /**
  * "Oddaj zmianę": everyone who could take the shift gets a notification; the shift stays mine until the manager
- * approves someone. While it is being given away, "Jednak nie oddaję" takes the offer back.
+ * approves someone (or, with the location's rule "bez zatwierdzania", until someone takes it). While it is being given away, "Jednak nie oddaję" takes the offer back.
  */
 export function GiveAwaySheet({ shift, onClose }: { shift: MyShiftOut | null; onClose: () => void }) {
   return (
@@ -42,10 +42,10 @@ function GiveAway({ shift, onClose }: { shift: MyShiftOut; onClose: () => void }
       <div className="grid gap-4">
         <p role="status" className="m-0">
           {sent.notified > 0
-            ? `${toldText(sent.notified, sent.notified_here ?? 0)} Gdy ktoś się zgłosi, dostaniesz powiadomienie. Potem zdecyduje kierownik.`
+            ? `${toldText(sent.notified, sent.notified_here ?? 0)} ${sent.at_once ? 'Gdy ktoś ją weźmie, od razu będzie jego, a Ty dostaniesz powiadomienie.' : 'Gdy ktoś się zgłosi, dostaniesz powiadomienie. Potem zdecyduje kierownik.'}`
             : 'Teraz nikt nie może wziąć tej zmiany: inni pracują, zaznaczyli „nie mogę” albo mają inne stanowisko. Zmiana czeka w „Zmiany do wzięcia”. Najlepiej porozmawiaj też z kierownikiem.'}
         </p>
-        <p className="m-0 font-semibold">Dopóki kierownik nie zdecyduje, to nadal Twoja zmiana.</p>
+        <p className="m-0 font-semibold">{stillMine(Boolean(sent.at_once))}</p>
         <Button wide onClick={onClose}>
           Rozumiem
         </Button>
@@ -59,9 +59,14 @@ function GiveAway({ shift, onClose }: { shift: MyShiftOut; onClose: () => void }
         <p className="m-0">
           {shift.offer_status === 'claimed'
             ? 'Ktoś chce wziąć tę zmianę. Teraz decyduje kierownik.'
-            : 'Jeszcze nikt się nie zgłosił.'}
+            : shift.handover_at_once
+              ? 'Jeszcze nikt jej nie wziął.'
+              : 'Jeszcze nikt się nie zgłosił.'}
         </p>
-        <p className="m-0 font-semibold">Dopóki kierownik nie zdecyduje, to nadal Twoja zmiana. Jeśli nic się nie zmieni, przyjdź do pracy.</p>
+        <p className="m-0 font-semibold">
+          {stillMine(Boolean(shift.handover_at_once) && shift.offer_status !== 'claimed')} Jeśli nic się nie zmieni,
+          przyjdź do pracy.
+        </p>
         {cancel.isError && <InlineError>{errorMessage(cancel.error, NETWORK_PROBLEM)}</InlineError>}
         <Button
           variant="secondary"
@@ -88,10 +93,12 @@ function GiveAway({ shift, onClose }: { shift: MyShiftOut; onClose: () => void }
   return (
     <div className="grid gap-4">
       <p className="m-0">
-        Damy znać osobom, które mogą wziąć tę zmianę (także z innych lokali firmy). Gdy ktoś się zgłosi, kierownik
-        zdecyduje.
+        Damy znać osobom, które mogą wziąć tę zmianę (także z innych lokali firmy).{' '}
+        {shift.handover_at_once
+          ? 'Pierwsza osoba, która ją weźmie, dostaje ją od razu.'
+          : 'Gdy ktoś się zgłosi, kierownik zdecyduje.'}
       </p>
-      <p className="m-0 font-semibold">Dopóki kierownik nie zdecyduje, to nadal Twoja zmiana.</p>
+      <p className="m-0 font-semibold">{stillMine(Boolean(shift.handover_at_once))}</p>
       {offer.isError && <InlineError>{errorMessage(offer.error, NETWORK_PROBLEM)}</InlineError>}
       <Button
         wide
@@ -112,6 +119,12 @@ function GiveAway({ shift, onClose }: { shift: MyShiftOut; onClose: () => void }
       </Button>
     </div>
   )
+}
+
+function stillMine(atOnce: boolean): string {
+  return atOnce
+    ? 'Dopóki nikt jej nie weźmie, to nadal Twoja zmiana.'
+    : 'Dopóki kierownik nie zdecyduje, to nadal Twoja zmiana.'
 }
 
 function dative(count: number): string {

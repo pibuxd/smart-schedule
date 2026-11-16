@@ -1046,7 +1046,7 @@
             }
           }
         },
-        "description": "Name, address, group, period length, default deadline; archiving (owner only) instead of deleting.",
+        "description": "Name, address, group, period length, default deadline, handing over given-away shifts without approval;\narchiving (owner only) instead of deleting.",
         "tags": [
           "tenancy"
         ],
@@ -5408,7 +5408,7 @@
             }
           }
         },
-        "description": "'Biorę': the managers of the location decide; the shift is not mine until they approve.",
+        "description": "'Biorę': the managers of the location decide; the shift is not mine until they approve. With the location's\nrule \"bez zatwierdzania\" it is mine at once (status \"approved\").",
         "tags": [
           "marketplace"
         ],
@@ -6850,6 +6850,10 @@
             "title": "Availability Deadline Days",
             "type": "integer"
           },
+          "handover_without_approval": {
+            "title": "Handover Without Approval",
+            "type": "boolean"
+          },
           "archived": {
             "title": "Archived",
             "type": "boolean"
@@ -6863,6 +6867,7 @@
           "group_name",
           "schedule_period",
           "availability_deadline_days",
+          "handover_without_approval",
           "archived"
         ],
         "title": "LocationOut",
@@ -6918,6 +6923,10 @@
             "title": "Availability Deadline Days",
             "type": "integer"
           },
+          "handover_without_approval": {
+            "title": "Handover Without Approval",
+            "type": "boolean"
+          },
           "archived": {
             "title": "Archived",
             "type": "boolean"
@@ -6962,6 +6971,7 @@
           "group_name",
           "schedule_period",
           "availability_deadline_days",
+          "handover_without_approval",
           "archived",
           "employees",
           "pending_invitations",
@@ -7336,6 +7346,17 @@
               }
             ],
             "title": "Availability Deadline Days"
+          },
+          "handover_without_approval": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handover Without Approval"
           },
           "archived": {
             "anyOf": [
@@ -8003,6 +8024,11 @@
               }
             ],
             "title": "Offer Status"
+          },
+          "handover_at_once": {
+            "default": false,
+            "title": "Handover At Once",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10902,6 +10928,11 @@
             "default": 0,
             "title": "Notified Here",
             "type": "integer"
+          },
+          "at_once": {
+            "default": false,
+            "title": "At Once",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10958,6 +10989,11 @@
               }
             ],
             "title": "My Claim Status"
+          },
+          "at_once": {
+            "default": false,
+            "title": "At Once",
+            "type": "boolean"
           }
         },
         "required": [
@@ -11125,6 +11161,11 @@
             },
             "title": "Claims",
             "type": "array"
+          },
+          "auto_approved": {
+            "default": false,
+            "title": "Auto Approved",
+            "type": "boolean"
           }
         },
         "required": [

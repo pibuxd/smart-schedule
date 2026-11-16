@@ -54,6 +54,9 @@ class Location(CompanyOwnedModel):
         "okres grafiku", max_length=8, choices=SchedulePeriodKind.choices, default=SchedulePeriodKind.MONTH
     )
     availability_deadline_days = models.PositiveSmallIntegerField("termin dyspozycji (dni przed okresem)", default=7)
+    # "Przejęcie oddanej zmiany bez zatwierdzania": "Weź zmianę" moves a given-away shift of this location at once
+    # (still only when the validator finds no new hard problem); off = the manager approves each one.
+    handover_without_approval = models.BooleanField("przejęcie oddanej zmiany bez zatwierdzania", default=False)
     # An archived location keeps its history but drops out of the manager's lists and of generation.
     archived_at = models.DateTimeField("zarchiwizowany", null=True, blank=True)
 

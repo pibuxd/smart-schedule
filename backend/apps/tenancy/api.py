@@ -233,6 +233,8 @@ class LocationUpdateIn(Schema):
     group_id: UUID | None = None
     schedule_period: PeriodKind | None = None
     availability_deadline_days: int | None = Field(None, ge=0, le=60)
+    # "Przejęcie oddanej zmiany bez zatwierdzania" (a rule on the location's "Zasady" screen).
+    handover_without_approval: bool | None = None
     # True archives the location (it keeps its history), False brings it back.
     archived: bool | None = None
 
@@ -245,6 +247,7 @@ class LocationOut(Schema):
     group_name: str | None
     schedule_period: PeriodKind
     availability_deadline_days: int
+    handover_without_approval: bool
     archived: bool
 
 
@@ -311,6 +314,7 @@ def _location_out(location: Location) -> LocationOut:
         group_name=location.group.name if location.group_id else None,
         schedule_period=location.schedule_period,
         availability_deadline_days=location.availability_deadline_days,
+        handover_without_approval=location.handover_without_approval,
         archived=location.archived_at is not None,
     )
 
@@ -508,7 +512,8 @@ def location_detail(request, location_id: UUID):
     response={200: LocationOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def update_location(request, location_id: UUID, payload: LocationUpdateIn):
-    """Name, address, group, period length, default deadline; archiving (owner only) instead of deleting."""
+    """Name, address, group, period length, default deadline, handing over given-away shifts without approval;
+    archiving (owner only) instead of deleting."""
     from django.utils import timezone
 
     ctx, location = context_for(request, Location, location_id)
@@ -528,6 +533,8 @@ def update_location(request, location_id: UUID, payload: LocationUpdateIn):
         location.schedule_period = payload.schedule_period
     if payload.availability_deadline_days is not None:
         location.availability_deadline_days = payload.availability_deadline_days
+    if payload.handover_without_approval is not None:
+        location.handover_without_approval = payload.handover_without_approval
     if payload.archived is not None:
         _require_owner(ctx)
         if payload.archived and location.archived_at is None:

@@ -634,3 +634,29 @@ Po teście Piotra 15.11.2026 (osobny PR):
 - Caddy: `index.html` z `Cache-Control: no-cache`, pliki z `/assets` (z hashem w nazwie) na rok. Otwarta karta, która po
   wdrożeniu nie znajdzie starego pliku ekranu, przeładowuje się sama (`vite:preloadError`). Przyczyna: Piotr po wdrożeniu
   #27 widział jeszcze starą wersję okienka dnia.
+
+## 23. Przejęcie oddanej zmiany bez zatwierdzania (15.11.2026)
+
+Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi oddaną zmianę, bez kierownika.
+
+- Ustawienie `Location.handover_without_approval` (domyślnie wyłączone), zmieniane przez `PATCH /api/locations/{id}`;
+  przełącznik "Przejęcie oddanej zmiany bez zatwierdzania" na dole ekranu "Zasady" lokalu, zapisywany od razu.
+  To nie jest zasada z `engine/rules_catalog.py`: katalog opisuje ocenę grafiku przez walidator i solver, a to
+  ustawienie zmienia tylko tok oddawania zmian. Dlatego nie ma go w grupie lokali (każdy lokal osobno) ani w podglądzie
+  "Co się zmieni?".
+- Przy włączonym ustawieniu `claim_offer` sprawdza osobę tak samo jak dotąd (walidator, bez nowych twardych problemów)
+  i od razu wykonuje to samo co zatwierdzenie (`_hand_over`): przeniesienie w opublikowanym grafiku i w najnowszym
+  szkicu, przypięcie, `AssignmentEvent` z powodem "oddana zmiana", gdzie "kto" to sam biorący, nowe wyniki grafiku.
+  `ShiftClaim.auto_approved` zaznacza takie przejęcie (na liście "Oddane zmiany": "Wzięta bez zatwierdzania").
+- Powiadomienia: biorący `claim_taken`, oddający `offer_taken_auto`, kierownicy lokalu `handover_done`, kierownicy
+  lokalu domowego osoby z innego lokalu `borrowed` (z dopiskiem, że bez zatwierdzania).
+- Założenie: jeśli ktoś czekał już na decyzję kierownika, zanim ustawienie włączono, kolejne "Weź zmianę" przy tym
+  oddaniu też czeka na kierownika (pierwszy chętny nie traci miejsca). Nowe oddania działają już bez zatwierdzania.
+- Teksty dla pracownika zależą od ustawienia lokalu zmiany (`at_once`, `handover_at_once`): "Pierwsza osoba, która ją
+  weźmie, dostaje ją od razu", "Tak, biorę", "Zmiana jest Twoja".
+- Po przeglądzie Prelinta (PR #29): gdy ustawienie jest włączone, a w lokalu nadal czekają zgłoszenia sprzed włączenia,
+  pod przełącznikiem widać, ile oddanych zmian czeka na decyzję w "Oddane zmiany" (żeby nie utknęły). Do decyzji Piotra:
+  czy osoba z innego lokalu też bierze od razu (dziś tak, a jej kierownik dostaje powiadomienie). Do sprawdzenia
+  w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
+  sprawiedliwe (np. osoba blisko limitu godzin).
+

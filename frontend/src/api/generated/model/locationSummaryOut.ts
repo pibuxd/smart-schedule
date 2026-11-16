@@ -16,6 +16,7 @@ export interface LocationSummaryOut {
   group_name: string | null;
   schedule_period: LocationSummaryOutSchedulePeriod;
   availability_deadline_days: number;
+  handover_without_approval: boolean;
   archived: boolean;
   employees: number;
   pending_invitations: number;

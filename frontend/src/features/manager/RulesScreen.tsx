@@ -19,8 +19,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react'
 import { useState } from 'react'
 
-import type { PreviewOut, RuleItemIn, RuleItemOut, RulesOut } from '../../api/generated/model'
+import { useManagerOffers } from '../../api/generated/marketplace/marketplace'
+import type { LocationOut, ManagerOffersOut, PreviewOut, RuleItemIn, RuleItemOut, RulesOut } from '../../api/generated/model'
 import { usePreviewScopeRules, useSaveScopeRules, useScopeRules } from '../../api/generated/rules/rules'
+import { useLocationDetail, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
 import { CheckField, inputClass, Tag } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
@@ -71,7 +73,85 @@ export function RulesScreen({ scope, scopeId }: { scope: Scope; scopeId: string 
     <div className="grid gap-8">
       {scope === 'location' && <AssistantPanel locationId={scopeId} />}
       <RulesEditor key={JSON.stringify(data.items)} data={data} scope={scope} scopeId={scopeId} />
+      {scope === 'location' && <HandoverRule locationId={scopeId} />}
     </div>
+  )
+}
+
+/**
+ * "Przejęcie oddanej zmiany bez zatwierdzania": not a rule for arranging the schedule, so it is saved at once
+ * and has no preview. On: "Weź zmianę" moves the shift right away when the person can take it.
+ */
+export function HandoverRule({ locationId }: { locationId: string }) {
+  const { readOnly, companyId } = useManager()
+  const location = useLocationDetail(locationId)
+  const offers = useManagerOffers({ company_id: companyId })
+  // Volunteers who said "Weź zmianę" before the switch still wait for the manager: say so, or they stay stuck.
+  const waiting =
+    offers.data?.status === 200
+      ? ((offers.data.data as ManagerOffersOut).offers ?? []).filter(
+          (o) => o.status === 'claimed' && o.shift.location_id === locationId,
+        ).length
+      : 0
+  const update = useUpdateLocation()
+  const queryClient = useQueryClient()
+  const [saved, setSaved] = useState(false)
+  if (location.isPending) return <Loading>Wczytuję ustawienie oddanych zmian…</Loading>
+  if (location.isError) {
+    return (
+      <ErrorState onRetry={() => void location.refetch()}>
+        {errorMessage(location.error, 'Nie udało się wczytać ustawienia oddanych zmian. Spróbuj jeszcze raz.')}
+      </ErrorState>
+    )
+  }
+  const data = location.data.data as LocationOut
+  const toggle = (on: boolean) => {
+    setSaved(false)
+    update.mutate(
+      { locationId, data: { handover_without_approval: on } },
+      {
+        onSuccess: () => {
+          setSaved(true)
+          void queryClient.invalidateQueries()
+        },
+      },
+    )
+  }
+  return (
+    <section aria-labelledby="handover" className="grid gap-2">
+      <h2 id="handover" className="m-0 text-xl font-extrabold">
+        Oddane zmiany
+      </h2>
+      <div className="rounded-md border border-line bg-surface p-3">
+        <CheckField
+          label="Przejęcie oddanej zmiany bez zatwierdzania"
+          hint={
+            <>
+              Gdy pracownik odda zmianę, pierwsza osoba, która ją weźmie, dostaje ją od razu. Najpierw sprawdzamy, czy ta
+              osoba może wtedy pracować: dyspozycje, inne zmiany, stanowisko i zasady „bez wyjątków”. Ty dostaniesz
+              powiadomienie. Gdy to wyłączysz, każde wzięcie zatwierdzasz w „Oddane zmiany”.
+            </>
+          }
+          checked={data.handover_without_approval}
+          disabled={readOnly || update.isPending}
+          onChange={(e) => toggle(e.target.checked)}
+        />
+        {saved && (
+          <p role="status" className="m-0 text-accent">
+            Zapisane.
+          </p>
+        )}
+        {data.handover_without_approval && waiting > 0 && (
+          <p className="m-0 mt-2 rounded-sm border border-line bg-paper px-3 py-2">
+            {waiting === 1
+              ? 'Jedna oddana zmiana z tego lokalu nadal czeka na Twoją decyzję, bo ktoś zgłosił się do niej przed włączeniem tego ustawienia.'
+              : `${waiting} oddane zmiany z tego lokalu nadal czekają na Twoją decyzję, bo ktoś zgłosił się do nich przed włączeniem tego ustawienia.`}{' '}
+            Zdecyduj w „Oddane zmiany”.
+          </p>
+        )}
+        {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
+      </div>
+    </section>
   )
 }
 
