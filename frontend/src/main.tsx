@@ -23,6 +23,12 @@ function onApiError(error: unknown) {
   void router.navigate({ to: '/logowanie', replace: true })
 }
 
+// After a deploy, an open tab asks for screen files that no longer exist: load the new version instead of failing.
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  window.location.reload()
+})
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
   queryCache: new QueryCache({ onError: onApiError }),

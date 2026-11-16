@@ -9,7 +9,7 @@ against the location's own data, and the sentences the manager sees are built he
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from django.conf import settings
@@ -66,15 +66,23 @@ def _today_line(today: date) -> str:
     return f"Dzisiaj: {today.isoformat()} ({WEEKDAY_NAMES[today.weekday()]})."
 
 
+def request_span(text_request: TextRequest) -> tuple[date, date]:
+    """The days a request can be about: its period, or its whole month when there is no period yet."""
+    if text_request.period_id:
+        return text_request.period.start, text_request.period.end
+    first = text_request.month
+    return first, (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+
 def request_context(text_request: TextRequest, today: date) -> tuple[str, dict[str, str], dict[str, str]]:
-    period = text_request.period
-    location = period.location
+    location = text_request.location
+    start, end = request_span(text_request)
     people = _people(location, exclude_id=text_request.employee_id)
     shift_types = _shift_types(location)
     context = "\n".join(
         [
             _today_line(today),
-            f"Okres grafiku: od {period.start.isoformat()} do {period.end.isoformat()}.",
+            f"Okres grafiku: od {start.isoformat()} do {end.isoformat()}.",
             f"Współpracownicy: {', '.join(people) or '(brak)'}.",
             f"Zmiany: {_shift_lines(shift_types)}.",
         ]
@@ -100,7 +108,11 @@ def queue_request(text_request: TextRequest) -> None:
 
 def interpret_request(request_id: str, text: str | None = None, today: date | None = None) -> str:
     """Worker: read one request and save how it was understood. Returns the new status (or "skipped")."""
-    row = TextRequest.objects.select_related("period__location").filter(pk=request_id).first()  # worker: by id
+    row = (
+        TextRequest.objects.select_related("period__location", "employee__home_location")  # worker: by id
+        .filter(pk=request_id)
+        .first()
+    )
     if row is None or row.status != TextRequest.Status.NEW or (text is not None and row.text != text):
         return "skipped"  # deleted, already read, or edited since (the newer job reads it)
     today = today or timezone.localdate()
@@ -111,7 +123,7 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         context, people, shift_types = request_context(row, today)
         try:
             reading = llm.read_request(row.text, context)
-            status, interpretation, why = _checked_request(reading, row.period, people, shift_types)
+            status, interpretation, why = _checked_request(reading, request_span(row), people, shift_types)
             reason = TextRequest.UnreadReason.NONE if interpretation else TextRequest.UnreadReason.UNSURE
             if interpretation is None:
                 answer = {"why": why, **reading.model_dump(mode="json")}
@@ -136,9 +148,10 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
 
 
 def _checked_request(
-    reading: llm.RequestReading, period: SchedulePeriod, people: dict[str, str], shift_types: dict[str, str]
+    reading: llm.RequestReading, span: tuple[date, date], people: dict[str, str], shift_types: dict[str, str]
 ) -> tuple[str, dict[str, Any] | None, str]:
-    """(status, interpretation, why it could not be used: "" when it could)."""
+    """(status, interpretation, why it could not be used: "" when it could). `span`: the days it can be about."""
+    start, end = span[0].isoformat(), span[1].isoformat()
     confidence = min(1.0, max(0.0, float(reading.confidence)))
     data = readings.clean(
         type=reading.type,
@@ -146,7 +159,7 @@ def _checked_request(
         shift_type=reading.shift_type,
         avoid=reading.avoid_shift_type,
         max_hours=reading.max_hours,
-        dates=[d for d in reading.dates if period.start.isoformat() <= d <= period.end.isoformat()],
+        dates=[d for d in reading.dates if start <= d <= end],
         weekdays=reading.weekdays,
         min_days=reading.min_days,
         shifts_per_day=reading.shifts_per_day,

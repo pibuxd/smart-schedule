@@ -2924,11 +2924,35 @@
             "in": "query",
             "name": "period_id",
             "schema": {
-              "format": "uuid",
-              "title": "Period Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
             },
-            "required": true
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -2946,6 +2970,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -2957,6 +2991,7 @@
             }
           }
         },
+        "description": "My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet.",
         "tags": [
           "availability"
         ],
@@ -8934,6 +8969,11 @@
               }
             ],
             "title": "Submitted At"
+          },
+          "assistant_reads": {
+            "default": false,
+            "title": "Assistant Reads",
+            "type": "boolean"
           }
         },
         "required": [
@@ -9258,9 +9298,28 @@
             "type": "string"
           },
           "period_id": {
-            "format": "uuid",
-            "title": "Period Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
+          },
+          "month": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month"
           },
           "text": {
             "maxLength": 1000,
@@ -9271,7 +9330,6 @@
         },
         "required": [
           "company_id",
-          "period_id",
           "text"
         ],
         "title": "RequestIn",

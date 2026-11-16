@@ -623,6 +623,18 @@ Czwarty PR (prośba Piotra z 15.11.2026: dyspozycja w dwóch przedziałach dnia 
 - Dzień zamknięcia mówi też, gdy opublikowany grafik ma kogoś w ten dzień (`ClosureOut.in_published`), i przypomina,
   że ułożenie od nowa zostawia tylko przypięte zmiany.
 
+Po teście Piotra 15.11.2026 (osobny PR):
+
+- Prośbę tekstem można napisać zawsze. Bez okresu należy do miesiąca na ekranie (`TextRequest.month`, `period` puste;
+  w bazie zawsze dokładnie jedno z nich). Liczy się w każdym okresie lokalu domowego osoby, który obejmuje ten miesiąc
+  (`TextRequest.for_periods`): kierownik widzi ją na liście próśb okresu, a generator bierze tylko dni z okresu.
+  Asystent czyta ją z datami całego miesiąca. Można ją zmienić albo usunąć do końca tego miesiąca.
+  Pracownik widzi ją też w okresie, który obejmuje ten miesiąc. Do pilotażu (uwaga Prelinta do #28): czy kierownik
+  potrzebuje znaku, że prośba miesięczna zmieniła się po ułożeniu szkicu.
+- Caddy: `index.html` z `Cache-Control: no-cache`, pliki z `/assets` (z hashem w nazwie) na rok. Otwarta karta, która po
+  wdrożeniu nie znajdzie starego pliku ekranu, przeładowuje się sama (`vite:preloadError`). Przyczyna: Piotr po wdrożeniu
+  #27 widział jeszcze starą wersję okienka dnia.
+
 ## 23. Przejęcie oddanej zmiany bez zatwierdzania (15.11.2026)
 
 Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi oddaną zmianę, bez kierownika.

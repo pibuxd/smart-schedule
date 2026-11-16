@@ -166,6 +166,23 @@ class TestRequests:
         [listed] = api.get(f"/api/periods/{shop['period'].pk}/requests").json()
         assert listed["summary"] == "Wolne w piątki, jeśli się da."
 
+    def test_a_request_for_a_month_without_a_period_is_read_for_that_month(self, api, shop, with_key, monkeypatch):
+        seen = {}
+
+        def fake(text, context):
+            seen["context"] = context
+            return reading()
+
+        monkeypatch.setattr(llm, "read_request", fake)
+        first = (shop["period"].end + timedelta(days=1)).replace(day=1)
+        api.login(shop["worker"])
+        body = {"company_id": str(shop["company"].pk), "month": str(first), "text": "Wolne w piątki."}
+        request_id = api.post("/api/me/requests", body).json()["id"]
+        assert services.interpret_request(request_id) == "interpreted"
+        last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        assert f"od {first.isoformat()} do {last.isoformat()}" in seen["context"]
+        assert "Kasia" in seen["context"]  # the person's own location
+
     @pytest.mark.parametrize(
         "answer",
         [
