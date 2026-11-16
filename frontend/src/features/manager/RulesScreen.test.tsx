@@ -91,9 +91,14 @@ describe('RulesScreen', () => {
   })
 
   it('switches handing over given-away shifts without approval and saves it at once', async () => {
-    const location = { id: 'l1', name: 'Wieliczka', handover_without_approval: false }
-    const calls = mockApi((method, _path, body) => {
-      if (method === 'PATCH') return [200, { ...location, ...(body as object) }]
+    let location = { id: 'l1', name: 'Wieliczka', handover_without_approval: false }
+    const waitingOffer = { id: 'o1', status: 'claimed', shift: { location_id: 'l1' }, claims: [] }
+    const calls = mockApi((method, path, body) => {
+      if (method === 'PATCH') {
+        location = { ...location, ...(body as object) }
+        return [200, location]
+      }
+      if (path === '/api/manager/offers') return [200, { offers: [waitingOffer], waiting: 1 }]
       return [200, location]
     })
     renderScreen(
@@ -109,5 +114,7 @@ describe('RulesScreen', () => {
     expect(patch.url).toBe('/api/locations/l1')
     expect(patch.body).toEqual({ handover_without_approval: true })
     expect(await screen.findByText('Zapisane.')).toBeInTheDocument()
+    // Someone volunteered before the switch: the manager still has to decide that one.
+    expect(await screen.findByText(/Jedna oddana zmiana z tego lokalu nadal czeka/)).toBeInTheDocument()
   })
 })

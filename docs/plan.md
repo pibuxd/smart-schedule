@@ -642,4 +642,9 @@ Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi odda
   oddaniu też czeka na kierownika (pierwszy chętny nie traci miejsca). Nowe oddania działają już bez zatwierdzania.
 - Teksty dla pracownika zależą od ustawienia lokalu zmiany (`at_once`, `handover_at_once`): "Pierwsza osoba, która ją
   weźmie, dostaje ją od razu", "Tak, biorę", "Zmiana jest Twoja".
+- Po przeglądzie Prelinta (PR #29): gdy ustawienie jest włączone, a w lokalu nadal czekają zgłoszenia sprzed włączenia,
+  pod przełącznikiem widać, ile oddanych zmian czeka na decyzję w "Oddane zmiany" (żeby nie utknęły). Do decyzji Piotra:
+  czy osoba z innego lokalu też bierze od razu (dziś tak, a jej kierownik dostaje powiadomienie). Do sprawdzenia
+  w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
+  sprawiedliwe (np. osoba blisko limitu godzin).
 

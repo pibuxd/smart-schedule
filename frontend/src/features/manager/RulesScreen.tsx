@@ -19,7 +19,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react'
 import { useState } from 'react'
 
-import type { LocationOut, PreviewOut, RuleItemIn, RuleItemOut, RulesOut } from '../../api/generated/model'
+import { useManagerOffers } from '../../api/generated/marketplace/marketplace'
+import type { LocationOut, ManagerOffersOut, PreviewOut, RuleItemIn, RuleItemOut, RulesOut } from '../../api/generated/model'
 import { usePreviewScopeRules, useSaveScopeRules, useScopeRules } from '../../api/generated/rules/rules'
 import { useLocationDetail, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
@@ -82,8 +83,16 @@ export function RulesScreen({ scope, scopeId }: { scope: Scope; scopeId: string 
  * and has no preview. On: "Weź zmianę" moves the shift right away when the person can take it.
  */
 export function HandoverRule({ locationId }: { locationId: string }) {
-  const { readOnly } = useManager()
+  const { readOnly, companyId } = useManager()
   const location = useLocationDetail(locationId)
+  const offers = useManagerOffers({ company_id: companyId })
+  // Volunteers who said "Weź zmianę" before the switch still wait for the manager: say so, or they stay stuck.
+  const waiting =
+    offers.data?.status === 200
+      ? ((offers.data.data as ManagerOffersOut).offers ?? []).filter(
+          (o) => o.status === 'claimed' && o.shift.location_id === locationId,
+        ).length
+      : 0
   const update = useUpdateLocation()
   const queryClient = useQueryClient()
   const [saved, setSaved] = useState(false)
@@ -130,6 +139,14 @@ export function HandoverRule({ locationId }: { locationId: string }) {
         {saved && (
           <p role="status" className="m-0 text-accent">
             Zapisane.
+          </p>
+        )}
+        {data.handover_without_approval && waiting > 0 && (
+          <p className="m-0 mt-2 rounded-sm border border-line bg-paper px-3 py-2">
+            {waiting === 1
+              ? 'Jedna oddana zmiana z tego lokalu nadal czeka na Twoją decyzję, bo ktoś zgłosił się do niej przed włączeniem tego ustawienia.'
+              : `${waiting} oddane zmiany z tego lokalu nadal czekają na Twoją decyzję, bo ktoś zgłosił się do nich przed włączeniem tego ustawienia.`}{' '}
+            Zdecyduj w „Oddane zmiany”.
           </p>
         )}
         {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
