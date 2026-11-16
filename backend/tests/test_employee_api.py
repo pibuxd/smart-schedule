@@ -230,6 +230,8 @@ class TestRequestsWithoutPeriod:
         assert api.get(f"/api/me/requests?company_id={shop['company'].pk}&period_id={shop['period'].pk}").json() == []
 
         later = SchedulePeriod.objects.create(location=shop["location"], start=first, end=last)
+        mine = api.get(f"/api/me/requests?company_id={shop['company'].pk}&period_id={later.pk}").json()
+        assert [r["id"] for r in mine] == [created.json()["id"]]  # still mine to see and change
         api.login(shop["manager"])
         seen = api.get(f"/api/periods/{later.pk}/requests").json()
         assert [r["text"] for r in seen] == ["W tym miesiącu bez nocek."]

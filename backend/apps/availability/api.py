@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
@@ -449,12 +450,13 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
     """My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet."""
     ctx, profile = employee_context(request, company_id)
     if period_id is not None:
-        scope = {"period": _my_period(ctx, profile, period_id)}
+        # Also the ones I wrote for its months before the manager asked: they count here too.
+        scope = TextRequest.for_periods([_my_period(ctx, profile, period_id)])
     elif month is not None:
-        scope = {"period": None, "month": month.replace(day=1)}
+        scope = Q(period=None, month=month.replace(day=1))
     else:
         raise HttpError(400, "Wybierz miesiąc.")
-    requests = ctx.qs(TextRequest).filter(employee=profile, **scope).order_by("created_at")
+    requests = ctx.qs(TextRequest).filter(scope, employee=profile).order_by("created_at")
     return [_request_out(r) for r in requests]
 
 
