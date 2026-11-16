@@ -39,7 +39,7 @@ def misses(since):
     rows = []
     requests = (
         TextRequest.objects.filter(created_at__gte=since, status=TextRequest.Status.NEEDS_MANAGER)  # superadmin
-        .select_related("company", "period__location")
+        .select_related("company", "period__location", "employee__home_location")
         .order_by("created_at")
     )
     for r in requests:
@@ -49,7 +49,7 @@ def misses(since):
                 r.created_at.isoformat(timespec="seconds"),
                 "request",
                 r.company.name,
-                r.period.location.name,
+                r.location.name,
                 r.text,
                 reason,
                 _json(r.assistant_answer),

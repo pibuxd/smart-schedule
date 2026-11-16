@@ -107,6 +107,7 @@ export function AvailabilityScreen({
         month={month}
         readOnly={readOnly}
         period={period}
+        assistantReads={data.assistant_reads ?? false}
         submittedAt={submittedNow ?? data.submitted_at}
         onSubmitted={setSubmittedNow}
       />
@@ -189,6 +190,7 @@ function MonthEditor(props: {
   month: string
   readOnly: boolean
   period: AvailabilityPeriodOut | null
+  assistantReads: boolean
   submittedAt: string | null | undefined
   onSubmitted: (at: string | null) => void
 }) {
@@ -209,6 +211,7 @@ function AvailabilityEditor({
   companyId,
   readOnly,
   period,
+  assistantReads,
   submittedAt,
   onSubmitted,
   initial,
@@ -216,6 +219,7 @@ function AvailabilityEditor({
   companyId: string
   readOnly: boolean
   period: AvailabilityPeriodOut | null
+  assistantReads: boolean
   submittedAt: string | null | undefined
   onSubmitted: (at: string | null) => void
   initial: MyCalendarOut
@@ -376,8 +380,7 @@ function AvailabilityEditor({
           </button>
           {!period ? (
             <p className="m-0 text-sm text-ink-muted">
-              Wszystko zapisuje się samo. Dni, których nie ruszysz, zostają jako „Mogę”. Prośbę do kierownika napiszesz
-              tutaj, gdy poprosi o dyspozycje.
+              Wszystko zapisuje się samo. Dni, których nie ruszysz, zostają jako „Mogę”.
             </p>
           ) : submittedAt ? (
             <p className="m-0 flex items-start gap-2 rounded-md border-2 border-prefer bg-prefer-soft px-3.5 py-3 text-prefer">
@@ -410,7 +413,21 @@ function AvailabilityEditor({
         </>
       )}
 
-      {period && <RequestsSection companyId={companyId} periodId={period.id} editable={!readOnly && period.editable} assistantReads={period.assistant_reads} />}
+      {period && period.start <= initial.end && period.end >= initial.start ? (
+        <RequestsSection
+          companyId={companyId}
+          periodId={period.id}
+          editable={!readOnly && period.editable}
+          assistantReads={assistantReads}
+        />
+      ) : (
+        <RequestsSection
+          companyId={companyId}
+          month={initial.start}
+          editable={!readOnly && initial.end >= today}
+          assistantReads={assistantReads}
+        />
+      )}
 
       {openDay && (
         <DayHoursSheet

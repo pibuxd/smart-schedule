@@ -11,4 +11,5 @@ export interface MyAvailabilityOut {
   period: AvailabilityPeriodOut | null;
   days: AvailabilityDayOut[];
   submitted_at: string | null;
+  assistant_reads?: boolean;
 }

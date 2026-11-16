@@ -51,7 +51,7 @@ class TestAvailability:
         shop["period"].save()
         api.login(shop["worker"])
         body = api.get(path("/api/me/availability", shop["company"])).json()
-        assert body == {"period": None, "days": [], "submitted_at": None}
+        assert body == {"period": None, "days": [], "submitted_at": None, "assistant_reads": False}
 
     def test_save_days_with_hours_and_overwrite(self, api, shop):
         api.login(shop["worker"])
@@ -204,6 +204,56 @@ class TestRequests:
         api.login(shop["worker"])
         assert api.client.delete(f"/api/me/requests/{theirs.pk}").status_code == 404
         assert TextRequest.objects.filter(pk=theirs.pk).exists()
+
+
+class TestRequestsWithoutPeriod:
+    """Requests can be written for any month, also before the manager asks for availability."""
+
+    def months(self, shop):
+        later = (shop["period"].end + timedelta(days=1)).replace(day=1)  # the month after the open period
+        return later, (later + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+    def test_write_for_a_month_and_see_it_in_the_period_that_covers_it(self, api, shop):
+        first, last = self.months(shop)
+        api.login(shop["worker"])
+        body = {
+            "company_id": str(shop["company"].pk),
+            "month": str(first + timedelta(days=9)),
+            "text": "W tym miesiącu bez nocek.",
+        }
+        created = api.post("/api/me/requests", body)
+        assert created.status_code == 201
+        row = TextRequest.objects.get()
+        assert row.period is None and row.month == first
+        listed = api.get(f"/api/me/requests?company_id={shop['company'].pk}&month={first}").json()
+        assert [r["id"] for r in listed] == [created.json()["id"]]
+        assert api.get(f"/api/me/requests?company_id={shop['company'].pk}&period_id={shop['period'].pk}").json() == []
+
+        later = SchedulePeriod.objects.create(location=shop["location"], start=first, end=last)
+        api.login(shop["manager"])
+        seen = api.get(f"/api/periods/{later.pk}/requests").json()
+        assert [r["text"] for r in seen] == ["W tym miesiącu bez nocek."]
+        assert api.get(f"/api/periods/{shop['period'].pk}/requests").json() == []
+
+        from apps.scheduling.problem_builder import build_problem
+
+        problem = build_problem([later], today=timezone.localdate()).problem
+        assert [r.summary for r in problem.requests if not r.by_manager] == ["W tym miesiącu bez nocek."]
+
+    def test_a_past_month_is_refused_and_closed(self, api, shop):
+        api.login(shop["worker"])
+        past = timezone.localdate().replace(day=1) - timedelta(days=1)
+        body = {"company_id": str(shop["company"].pk), "month": str(past), "text": "Za późno."}
+        assert api.post("/api/me/requests", body).status_code == 400
+        assert api.post("/api/me/requests", {**body, "month": None}).status_code == 400
+        old = TextRequest.objects.create(employee=shop["employee"], month=past.replace(day=1), text="Stara prośba.")
+        assert api.client.delete(f"/api/me/requests/{old.pk}").status_code == 409
+
+    def test_the_form_knows_whether_the_assistant_reads(self, api, shop):
+        api.login(shop["worker"])
+        shop["period"].delete()
+        body = api.get(path("/api/me/availability", shop["company"])).json()
+        assert body["period"] is None and body["assistant_reads"] is False
 
 
 class TestOpenCalendar:

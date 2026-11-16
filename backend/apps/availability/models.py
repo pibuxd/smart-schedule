@@ -122,7 +122,13 @@ class TextRequest(CompanyOwnedModel):
     company_from = "employee"
 
     employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name="text_requests")
-    period = models.ForeignKey(SchedulePeriod, on_delete=models.CASCADE, related_name="text_requests")
+    # A request written while the manager has asked for a period belongs to it. One written for a month with no
+    # period yet has only `month` (its first day) and counts in every period of the person's home location that
+    # covers that month (see `for_periods`).
+    period = models.ForeignKey(
+        SchedulePeriod, on_delete=models.CASCADE, related_name="text_requests", null=True, blank=True
+    )
+    month = models.DateField("miesiąc (bez okresu)", null=True, blank=True)
     text = models.TextField("treść", max_length=1000)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
     interpretation = models.JSONField(
@@ -157,7 +163,33 @@ class TextRequest(CompanyOwnedModel):
         verbose_name = "prośba"
         verbose_name_plural = "prośby"
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["period", "status"])]
+        indexes = [models.Index(fields=["period", "status"]), models.Index(fields=["employee", "month"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(period__isnull=False, month__isnull=True)
+                | models.Q(period__isnull=True, month__isnull=False),
+                name="text_request_period_or_month",
+            )
+        ]
+
+    @property
+    def location(self):
+        """The location this request is about: its period's, or the person's home location for a month request."""
+        return self.period.location if self.period_id else self.employee.home_location
+
+    @staticmethod
+    def for_periods(periods) -> models.Q:
+        """Requests that count in these periods: written for them, or for a month they cover, by people of their
+        location."""
+        q = models.Q(period__in=[p.pk for p in periods])
+        for p in periods:
+            q |= models.Q(
+                period__isnull=True,
+                employee__home_location_id=p.location_id,
+                month__gte=p.start.replace(day=1),
+                month__lte=p.end,
+            )
+        return q
 
     def __str__(self) -> str:
         return f"{self.employee}: {self.text[:60]}"

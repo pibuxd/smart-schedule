@@ -7,7 +7,8 @@
 
 export interface RequestIn {
   company_id: string;
-  period_id: string;
+  period_id?: string | null;
+  month?: string | null;
   /**
      * @minLength 1
      * @maxLength 1000

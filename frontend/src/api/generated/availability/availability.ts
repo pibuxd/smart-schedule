@@ -962,6 +962,11 @@ export const useSubmitMyAvailability = <TError = ErrorOut,
   status: 200
 }
 
+export type myRequestsResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
 export type myRequestsResponse404 = {
   data: ErrorOut
   status: 404
@@ -970,7 +975,7 @@ export type myRequestsResponse404 = {
 export type myRequestsResponseSuccess = (myRequestsResponse200) & {
   headers: Headers;
 };
-export type myRequestsResponseError = (myRequestsResponse404) & {
+export type myRequestsResponseError = (myRequestsResponse400 | myRequestsResponse404) & {
   headers: Headers;
 };
 
@@ -992,6 +997,7 @@ export const getMyRequestsUrl = (params: MyRequestsParams,) => {
 }
 
 /**
+ * My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet.
  * @summary My Requests
  */
 export const myRequests = async (params: MyRequestsParams, options?: Parameters<typeof apiFetch>[1]): Promise<myRequestsResponse> => {
@@ -1038,7 +1044,10 @@ export type MyRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof myRequ
 export type MyRequestsQueryError = ErrorOut
 
 
-/** @summary My Requests */
+/**
+ * My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet.
+ * @summary My Requests
+ */
 export function useMyRequests<TData = Awaited<ReturnType<typeof myRequests>>, TError = ErrorOut>(
  params: MyRequestsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof myRequests>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -1049,7 +1058,10 @@ export function useMyRequests<TData = Awaited<ReturnType<typeof myRequests>>, TE
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** @summary My Requests */
+/**
+ * My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet.
+ * @summary My Requests
+ */
 export function useMyRequests<TData = Awaited<ReturnType<typeof myRequests>>, TError = ErrorOut>(
  params: MyRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof myRequests>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -1060,12 +1072,18 @@ export function useMyRequests<TData = Awaited<ReturnType<typeof myRequests>>, TE
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** @summary My Requests */
+/**
+ * My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet.
+ * @summary My Requests
+ */
 export function useMyRequests<TData = Awaited<ReturnType<typeof myRequests>>, TError = ErrorOut>(
  params: MyRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof myRequests>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** @summary My Requests */
+/**
+ * My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet.
+ * @summary My Requests
+ */
 export function useMyRequests<TData = Awaited<ReturnType<typeof myRequests>>, TError = ErrorOut>(
  params: MyRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof myRequests>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient

@@ -622,3 +622,13 @@ Czwarty PR (prośba Piotra z 15.11.2026: dyspozycja w dwóch przedziałach dnia 
   i jak często „albo” zostawia zmiany bez obsady.
 - Dzień zamknięcia mówi też, gdy opublikowany grafik ma kogoś w ten dzień (`ClosureOut.in_published`), i przypomina,
   że ułożenie od nowa zostawia tylko przypięte zmiany.
+
+Po teście Piotra 15.11.2026 (osobny PR):
+
+- Prośbę tekstem można napisać zawsze. Bez okresu należy do miesiąca na ekranie (`TextRequest.month`, `period` puste;
+  w bazie zawsze dokładnie jedno z nich). Liczy się w każdym okresie lokalu domowego osoby, który obejmuje ten miesiąc
+  (`TextRequest.for_periods`): kierownik widzi ją na liście próśb okresu, a generator bierze tylko dni z okresu.
+  Asystent czyta ją z datami całego miesiąca. Można ją zmienić albo usunąć do końca tego miesiąca.
+- Caddy: `index.html` z `Cache-Control: no-cache`, pliki z `/assets` (z hashem w nazwie) na rok. Otwarta karta, która po
+  wdrożeniu nie znajdzie starego pliku ekranu, przeładowuje się sama (`vite:preloadError`). Przyczyna: Piotr po wdrożeniu
+  #27 widział jeszcze starą wersję okienka dnia.

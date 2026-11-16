@@ -78,6 +78,8 @@ class MyAvailabilityOut(Schema):
     period: AvailabilityPeriodOut | None
     days: list[AvailabilityDayOut]
     submitted_at: datetime | None
+    # The assistant (an outside AI service) also reads requests: the request form must say so.
+    assistant_reads: bool = False
 
 
 class MyCalendarOut(Schema):
@@ -127,7 +129,9 @@ class PatternIn(Schema):
 
 class RequestIn(Schema):
     company_id: UUID
-    period_id: UUID
+    # The period the manager asked for, or (with no period) any day of the month the request is about.
+    period_id: UUID | None = None
+    month: date | None = None
     text: str = Field(min_length=1, max_length=1000)
 
 
@@ -178,13 +182,14 @@ def _editable_period(ctx: TenantContext, profile: EmployeeProfile, period_id: UU
 
 def _availability_out(ctx: TenantContext, profile: EmployeeProfile, period: SchedulePeriod | None) -> MyAvailabilityOut:
     if period is None:
-        return MyAvailabilityOut(period=None, days=[], submitted_at=None)
+        return MyAvailabilityOut(period=None, days=[], submitted_at=None, assistant_reads=llm.is_enabled())
     days = ctx.qs(AvailabilityDay).filter(employee=profile, date__gte=period.start, date__lte=period.end)
     submission = ctx.qs(AvailabilitySubmission).filter(employee=profile, period=period).first()
     return MyAvailabilityOut(
         period=_period_out(period),
         days=[_day_out(d) for d in days.order_by("date")],
         submitted_at=submission.submitted_at if submission else None,
+        assistant_reads=llm.is_enabled(),
     )
 
 
@@ -428,29 +433,63 @@ def _summary(row: TextRequest) -> str | None:
     return str(summary) if summary else None
 
 
-@router.get("/me/requests", response={200: list[MyRequestOut], 404: ErrorOut})
-def my_requests(request, company_id: UUID, period_id: UUID):
+def _request_month(day: date) -> date:
+    """A month for a request without a period: from this month up to a year ahead (its first day)."""
+    month = day.replace(day=1)
+    today = timezone.localdate()
+    if month < today.replace(day=1):
+        raise HttpError(400, "Ten miesiąc już minął. Napisz prośbę na ten albo kolejny miesiąc.")
+    if month > today + timedelta(days=MAX_AHEAD_DAYS):
+        raise HttpError(400, "Prośbę można napisać najwyżej rok naprzód.")
+    return month
+
+
+@router.get("/me/requests", response={200: list[MyRequestOut], 400: ErrorOut, 404: ErrorOut})
+def my_requests(request, company_id: UUID, period_id: UUID | None = None, month: date | None = None):
+    """My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet."""
     ctx, profile = employee_context(request, company_id)
-    period = _my_period(ctx, profile, period_id)
-    requests = ctx.qs(TextRequest).filter(employee=profile, period=period).order_by("created_at")
+    if period_id is not None:
+        scope = {"period": _my_period(ctx, profile, period_id)}
+    elif month is not None:
+        scope = {"period": None, "month": month.replace(day=1)}
+    else:
+        raise HttpError(400, "Wybierz miesiąc.")
+    requests = ctx.qs(TextRequest).filter(employee=profile, **scope).order_by("created_at")
     return [_request_out(r) for r in requests]
+
+
+def _require_request_open(text_request: TextRequest) -> None:
+    """A request can change while its period collects availability, or until its month (no period) has passed."""
+    if text_request.period_id:
+        if text_request.period.status != SchedulePeriod.Status.COLLECTING:
+            raise HttpError(409, CLOSED)
+    elif text_request.month < timezone.localdate().replace(day=1):
+        raise HttpError(409, "Ten miesiąc już minął. Jeśli coś się zmieniło, powiedz kierownikowi.")
 
 
 @router.post("/me/requests", response={201: MyRequestOut, 400: ErrorOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})
 def create_my_request(request, payload: RequestIn):
     """ "Coś jeszcze?": a request in words for things the calendar cannot say. Only managers read it."""
     ctx, profile = employee_context(request, payload.company_id)
-    period = _editable_period(ctx, profile, payload.period_id)
+    if payload.period_id is not None:
+        period, month = _editable_period(ctx, profile, payload.period_id), None
+        scope = {"period": period}
+    else:
+        ctx.require_writable()
+        if payload.month is None:
+            raise HttpError(400, "Wybierz miesiąc.")
+        period, month = None, _request_month(payload.month)
+        scope = {"period": None, "month": month}
     text = payload.text.strip()
     if not text:
         raise HttpError(400, "Napisz, o co chodzi.")
-    if ctx.qs(TextRequest).filter(employee=profile, period=period).count() >= settings.TEXT_REQUESTS_PER_PERIOD:
+    if ctx.qs(TextRequest).filter(employee=profile, **scope).count() >= settings.TEXT_REQUESTS_PER_PERIOD:
         raise HttpError(
             400, "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń którąś albo powiedz kierownikowi."
         )
     with transaction.atomic():
         text_request = TextRequest.objects.for_company(ctx.company).create(
-            company=ctx.company, employee=profile, period=period, text=text
+            company=ctx.company, employee=profile, period=period, month=month, text=text
         )
         queue_request(text_request)  # the assistant reads it in the worker; without a key the manager does
     return Status(201, _request_out(text_request))
@@ -467,8 +506,7 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
     if text_request.employee.membership_id != ctx.membership.pk:
         raise HttpError(404, "Nie znaleziono.")
     ctx.require_writable()
-    if text_request.period.status != SchedulePeriod.Status.COLLECTING:
-        raise HttpError(409, CLOSED)
+    _require_request_open(text_request)
     text = (payload.text or "").strip()
     if payload.text is not None and not text:
         raise HttpError(400, "Napisz, o co chodzi.")
@@ -494,8 +532,7 @@ def delete_my_request(request, request_id: UUID):
     if text_request.employee.membership_id != ctx.membership.pk:
         raise HttpError(404, "Nie znaleziono.")
     ctx.require_writable()
-    if text_request.period.status != SchedulePeriod.Status.COLLECTING:
-        raise HttpError(409, CLOSED)
+    _require_request_open(text_request)
     text_request.delete()
     return Status(204, None)
 
@@ -646,7 +683,7 @@ def _can_reread(row: TextRequest) -> bool:
 def period_requests(request, period_id: UUID):
     """Requests in words for this period, oldest first. Only managers see them."""
     ctx, period = _managed_period(request, period_id)
-    rows = ctx.qs(TextRequest).filter(period=period).select_related("employee__membership__user")
+    rows = ctx.qs(TextRequest).filter(TextRequest.for_periods([period])).select_related("employee__membership__user")
     return [_manager_request_out(r) for r in rows.order_by("created_at")]
 
 
@@ -654,7 +691,7 @@ def period_requests(request, period_id: UUID):
 def update_request(request, request_id: UUID, payload: RequestDecisionIn):
     """The manager rejects a request, or marks it as more or less important than usual."""
     ctx, row = context_for(request, TextRequest, request_id)
-    ctx.require_manager_of(row.period.location)
+    ctx.require_manager_of(row.location)
     ctx.require_writable()
     if payload.manager_priority is not None:
         row.manager_priority = payload.manager_priority
@@ -671,7 +708,7 @@ def update_request(request, request_id: UUID, payload: RequestDecisionIn):
 def reread_request(request, request_id: UUID):
     """Hand a request to the assistant again: one that came while it was switched off, or when the call failed."""
     ctx, row = context_for(request, TextRequest, request_id)
-    ctx.require_manager_of(row.period.location)
+    ctx.require_manager_of(row.location)
     ctx.require_writable()
     if not _can_reread(row):
         raise HttpError(409, "Tej prośby nie da się teraz dać asystentowi. Odśwież stronę.")
