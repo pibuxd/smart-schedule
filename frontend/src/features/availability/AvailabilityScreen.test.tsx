@@ -51,6 +51,21 @@ describe('AvailabilityScreen', () => {
     expect(calls.some((c) => c.url.includes('start=2026-12-01&end=2026-12-31'))).toBe(true)
   })
 
+  it('takes a request for the month before the manager asks', async () => {
+    const calls = api({ period: null, days: [] })
+    show()
+    const box = await screen.findByLabelText('Twoja prośba')
+    expect(screen.getByText(/Prośba dotyczy tego miesiąca/)).toBeInTheDocument()
+    fireEvent.change(box, { target: { value: 'W grudniu bez nocek.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij prośbę' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/me/requests')).toBe(true))
+    expect(calls.find((c) => c.method === 'POST' && c.url === '/api/me/requests')?.body).toEqual({
+      company_id: 'c1',
+      month: '2026-12-01',
+      text: 'W grudniu bez nocek.',
+    })
+  })
+
   it('opens on the period the manager asked about and shows the deadline', async () => {
     api()
     show()

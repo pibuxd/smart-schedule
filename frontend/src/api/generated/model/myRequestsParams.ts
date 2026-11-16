@@ -7,5 +7,6 @@
 
 export type MyRequestsParams = {
   company_id: string;
-  period_id: string;
+  period_id?: string | null;
+  month?: string | null;
 };

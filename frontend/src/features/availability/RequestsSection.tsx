@@ -52,19 +52,23 @@ function RequestStatus({
 /**
  * "Coś jeszcze?": a request in words, only for what the calendar cannot say. The manager reads it; when the
  * assistant is on (`assistantReads`), the text also goes to an outside AI service, and the screen says so.
+ * It belongs to the period the manager asked for (`periodId`), or, before that, to the month on the screen
+ * (`month`, its first day): the manager sees it in every period that covers that month.
  */
 export function RequestsSection({
   companyId,
   periodId,
+  month,
   editable,
   assistantReads = false,
 }: {
   companyId: string
-  periodId: string
+  periodId?: string
+  month?: string
   editable: boolean
   assistantReads?: boolean
 }) {
-  const params = { company_id: companyId, period_id: periodId }
+  const params = periodId ? { company_id: companyId, period_id: periodId } : { company_id: companyId, month }
   const requests = useMyRequests(params, {
     query: {
       // A fresh request is read by the assistant within seconds; look again until it is.
@@ -93,6 +97,7 @@ export function RequestsSection({
       <p className="m-0 text-sm text-ink-muted">
         Napisz to, czego nie zaznaczysz w kalendarzu. Na przykład: w które dni wolisz mieć wolne albo z kim nie chcesz
         pracować. Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny.{' '}
+        {!periodId && 'Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. '}
         {assistantReads
           ? 'Przeczyta to kierownik i asystent AI. Asystent to zewnętrzna usługa (Claude), która pomaga zrozumieć prośby. Grafiku nie układa. Nie wpisuj tu nic, czego nie chcesz jej przekazać.'
           : 'Przeczyta to tylko kierownik.'}
