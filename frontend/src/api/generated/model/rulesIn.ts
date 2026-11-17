@@ -9,4 +9,5 @@ import type { RuleItemIn } from './ruleItemIn';
 export interface RulesIn {
   /** @maxItems 13 */
   items: RuleItemIn[];
+  local_overrides?: string[] | null;
 }

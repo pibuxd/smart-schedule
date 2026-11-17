@@ -591,6 +591,22 @@ class TestRules:
         restored = put(api, self.url(shop), {"items": original}).json()["items"][0]
         assert restored["source"] == "group"
 
+    def test_editor_moves_only_the_selected_group_rule_and_can_restore_it(self, api, shop, group):
+        as_manager(api, shop)
+        url = self.url(shop)
+        items = [
+            {k: item[k] for k in ("code", "enabled", "is_hard", "params")} for item in api.get(url).json()["items"]
+        ]
+        reordered = [items[1], items[0], *items[2:]]
+        moved = put(api, url, {"items": reordered, "local_overrides": [items[1]["code"]]}).json()["items"]
+        assert [(i["code"], i["source"]) for i in moved[:2]] == [
+            (items[1]["code"], "location"),
+            (items[0]["code"], "group"),
+        ]
+        restored = put(api, url, {"items": items, "local_overrides": []}).json()["items"]
+        assert [i["code"] for i in restored] == [i["code"] for i in items]
+        assert not RuleSetting.objects.filter(location=shop["location"]).exists()
+
     def test_saving_unchanged_list_keeps_following_the_group(self, api, shop, group):
         as_manager(api, shop)
         items = api.get(self.url(shop)).json()["items"]

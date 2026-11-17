@@ -183,7 +183,7 @@ describe('ScheduleScreen', () => {
     })
     show()
     fireEvent.click((await screen.findAllByRole('button', { name: new RegExp(shift.employee_name) }))[0])
-    expect(await screen.findByRole('heading', { name: 'Dlaczego ta osoba ma tę zmianę?' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Co uzasadnia ten przydział w obecnym grafiku?' })).toBeInTheDocument()
     expect(await screen.findByText(reason)).toBeInTheDocument()
   })
 

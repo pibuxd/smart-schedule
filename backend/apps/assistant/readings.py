@@ -68,6 +68,12 @@ def saved_reading(data: dict | None, text: str) -> dict:
     return data
 
 
+def legacy_hours_notice(data: dict | None, text: str) -> str:
+    if data and "hours_period" not in data and saved_reading(data, text).get("hours_period") == "week":
+        return " Od aktualizacji generator liczy ten zapisany limit osobno w każdym tygodniu."
+    return ""
+
+
 def clean(
     *,
     type: str,

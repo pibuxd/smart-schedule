@@ -444,8 +444,10 @@ def _request_out(text_request: TextRequest) -> MyRequestOut:
 
 
 def _summary(row: TextRequest) -> str | None:
+    from apps.assistant.readings import legacy_hours_notice
+
     summary = (row.interpretation or {}).get("summary") if row.status == TextRequest.Status.INTERPRETED else None
-    return str(summary) if summary else None
+    return str(summary) + legacy_hours_notice(row.interpretation, row.text) if summary else None
 
 
 def _request_month(day: date) -> date:

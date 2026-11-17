@@ -239,12 +239,13 @@ def _instructions(location: Location) -> list[ManagerInstruction]:
 
 
 def instruction_text(row: ManagerInstruction, names: dict[str, str], shift_names: dict[str, str]) -> str:
-    return readings.describe(
+    description = readings.describe(
         readings.saved_reading(row.data, row.source_text),
         names.get(str(row.employee_id), "Osoba spoza lokalu"),
         names,
         shift_names,
     )
+    return description + readings.legacy_hours_notice(row.data, row.source_text)
 
 
 def command_context(location: Location, sc, today: date, instructions: list[ManagerInstruction]) -> str:
@@ -498,7 +499,8 @@ def _personal_effects(sc, location, additions, removed, names, shift_names) -> l
     built, schedule = build_problem_for_version(version)
     problem = built.problem
     start, end = problem.period_start, problem.period_end
-    when = _period_words(start, end)
+    status = "opublikowany" if version.published_at else "szkic"
+    when = f"{_period_words(start, end)} (wersja {version.number}, {status})"
     new_requests = []
     lines = []
     for i, entry in enumerate(additions):

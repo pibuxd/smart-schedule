@@ -92,6 +92,8 @@ class RuleItemIn(Schema):
 class RulesIn(Schema):
     # The whole list, most important first.
     items: list[RuleItemIn] = Field(max_length=len(RULES))
+    # Location editor: which group settings this location explicitly overrides.
+    local_overrides: list[str] | None = Field(None, max_length=len(RULES))
 
 
 class PreviewOut(Schema):
@@ -291,14 +293,14 @@ def save_scope_rules(request, scope: ScopeType, scope_id: UUID, payload: RulesIn
     return _rules_out(sc)
 
 
-def _assistant_positions(rows, group_rows, existing, changed_codes):
+def _local_positions(rows, group_rows, overrides):
     """Place local settings around the inherited rules, which keep their own ranks in the group."""
     next_rank = None
     local = {}
     last_group_rank = max((r.position for r in group_rows.values()), default=0)
     for row in reversed(rows):
         code = row.rule_code
-        if code in group_rows and code not in existing and code not in changed_codes:
+        if code in group_rows and code not in overrides:
             next_rank = group_rows[code].position
         else:
             local[code] = (last_group_rank + row.position if next_rank is None else next_rank, row.position)
@@ -319,9 +321,12 @@ def save_rules(sc: _Scope, payload: RulesIn, *, changed_codes: set[str] | None =
         original_ranks = {row.rule_code: row.position for row in original}
         old_codes = list(original_ranks)
         ordering_unchanged = [row.rule_code for row in rows[: len(old_codes)]] == old_codes
-        local_ranks = (
-            _assistant_positions(rows, group_rows, existing, changed_codes) if changed_codes is not None else None
-        )
+        overrides = None
+        if changed_codes is not None:
+            overrides = set(existing) | changed_codes
+        elif scope == "location" and payload.local_overrides is not None:
+            overrides = set(payload.local_overrides)
+        local_ranks = _local_positions(rows, group_rows, overrides) if overrides is not None else None
         keep = set()
         for row in rows:
             code = row.rule_code
@@ -370,13 +375,19 @@ def _period_words(start: date, end: date) -> str:
 
 
 def preview_version(sc: _Scope, location: Location) -> ScheduleVersion | None:
-    return (
+    version = (
         sc.ctx.qs(ScheduleVersion)
         .filter(period__location=location)
         .select_related("period")
         .order_by("-period__start", "-number")
         .first()
     )
+    if version is None or version.status == ScheduleVersion.Status.PUBLISHED:
+        return version
+    published = (
+        sc.ctx.qs(ScheduleVersion).filter(period=version.period, status=ScheduleVersion.Status.PUBLISHED).first()
+    )
+    return published or version
 
 
 def _location_preview(sc: _Scope, location: Location, proposed: list[Row]) -> tuple[list[str], tuple | None]:

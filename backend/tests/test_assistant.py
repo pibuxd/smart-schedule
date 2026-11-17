@@ -397,7 +397,11 @@ class TestCommands:
     ):
         api.login(shop["manager"])
         period = shop["period"]
-        version = ScheduleVersion.objects.create(period=period, number=1)
+        version = ScheduleVersion.objects.create(
+            period=period, number=1, status=ScheduleVersion.Status.PUBLISHED, published_at=timezone.now()
+        )
+        ScheduleVersion.objects.create(period=period, number=2)
+
         morning = ShiftType.objects.get(location=shop["location"])
         dates = [period.start + timedelta(days=d) for d in (0, 7, 14, 21)]
         for day in dates:
@@ -418,6 +422,7 @@ class TestCommands:
         )
         body = run(api, shop, monkeypatch, answer, "Anna ma pracować najwyżej 16 godzin w każdym tygodniu.")
         assert "w każdym tygodniu" in body["lines"][0] and "100%" in body["effects"][0]
+        assert "wersja 1, opublikowany" in body["effects"][0]
         assert not ManagerInstruction.objects.exists()
         assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200
         assert build_problem([period]).problem.requests[0].weekly_hours
