@@ -108,7 +108,20 @@ function ShiftDetails({
   return (
     <div className="grid gap-5">
       {shift.past && <p className="m-0 text-ink-muted">Ten dzień już minął, więc tej zmiany nie zmienisz.</p>}
-      <p className="m-0">{data.summary}</p>
+      <section className="grid gap-2" aria-label="Wyjaśnienie przydziału">
+        <h3 className="m-0 text-lg font-extrabold">{shift.employee_id ? 'Dlaczego ta osoba ma tę zmianę?' : 'Dlaczego zmiana jest bez obsady?'}</h3>
+        {shift.manual && shift.employee_id && <p className="m-0">Ten przydział zmieniono ręcznie.</p>}
+        {shift.pinned && <p className="m-0">{shift.employee_id ? 'Przypięcie zachowuje tę osobę przy ponownym układaniu grafiku.' : 'Kierownik przypiął to miejsce jako puste.'}</p>}
+        <p className="m-0">{data.summary}</p>
+        {!!data.reasons?.length && (
+          <div>
+            <h4 className="m-0 text-base font-semibold">Porównanie przy obecnych ustawieniach</h4>
+            <ul className="my-1 grid gap-1 pl-5">
+              {data.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          </div>
+        )}
+      </section>
       {data.shift.problems.map((problem) => (
         <InlineError key={problem}>{problem}</InlineError>
       ))}
@@ -132,9 +145,6 @@ function ShiftDetails({
                 Zostaw bez obsady
               </Button>
             </div>
-          )}
-          {shift.pinned && (
-            <p className="m-0 text-sm text-ink-muted">Przypięta: gdy ułożysz grafik od nowa, ta osoba zostanie na tej zmianie.</p>
           )}
         </div>
       )}

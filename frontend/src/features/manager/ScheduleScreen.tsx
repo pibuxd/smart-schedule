@@ -230,9 +230,9 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
         </div>
         <span className="text-sm text-ink-muted">
           {data.status === 'draft'
-            ? 'Pracownicy jeszcze tego nie widzą. Kliknij zmianę, żeby zobaczyć, kto może ją wziąć. Przeciągnij osobę na inną zmianę, żeby zamienić dwie osoby.'
+            ? 'Pracownicy jeszcze tego nie widzą. Wybierz zmianę, żeby sprawdzić powód przydziału i możliwe zastępstwa. Przeciągnij osobę na inną zmianę, żeby zamienić dwie osoby.'
             : data.status === 'published'
-              ? 'Ten grafik widzą pracownicy w „Mój grafik”.'
+              ? 'Ten grafik widzą pracownicy w „Mój grafik”. Wybierz zmianę, żeby sprawdzić powód przydziału.'
               : 'Starsza wersja, tylko do podglądu.'}
         </span>
       </div>

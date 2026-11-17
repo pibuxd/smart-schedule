@@ -37,6 +37,11 @@ class RequestReading(BaseModel):
     shift_type: str | None = Field(description="Shift name exactly as on the list (typ_zmiany); else null.")
     avoid_shift_type: bool = Field(description="typ_zmiany: true = does NOT want this shift, false = wants only it.")
     max_hours: float | None = Field(description="limit_godzin: most hours in the given days or the whole period.")
+    hours_period: Literal["week", "period"] | None = Field(
+        default=None,
+        description="limit_godzin: week = per Monday–Sunday week; period = total across selected dates.",
+    )
+
     min_days: int | None = Field(
         description='chce_pracowac: on how many of the given days ("albo 12, albo 13" = 1); null = all of them.'
     )
@@ -69,11 +74,17 @@ class NewInstruction(BaseModel):
     shift_type: str | None
     avoid_shift_type: bool
     max_hours: float | None
+    hours_period: Literal["week", "period"] | None = Field(
+        default=None,
+        description="limit_godzin: week = per Monday–Sunday week; period = total across selected dates.",
+    )
     min_days: int | None
     shifts_per_day: int | None
     dates: list[str] = Field(description="Concrete days as YYYY-MM-DD, from today on, in any month. May be empty.")
     weekdays: list[int] = Field(description="Repeating weekdays, 1 = Monday … 7 = Sunday. May be empty.")
-    place: int = Field(description="Place among the manager's instructions, 1 = most important.")
+    place: int | None = Field(
+        description="Null to append on acceptance. Only use a number for an explicit rank (1 = first)."
+    )
 
 
 class CommandPlan(BaseModel):
@@ -95,6 +106,7 @@ Typy:
 - preferuj_osobe: chce zmian z konkretną osobą z listy.
 - typ_zmiany: chce tylko danej zmiany z listy albo nie chce jej wcale.
 - limit_godzin: nie chce pracować więcej niż podaną liczbę godzin (w podanych dniach albo w całym okresie).
+- Przy limicie w każdym tygodniu ustaw hours_period=week. Dla łącznej liczby godzin ustaw period.
 - wolne_dni: woli nie pracować w podane dni albo dni tygodnia.
 - chce_pracowac: chce pracować w podane dni albo dni tygodnia. "Albo 12, albo 13" to dwa dni i min_days = 1
   (wystarczy jeden z nich). Kilka zmian jednego dnia (np. "dwie zmiany pod rząd 21 stycznia") to shifts_per_day.
@@ -121,6 +133,8 @@ Masz dwa narzędzia:
    osobno), preferuj_osobe (dwie osoby razem), typ_zmiany (osoba tylko na danej zmianie albo bez niej),
    limit_godzin, wolne_dni (daty lub dni tygodnia), chce_pracowac (osoba ma pracować w podane dni; min_days =
    w ilu z nich, shifts_per_day = ile zmian danego dnia).
+Dla „najwyżej 16 godzin w każdym tygodniu lutego” podaj jedno limit_godzin z hours_period=week i datami lutego.
+Limit na cały luty to hours_period=period. Dla dopisania na końcu zwróć place=null.
 Jeśli da się użyć zasady z katalogu, użyj zasady.
 Rozpoznawaj polskie formy odmienione imion, nazwisk i nazwy bieżącego lokalu. W planie używaj nazw
 z list w ich oryginalnym brzmieniu. Lista osób zawiera imiona, przy powtórzeniach również inicjały.

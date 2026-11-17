@@ -744,3 +744,45 @@ def test_want_work_two_shifts_on_one_day():
     result, report = solved(p)
     assert (result.schedule["am"], result.schedule["pm"]) == ("anna", "anna")
     assert score(p, report).employee_requests == 100
+
+
+def test_weekly_personal_hours_reset_on_monday_and_include_published_week_hours():
+    # At the start of this period Anna already has eight published hours from Monday.
+    start, end = shift_bounds(MON, time(6), time(14))
+    external = ExternalShift("anna", MON, start, end)
+    slots = [slot("tue", day(1)), slot("next_mon", day(7))]
+    cap = Request("cap", "anna", "hours_limit", max_hours=8, weekly_hours=True, by_manager=True)
+    p = problem(
+        [employee("anna"), employee("ewa")],
+        slots,
+        requests=[cap],
+        external_shifts=[external],
+        pinned={"next_mon": "anna"},
+    )
+    result, report = solved(p)
+    assert result.schedule == {"tue": "ewa", "next_mon": "anna"}
+    assert report.requests[0].degree == 0
+    assert validate(p, {"tue": "anna", "next_mon": "anna"}).requests[0].degree == 0.5
+    # An ordinary period cap keeps the original meaning.
+    monthly = replace(p, requests=(replace(cap, weekly_hours=False),))
+    assert validate(monthly, {"tue": "anna", "next_mon": "anna"}).requests[0].degree == 1
+
+
+def test_together_requires_identical_shift_even_when_opening_and_closing_overlap():
+    slots = [
+        slot("opening", MON, "07:00", "15:00", position=BAKER),
+        slot("closing", MON, "14:00", "22:00", position=BAKER),
+        slot("counter", MON, "14:00", "22:00"),
+    ]
+    pair = Request("pair", "roza", "prefer_person", subject_employee="jan", by_manager=True)
+    p = problem(
+        [employee("roza", positions=(BAKER,)), employee("ewa", positions=(BAKER,)), employee("jan")],
+        slots,
+        requests=[pair],
+        pinned={"counter": "jan"},
+    )
+    result, report = solved(p)
+    assert result.schedule["closing"] == "roza" and report.requests[0].degree == 0
+    overlap = {"opening": "roza", "closing": "ewa", "counter": "jan"}
+    assert validate(p, overlap).requests[0].degree == 1
+    assert validate(replace(p, requests=(replace(pair, type="avoid_person"),)), overlap).requests[0].degree == 1

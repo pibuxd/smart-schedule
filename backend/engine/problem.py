@@ -134,6 +134,18 @@ class Slot:
     # slots of one location, day, shift type and position, as many people must be experienced as slots are marked.
     needs_experienced: bool = False
 
+    def matches_pair(self, other: Slot, *, avoid: bool) -> bool:
+        if self.location != other.location:
+            return False
+        if avoid:
+            return self.start_utc < other.end_utc and other.start_utc < self.end_utc
+        return (self.date, self.shift_type, self.start_utc, self.end_utc) == (
+            other.date,
+            other.shift_type,
+            other.start_utc,
+            other.end_utc,
+        )
+
     def __post_init__(self) -> None:
         _require_aware(self.start, f"Slot {self.id} start")
         _require_aware(self.end, f"Slot {self.id} end")
@@ -242,6 +254,25 @@ class Request:
     # rules, not with employee requests; `rank` is its place on the manager's list (1 = most important).
     by_manager: bool = False
     rank: int = 1
+    weekly_hours: bool = False
+
+    def hour_windows(self, problem: Problem) -> list[tuple[date, date, int]]:
+        """Inclusive bounds and already published minutes counted toward this limit."""
+        if not self.weekly_hours:
+            return [(problem.period_start, problem.period_end, 0)]
+        monday = problem.period_start - timedelta(days=problem.period_start.weekday())
+        result = []
+        while monday <= problem.period_end:
+            sunday = monday + timedelta(days=6)
+            if not self.dates or any(monday <= day <= sunday for day in self.dates):
+                minutes = sum(
+                    round((shift.end_utc - shift.start_utc).total_seconds() / 60)
+                    for shift in problem.external_shifts
+                    if shift.employee == self.employee and monday <= shift.date <= sunday and self.covers(shift.date)
+                )
+                result.append((monday, sunday, minutes))
+            monday += timedelta(days=7)
+        return result
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", RequestType(self.type))

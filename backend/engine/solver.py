@@ -681,9 +681,7 @@ class _Builder:
                 theirs = self.x_of_emp.get(request.subject_employee, ())
                 for slot, var in own:
                     overlapping = [
-                        v
-                        for o, v in theirs
-                        if o.location == slot.location and o.start_utc < slot.end_utc and slot.start_utc < o.end_utc
+                        v for o, v in theirs if slot.matches_pair(o, avoid=request.type == RequestType.AVOID_PERSON)
                     ]
                     if not overlapping:
                         continue
@@ -701,16 +699,24 @@ class _Builder:
                     if (slot.shift_type == request.shift_type) == request.avoid:
                         self.add_penalty(weight / estimate, var)
             case RequestType.HOURS_LIMIT:
-                hours = sum(_minutes(s) * v for s, v in own)
+                windows = request.hour_windows(self.p)
                 limit = round(float(request.max_hours) * 60)
-                if limit <= 0:
-                    self.add_penalty(weight, self._or([v for _, v in own], f"any[{request.id}]"))
-                    return
-                over = self.m.new_int_var(0, sum(_minutes(s) for s, _ in own), f"over[{request.id}]")
-                self.m.add(over >= hours - limit)
-                capped = self.m.new_int_var(0, limit, f"over_capped[{request.id}]")
-                self.m.add_min_equality(capped, [over, limit])
-                self.add_penalty(weight / limit, capped)
+                for start, end, fixed in windows:
+                    slots = [(s, v) for s, v in own if start <= s.date <= end]
+                    if not slots or (limit == 0 and fixed > 0):
+                        continue
+                    cost = weight / len(windows)
+                    if limit == 0:
+                        self.add_penalty(cost, self._or([v for _, v in slots], f"any[{request.id},{start}]"))
+                        continue
+                    hours = fixed + sum(_minutes(s) * v for s, v in slots)
+                    over = self.m.new_int_var(
+                        0, fixed + sum(_minutes(s) for s, _ in slots), f"over[{request.id},{start}]"
+                    )
+                    self.m.add(over >= hours - limit)
+                    capped = self.m.new_int_var(0, limit, f"capped[{request.id},{start}]")
+                    self.m.add_min_equality(capped, [over, limit])
+                    self.add_penalty(cost / limit, capped)
             case RequestType.DAYS_OFF:
                 if not request.dates:  # no dates: left to the manager, as in the validator
                     return

@@ -291,24 +291,62 @@ def save_scope_rules(request, scope: ScopeType, scope_id: UUID, payload: RulesIn
     return _rules_out(sc)
 
 
-def save_rules(sc: _Scope, payload: RulesIn) -> None:
+def _assistant_positions(rows, group_rows, existing, changed_codes):
+    """Place local settings around the inherited rules, which keep their own ranks in the group."""
+    next_rank = None
+    local = {}
+    last_group_rank = max((r.position for r in group_rows.values()), default=0)
+    for row in reversed(rows):
+        code = row.rule_code
+        if code in group_rows and code not in existing and code not in changed_codes:
+            next_rank = group_rows[code].position
+        else:
+            local[code] = (last_group_rank + row.position if next_rank is None else next_rank, row.position)
+    return local
+
+
+def save_rules(sc: _Scope, payload: RulesIn, *, changed_codes: set[str] | None = None) -> None:
     """Check and store the whole list of one scope (also used when the manager accepts the assistant's plan)."""
     scope = sc.scope
-    group_rows = {row.rule_code: row for row in sc.group_rows()}
     field = "location" if scope == "location" else "group"
     with transaction.atomic():
         if sc.location is not None:
             sc.ctx.qs(Location).select_for_update().get(pk=sc.location.pk)
         rows = _clean_items(sc, payload)
         existing = {row.rule_code: row for row in sc.own_rows().order_by("pk").select_for_update()}
+        group_rows = {row.rule_code: row for row in sc.group_rows()}
+        original = merge(group_rows.values(), existing.values())
+        original_ranks = {row.rule_code: row.position for row in original}
+        old_codes = list(original_ranks)
+        ordering_unchanged = [row.rule_code for row in rows[: len(old_codes)]] == old_codes
+        local_ranks = (
+            _assistant_positions(rows, group_rows, existing, changed_codes) if changed_codes is not None else None
+        )
         keep = set()
         for row in rows:
-            group_row = group_rows.get(row.rule_code)
+            code = row.rule_code
+            group_row = group_rows.get(code)
+            if local_ranks is not None:
+                if code not in local_ranks:
+                    continue  # only the group supplies this rule
+                position, tiebreak = local_ranks[code]
+                if ordering_unchanged and code in original_ranks:
+                    position = original_ranks[code]
+                row = replace(row, position=position)
+            else:
+                tiebreak = existing[code].position_tiebreak if code in existing and ordering_unchanged else 0
+                if scope == "location" and ordering_unchanged and code in original_ranks:
+                    row = replace(row, position=original_ranks[code])
             stored = Row(
                 row.rule_code, row.enabled, row.is_hard, row.position, _stored_params(row.rule_code, row.params)
             )
             if scope == "location":
-                if group_row is not None and same_setting(group_row, stored) and group_row.position == row.position:
+                if (
+                    local_ranks is None
+                    and group_row is not None
+                    and same_setting(group_row, stored)
+                    and group_row.position == row.position
+                ):
                     continue  # follows the group
                 if group_row is None and not row.enabled:
                     continue  # nothing to remember: off, like a rule nobody set
@@ -318,6 +356,7 @@ def save_rules(sc: _Scope, payload: RulesIn) -> None:
             )
             setting.enabled, setting.is_hard = stored.enabled, stored.is_hard
             setting.position, setting.params = stored.position, stored.params
+            setting.position_tiebreak = tiebreak
             setting.save()
         sc.own_rows().exclude(rule_code__in=keep).delete()
 
@@ -330,21 +369,21 @@ def _period_words(start: date, end: date) -> str:
     return f"{start:%d.%m}–{end:%d.%m.%Y}"
 
 
-def _location_preview(sc: _Scope, location: Location, proposed: list[Row]) -> tuple[list[str], tuple | None]:
-    """Check the latest schedule of a location against its rules now and with the proposed change."""
-    version = (
+def preview_version(sc: _Scope, location: Location) -> ScheduleVersion | None:
+    return (
         sc.ctx.qs(ScheduleVersion)
         .filter(period__location=location)
         .select_related("period")
         .order_by("-period__start", "-number")
         .first()
     )
+
+
+def _location_preview(sc: _Scope, location: Location, proposed: list[Row]) -> tuple[list[str], tuple | None]:
+    """Check the latest schedule of a location against its rules now and with the proposed change."""
+    version = preview_version(sc, location)
     if version is None:
         return [], None
-    published = (
-        sc.ctx.qs(ScheduleVersion).filter(period=version.period, status=ScheduleVersion.Status.PUBLISHED).first()
-    )
-    version = published or version
     built, schedule = build_problem_for_version(version)
     location_id = str(location.pk)
     # A location's screen sends its whole list (group rules included); a group's list merges with each location.

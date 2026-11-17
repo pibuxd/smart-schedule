@@ -725,9 +725,7 @@ class _Checker:
                 together = sum(
                     1
                     for s in own
-                    if any(
-                        o.location == s.location and o.start_utc < s.end_utc and s.start_utc < o.end_utc for o in theirs
-                    )
+                    if any(s.matches_pair(o, avoid=request.type == RequestType.AVOID_PERSON) for o in theirs)
                 )
                 if request.type == RequestType.AVOID_PERSON:
                     return together / len(own)
@@ -742,10 +740,14 @@ class _Checker:
             case RequestType.HOURS_LIMIT:
                 if request.max_hours is None:
                     return None
-                hours = sum(s.hours for s in own)
-                if request.max_hours <= 0:
-                    return 1.0 if hours > _EPS else 0.0
-                return max(0.0, hours - request.max_hours) / request.max_hours
+                degrees = []
+                for start, end, external_minutes in request.hour_windows(self.p):
+                    hours = external_minutes / 60 + sum(s.hours for s in own if start <= s.date <= end)
+                    if request.max_hours <= 0:
+                        degrees.append(float(hours > _EPS))
+                    else:
+                        degrees.append(min(1.0, max(0.0, hours / request.max_hours - 1)))
+                return sum(degrees) / len(degrees) if degrees else None
             case RequestType.DAYS_OFF:
                 if not request.dates:
                     return None

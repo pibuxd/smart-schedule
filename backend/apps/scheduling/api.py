@@ -595,6 +595,7 @@ class SlotEventOut(Schema):
 class ShiftExplanationOut(Schema):
     shift: VersionShiftOut
     summary: str
+    reasons: list[str]
     candidates: list[CandidateOut]
     # Who held this shift before, newest first (published changes, given-away shifts).
     history: list[SlotEventOut]
@@ -862,6 +863,7 @@ def explain_shift(request, version_id: UUID, shift_id: UUID):
     return ShiftExplanationOut(
         shift=row,
         summary=explanation.summary,
+        reasons=list(explanation.reasons),
         candidates=[
             CandidateOut(
                 employee_id=c.employee,

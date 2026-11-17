@@ -79,6 +79,46 @@ REQUEST_TYPES = {
 }
 
 
+def request_dates(data: dict, start: date, end: date) -> set[date]:
+    dates = readings.dates_in(data, start, end)
+    if dates and data.get("hours_period") == "week":
+        # Include covered dates just outside the period for already published shifts in the same week.
+        dates = readings.dates_in(
+            data, start - timedelta(days=start.weekday()), end + timedelta(days=6 - end.weekday())
+        )
+    return dates
+
+
+def instruction_request(data, employee_id, instruction_id, rank, start, end, names, shift_names) -> Request | None:
+    kind = REQUEST_TYPES.get(str(data.get("type")))
+    subject = str(data["subject_employee"]) if data.get("subject_employee") else None
+    dates = request_dates(data, start, end)
+    if (
+        kind in (None, RequestType.OTHER)
+        or employee_id not in names
+        or (subject is not None and subject not in names)
+        or (readings.has_days(data) and not dates)
+    ):
+        return None
+    max_hours = data.get("max_hours")
+    return Request(
+        id=f"instruction:{instruction_id}",
+        employee=employee_id,
+        type=kind,
+        dates=frozenset(dates),
+        subject_employee=subject,
+        shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
+        avoid=bool(data.get("avoid", False)),
+        max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+        weekly_hours=data.get("hours_period") == "week",
+        min_days=_min_days(data),
+        shifts_per_day=_shifts_per_day(data),
+        summary=readings.describe(data, names[employee_id], names, shift_names),
+        by_manager=True,
+        rank=rank,
+    )
+
+
 class BuildError(Exception):
     """The periods cannot be generated together; the message is a Polish sentence for the manager."""
 
@@ -391,7 +431,7 @@ class _Reader:
             employee_id = str(row.employee_id)
             if employee_id not in employee_ids:
                 continue
-            data = row.interpretation or {}
+            data = readings.saved_reading(row.interpretation, row.text)
             kind = RequestType.OTHER
             if row.status == TextRequest.Status.INTERPRETED:
                 kind = REQUEST_TYPES.get(str(data.get("type")), RequestType.OTHER)
@@ -400,7 +440,7 @@ class _Reader:
             if kind in (RequestType.AVOID_PERSON, RequestType.PREFER_PERSON) and subject is None:
                 kind = RequestType.OTHER
             level = data.get("level")
-            dates = readings.dates_in(data, self.start, self.end)
+            dates = request_dates(data, self.start, self.end)
             if readings.has_days(data) and not dates:
                 continue  # about days outside this period: nothing to keep here
             max_hours = data.get("max_hours")
@@ -416,6 +456,7 @@ class _Reader:
                     shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
                     avoid=bool(data.get("avoid", False)),
                     max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+                    weekly_hours=data.get("hours_period") == "week",
                     min_days=_min_days(data),
                     shifts_per_day=_shifts_per_day(data),
                     summary=str(data.get("summary") or row.text[:200]),
@@ -436,37 +477,15 @@ class _Reader:
         shift_names = {str(s.pk): s.name for s in self.qs(ShiftType).filter(location__in=self.locations)}
         result, places = [], {}
         for row in rows:
-            data = row.data or {}
+            data = readings.saved_reading(row.data, row.source_text)
             employee_id = str(row.employee_id)
-            kind = REQUEST_TYPES.get(str(data.get("type")))
-            subject = str(data["subject_employee"]) if data.get("subject_employee") else None
-            dates = readings.dates_in(data, self.start, self.end)
-            if (
-                kind in (None, RequestType.OTHER)
-                or employee_id not in employee_ids
-                or (subject is not None and subject not in employee_ids)
-                or (readings.has_days(data) and not dates)
-            ):
-                continue
-            places[row.location_id] = places.get(row.location_id, 0) + 1
-            max_hours = data.get("max_hours")
-            result.append(
-                Request(
-                    id=f"instruction:{row.pk}",
-                    employee=employee_id,
-                    type=kind,
-                    dates=frozenset(dates),
-                    subject_employee=subject,
-                    shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
-                    avoid=bool(data.get("avoid", False)),
-                    max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
-                    min_days=_min_days(data),
-                    shifts_per_day=_shifts_per_day(data),
-                    summary=readings.describe(data, names.get(employee_id, "?"), names, shift_names),
-                    by_manager=True,
-                    rank=places[row.location_id],
-                )
+            rank = places.get(row.location_id, 0) + 1
+            request = instruction_request(
+                data, employee_id, str(row.pk), rank, self.start, self.end, names, shift_names
             )
+            if request is not None:
+                places[row.location_id] = rank
+                result.append(request)
         return result
 
     def weights(self) -> WeightProfile:

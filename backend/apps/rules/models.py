@@ -41,6 +41,7 @@ class RuleSetting(ScopedModel):
     enabled = models.BooleanField("włączona", default=True)
     is_hard = models.BooleanField("bez wyjątków", default=False)
     position = models.PositiveSmallIntegerField("miejsce na liście", help_text="1 = najważniejsza.")
+    position_tiebreak = models.PositiveSmallIntegerField(default=0)  # multiple local rules before one inherited rank
     params = models.JSONField("parametry", default=dict, blank=True)
 
     class Meta:
