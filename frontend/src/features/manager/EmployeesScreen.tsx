@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Pencil, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 
-import type { EmployeeOut, InvitationOut, LocationSetupOut, MeOut, PositionOut } from '../../api/generated/model'
+import type { EmployeeIn, EmployeeOut, InvitationOut, LocationSetupOut, MeOut, PositionOut } from '../../api/generated/model'
 import { useMe } from '../../api/generated/auth/auth'
 import {
   useAddMyselfAsEmployee,
@@ -15,7 +15,7 @@ import { Button } from '../../components/ui/button'
 import { CheckField, Section, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
-import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
 import { prettyPhone } from '../auth/phone'
 import { useManager } from './ManagerContext'
 import { EXPERIENCE, shifts } from './words'
@@ -201,21 +201,26 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
+    const data: EmployeeIn = { revision: employee.revision }
+    if (first !== employee.first_name) data.first_name = first
+    if (last !== employee.last_name) data.last_name = last
+    if (experience !== employee.experience) data.experience = experience
+    if (toNumber(max) !== employee.max_hours_month) data.max_hours_month = toNumber(max)
+    if (toNumber(target) !== employee.target_hours_month) data.target_hours_month = toNumber(target)
+    if (active !== employee.is_active) data.is_active = active
+    if (chosen.length !== employee.position_ids.length || chosen.some((id) => !employee.position_ids.includes(id))) {
+      data.position_ids = chosen
+    }
+    const originalLevels = employee.position_experience.filter((p) => p.experience !== employee.experience)
+    if (chosen.some((id) => levels[id] !== originalLevels.find((p) => p.position_id === id)?.experience)) {
+      data.position_experience = chosen.map((id) => ({ position_id: id, experience: levels[id] ?? experience }))
+    }
     update.mutate(
+      { employeeId: employee.id, data },
       {
-        employeeId: employee.id,
-        data: {
-          first_name: first,
-          last_name: last,
-          position_ids: chosen,
-          experience,
-          position_experience: chosen.map((id) => ({ position_id: id, experience: levels[id] ?? experience })),
-          max_hours_month: toNumber(max),
-          target_hours_month: toNumber(target),
-          is_active: active,
+        onError: (error) => {
+          if (errorStatus(error) === 409) void queryClient.invalidateQueries()
         },
-      },
-      {
         onSuccess: () => {
           void queryClient.invalidateQueries()
           onDone()

@@ -4716,6 +4716,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         },
         "description": "Name, positions, experience level, monthly maximum and target, or switching the person off\n(history stays).",
@@ -10258,6 +10268,10 @@
       },
       "EmployeeOut": {
         "properties": {
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -10336,6 +10350,7 @@
           }
         },
         "required": [
+          "revision",
           "id",
           "first_name",
           "last_name",
@@ -10377,6 +10392,18 @@
       },
       "EmployeeIn": {
         "properties": {
+          "revision": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
           "first_name": {
             "anyOf": [
               {
@@ -10587,6 +10614,10 @@
       },
       "RuleValueOut": {
         "properties": {
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -10602,6 +10633,7 @@
           }
         },
         "required": [
+          "position",
           "enabled",
           "is_hard",
           "params"

@@ -28,7 +28,7 @@ from apps.availability.models import (
 )
 from apps.core.schemas import ErrorOut
 from apps.notifications.services import notify
-from apps.scheduling.models import SchedulePeriod
+from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion
 from apps.staffing.me import employee_context
 from apps.staffing.models import EmployeeProfile
 from apps.tenancy.context import TenantContext, context_for
@@ -223,6 +223,10 @@ def _hours_in(day: DayIn) -> Hours:
 def _save_days(
     ctx: TenantContext, profile: EmployeeProfile, states: dict[date, tuple[str, Hours]], source: str
 ) -> None:
+    if states:
+        ctx.qs(EmployeeProfile).select_for_update().get(pk=profile.pk)
+        if _published_dates(ctx, profile, min(states), max(states)).intersection(states):
+            raise HttpError(409, ARRANGED)
     rows = [
         AvailabilityDay(
             company_id=ctx.company.pk,
@@ -277,13 +281,13 @@ def save_my_availability(request, payload: AvailabilityIn):
     return _availability_out(ctx, profile, period)
 
 
-def _collecting_period(ctx: TenantContext, profile: EmployeeProfile) -> SchedulePeriod | None:
-    return (
-        ctx.qs(SchedulePeriod)
-        .filter(location=profile.home_location, status=SchedulePeriod.Status.COLLECTING, end__gte=timezone.localdate())
-        .select_related("location")
-        .order_by("start")
-        .first()
+def _published_dates(ctx: TenantContext, profile: EmployeeProfile, start: date, end: date) -> set[date]:
+    return set(
+        ctx.qs(Assignment)
+        .filter(
+            employee=profile, shift__date__range=(start, end), shift__version__status=ScheduleVersion.Status.PUBLISHED
+        )
+        .values_list("shift__date", flat=True)
     )
 
 
@@ -301,7 +305,7 @@ def _locked_days(ctx: TenantContext, profile: EmployeeProfile, start: date, end:
         while day <= min(period_end, end):
             locked.add(day)
             day += timedelta(days=1)
-    return locked
+    return locked | _published_dates(ctx, profile, start, end)
 
 
 @router.get("/me/calendar", response={200: MyCalendarOut, 400: ErrorOut, 404: ErrorOut})
@@ -310,7 +314,17 @@ def my_calendar(request, company_id: UUID, start: date, end: date):
     ctx, profile = employee_context(request, company_id)
     if end < start or (end - start).days >= MAX_CALENDAR_DAYS:
         raise HttpError(400, f"Kalendarz pokazuje najwyżej {MAX_CALENDAR_DAYS} dni naraz.")
-    period = _collecting_period(ctx, profile)
+    period = (
+        ctx.qs(SchedulePeriod)
+        .filter(
+            location=profile.home_location,
+            status=SchedulePeriod.Status.COLLECTING,
+            end__gte=max(start, timezone.localdate()),
+            start__lte=end,
+        )
+        .order_by("start")
+        .first()
+    )
     submission = ctx.qs(AvailabilitySubmission).filter(employee=profile, period=period).first() if period else None
     days = ctx.qs(AvailabilityDay).filter(employee=profile, date__gte=start, date__lte=end).order_by("date")
     return MyCalendarOut(

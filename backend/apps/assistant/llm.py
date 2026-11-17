@@ -122,6 +122,10 @@ Masz dwa narzędzia:
    limit_godzin, wolne_dni (daty lub dni tygodnia), chce_pracowac (osoba ma pracować w podane dni; min_days =
    w ilu z nich, shifts_per_day = ile zmian danego dnia).
 Jeśli da się użyć zasady z katalogu, użyj zasady.
+Rozpoznawaj polskie formy odmienione imion, nazwisk i nazwy bieżącego lokalu. W planie używaj nazw
+z list w ich oryginalnym brzmieniu. Lista osób zawiera imiona, przy powtórzeniach również inicjały.
+Jeśli imię jest jednoznaczne, nie wymagaj pełnego nazwiska na liście. Nazwa lokalu wskazuje miejsce pracy.
+Gdy jednej osoby brakuje lub imię pasuje do kilku osób, zapytaj tylko o tę osobę. Zachowaj rozpoznane osoby i lokal.
 
 Ważność wyraża się wyłącznie miejscem na liście: wyżej znaczy ważniej, a każda rzecz ma inne miejsce. Nie ma
 poziomu „bardzo ważne”. Gdy kierownik mówi, że coś jest ważne, wybierz miejsce względem tego, co już jest na

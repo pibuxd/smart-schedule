@@ -61,6 +61,17 @@ describe('MyScheduleScreen', () => {
     expect(screen.getByText('112 godz.')).toBeInTheDocument()
   })
 
+  it('keeps an ongoing shift visible without offering it and skips an ended shift', async () => {
+    schedule([shift])
+    const first = renderScreen(<MyScheduleScreen companyId="c1" today={new Date(shift.start_at)} />)
+    expect(await screen.findByText('Trwa Twoja zmiana')).toBeInTheDocument()
+    expect(screen.queryByText('Oddaj tę zmianę')).not.toBeInTheDocument()
+    first.unmount()
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(shift.end_at)} />)
+    expect(await screen.findByText('Nie masz jeszcze zmian w grafiku')).toBeInTheDocument()
+    expect(screen.getByText('112 godz.')).toBeInTheDocument()
+  })
+
   it('gives a shift away after explaining that it stays mine until the manager decides', async () => {
     const calls = schedule([shift])
     renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)

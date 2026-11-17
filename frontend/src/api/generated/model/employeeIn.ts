@@ -8,6 +8,7 @@ import type { EmployeeInExperience } from './employeeInExperience';
 import type { PositionLevel } from './positionLevel';
 
 export interface EmployeeIn {
+  revision?: string | null;
   first_name?: string | null;
   last_name?: string | null;
   position_ids?: string[] | null;

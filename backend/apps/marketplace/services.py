@@ -207,6 +207,7 @@ def claim_offer(offer: ShiftOffer, profile: EmployeeProfile) -> ShiftClaim:
         if auto:
             # Same lock as the manager's approval: no schedule edit or publication between the check and the move.
             SchedulePeriod.objects.select_for_update().filter(pk=offer.assignment.shift.version.period_id).first()
+            profile = EmployeeProfile.objects.for_company(offer.company_id).select_for_update().get(pk=profile.pk)
         verdicts = check_people(offer, [profile])
         if not verdicts:
             raise HttpError(409, "Nie pracujesz na tym stanowisku, więc nie możesz wziąć tej zmiany.")
@@ -349,6 +350,7 @@ def approve_claim(claim: ShiftClaim, user) -> ShiftOffer:
         _require_current(offer)
         taker = (
             EmployeeProfile.objects.for_company(claim.company_id)
+            .select_for_update(of=("self",))
             .select_related("membership__user", "home_location")
             .get(pk=claim.employee_id)
         )

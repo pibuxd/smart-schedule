@@ -7,6 +7,7 @@
 import type { RuleValueOutParams } from './ruleValueOutParams';
 
 export interface RuleValueOut {
+  position: number;
   enabled: boolean;
   is_hard: boolean;
   params: RuleValueOutParams;

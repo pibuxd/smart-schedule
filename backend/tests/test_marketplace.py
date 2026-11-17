@@ -150,6 +150,15 @@ def test_claim_and_approval_move_the_shift_with_history(api, market):
     api.login(user_of(m["elsewhere"]))
     theirs = api.get(f"/api/me/schedule?company_id={m['company'].id}").json()["shifts"]
     assert [s["id"] for s in theirs] == [str(row.pk)] and theirs[0]["away"] is True
+    company_id = str(m["company"].pk)
+    calendar = api.get(f"/api/me/calendar?company_id={company_id}&start={MON}&end={MON}").json()
+    assert calendar["locked"] == [MON.isoformat()]
+    refused = api.client.put(
+        "/api/me/calendar",
+        {"company_id": company_id, "days": [{"date": MON.isoformat(), "state": "cannot"}]},
+        content_type="application/json",
+    )
+    assert refused.status_code == 409
     api.login(user_of(m["giver"]))
     gone = api.get(f"/api/me/schedule?company_id={m['company'].id}").json()["shifts"]
     assert str(row.pk) not in {s["id"] for s in gone}

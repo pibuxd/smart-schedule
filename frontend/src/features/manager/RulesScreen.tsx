@@ -195,6 +195,12 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
       },
     )
 
+  const hardCount = items.filter((item) => item.enabled && item.is_hard).length
+  const hardWarning = hardCount >= 3 && (
+    <p role="status" className="m-0 rounded-md bg-prefer-not-soft p-3">
+      Liczba zasad bez wyjątków: {hardCount}. Gdy nie da się spełnić ich razem, część zmian może zostać bez obsady.
+    </p>
+  )
   const result = preview.data?.data as PreviewOut | undefined
   let place = 0
 
@@ -228,6 +234,7 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
         </p>
       </div>
 
+      {hardWarning}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={items.map((i) => i.code)} strategy={verticalListSortingStrategy}>
           <ol className="m-0 grid list-none gap-2 p-0">
@@ -239,6 +246,7 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
                   item={item}
                   place={item.enabled ? place : null}
                   index={index}
+                  dirty={dirty}
                   last={index === items.length - 1}
                   scope={scope}
                   data={data}
@@ -271,6 +279,7 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
         <div className="grid gap-4">
           {preview.isPending && <Loading>Sprawdzam ostatni grafik…</Loading>}
           {preview.isError && <InlineError>{errorMessage(preview.error, NETWORK_PROBLEM)}</InlineError>}
+          {hardWarning}
           {result && <PreviewText result={result} />}
           {save.isError && <InlineError>{errorMessage(save.error, NETWORK_PROBLEM)}</InlineError>}
           <Button wide onClick={confirm} disabled={save.isPending || preview.isPending || preview.isError}>
@@ -328,6 +337,7 @@ function RuleCard({
   item,
   place,
   index,
+  dirty,
   last,
   scope,
   data,
@@ -338,6 +348,7 @@ function RuleCard({
   item: Item
   place: number | null
   index: number
+  dirty: boolean
   last: boolean
   scope: Scope
   data: RulesOut
@@ -347,13 +358,15 @@ function RuleCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.code })
   const lockedHere = scope === 'group' && item.location_only
-  const source = scope === 'location' ? SOURCE[item.source] : null
   const differsFromGroup =
     scope === 'location' &&
     item.group_value &&
-    (item.group_value.enabled !== item.enabled ||
+    (item.group_value.position !== index + 1 || item.group_value.enabled !== item.enabled ||
       item.group_value.is_hard !== item.is_hard ||
       JSON.stringify(item.group_value.params) !== JSON.stringify(item.params))
+  const source = scope === 'location'
+    ? SOURCE[dirty && item.group_value ? (differsFromGroup ? 'location' : 'group') : item.source]
+    : null
 
   return (
     <li
@@ -394,10 +407,10 @@ function RuleCard({
             <span className="text-sm text-ink-muted">{item.description}</span>
           </div>
           <span className="flex gap-1">
-            <Button variant="quiet" size="normal" className="px-2" aria-label={`Wyżej: ${item.label}`} disabled={disabled || index === 0} onClick={() => onMove(index, index - 1)}>
+            <Button variant="quiet" size="normal" className="min-w-(--touch) px-2" aria-label={`Wyżej: ${item.label}`} disabled={disabled || index === 0} onClick={() => onMove(index, index - 1)}>
               <ArrowUp aria-hidden="true" size={20} />
             </Button>
-            <Button variant="quiet" size="normal" className="px-2" aria-label={`Niżej: ${item.label}`} disabled={disabled || last} onClick={() => onMove(index, index + 1)}>
+            <Button variant="quiet" size="normal" className="min-w-(--touch) px-2" aria-label={`Niżej: ${item.label}`} disabled={disabled || last} onClick={() => onMove(index, index + 1)}>
               <ArrowDown aria-hidden="true" size={20} />
             </Button>
           </span>
@@ -431,7 +444,11 @@ function RuleCard({
               variant="quiet"
               size="normal"
               disabled={disabled}
-              onClick={() => onChange({ enabled: item.group_value!.enabled, is_hard: item.group_value!.is_hard, params: item.group_value!.params })}
+              onClick={() => {
+                const group = item.group_value!
+                onChange({ enabled: group.enabled, is_hard: group.is_hard, params: group.params })
+                if (index !== group.position - 1) onMove(index, group.position - 1)
+              }}
             >
               Przywróć jak w grupie
             </Button>

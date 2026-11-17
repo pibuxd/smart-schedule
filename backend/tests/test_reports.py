@@ -54,6 +54,8 @@ def test_bad_month_and_other_companies(api, shop, published, make_company):
     api.login(shop["manager"])
     assert api.get(f"/api/reports/hours?company_id={shop['company'].id}&month=grudzien").status_code == 400
 
+    assert api.get(f"/api/reports/hours?company_id={shop['company'].id}&month=9999-12").status_code == 400
+
     other = make_company("Inna")
     api.login(other["manager"])
     assert api.get(f"/api/reports/hours?company_id={shop['company'].id}&month=2026-12").status_code == 404

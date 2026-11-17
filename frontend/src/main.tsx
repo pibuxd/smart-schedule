@@ -6,7 +6,8 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/atkinson-hyperlegible-next'
 import './index.css'
 import { errorStatus } from './lib/api-error'
-import { SESSION_ENDED_KEY } from './lib/session-ended'
+import { noteUnauthorized, rememberSession } from './lib/session-ended'
+import { getLogoutMutationKey, getMeQueryKey } from './api/generated/auth/auth'
 import { routeTree } from './routeTree.gen'
 
 /** The session ended (logged out elsewhere, expired): go to the login screen instead of showing errors. */
@@ -14,12 +15,9 @@ function onApiError(error: unknown) {
   if (errorStatus(error) !== 401) return
   const path = window.location.pathname
   if (path.startsWith('/logowanie') || path.startsWith('/rejestracja')) return
+  const hadSession = Boolean(queryClient.getQueryData(getMeQueryKey()))
   queryClient.clear()
-  try {
-    window.sessionStorage.setItem(SESSION_ENDED_KEY, '1')
-  } catch {
-    // The login screen just does not explain why.
-  }
+  noteUnauthorized(hadSession)
   void router.navigate({ to: '/logowanie', replace: true })
 }
 
@@ -31,8 +29,16 @@ window.addEventListener('vite:preloadError', (event) => {
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
-  queryCache: new QueryCache({ onError: onApiError }),
-  mutationCache: new MutationCache({ onError: onApiError }),
+  queryCache: new QueryCache({
+    onError: onApiError,
+    onSuccess: (_, query) => { if (query.queryKey[0] === getMeQueryKey()[0]) rememberSession(true) },
+  }),
+  mutationCache: new MutationCache({
+    onError: onApiError,
+    onSuccess: (_data, _vars, _result, mutation) => {
+      if (mutation.options.mutationKey?.[0] === getLogoutMutationKey()[0]) rememberSession(false)
+    },
+  }),
 })
 
 const router = createRouter({ routeTree, context: { queryClient } })

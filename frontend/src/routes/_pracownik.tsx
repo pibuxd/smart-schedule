@@ -5,6 +5,7 @@ import { Bell, CalendarCheck, CalendarDays } from 'lucide-react'
 import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { EmployeeContext } from '../features/auth/EmployeeContext'
+import { ProfileNameForm } from '../features/auth/ProfileNameForm'
 import { useSession } from '../features/auth/session'
 import { isManagerRole } from '../features/manager/ManagerContext'
 import { useUnreadNotifications } from '../features/notifications/unread'
@@ -53,20 +54,6 @@ function EmployeeLayout() {
           <div className="flex min-w-0 items-center justify-between gap-3 text-base text-ink-muted">
             <span className="min-w-0 truncate">
               {`${me.first_name} ${me.last_name}`.trim() || 'Twoje konto'}
-              {me.companies.length > 1 && (
-                <select
-                  aria-label="Firma"
-                  className="ml-2 min-h-(--touch) rounded-sm border border-line bg-surface px-2 text-base"
-                  value={company.id}
-                  onChange={(event) => session.chooseCompany(event.target.value)}
-                >
-                  {me.companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              )}
               {me.companies.length === 1 && <span>, {company.name}</span>}
             </span>
             <button
@@ -77,6 +64,20 @@ function EmployeeLayout() {
               Wyloguj
             </button>
           </div>
+          {me.companies.length > 1 && (
+            <select
+              aria-label="Firma"
+              className="w-full min-w-0 min-h-(--touch) rounded-sm border border-line bg-surface px-2 text-base"
+              value={company.id}
+              onChange={(event) => session.chooseCompany(event.target.value)}
+            >
+              {me.companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           {isManagerRole(company.role) && (
             <Link
               to="/kierownik"
@@ -123,7 +124,8 @@ function EmployeeLayout() {
             </Link>
           ))}
         </nav>
-        <main className="mx-auto max-w-(--column) px-4 pt-4 pb-10">
+        <main key={company.id} className="mx-auto max-w-(--column) px-4 pt-4 pb-10">
+          {!me.first_name && <ProfileNameForm me={me} />}
           <Outlet />
         </main>
       </div>

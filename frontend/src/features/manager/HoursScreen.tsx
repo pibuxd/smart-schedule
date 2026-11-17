@@ -120,7 +120,7 @@ function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: 
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-ink">
-            <td className="px-3 py-2 font-extrabold" colSpan={3 + (many ? data.locations.length : 0)}>
+            <td className="px-3 py-2 font-extrabold" colSpan={2 + (many ? data.locations.length : 0)}>
               Razem
             </td>
             <td className="px-3 py-2 text-right font-extrabold tabular-nums">{hours(data.total)}</td>

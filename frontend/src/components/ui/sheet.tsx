@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 
 /**
  * A panel that slides up from the bottom on a phone and sits in the middle on a computer
@@ -19,11 +19,21 @@ export function Sheet({
   description?: string
   children: ReactNode
 }) {
+  const opener = useRef<HTMLElement | null>(null)
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/40" />
         <Dialog.Content
+          onOpenAutoFocus={() => {
+            opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+          }}
+          onCloseAutoFocus={(event) => {
+            if (opener.current?.isConnected) {
+              event.preventDefault()
+              opener.current.focus()
+            }
+          }}
           className={
             'fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-y-auto rounded-t-lg bg-paper px-4 pt-4 ' +
             'pb-[max(24px,env(safe-area-inset-bottom))] shadow-sheet ' +
