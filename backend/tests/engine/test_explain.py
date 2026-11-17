@@ -116,3 +116,14 @@ def test_empty_slot_names_the_albo_choice():
     )
     explanation = explain_slot(p, {"a": "anna", "b": None}, "b")
     assert "dyspozycja „albo”: już ma zmianę tego dnia (1 osoba)" in explanation.summary
+
+
+def test_assigned_shift_explains_the_specific_instruction_and_equivalent_alternative():
+    want = Request(
+        "r", "anna", "want_work", dates=frozenset([MON]), by_manager=True, summary="Anna chce pracować w poniedziałek"
+    )
+    p = problem([employee("anna"), employee("ewa")], [slot("a", MON)], requests=[want])
+    explanation = explain_slot(p, {"a": "anna"}, "a")
+    assert any("Ewa" in line and want.summary in line for line in explanation.reasons)
+    tie = explain_slot(replace(p, requests=()), {"a": "anna"}, "a")
+    assert any("Ewa" in line and "takie same" in line for line in tie.reasons)

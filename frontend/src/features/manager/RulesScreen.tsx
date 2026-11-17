@@ -166,13 +166,33 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
-  const dirty = JSON.stringify(toPayload(items)) !== JSON.stringify(toPayload(data.items))
+  const payload = (list: Item[]) => ({
+    items: toPayload(list),
+    ...(scope === 'location' && data.group && {
+      local_overrides: list.filter((item) => item.source === 'location').map((item) => item.code),
+    }),
+  })
+  const dirty = JSON.stringify(payload(items)) !== JSON.stringify(payload(data.items))
 
   const change = (code: string, patch: Partial<Item>) =>
-    setItems((now) => now.map((i) => (i.code === code ? { ...i, ...patch } : i)))
-  const move = (from: number, to: number) => {
+    setItems((now) => now.map((item, index) => {
+      if (item.code !== code) return item
+      const next = { ...item, ...patch }
+      if (scope === 'location' && next.group_value && patch.source === undefined) {
+        next.source = matchesGroup(next, index) ? 'group' : 'location'
+      }
+      return next
+    }))
+  const move = (from: number, to: number, restore = false) => {
     if (to < 0 || to >= items.length) return
-    setItems((now) => arrayMove(now, from, to))
+    setItems((now) => {
+      const reordered = arrayMove(now, from, to)
+      const item = reordered[to]
+      if (scope === 'location' && item.group_value) {
+        reordered[to] = { ...item, source: restore || matchesGroup(item, to) ? 'group' : 'location' }
+      }
+      return reordered
+    })
   }
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
@@ -182,11 +202,11 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
   }
   const check = () => {
     setChecking(true)
-    preview.mutate({ scope, scopeId, data: { items: toPayload(items) } })
+    preview.mutate({ scope, scopeId, data: payload(items) })
   }
   const confirm = () =>
     save.mutate(
-      { scope, scopeId, data: { items: toPayload(items) } },
+      { scope, scopeId, data: payload(items) },
       {
         onSuccess: () => {
           setChecking(false)
@@ -246,7 +266,6 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
                   item={item}
                   place={item.enabled ? place : null}
                   index={index}
-                  dirty={dirty}
                   last={index === items.length - 1}
                   scope={scope}
                   data={data}
@@ -333,11 +352,16 @@ const SOURCE: Record<string, { text: string; tone: 'muted' | 'accent' | 'warn' }
   off: null,
 }
 
+function matchesGroup(item: Item, index: number) {
+  const group = item.group_value
+  return group && group.position === index + 1 && group.enabled === item.enabled &&
+    group.is_hard === item.is_hard && JSON.stringify(group.params) === JSON.stringify(item.params)
+}
+
 function RuleCard({
   item,
   place,
   index,
-  dirty,
   last,
   scope,
   data,
@@ -348,25 +372,17 @@ function RuleCard({
   item: Item
   place: number | null
   index: number
-  dirty: boolean
   last: boolean
   scope: Scope
   data: RulesOut
   disabled: boolean
   onChange: (patch: Partial<Item>) => void
-  onMove: (from: number, to: number) => void
+  onMove: (from: number, to: number, restore?: boolean) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.code })
   const lockedHere = scope === 'group' && item.location_only
-  const differsFromGroup =
-    scope === 'location' &&
-    item.group_value &&
-    (item.group_value.position !== index + 1 || item.group_value.enabled !== item.enabled ||
-      item.group_value.is_hard !== item.is_hard ||
-      JSON.stringify(item.group_value.params) !== JSON.stringify(item.params))
-  const source = scope === 'location'
-    ? SOURCE[dirty && item.group_value ? (differsFromGroup ? 'location' : 'group') : item.source]
-    : null
+  const differsFromGroup = scope === 'location' && item.source === 'location'
+  const source = scope === 'location' ? SOURCE[item.source] : null
 
   return (
     <li
@@ -446,8 +462,8 @@ function RuleCard({
               disabled={disabled}
               onClick={() => {
                 const group = item.group_value!
-                onChange({ enabled: group.enabled, is_hard: group.is_hard, params: group.params })
-                if (index !== group.position - 1) onMove(index, group.position - 1)
+                onChange({ enabled: group.enabled, is_hard: group.is_hard, params: group.params, source: 'group' })
+                if (index !== group.position - 1) onMove(index, group.position - 1, true)
               }}
             >
               Przywróć jak w grupie

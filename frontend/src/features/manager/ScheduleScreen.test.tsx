@@ -172,6 +172,21 @@ describe('ScheduleScreen', () => {
     expect(screen.getByText('Nie chcę zamykać w piątki.')).toBeInTheDocument()
   })
 
+  it('shows what a replacement would change when the manager opens an assigned shift', async () => {
+    const shift = version.shifts.find((item) => item.employee_id)!
+    const reason = 'Po zamianie na osobę Ewa grafik gorzej spełnia polecenie kierownika „Praca 1 grudnia”.'
+    mockApi((method, path) => {
+      if (method === 'GET' && path.endsWith('/periods')) return [200, [period]]
+      if (method === 'GET' && path === '/api/versions/v1') return [200, version]
+      if (method === 'GET' && path.endsWith('/explain')) return [200, { ...explanation, shift, reasons: [reason] }]
+      return [404, { detail: 'Nie ma.' }]
+    })
+    show()
+    fireEvent.click((await screen.findAllByRole('button', { name: new RegExp(shift.employee_name) }))[0])
+    expect(await screen.findByRole('heading', { name: 'Co uzasadnia ten przydział w obecnym grafiku?' })).toBeInTheDocument()
+    expect(await screen.findByText(reason)).toBeInTheDocument()
+  })
+
   it('explains an empty shift and puts a person in it', async () => {
     const calls = api()
     show()
@@ -246,7 +261,7 @@ describe('ScheduleScreen', () => {
     show()
     expect(await screen.findByRole('button', { name: 'Popraw grafik' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Opublikuj' })).not.toBeInTheDocument()
-    expect(screen.getByText('Ten grafik widzą pracownicy w „Mój grafik”.')).toBeInTheDocument()
+    expect(screen.getByText(/Ten grafik widzą pracownicy w „Mój grafik”/)).toBeInTheDocument()
   })
 
   it('says what to do before anything is arranged', async () => {

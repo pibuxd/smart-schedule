@@ -11,6 +11,7 @@ anything that cannot be checked makes the reading unusable (`clean` returns None
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
 from datetime import date, timedelta
 from typing import Any
@@ -49,6 +50,30 @@ def _lookup(name: str | None, by_label: Mapping[str, str]) -> str | None:
     return None
 
 
+def hour_scope(scope: str | None, text: str, max_hours: float | None) -> str:
+    """Recognise an explicit per-week limit if the model dropped its unit on a single request."""
+    amount = r"\b(\d+(?:[,.]\d+)?)\s*(?:godzin(?:y|ę)?|godz\.?|h)\b"
+    week = r"(?:w każdym tygodniu|na każdy tydzień|tygodniowo|na tydzień)"
+    match = re.search(rf"{amount}\s+{week}\b", text, re.I)
+    if match and len(re.findall(amount, text, re.I)) == 1 and float(match[1].replace(",", ".")) == max_hours:
+        return "week"
+    return scope or "period"
+
+
+def saved_reading(data: dict | None, text: str) -> dict:
+    """Older readings had no unit. Recover it only from an explicit weekly quantity in the original text."""
+    data = data or {}
+    if data.get("type") == "limit_godzin" and "hours_period" not in data:
+        return {**data, "hours_period": hour_scope(None, text, data.get("max_hours"))}
+    return data
+
+
+def legacy_hours_notice(data: dict | None, text: str) -> str:
+    if data and "hours_period" not in data and saved_reading(data, text).get("hours_period") == "week":
+        return " Od aktualizacji generator liczy ten zapisany limit osobno w każdym tygodniu."
+    return ""
+
+
 def clean(
     *,
     type: str,
@@ -56,6 +81,7 @@ def clean(
     shift_type: str | None = None,
     avoid: bool = False,
     max_hours: float | None = None,
+    hours_period: str = "period",
     dates: Iterable[str] = (),
     weekdays: Iterable[int] = (),
     min_days: int | None = None,
@@ -88,6 +114,7 @@ def clean(
         if max_hours is None or not 0 <= max_hours <= 744:
             return None
         data["max_hours"] = float(max_hours)
+        data["hours_period"] = hours_period
     elif type == "wolne_dni" and not days and not week:
         return None
     elif type == "chce_pracowac":
@@ -159,6 +186,8 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
         case "limit_godzin":
             hours = data.get("max_hours") or 0
             shown = int(hours) if float(hours).is_integer() else hours
+            if data.get("hours_period") == "week":
+                return f"{who}: najwyżej {shown} godz. w każdym tygodniu{when}"
             return f"{who}: najwyżej {shown} godz.{when or ' w okresie grafiku'}"
         case "wolne_dni":
             return f"{who}: wolne{when}"

@@ -123,7 +123,7 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         context, people, shift_types = request_context(row, today)
         try:
             reading = llm.read_request(row.text, context)
-            status, interpretation, why = _checked_request(reading, request_span(row), people, shift_types)
+            status, interpretation, why = _checked_request(reading, request_span(row), people, shift_types, row.text)
             reason = TextRequest.UnreadReason.NONE if interpretation else TextRequest.UnreadReason.UNSURE
             if interpretation is None:
                 answer = {"why": why, **reading.model_dump(mode="json")}
@@ -148,7 +148,11 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
 
 
 def _checked_request(
-    reading: llm.RequestReading, span: tuple[date, date], people: dict[str, str], shift_types: dict[str, str]
+    reading: llm.RequestReading,
+    span: tuple[date, date],
+    people: dict[str, str],
+    shift_types: dict[str, str],
+    text: str = "",
 ) -> tuple[str, dict[str, Any] | None, str]:
     """(status, interpretation, why it could not be used: "" when it could). `span`: the days it can be about."""
     start, end = span[0].isoformat(), span[1].isoformat()
@@ -159,6 +163,7 @@ def _checked_request(
         shift_type=reading.shift_type,
         avoid=reading.avoid_shift_type,
         max_hours=reading.max_hours,
+        hours_period=readings.hour_scope(reading.hours_period, text, reading.max_hours),
         dates=[d for d in reading.dates if start <= d <= end],
         weekdays=reading.weekdays,
         min_days=reading.min_days,
@@ -234,10 +239,16 @@ def _instructions(location: Location) -> list[ManagerInstruction]:
 
 
 def instruction_text(row: ManagerInstruction, names: dict[str, str], shift_names: dict[str, str]) -> str:
-    return readings.describe(row.data or {}, names.get(str(row.employee_id), "Osoba spoza lokalu"), names, shift_names)
+    description = readings.describe(
+        readings.saved_reading(row.data, row.source_text),
+        names.get(str(row.employee_id), "Osoba spoza lokalu"),
+        names,
+        shift_names,
+    )
+    return description + readings.legacy_hours_notice(row.data, row.source_text)
 
 
-def command_context(location: Location, sc, today: date) -> str:
+def command_context(location: Location, sc, today: date, instructions: list[ManagerInstruction]) -> str:
     people = _people(location)
     names = {pid: label for label, pid in people.items()}
     shift_types = _shift_types(location)
@@ -276,7 +287,6 @@ def command_context(location: Location, sc, today: date) -> str:
         extra = f"; {'; '.join(settings_)}" if settings_ else ""
         lines.append(f"{place}. [{rule.code}] {rule.label}: {state}{extra}. {rule.description}")
     lines += ["", "Polecenia o osobach (kolejność = ważność):"]
-    instructions = _instructions(location)
     for number, row in enumerate(instructions, start=1):
         lines.append(f"{number}. {instruction_text(row, names, shift_names)}")
     if not instructions:
@@ -293,9 +303,13 @@ def run_command(command_id: str, today: date | None = None) -> str:
     status, plan, raw = AssistantCommand.Status.FAILED, None, None
     try:
         sc = rules_scope(_SystemContext(command.company), command.location)
-        answer = llm.plan_command(command.text, command_context(command.location, sc, today))
+        instructions = _instructions(command.location)
+        answer = llm.plan_command(command.text, command_context(command.location, sc, today, instructions))
         raw = answer.model_dump(mode="json")
-        status, plan = AssistantCommand.Status.READY, check_plan(command.location, sc, answer)
+        status, plan = (
+            AssistantCommand.Status.READY,
+            check_plan(command.location, sc, answer, command.text, instructions),
+        )
     except llm.AssistantError as exc:
         logger.warning("assistant command %s failed: %s", command.pk, exc)
         raw = {"error": str(exc)}
@@ -327,7 +341,9 @@ def _number_param(code: str) -> str | None:
 MAX_DAYS_AHEAD = 366
 
 
-def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any]:
+def check_plan(
+    location: Location, sc, answer: llm.CommandPlan, text: str, instructions: list[ManagerInstruction]
+) -> dict[str, Any]:
     """Turn the assistant's answer into a plan made only of things that exist in this location.
 
     `lines` say in plain Polish what accepting the plan will do; `notes` say what was left out and warn about
@@ -390,7 +406,6 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
             rule_changes.append(entry)
             lines.append(f"Zasada „{rule.label}”: {', '.join(said)}.")
 
-    instructions = _instructions(location)
     removed = []
     for number in dict.fromkeys(answer.remove_instructions[:MAX_ACTIONS]):
         if 1 <= number <= len(instructions):
@@ -410,6 +425,9 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
             shift_type=new.shift_type,
             avoid=new.avoid_shift_type,
             max_hours=new.max_hours,
+            hours_period=readings.hour_scope(
+                new.hours_period, text if len(answer.new_instructions) == 1 else "", new.max_hours
+            ),
             dates=new.dates,
             weekdays=new.weekdays,
             min_days=new.min_days,
@@ -430,8 +448,7 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
                     f"Polecenie o osobie „{new.person}” zadziała, gdy założysz okres grafiku na te dni. "
                     "Do tego czasu nie zmienia żadnego grafiku."
                 )
-        place = max(1, new.place)
-        new_instructions.append({"employee": employee, "data": data, "place": place})
+        new_instructions.append({"employee": employee, "data": data, "place": new.place})
         lines.append(f"Nowe polecenie: {readings.describe(data, names[employee], names, shift_names)}.")
 
     effects: list[str] = []
@@ -443,6 +460,8 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
             notes.append(f"Tych zmian zasad nie da się zapisać: {exc.message}")
             lines = [line for line in lines if not line.startswith("Zasada „")]
             rule_changes = []
+    if new_instructions or removed:
+        effects.extend(_personal_effects(sc, location, new_instructions, removed, names, shift_names))
     hard = sum(1 for item in _changed_items(items, rule_changes) if item.enabled and item.is_hard)
     if any(change.get("is_hard") for change in rule_changes) and hard >= 3:
         notes.append(
@@ -455,15 +474,65 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
             "Kolejność możesz zmienić na liście poleceń."
         )
     return {
+        "relative_append": True,
         "reply": answer.reply.strip()[:600],
         "question": (answer.question or "").strip()[:300] or None,
         "rule_changes": rule_changes,
         "new_instructions": new_instructions,
         "remove_instructions": removed,
         "lines": lines,
-        "effects": effects[:8],
+        "effects": effects,
         "notes": notes,
     }
+
+
+def _personal_effects(sc, location, additions, removed, names, shift_names) -> list[str]:
+    from dataclasses import replace
+
+    from apps.rules.api import _period_words, preview_version
+    from apps.scheduling.problem_builder import build_problem_for_version, instruction_request
+    from engine.validator import validate
+
+    version = preview_version(sc, location)
+    if version is None:
+        return ["Ten lokal nie ma jeszcze grafiku do porównania."]
+    built, schedule = build_problem_for_version(version)
+    problem = built.problem
+    start, end = problem.period_start, problem.period_end
+    status = "opublikowany" if version.published_at else "szkic"
+    when = f"{_period_words(start, end)} (wersja {version.number}, {status})"
+    new_requests = []
+    lines = []
+    for i, entry in enumerate(additions):
+        req = instruction_request(
+            entry["data"], entry["employee"], f"preview-{i}", i + 1, start, end, names, shift_names
+        )
+        if (
+            req is None
+            or req.employee not in problem.employee_by_id
+            or (req.subject_employee and req.subject_employee not in problem.employee_by_id)
+        ):
+            label = readings.describe(entry["data"], names[entry["employee"]], names, shift_names)
+            lines.append(f"{label} — poza grafikiem {when}.")
+        else:
+            new_requests.append(req)
+    removed_ids = {f"instruction:{pk}" for pk in removed}
+    old_requests = [r for r in problem.requests if r.id in removed_ids]
+    report = validate(replace(problem, requests=tuple([*old_requests, *new_requests])), schedule)
+    degrees = {m.request_id: m.degree for m in report.requests}
+    for req in [*old_requests, *new_requests]:
+        label = "Usuwane polecenie" if req.id in removed_ids else "Nowe polecenie"
+        worked = any(schedule.get(s.id) == req.employee and req.covers(s.date) for s in problem.slots)
+        if not worked and req.type in ("prefer_person", "avoid_person", "shift_type"):
+            outcome = "brak przydziałów tej osoby w podanych dniach"
+        elif req.id in degrees:
+            outcome = f"wykonanie {100 * (1 - degrees[req.id]):.0f}%"
+        else:
+            outcome = "brak danych do oceny"
+        lines.append(f"{label} na grafiku {when}: {req.summary} — {outcome}.")
+    if removed_ids - {r.id for r in old_requests}:
+        lines.append(f"Usuwane polecenie nie dotyczy grafiku {when}.")
+    return lines
 
 
 def _changed_items(items: list, changes: list[dict[str, Any]]) -> list:
@@ -501,15 +570,19 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
     """The manager accepted the plan: change the rule list and the instructions in one transaction."""
     from apps.rules.api import RulesIn, save_rules
 
-    plan = command.plan or {}
     with transaction.atomic():
         locked = ctx.qs(AssistantCommand).select_for_update().get(pk=command.pk)
+        plan = locked.plan or {}
         if locked.status != AssistantCommand.Status.READY or not has_changes(plan):
             raise HttpError(409, "Tego planu nie można już zastosować. Napisz polecenie jeszcze raz.")
-        location = command.location
+        location = ctx.qs(Location).select_for_update().get(pk=command.location_id)
         if plan.get("rule_changes"):
             sc = rules_scope(ctx, location)
-            save_rules(sc, RulesIn(items=_changed_items(_rule_items(sc), plan["rule_changes"])))
+            save_rules(
+                sc,
+                RulesIn(items=_changed_items(_rule_items(sc), plan["rule_changes"])),
+                changed_codes={change["code"] for change in plan["rule_changes"]},
+            )
         ctx.qs(ManagerInstruction).filter(location=location, pk__in=plan.get("remove_instructions") or []).delete()
         rows = _instructions(location)
         for new in plan.get("new_instructions") or []:
@@ -525,7 +598,18 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
                 source_text=command.text,
                 created_by=ctx.user,
             )
-            rows.insert(min(int(new.get("place") or len(rows) + 1), len(rows) + 1) - 1, row)
+            place = new.get("place")
+            # Pending plans from older workers expressed even "at the end" as an absolute number.
+            if (
+                "relative_append" not in plan
+                and len(plan["new_instructions"]) == 1
+                and any(word in plan.get("reply", "").lower() for word in ("na koniec", "na końcu"))
+            ):
+                place = None
+            if place is None:
+                rows.append(row)
+            else:
+                rows.insert(max(0, min(int(place) - 1, len(rows))), row)
         renumber(rows)
         locked.status = AssistantCommand.Status.APPLIED
         locked.decided_at = timezone.now()

@@ -19,12 +19,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from engine.problem import AvailabilityState, Problem, Schedule
+from engine.rules_catalog import RULES_BY_CODE
 from engine.scoring import Scores, score
 from engine.validator import Code, ValidationReport, validate
 
 WISH_WORDS = {
     AvailabilityState.PREFER: "chętnie pracuje tego dnia",
-    AvailabilityState.NEUTRAL: "nie ma tego dnia nic zaznaczone",
+    AvailabilityState.NEUTRAL: "ma dyspozycję „mogę”",
     AvailabilityState.CANNOT: "ma tego dnia zaznaczone „nie mogę”",
 }
 
@@ -66,6 +67,7 @@ class SlotExplanation:
     slot: str
     employee: str | None
     summary: str
+    reasons: tuple[str, ...]
     candidates: tuple[Candidate, ...]  # the current person first, then those who can, then those who cannot
 
 
@@ -98,6 +100,7 @@ def explain_slot(
     current = schedule.get(slot_id)
 
     candidates = []
+    alternatives = {}
     for employee in problem.employees:
         if slot.position not in employee.positions:
             continue
@@ -116,6 +119,8 @@ def explain_slot(
             report = validate(problem, changed)
             hard = [v for v in report.hard if v.message not in base_messages]
             notes = tuple(new_soft_violations(base, report, employee.id))
+            if not hard and current is not None:
+                alternatives[employee.id] = report
         candidates.append(
             Candidate(
                 employee=employee.id,
@@ -145,8 +150,56 @@ def explain_slot(
         slot=slot_id,
         employee=current,
         summary=_summary(problem, slot_id, current, candidates, base),
+        reasons=_assignment_reasons(problem, schedule, slot_id, base, candidates, alternatives) if current else (),
         candidates=tuple(candidates),
     )
+
+
+def _assignment_reasons(problem, schedule, slot_id, base, candidates, alternatives) -> tuple[str, ...]:
+    """Explain a one-slot comparison on the displayed schedule, without guessing how the solver broke a tie."""
+    current = next((c for c in candidates if c.current), None)
+    if current is None:
+        return ()
+    other = next((c for c in candidates if c.employee in alternatives), None)
+    after = alternatives[other.employee] if other else validate(problem, {**schedule, slot_id: None})
+    comparison = f"Gdy zmianę przejmie {other.name}," if other else "Gdy to miejsce zostanie puste,"
+    reasons = []
+    baseline = {m.request_id: m.degree for m in base.requests if m.request_id}
+    requests = {r.id: r for r in problem.requests}
+    for measure in after.requests:
+        if measure.request_id and measure.degree > baseline.get(measure.request_id, 1.0) + 1e-9:
+            req = requests[measure.request_id]
+            if req.summary:
+                kind = "polecenie kierownika" if req.by_manager else "prośbę pracownika"
+                reasons.append(f"{comparison} grafik gorzej spełnia {kind} „{req.summary}”.")
+    before = {(m.location, m.code): m.degree for m in base.rules}
+    for rule in after.rules:
+        if rule.degree > before.get((rule.location, rule.code), 1.0) + 1e-9:
+            reasons.append(f"{comparison} grafik gorzej spełnia zasadę „{RULES_BY_CODE[rule.code].label}”.")
+    if other:
+        if (other.scores.manager_rules, other.scores.employee_requests) == (
+            current.scores.manager_rules,
+            current.scores.employee_requests,
+        ):
+            reasons.append(f"{other.name} też może wziąć tę zmianę. Oceny zasad i próśb byłyby takie same.")
+        else:
+            reasons.append(
+                f"{comparison} ocena zasad wyniosłaby {_hours(other.scores.manager_rules)}% "
+                f"(obecnie {_hours(current.scores.manager_rules)}%), a próśb {_hours(other.scores.employee_requests)}% "
+                f"(obecnie {_hours(current.scores.employee_requests)}%)."
+            )
+    else:
+        blocks = Counter(_BLOCK_WORDS.get(c.block_code, "inne ograniczenie") for c in candidates if not c.current)
+        if blocks:
+            reasons.append(
+                "Pozostałe osoby z tym stanowiskiem: "
+                + ", ".join(f"{why} ({_people(n)})" for why, n in blocks.most_common())
+                + "."
+            )
+        else:
+            reasons.append("Na liście kandydatów do tej zmiany tylko ta osoba ma wymagane stanowisko.")
+    reasons = list(dict.fromkeys(reasons))
+    return tuple([*reasons[:2], reasons[-1]] if len(reasons) > 3 else reasons)
 
 
 def _summary(problem: Problem, slot_id: str, current: str | None, candidates: list[Candidate], base) -> str:
@@ -170,7 +223,7 @@ def _summary(problem: Problem, slot_id: str, current: str | None, candidates: li
     person = next((c for c in candidates if c.current), None)
     if person is None:  # the person lost the position since; the validator reports it
         return "Osoba na tej zmianie nie pracuje już na tym stanowisku."
-    text = f"{person.name} {WISH_WORDS[person.wish]}; ma w tym grafiku {_hours(person.hours)} h"
+    text = f"{person.name} {WISH_WORDS[person.wish]}. W tym grafiku ma {_hours(person.hours)} h"
     if person.target_hours:
         text += f" (cel na miesiąc: {_hours(person.target_hours)} h)"
     text += "."

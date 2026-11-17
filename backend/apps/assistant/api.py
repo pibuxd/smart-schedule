@@ -146,9 +146,10 @@ def dismiss_assistant_command(request, command_id: UUID):
     ctx, command = _managed_command(request, command_id)
     ctx.require_writable()
     if command.status in (AssistantCommand.Status.READY, AssistantCommand.Status.QUEUED):
-        command.status = AssistantCommand.Status.DISMISSED
-        command.decided_at = timezone.now()
-        command.save(update_fields=["status", "decided_at"])
+        ctx.qs(AssistantCommand).filter(
+            pk=command.pk, status__in=[AssistantCommand.Status.READY, AssistantCommand.Status.QUEUED]
+        ).update(status=AssistantCommand.Status.DISMISSED, decided_at=timezone.now())
+        command.refresh_from_db()
     return _command_out(command)
 
 
@@ -168,6 +169,7 @@ def order_location_instructions(request, location_id: UUID, payload: Instruction
     ctx, location = _managed_location(request, location_id)
     ctx.require_writable()
     with transaction.atomic():
+        ctx.qs(Location).select_for_update().get(pk=location.pk)
         rows = {row.pk: row for row in ctx.qs(ManagerInstruction).filter(location=location).select_for_update()}
         if len(payload.ids) != len(rows) or set(payload.ids) != set(rows):
             raise HttpError(400, "Lista poleceń zmieniła się w międzyczasie. Odśwież stronę i spróbuj jeszcze raz.")
@@ -182,6 +184,7 @@ def delete_instruction(request, instruction_id: UUID):
     ctx.require_writable()
     location = row.location
     with transaction.atomic():
+        ctx.qs(Location).select_for_update().get(pk=location.pk)
         row.delete()
         services.renumber(list(ctx.qs(ManagerInstruction).filter(location=location).order_by("position")))
     return Status(204, None)

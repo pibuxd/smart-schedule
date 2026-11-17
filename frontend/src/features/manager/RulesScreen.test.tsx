@@ -73,6 +73,7 @@ describe('RulesScreen', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
     const put = calls.find((c) => c.method === 'PUT')!
     expect(put.url).toBe('/api/scopes/location/l1/rules')
+    expect(put.body).toMatchObject({ local_overrides: ['target_hours'] })
     expect((put.body as { items: { code: string }[] }).items.map((i) => i.code)).toEqual([
       'target_hours',
       'min_rest_between_shifts',

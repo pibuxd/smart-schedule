@@ -22,6 +22,7 @@ class RuleRow(Protocol):
     is_hard: bool
     position: int
     params: dict[str, Any]
+    position_tiebreak: int
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class Row:
     is_hard: bool
     position: int
     params: dict[str, Any] = field(default_factory=dict)
+    position_tiebreak: int = 0
 
 
 # Choices that may stay empty on an enabled rule (experience_mix: empty = all positions together).
@@ -60,12 +62,17 @@ NUMBER_PARAMS: dict[str, tuple[int, int, str]] = {
 
 def merge(group_rows: Iterable[RuleRow], location_rows: Iterable[RuleRow]) -> list[RuleRow]:
     """One list in order of importance, enabled and switched-off rules alike."""
-    by_code: dict[str, tuple[int, int, RuleRow]] = {}
+    by_code: dict[str, tuple[int, int, int, RuleRow]] = {}
     for row in group_rows:
-        by_code[row.rule_code] = (row.position, 1, row)
+        by_code[row.rule_code] = (row.position, 1, 0, row)
     for row in location_rows:
-        by_code[row.rule_code] = (row.position, 0, row)  # the location's own setting wins
-    return [row for _, _, row in sorted(by_code.values(), key=lambda v: (v[0], v[1], v[2].rule_code))]
+        by_code[row.rule_code] = (
+            row.position,
+            0,
+            row.position_tiebreak,
+            row,
+        )  # the location's own setting wins
+    return [row for _, _, _, row in sorted(by_code.values(), key=lambda v: (*v[:3], v[3].rule_code))]
 
 
 def rule_configs(location_id: str, rows: Iterable[RuleRow]) -> list[RuleConfig]:

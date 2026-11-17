@@ -1,7 +1,7 @@
 """Stage 10: the assistant reads employees' requests and the manager's commands (with a fake API client)."""
 
 import json
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import httpx2
 import pytest
@@ -16,10 +16,10 @@ from apps.availability.models import TextRequest
 from apps.notifications.models import Notification
 from apps.notifications.services import notification_text
 from apps.rules.models import RuleSetting
-from apps.scheduling.models import SchedulePeriod
+from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import build_problem
 from apps.staffing.models import EmployeeProfile, ShiftType
-from apps.tenancy.models import Membership
+from apps.tenancy.models import LocationGroup, Membership
 from tests.conftest import next_phone
 
 
@@ -352,6 +352,82 @@ class TestCommands:
         assert [i["text"] for i in listed["items"]] == ["Anna i Kasia: osobno, nie na tej samej zmianie"]
         [request] = build_problem([shop["period"]]).problem.requests
         assert request.by_manager and request.rank == 1 and request.type == "avoid_person"
+
+    def test_queued_appends_use_the_order_of_acceptance(self, api, shop, with_key, monkeypatch):
+        api.login(shop["manager"])
+        ids = [
+            run(
+                api,
+                shop,
+                monkeypatch,
+                plan(new_instructions=[instruction(person=name, type="limit_godzin", max_hours=16, place=None)]),
+            )["id"]
+            for name in ("Anna", "Kasia")
+        ]
+        for pk in reversed(ids):
+            assert api.post(f"/api/assistant-commands/{pk}/apply").status_code == 200
+        assert list(ManagerInstruction.objects.order_by("position").values_list("employee_id", flat=True)) == [
+            shop["kasia"].pk,
+            shop["employee"].pk,
+        ]
+
+    def test_changing_one_rule_preserves_other_inherited_settings(self, api, shop, with_key, monkeypatch):
+        api.login(shop["manager"])
+        location = shop["location"]
+        group = LocationGroup.objects.create(company=shop["company"], name="Grupa")
+        location.group = group
+        location.save()
+        for rank, code in enumerate(("min_rest_between_shifts", "target_hours", "max_consecutive_days"), 1):
+            RuleSetting.objects.create(group=group, rule_code=code, position=rank)
+        RuleSetting.objects.create(location=location, rule_code="fair_weekends", position=1)
+        for place in (None, 1):
+            answer = plan(rule_changes=[rule_change("max_consecutive_days", number=4, place=place)])
+            cmd = run(api, shop, monkeypatch, answer)
+            assert api.post(f"/api/assistant-commands/{cmd['id']}/apply").status_code == 200
+            items = api.get(f"/api/scopes/location/{location.pk}/rules").json()["items"]
+            assert {i["code"] for i in items if i["source"] == "group"} == {"min_rest_between_shifts", "target_hours"}
+            if place:
+                assert items[0]["code"] == "max_consecutive_days"
+        RuleSetting.objects.filter(group=group, rule_code="min_rest_between_shifts").update(params={"hours": 18})
+        items = api.get(f"/api/scopes/location/{location.pk}/rules").json()["items"]
+        assert next(i for i in items if i["code"] == "min_rest_between_shifts")["params"]["hours"] == 18
+
+    def test_weekly_limit_preview_uses_actual_assignments_and_changes_nothing_before_apply(
+        self, api, shop, with_key, monkeypatch
+    ):
+        api.login(shop["manager"])
+        period = shop["period"]
+        version = ScheduleVersion.objects.create(
+            period=period, number=1, status=ScheduleVersion.Status.PUBLISHED, published_at=timezone.now()
+        )
+        ScheduleVersion.objects.create(period=period, number=2)
+
+        morning = ShiftType.objects.get(location=shop["location"])
+        dates = [period.start + timedelta(days=d) for d in (0, 7, 14, 21)]
+        for day in dates:
+            start = timezone.make_aware(datetime.combine(day, time(6)))
+            shift = Shift.objects.create(
+                location=shop["location"],
+                position=shop["position"],
+                shift_type=morning,
+                version=version,
+                slot_key=f"{day}/{morning.pk}/{shop['position'].pk}/1",
+                date=day,
+                start_at=start,
+                end_at=start + timedelta(hours=8),
+            )
+            Assignment.objects.create(shift=shift, employee=shop["employee"])
+        answer = plan(
+            new_instructions=[instruction(type="limit_godzin", max_hours=16, dates=[d.isoformat() for d in dates])]
+        )
+        body = run(api, shop, monkeypatch, answer, "Anna ma pracować najwyżej 16 godzin w każdym tygodniu.")
+        assert "w każdym tygodniu" in body["lines"][0] and "100%" in body["effects"][0]
+        assert "wersja 1, opublikowany" in body["effects"][0]
+        assert not ManagerInstruction.objects.exists()
+        assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200
+        assert build_problem([period]).problem.requests[0].weekly_hours
+        removal = run(api, shop, monkeypatch, plan(remove_instructions=[1]))
+        assert "Usuwane" in removal["effects"][0] and "100%" in removal["effects"][0]
 
     def test_dismissed_plan_changes_nothing(self, api, shop, with_key, monkeypatch):
         api.login(shop["manager"])

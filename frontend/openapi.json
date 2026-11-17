@@ -8657,6 +8657,13 @@
             "title": "Summary",
             "type": "string"
           },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
           "candidates": {
             "items": {
               "$ref": "#/components/schemas/CandidateOut"
@@ -8675,6 +8682,7 @@
         "required": [
           "shift",
           "summary",
+          "reasons",
           "candidates",
           "history"
         ],
@@ -10742,6 +10750,21 @@
             "maxItems": 13,
             "title": "Items",
             "type": "array"
+          },
+          "local_overrides": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 13,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Overrides"
           }
         },
         "required": [

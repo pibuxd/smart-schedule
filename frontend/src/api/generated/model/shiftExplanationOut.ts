@@ -11,6 +11,7 @@ import type { VersionShiftOut } from './versionShiftOut';
 export interface ShiftExplanationOut {
   shift: VersionShiftOut;
   summary: string;
+  reasons: string[];
   candidates: CandidateOut[];
   history: SlotEventOut[];
 }
