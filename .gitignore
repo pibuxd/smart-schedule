@@ -10,3 +10,5 @@ frontend/dist/
 .DS_Store
 .deployed-commit
 .deploy-failed-commit
+deploy/local/*
+!deploy/local/README.md

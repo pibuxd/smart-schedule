@@ -9,6 +9,9 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    volumes:
+      # Server-only Caddy additions, see deploy/local/README.md.
+      - ./deploy/local:/etc/caddy/local:ro
 
   db:
     # The database is reachable only from the other containers.

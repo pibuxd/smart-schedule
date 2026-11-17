@@ -3,6 +3,10 @@
 {$SITE_ADDRESS::8080} {
 	encode zstd gzip
 
+	# Server-only additions (e.g. a page only this server has): *.caddy files in deploy/local/ on the VPS.
+	# That folder is git-ignored, so `git pull` in the auto-update never stops on a local change.
+	import /etc/caddy/local/*.caddy
+
 	handle /api/* {
 		reverse_proxy api:8000
 	}
