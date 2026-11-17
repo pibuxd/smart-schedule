@@ -119,8 +119,12 @@ export function RequestsSection({
                     <textarea className="rounded-md border-2 border-ink p-2" maxLength={1000} rows={3}
                       value={editing.text} onChange={(e) => setEditing({ id: request.id, text: e.target.value })} />
                   </label>
+                  <p className="m-0 text-sm text-ink-muted">
+                    Kierownik zobaczy poprawioną treść. Jego wcześniejsza decyzja i nadana prośbie ważność pozostaną w mocy.{' '}
+                    {assistantReads && 'Po zmianie tekstu zewnętrzny asystent AI (Claude) przeczyta prośbę ponownie.'}
+                  </p>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="submit" disabled={update.isPending || !editing.text.trim()}>Zapisz prośbę</Button>
+                    <Button type="submit" disabled={update.isPending || !editing.text.trim() || editing.text.trim() === request.text}>Zapisz prośbę</Button>
                     <Button type="button" variant="quiet" disabled={update.isPending} onClick={() => setEditing(null)}>Anuluj</Button>
                   </div>
                 </form>

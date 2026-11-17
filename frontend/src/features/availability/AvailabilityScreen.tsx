@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { onlineManager, useIsMutating } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
@@ -323,7 +324,12 @@ function AvailabilityEditor({
 
       {arranged && (
         <p className="m-0 text-sm text-ink-muted">
-          Na szare dni grafik jest już ułożony, więc ich nie zmienisz. Jeśli coś Ci wypadło, powiedz kierownikowi.
+          Na szare dni grafik jest już ułożony.{' '}
+          {readOnly ? 'Jeśli coś Ci wypadło, skontaktuj się z kierownikiem.' : <>
+            Jeśli masz opublikowaną zmianę, która jeszcze się nie zaczęła, możesz ją oddać w{' '}
+            <Link to="/grafik" className="font-semibold text-accent underline">Moim grafiku</Link>.
+            W pozostałych przypadkach skontaktuj się z kierownikiem.
+          </>}
         </p>
       )}
 

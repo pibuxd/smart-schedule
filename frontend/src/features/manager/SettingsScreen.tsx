@@ -117,7 +117,10 @@ function LocationForm({ location }: { location: LocationOut }) {
       <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 md:grid-cols-2 lg:grid-cols-4 lg:items-start">
         <TextField label="Nazwa" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
         {role === 'owner' && groups.length > 0 && (
-          <SelectField label="Grupa lokali" value={groupId} disabled={readOnly} onChange={(e) => setGroupId(e.target.value)}>
+          <SelectField label="Grupa lokali" value={groupId} disabled={readOnly} onChange={(e) => setGroupId(e.target.value)}
+            hint={groupId === (location.group_id ?? '') ? undefined : groupId
+              ? 'Po zapisaniu lokal będzie korzystać z zasad wybranej grupy. Własne ustawienia lokalu nadal mają pierwszeństwo.'
+              : 'Po zapisaniu przestaną obowiązywać zasady dziedziczone z grupy. Zostaną zasady ustawione w tym lokalu.'}>
             <option value="">Bez grupy</option>
             {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
           </SelectField>
@@ -519,6 +522,11 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
                         onChange={(e) => change(key, 'start', e.target.value)} />
                       <TextField label="Do" aria-label={`${label}: do`} type="time" step="any" value={cell.end}
                         onChange={(e) => change(key, 'end', e.target.value)} />
+                      {Number(cell.count) > 0 && (!(cell.start || st.start_time) || !(cell.end || st.end_time)) && (
+                        <p className="m-0 text-sm font-semibold text-prefer-not">
+                          Uzupełnij początek i koniec zmiany przed ułożeniem grafiku na ten dzień.
+                        </p>
+                      )}
                     </>)}
                   </fieldset>
                 )
