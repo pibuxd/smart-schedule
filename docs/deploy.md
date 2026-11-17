@@ -82,6 +82,9 @@ zwykle do 10 minut po merge'u, a przerwa w działaniu trwa kilkanaście sekund.
   Bez tego ślad zostaje tylko w logu.
 - Ręcznie, bez czekania: `/opt/grafikomat/deploy/update.sh`.
 - Wyłączenie automatu: `rm /etc/cron.d/grafikomat-auto-update`. Ponowne włączenie: uruchom jeszcze raz polecenie z punktu 1.
+- Nie zmieniaj na serwerze plików śledzonych w repo (np. `deploy/Caddyfile`): `git pull` zatrzyma się na nich i automat
+  przestanie wdrażać. Dodatki tylko dla tego serwera (np. własna strona) wpisz w pliku `deploy/local/<nazwa>.caddy`
+  (folder poza repo, opis w `deploy/local/README.md`), potem `docker compose restart caddy`.
 - Na serwerze, który powstał przed dodaniem automatu, wystarczy raz uruchomić polecenie z punktu 1 (niczego nie kasuje).
 
 Uwaga: każdy merge do `main` trafia od razu na działający serwis, o dowolnej porze. To jest w porządku tylko wtedy,
