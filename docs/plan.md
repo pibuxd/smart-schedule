@@ -637,7 +637,8 @@ Po teście Piotra 15.11.2026 (osobny PR):
 - Polecenia kierownika dla asystenta nie są przypięte do okresu (tak było od etapu 10), ale asystent dostawał tylko
   najbliższy okres i prompt kazał mu trzymać daty w okresie. Teraz kontekst wymienia okresy od dzisiaj i mówi wprost,
   że polecenie może dotyczyć dowolnego przyszłego dnia, także miesiąca bez okresu; generator weźmie je, gdy kierownik
-  założy ten okres (zgłoszenie Piotra 17.11.2026).
+  założy ten okres (zgłoszenie Piotra 17.11.2026). Plan mówi wtedy kierownikowi, że polecenie zadziała po założeniu
+  okresu na te dni; polecenie tylko o dniach ponad rok naprzód jest pomijane z uwagą (jak w kalendarzu dyspozycji).
 
 ## 23. Przejęcie oddanej zmiany bez zatwierdzania (15.11.2026)
 

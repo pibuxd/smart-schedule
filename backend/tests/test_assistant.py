@@ -423,6 +423,11 @@ class TestCommands:
         assert services.run_command(created["id"]) == "ready"
         assert f"od {shop['period'].start.isoformat()} do {shop['period'].end.isoformat()}" in seen["context"]
         assert "także w miesiącach, na które nie ma jeszcze okresu" in seen["context"]
+        body = api.get(f"/api/assistant-commands/{created['id']}").json()
+        assert body["notes"] == [
+            "Polecenie o osobie „Anna” zadziała, gdy założysz okres grafiku na te dni. "
+            "Do tego czasu nie zmienia żadnego grafiku."
+        ]
         assert api.post(f"/api/assistant-commands/{created['id']}/apply").status_code == 200
 
         assert not build_problem([shop["period"]]).problem.requests  # not this period
@@ -430,6 +435,14 @@ class TestCommands:
         new_period = SchedulePeriod.objects.create(location=shop["location"], start=later, end=end)
         [request] = build_problem([new_period]).problem.requests
         assert request.by_manager and request.dates == {later.replace(day=12)}
+
+    def test_a_command_more_than_a_year_ahead_is_dropped(self, api, shop, with_key, monkeypatch):
+        far = (timezone.localdate() + timedelta(days=400)).isoformat()
+        api.login(shop["manager"])
+        answer = plan(new_instructions=[instruction(type="wolne_dni", other_person=None, dates=[far])])
+        body = run(api, shop, monkeypatch, answer)
+        assert body["lines"] == [] and body["can_apply"] is False
+        assert body["notes"] == ["Pominąłem polecenie o osobie „Anna”: dotyczy dni ponad rok naprzód."]
 
     def test_a_question_is_shown_when_the_command_is_unclear(self, api, shop, with_key, monkeypatch):
         api.login(shop["manager"])
