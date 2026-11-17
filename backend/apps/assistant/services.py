@@ -244,15 +244,17 @@ def command_context(location: Location, sc, today: date) -> str:
     shift_names = {str(s.pk): s.name for s in shift_types}
     positions = Position.objects.for_company(location.company_id).filter(location=location).order_by("name")
     position_names = {str(p.pk): p.name for p in positions}
-    period = (
+    periods = list(
         SchedulePeriod.objects.for_company(location.company_id)
         .filter(location=location, end__gte=today)
-        .order_by("start")
-        .first()
+        .order_by("start")[:6]
     )
+    # Instructions are not tied to a period: a day in a month with no period yet counts once one covers it.
+    period_words = "; ".join(f"od {p.start.isoformat()} do {p.end.isoformat()}" for p in periods) or "jeszcze żadnych"
     lines = [
         _today_line(today),
-        f"Okres grafiku: od {period.start.isoformat()} do {period.end.isoformat()}." if period else "Okres: brak.",
+        f"Okresy grafiku od dzisiaj: {period_words}. Polecenie może dotyczyć każdego dnia od dzisiaj, "
+        "także w miesiącach, na które nie ma jeszcze okresu.",
         f"Osoby: {', '.join(people) or '(brak)'}.",
         f"Stanowiska: {', '.join(position_names.values()) or '(brak)'}.",
         f"Zmiany: {_shift_lines(shift_types)}.",

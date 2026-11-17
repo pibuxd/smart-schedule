@@ -634,6 +634,10 @@ Po teście Piotra 15.11.2026 (osobny PR):
 - Caddy: `index.html` z `Cache-Control: no-cache`, pliki z `/assets` (z hashem w nazwie) na rok. Otwarta karta, która po
   wdrożeniu nie znajdzie starego pliku ekranu, przeładowuje się sama (`vite:preloadError`). Przyczyna: Piotr po wdrożeniu
   #27 widział jeszcze starą wersję okienka dnia.
+- Polecenia kierownika dla asystenta nie są przypięte do okresu (tak było od etapu 10), ale asystent dostawał tylko
+  najbliższy okres i prompt kazał mu trzymać daty w okresie. Teraz kontekst wymienia okresy od dzisiaj i mówi wprost,
+  że polecenie może dotyczyć dowolnego przyszłego dnia, także miesiąca bez okresu; generator weźmie je, gdy kierownik
+  założy ten okres (zgłoszenie Piotra 17.11.2026).
 
 ## 23. Przejęcie oddanej zmiany bez zatwierdzania (15.11.2026)
 

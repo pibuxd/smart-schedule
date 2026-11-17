@@ -71,8 +71,8 @@ class NewInstruction(BaseModel):
     max_hours: float | None
     min_days: int | None
     shifts_per_day: int | None
-    dates: list[str]
-    weekdays: list[int]
+    dates: list[str] = Field(description="Concrete days as YYYY-MM-DD, from today on, in any month. May be empty.")
+    weekdays: list[int] = Field(description="Repeating weekdays, 1 = Monday … 7 = Sunday. May be empty.")
     place: int = Field(description="Place among the manager's instructions, 1 = most important.")
 
 
@@ -131,6 +131,9 @@ Jeśli nie mówi nic o ważności, nie ruszaj kolejności zasad, a nowe poleceni
 
 „Bez wyjątków” ustaw tylko wtedy, gdy kierownik wyraźnie mówi, że coś nie może się zdarzyć nigdy, nawet kosztem
 nieobsadzonej zmiany. W odpowiedzi uprzedź wtedy, że mogą zostać zmiany bez obsady.
+
+Daty licz od dzisiejszego dnia. Polecenie może dotyczyć dowolnego przyszłego dnia, także miesiąca, na który
+kierownik nie ułożył jeszcze grafiku: generator uwzględni je, gdy będzie układać ten okres.
 
 Używaj tylko nazw osób, stanowisk, zmian i kodów zasad z list. Jeśli polecenie jest niejasne albo dotyczy czegoś
 spoza list, nie zgaduj: zostaw listy zmian puste i zadaj jedno krótkie pytanie. Odpowiadaj po polsku, prostymi
