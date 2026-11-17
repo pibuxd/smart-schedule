@@ -244,15 +244,17 @@ def command_context(location: Location, sc, today: date) -> str:
     shift_names = {str(s.pk): s.name for s in shift_types}
     positions = Position.objects.for_company(location.company_id).filter(location=location).order_by("name")
     position_names = {str(p.pk): p.name for p in positions}
-    period = (
+    periods = list(
         SchedulePeriod.objects.for_company(location.company_id)
         .filter(location=location, end__gte=today)
-        .order_by("start")
-        .first()
+        .order_by("start")[:6]
     )
+    # Instructions are not tied to a period: a day in a month with no period yet counts once one covers it.
+    period_words = "; ".join(f"od {p.start.isoformat()} do {p.end.isoformat()}" for p in periods) or "jeszcze żadnych"
     lines = [
         _today_line(today),
-        f"Okres grafiku: od {period.start.isoformat()} do {period.end.isoformat()}." if period else "Okres: brak.",
+        f"Okresy grafiku od dzisiaj: {period_words}. Polecenie może dotyczyć każdego dnia od dzisiaj, "
+        "także w miesiącach, na które nie ma jeszcze okresu.",
         f"Osoby: {', '.join(people) or '(brak)'}.",
         f"Stanowiska: {', '.join(position_names.values()) or '(brak)'}.",
         f"Zmiany: {_shift_lines(shift_types)}.",
@@ -320,6 +322,10 @@ def _number_param(code: str) -> str | None:
     return next((name for name in RULES_BY_CODE[code].params if name in NUMBER_PARAMS), None)
 
 
+# Like the availability calendar: an instruction about days further ahead is most likely a wrong year.
+MAX_DAYS_AHEAD = 366
+
+
 def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any]:
     """Turn the assistant's answer into a plan made only of things that exist in this location.
 
@@ -335,6 +341,8 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
     positions = {p.name: str(p.pk) for p in Position.objects.for_company(location.company_id).filter(location=location)}
     lines: list[str] = []
     notes: list[str] = []
+    today = timezone.localdate()
+    periods = list(SchedulePeriod.objects.for_company(location.company_id).filter(location=location, end__gte=today))
 
     items = _rule_items(sc)
     by_code = {item.code: item for item in items}
@@ -411,6 +419,16 @@ def check_plan(location: Location, sc, answer: llm.CommandPlan) -> dict[str, Any
         if data is None:
             notes.append(f"Nie umiem zapisać polecenia o osobie „{new.person}”: brakuje osoby, zmiany, godzin lub dni.")
             continue
+        days = sorted(d for d in (readings._parse_date(v) for v in data["dates"]) if d is not None)
+        if days and not data["weekdays"]:
+            if days[0] > today + timedelta(days=MAX_DAYS_AHEAD):
+                notes.append(f"Pominąłem polecenie o osobie „{new.person}”: dotyczy dni ponad rok naprzód.")
+                continue
+            if not any(p.start <= d <= p.end for p in periods for d in days):
+                notes.append(
+                    f"Polecenie o osobie „{new.person}” zadziała, gdy założysz okres grafiku na te dni. "
+                    "Do tego czasu nie zmienia żadnego grafiku."
+                )
         place = max(1, new.place)
         new_instructions.append({"employee": employee, "data": data, "place": place})
         lines.append(f"Nowe polecenie: {readings.describe(data, names[employee], names, shift_names)}.")
