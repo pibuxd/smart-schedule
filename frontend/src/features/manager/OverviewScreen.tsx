@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import type { LocationSummaryOut, ManagerOverviewOut } from '../../api/generated/model'
-import { useCreateLocation, useManagerOverview, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
+import { useCreateGroup, useCreateLocation, useManagerOverview, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
 import { SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
@@ -20,6 +20,7 @@ import { daysUntil, deadlineWords, namesList, PERIOD_STATUS, people, periodTitle
 export function OverviewScreen({ today = new Date() }: { today?: Date }) {
   const { companyId, role } = useManager()
   const overview = useManagerOverview({ company_id: companyId })
+  const [addingGroup, setAddingGroup] = useState(false)
   const [adding, setAdding] = useState(false)
 
   if (overview.isPending) return <Loading>Wczytuję lokale…</Loading>
@@ -36,6 +37,9 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
     .filter((l) => l.period && l.period.status !== 'published' && !l.period.active_run_id)
     .map((l) => arrangeTarget(l, today))
   const byGroup = new Map<string, { name: string; id: string | null; locations: LocationSummaryOut[] }>()
+  if (role === 'owner') {
+    for (const group of data.groups) byGroup.set(group.id, { ...group, locations: [] })
+  }
   for (const location of data.locations) {
     const key = location.group_id ?? ''
     if (!byGroup.has(key)) byGroup.set(key, { id: location.group_id, name: location.group_name ?? 'Bez grupy', locations: [] })
@@ -60,6 +64,11 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
               variant="secondary"
               disabled={data.subscription.read_only}
             />
+          )}
+          {role === 'owner' && (
+            <Button variant="secondary" size="normal" onClick={() => setAddingGroup(true)} disabled={data.subscription.read_only}>
+              Nowa grupa
+            </Button>
           )}
           {role === 'owner' && (
             <Button variant="secondary" size="normal" onClick={() => setAdding(true)} disabled={data.subscription.read_only}>
@@ -103,6 +112,7 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
       ))}
 
       {data.archived.length > 0 && <ArchivedList data={data} />}
+      {addingGroup && <NewGroupSheet companyId={companyId} onClose={() => setAddingGroup(false)} />}
       <NewLocationSheet open={adding} onOpenChange={setAdding} data={data} />
     </div>
   )
@@ -341,6 +351,27 @@ function ArchivedList({ data }: { data: ManagerOverviewOut }) {
         ))}
       </ul>
     </section>
+  )
+}
+
+function NewGroupSheet({ companyId, onClose }: { companyId: string; onClose: () => void }) {
+  const [name, setName] = useState('')
+  const create = useCreateGroup()
+  const queryClient = useQueryClient()
+  return (
+    <Sheet open onOpenChange={(open) => { if (!open) onClose() }} title="Nowa grupa lokali"
+      description="Po utworzeniu grupy wybierz ją w ustawieniach lokali, które mają dzielić zasady.">
+      <form className="grid gap-4" onSubmit={(event) => {
+        event.preventDefault()
+        create.mutate({ data: { company_id: companyId, name: name.trim() } }, {
+          onSuccess: async () => { await queryClient.invalidateQueries(); onClose() },
+        })
+      }}>
+        <TextField label="Nazwa grupy" value={name} required maxLength={200} onChange={(event) => setName(event.target.value)} />
+        {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
+        <Button type="submit" disabled={!name.trim() || create.isPending}>Utwórz grupę</Button>
+      </form>
+    </Sheet>
   )
 }
 

@@ -124,6 +124,17 @@ def test_code_is_stored_only_as_a_hash(api, sms_outbox):
     assert stored.expires_at - stored.created_at == timedelta(minutes=5)
 
 
+def test_consumed_latest_challenge_closes_the_login_window(api, sms_outbox):
+    request_code(api, purpose="register")
+    age_codes(61)
+    request_code(api, purpose="register")
+    assert verify(api, code_from(sms_outbox)).status_code == 200
+    # Older, still-unexpired rows may already exist when this version is deployed.
+    response = verify(api, code_from(sms_outbox[:1]))
+    assert response.status_code == 400
+    assert "wygasł" in response.json()["detail"]
+
+
 def test_wrong_code_is_refused_and_counted(api, sms_outbox):
     request_code(api, purpose="register")
     wrong = "000000" if code_from(sms_outbox) != "000000" else "111111"

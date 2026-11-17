@@ -6,6 +6,7 @@ import { useState } from 'react'
 import type {
   LocationOut,
   LocationSetupOut,
+  ManagerOverviewOut,
   ShiftTypeIn,
   ShiftTypeOut,
   StaffingCellIn,
@@ -25,9 +26,9 @@ import {
   useUpdatePosition,
   useUpdateShiftType,
 } from '../../api/generated/staffing/staffing'
-import { useLocationDetail, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
+import { useManagerOverview, useLocationDetail, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
-import { CheckField, inputClass, Section, SelectField, Tag, TextField } from '../../components/ui/field'
+import { CheckField, Section, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
@@ -63,9 +64,9 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
   const data = setup.data.data as LocationSetupOut
   const info = location.data.data as LocationOut
   return (
-    <div className="grid gap-10">
-      <LocationForm location={info} />
-      <div className="grid gap-10 lg:grid-cols-2">
+    <div className="grid min-w-0 grid-cols-1 gap-10">
+      <LocationForm key={info.id} location={info} />
+      <div className="grid min-w-0 grid-cols-1 gap-10 lg:grid-cols-2">
         <PositionsSection locationId={locationId} setup={data} />
         <ShiftTypesSection locationId={locationId} setup={data} />
       </div>
@@ -80,7 +81,10 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
 // --------------------------------------------------------------------------------------------- location
 
 function LocationForm({ location }: { location: LocationOut }) {
-  const { readOnly } = useManager()
+  const { readOnly, role, companyId } = useManager()
+  const overview = useManagerOverview({ company_id: companyId }, { query: { enabled: role === 'owner' } })
+  const groups = (overview.data?.data as ManagerOverviewOut | undefined)?.groups ?? []
+  const [groupId, setGroupId] = useState(location.group_id ?? '')
   const update = useUpdateLocation()
   const queryClient = useQueryClient()
   const [name, setName] = useState(location.name)
@@ -95,7 +99,10 @@ function LocationForm({ location }: { location: LocationOut }) {
     update.mutate(
       {
         locationId: location.id,
-        data: { name, address, schedule_period: period, availability_deadline_days: Number(days) },
+        data: {
+          name, address, schedule_period: period, availability_deadline_days: Number(days),
+          ...(role === 'owner' && groupId !== (location.group_id ?? '') ? { group_id: groupId || null } : {}),
+        },
       },
       {
         onSuccess: () => {
@@ -109,6 +116,15 @@ function LocationForm({ location }: { location: LocationOut }) {
     <Section title="Lokal">
       <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 md:grid-cols-2 lg:grid-cols-4 lg:items-start">
         <TextField label="Nazwa" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
+        {role === 'owner' && groups.length > 0 && (
+          <SelectField label="Grupa lokali" value={groupId} disabled={readOnly} onChange={(e) => setGroupId(e.target.value)}
+            hint={groupId === (location.group_id ?? '') ? undefined : groupId
+              ? 'Po zapisaniu lokal będzie korzystać z zasad wybranej grupy. Własne ustawienia lokalu nadal mają pierwszeństwo.'
+              : 'Po zapisaniu przestaną obowiązywać zasady dziedziczone z grupy. Zostaną zasady ustawione w tym lokalu.'}>
+            <option value="">Bez grupy</option>
+            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </SelectField>
+        )}
         <TextField label="Adres" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} />
         <SelectField label="Grafik układasz na" value={period} onChange={(e) => setPeriod(e.target.value as 'week' | 'month')}>
           <option value="month">miesiąc</option>
@@ -420,40 +436,22 @@ function ShiftTypeForm({
 
 // --------------------------------------------------------------------------------------------- staffing
 
-type Counts = Record<string, string>
-type Hours = Record<string, { start: string; end: string }>
-const cellKey = (st: string, pos: string, day: number) => `${st}|${pos}|${day}`
-const rowKey = (st: string, pos: string) => `${st}|${pos}`
+type StaffingValues = { count: string; experienced: string; start: string; end: string }
+const emptyStaffing: StaffingValues = { count: '', experienced: '', start: '', end: '' }
+const cellKey = (shift: string, position: string, day: number) => `${shift}|${position}|${day}`
 
-/** The weekly table: for every shift and position, how many people each weekday needs. */
 function StaffingSection({ locationId, setup }: { locationId: string; setup: LocationSetupOut }) {
   const { readOnly } = useManager()
   const save = useSaveStaffing()
   const queryClient = useQueryClient()
-  const [counts, setCounts] = useState<Counts>(() => {
-    const result: Counts = {}
-    for (const c of setup.staffing) result[cellKey(c.shift_type_id, c.position_id, c.weekday)] = String(c.count)
-    return result
-  })
-  const [hours, setHours] = useState<Hours>(() => {
-    const result: Hours = {}
-    for (const c of setup.staffing) {
-      if (c.start_time && c.end_time) result[rowKey(c.shift_type_id, c.position_id)] = { start: hhmm(c.start_time), end: hhmm(c.end_time) }
-    }
-    return result
-  })
-  // "Of these, experienced": one number per row (shift and position), used on every day that has people.
-  const [experienced, setExperienced] = useState<Counts>(() => {
-    const result: Counts = {}
-    for (const c of setup.staffing) {
-      const key = rowKey(c.shift_type_id, c.position_id)
-      if (c.experienced > Number(result[key] ?? 0)) result[key] = String(c.experienced)
-    }
-    return result
-  })
+  const [cells, setCells] = useState<Record<string, StaffingValues>>(() => Object.fromEntries(
+    setup.staffing.map((c) => [cellKey(c.shift_type_id, c.position_id, c.weekday), {
+      count: String(c.count), experienced: String(c.experienced), start: c.start_time ?? '', end: c.end_time ?? '',
+    }]),
+  ))
   const [saved, setSaved] = useState(false)
 
-  if (setup.shift_types.length === 0 || setup.positions.length === 0) {
+  if (!setup.shift_types.length || !setup.positions.length) {
     return (
       <Section title="Obsada">
         <EmptyState title="Najpierw stanowiska i zmiany">
@@ -463,152 +461,86 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
     )
   }
 
-  const set = (key: string, value: string) => {
+  function change(key: string, field: keyof StaffingValues, value: string) {
     setSaved(false)
-    setCounts((now) => ({ ...now, [key]: value }))
+    setCells((now) => ({ ...now, [key]: { ...(now[key] ?? emptyStaffing), [field]: value } }))
   }
-  const copyMonday = (st: string, pos: string) => {
+
+  function copyMonday(shift: string, position: string) {
     setSaved(false)
-    setCounts((now) => {
+    setCells((now) => {
       const next = { ...now }
-      for (let d = 1; d < 7; d++) next[cellKey(st, pos, d)] = now[cellKey(st, pos, 0)] ?? ''
+      const monday = now[cellKey(shift, position, 0)] ?? emptyStaffing
+      for (let day = 1; day < 7; day++) next[cellKey(shift, position, day)] = monday
       return next
     })
   }
-  const submit = () => {
-    const cells: StaffingCellIn[] = []
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault()
+    const values: StaffingCellIn[] = []
     for (const st of setup.shift_types) {
       for (const pos of setup.positions) {
-        const flex = st.kind === 'flexible' ? hours[rowKey(st.id, pos.id)] : undefined
-        for (let d = 0; d < 7; d++) {
-          const count = Number(counts[cellKey(st.id, pos.id, d)] || 0)
-          if (!count) continue
-          cells.push({
-            weekday: d,
-            shift_type_id: st.id,
-            position_id: pos.id,
-            count,
-            experienced: Math.min(count, Number(experienced[rowKey(st.id, pos.id)] || 0)),
-            start_time: flex?.start || null,
-            end_time: flex?.end || null,
+        WEEKDAY_HEADERS.forEach((_, day) => {
+          const cell = cells[cellKey(st.id, pos.id, day)]
+          if (!Number(cell?.count)) return
+          values.push({
+            weekday: day, shift_type_id: st.id, position_id: pos.id,
+            count: Number(cell.count), experienced: Number(cell.experienced),
+            start_time: cell.start || null, end_time: cell.end || null,
           })
-        }
+        })
       }
     }
-    save.mutate(
-      { locationId, data: { cells } },
-      {
-        onSuccess: () => {
-          setSaved(true)
-          void queryClient.invalidateQueries()
-        },
-      },
-    )
+    save.mutate({ locationId, data: { cells: values } }, { onSuccess: () => {
+      setSaved(true)
+      void queryClient.invalidateQueries()
+    } })
   }
 
   return (
-    <Section
-      title="Obsada"
-      description="Ile osób na danym stanowisku potrzeba na każdej zmianie w każdy dzień tygodnia. Puste pole znaczy: nikt. „W tym doświadczonych” mówi, ile z nich musi mieć stopień „doświadczony” na tym stanowisku, np. na zamknięciu 2 osoby, w tym 1 doświadczona. Gdy takiej osoby zabraknie, grafik zostawi tam wolne miejsce."
-    >
-      <div className="overflow-x-auto rounded-md border border-line bg-surface" tabIndex={0} aria-label="Tabela obsady">
-        <table className="w-full border-separate border-spacing-0">
-          <caption className="sr-only">Obsada: zmiana i stanowisko w wierszach, dni tygodnia w kolumnach</caption>
-          <thead>
-            <tr>
-              <th scope="col" className="sticky left-0 z-10 min-w-48 border-b border-line bg-surface px-3 py-2 text-left">
-                Zmiana i stanowisko
-              </th>
-              {WEEKDAY_HEADERS.map((d, i) => (
-                <th key={d} scope="col" className={`border-b border-line px-1 py-2 text-center ${i >= 5 ? 'bg-grid' : ''}`}>
-                  {d}
-                </th>
-              ))}
-              <th scope="col" className="border-b border-line px-2 py-2">
-                <span className="sr-only">Skróty</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {setup.shift_types.map((st) =>
-              setup.positions.map((pos, index) => (
-                <tr key={rowKey(st.id, pos.id)}>
-                  <th scope="row" className={`sticky left-0 z-10 bg-surface px-3 py-1.5 text-left font-normal ${index === setup.positions.length - 1 ? 'border-b-2 border-ink' : 'border-b border-line'}`}>
-                    <span className="block font-semibold">
-                      {st.name} <span className="font-normal text-ink-muted tabular-nums">{shiftHours(st)}</span>
-                    </span>
-                    <span className="block text-sm">{pos.name}</span>
-                    <label className="mt-1 flex items-center gap-2 text-sm">
-                      w tym doświadczonych
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={50}
-                        placeholder="0"
-                        aria-label={`${st.name}, ${pos.name}: w tym doświadczonych`}
-                        className={`${inputClass} w-14 px-1 text-center tabular-nums`}
-                        value={experienced[rowKey(st.id, pos.id)] ?? ''}
-                        onChange={(e) => {
-                          setSaved(false)
-                          setExperienced((now) => ({ ...now, [rowKey(st.id, pos.id)]: e.target.value }))
-                        }}
-                        disabled={readOnly}
-                      />
-                    </label>
-                    {st.kind === 'flexible' && (
-                      <span className="mt-1 flex items-center gap-1 text-sm">
-                        <input
-                          type="time"
-                          aria-label={`${st.name}, ${pos.name}: od`}
-                          className={`${inputClass} w-28`}
-                          value={hours[rowKey(st.id, pos.id)]?.start ?? ''}
-                          onChange={(e) => setHours((h) => ({ ...h, [rowKey(st.id, pos.id)]: { start: e.target.value, end: h[rowKey(st.id, pos.id)]?.end ?? '' } }))}
-                        />
-                        –
-                        <input
-                          type="time"
-                          aria-label={`${st.name}, ${pos.name}: do`}
-                          className={`${inputClass} w-28`}
-                          value={hours[rowKey(st.id, pos.id)]?.end ?? ''}
-                          onChange={(e) => setHours((h) => ({ ...h, [rowKey(st.id, pos.id)]: { start: h[rowKey(st.id, pos.id)]?.start ?? '', end: e.target.value } }))}
-                        />
-                      </span>
-                    )}
-                  </th>
-                  {WEEKDAY_HEADERS.map((d, i) => (
-                    <td key={d} className={`px-1 py-1.5 text-center ${i >= 5 ? 'bg-grid' : ''} ${index === setup.positions.length - 1 ? 'border-b-2 border-ink' : 'border-b border-line'}`}>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={50}
-                        aria-label={`${st.name}, ${pos.name}, ${d}`}
-                        className={`${inputClass} w-14 px-1 text-center tabular-nums`}
-                        value={counts[cellKey(st.id, pos.id, i)] ?? ''}
-                        onChange={(e) => set(cellKey(st.id, pos.id, i), e.target.value)}
-                        disabled={readOnly}
-                      />
-                    </td>
-                  ))}
-                  <td className={`px-2 py-1.5 ${index === setup.positions.length - 1 ? 'border-b-2 border-ink' : 'border-b border-line'}`}>
-                    <Button variant="quiet" size="normal" className="px-2 text-sm whitespace-nowrap" onClick={() => copyMonday(st.id, pos.id)} disabled={readOnly}>
-                      Cały tydzień jak pon.
-                    </Button>
-                  </td>
-                </tr>
-              )),
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={submit} disabled={save.isPending || readOnly}>
-          Zapisz obsadę
-        </Button>
-        {saved && <span role="status" className="text-accent">Obsada zapisana.</span>}
-        {save.isError && <InlineError>{errorMessage(save.error, NETWORK_PROBLEM)}</InlineError>}
-      </div>
+    <Section title="Obsada" description="Wpisz, ile osób potrzeba każdego dnia i ile z nich musi mieć doświadczenie na tym stanowisku. Puste pole oznacza zero osób.">
+      <form onSubmit={submit} className="grid min-w-0 gap-4">
+        {setup.shift_types.flatMap((st) => setup.positions.map((pos) => (
+          <fieldset key={cellKey(st.id, pos.id, 0)} disabled={readOnly || save.isPending} className="min-w-0 rounded-md border border-line bg-surface p-3">
+            <legend className="px-1 font-bold">{st.name} · {pos.name} ({shiftHours(st)})</legend>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+              {WEEKDAY_HEADERS.map((day, i) => {
+                const key = cellKey(st.id, pos.id, i)
+                const cell = cells[key] ?? emptyStaffing
+                const label = `${st.name}, ${pos.name}, ${day}`
+                return (
+                  <fieldset key={day} className="grid min-w-0 content-start gap-1 border-0 p-0">
+                    <legend className="font-bold">{day}</legend>
+                    <TextField label="Osoby" aria-label={label} type="number" min={0} max={50} placeholder="0"
+                      value={cell.count} onChange={(e) => change(key, 'count', e.target.value)} />
+                    <TextField label="W tym doświadczonych" aria-label={`${label}: w tym doświadczonych`} type="number"
+                      min={0} max={Number(cell.count) || 0} placeholder="0" disabled={!Number(cell.count)}
+                      value={cell.experienced} onChange={(e) => change(key, 'experienced', e.target.value)} />
+                    {st.kind === 'flexible' && (<>
+                      <TextField label="Od" aria-label={`${label}: od`} type="time" step="any" value={cell.start}
+                        onChange={(e) => change(key, 'start', e.target.value)} />
+                      <TextField label="Do" aria-label={`${label}: do`} type="time" step="any" value={cell.end}
+                        onChange={(e) => change(key, 'end', e.target.value)} />
+                      {Number(cell.count) > 0 && (!(cell.start || st.start_time) || !(cell.end || st.end_time)) && (
+                        <p className="m-0 text-sm font-semibold text-prefer-not">
+                          Uzupełnij początek i koniec zmiany przed ułożeniem grafiku na ten dzień.
+                        </p>
+                      )}
+                    </>)}
+                  </fieldset>
+                )
+              })}
+            </div>
+            <Button type="button" variant="quiet" size="normal" onClick={() => copyMonday(st.id, pos.id)}>Cały tydzień jak pon.</Button>
+          </fieldset>
+        )))}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" disabled={save.isPending || readOnly}>Zapisz obsadę</Button>
+          {saved && <span role="status" className="text-accent">Obsada zapisana.</span>}
+          {save.isError && <InlineError>{errorMessage(save.error, NETWORK_PROBLEM)}</InlineError>}
+        </div>
+      </form>
     </Section>
   )
 }

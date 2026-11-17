@@ -1,6 +1,8 @@
 """Location settings for the manager: positions, shifts and their hours, staffing per weekday with date
 exceptions, and the location's employees (positions, hours, switched off)."""
 
+import hashlib
+import json
 from datetime import date, time
 from typing import Literal
 from uuid import UUID
@@ -13,6 +15,7 @@ from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
+from apps.rules.models import RuleSetting
 from apps.scheduling.models import Assignment, ScheduleVersion
 from apps.staffing.models import (
     EmployeeProfile,
@@ -141,6 +144,7 @@ class PositionLevel(Schema):
 
 
 class EmployeeOut(Schema):
+    revision: str
     id: UUID
     first_name: str
     last_name: str
@@ -159,6 +163,7 @@ class EmployeeOut(Schema):
 
 
 class EmployeeIn(Schema):
+    revision: str | None = Field(None, max_length=64)
     # The name belongs to the person's account: changed only when the account is in this company alone. The phone
     # number is the login, so only the superadmin changes it (docs/spec.md, "Zmiana numeru telefonu").
     first_name: str | None = Field(None, max_length=80)
@@ -311,14 +316,27 @@ def update_position(request, position_id: UUID, payload: PositionIn):
 IN_USE = "{what} jest już w ułożonym grafiku, więc nie można go usunąć. Możesz zmienić jego nazwę."
 
 
+def _check_rule_references(ctx: TenantContext, obj: Position | ShiftType, param: str) -> None:
+    # Serialize against saving the location's rules, which store these references in JSON.
+    ctx.qs(Location).select_for_update().get(pk=obj.location_id)
+    references = ctx.qs(RuleSetting).filter(location_id=obj.location_id, **{f"params__{param}": str(obj.pk)})
+    if references.filter(enabled=True).exists():
+        what = "tego stanowiska" if param == "position" else "tej zmiany"
+        raise HttpError(409, f"Najpierw zmień lub wyłącz zasadę lokalu, która używa {what}.")
+    for rule in references:
+        del rule.params[param]
+        rule.save(update_fields=["params"])
+
+
 @router.delete(
     "/positions/{position_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
 )
 def delete_position(request, position_id: UUID):
     """Also removes its staffing; refused when a schedule already uses it (history stays intact)."""
-    _, position, _ = _change(request, Position, position_id)
+    ctx, position, _ = _change(request, Position, position_id)
     try:
         with transaction.atomic():
+            _check_rule_references(ctx, position, "position")
             position.delete()
     except (ProtectedError, RestrictedError) as exc:
         raise HttpError(409, IN_USE.format(what="To stanowisko")) from exc
@@ -364,9 +382,10 @@ def update_shift_type(request, shift_type_id: UUID, payload: ShiftTypeIn):
 )
 def delete_shift_type(request, shift_type_id: UUID):
     """Removes its staffing too. Saved schedules keep their shifts (with the hours copied)."""
-    _, st, _ = _change(request, ShiftType, shift_type_id)
+    ctx, st, _ = _change(request, ShiftType, shift_type_id)
     try:
         with transaction.atomic():
+            _check_rule_references(ctx, st, "shift_type")
             st.delete()
     except (ProtectedError, RestrictedError) as exc:
         raise HttpError(409, IN_USE.format(what="Ta zmiana")) from exc
@@ -477,7 +496,18 @@ def delete_closure(request, closure_id: UUID):
 def _employee_out(profile: EmployeeProfile, position_ids: list, levels: dict | None = None) -> EmployeeOut:
     levels = levels or {}
     user = profile.membership.user
+    # Include settings stored on the account and position links as well as the profile row.
+    snapshot = (
+        user.first_name,
+        user.last_name,
+        profile.experience,
+        profile.is_active,
+        profile.max_hours_month,
+        profile.target_hours_month,
+        sorted((str(pid), levels.get(pid, profile.experience)) for pid in position_ids),
+    )
     return EmployeeOut(
+        revision=hashlib.sha256(json.dumps(snapshot).encode()).hexdigest(),
         id=profile.pk,
         first_name=user.first_name,
         last_name=user.last_name,
@@ -603,7 +633,7 @@ def add_myself_as_employee(request, location_id: UUID):
             profile.is_active = True
             profile.save(update_fields=["is_active"])
     profile = ctx.qs(EmployeeProfile).select_related("membership__user").get(pk=profile.pk)
-    return _employee_out(profile, _position_ids([profile])[profile.pk])
+    return _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])
 
 
 def _changed_account(ctx: TenantContext, profile: EmployeeProfile, payload: EmployeeIn):
@@ -626,14 +656,20 @@ def _changed_account(ctx: TenantContext, profile: EmployeeProfile, payload: Empl
 
 @router.patch(
     "/employees/{employee_id}",
-    response={200: EmployeeOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
+    response={200: EmployeeOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
+@transaction.atomic
 def update_employee(request, employee_id: UUID, payload: EmployeeIn):
     """Name, positions, experience level, monthly maximum and target, or switching the person off
     (history stays)."""
     ctx, profile = context_for(request, EmployeeProfile, employee_id)
+    profile = ctx.qs(EmployeeProfile).select_for_update().get(pk=profile.pk)
     ctx.require_manager_of(profile.home_location)
     ctx.require_writable()
+    if payload.revision is not None:
+        current = _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])
+        if current.revision != payload.revision:
+            raise HttpError(409, "Ktoś zmienił dane tej osoby. Zamknij formularz i otwórz go ponownie.")
     sent = payload.model_fields_set
     if "experience" in sent and payload.experience is not None:
         profile.experience = payload.experience

@@ -120,7 +120,7 @@ describe('EmployeesScreen', () => {
 
   it('corrects the name, and warns about shifts in the draft before switching someone off', async () => {
     const calls = mockApi((method, path) => {
-      if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 8 }]]
+      if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 8, revision: 'initial' }]]
       if (path.endsWith('/setup')) return [200, setup]
       if (path.endsWith('/invitations')) return [200, []]
       if (method === 'PATCH') return [200, person('e1', 'Alicja', 2)]
@@ -140,7 +140,7 @@ describe('EmployeesScreen', () => {
 
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
-    expect(body).toMatchObject({ first_name: 'Alicja', last_name: 'Nowak', is_active: false })
+    expect(body).toEqual({ first_name: 'Alicja', is_active: false, revision: 'initial' })
     expect(body).not.toHaveProperty('phone') // the login number is changed only by the superadmin
   })
 })

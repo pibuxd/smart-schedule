@@ -5,6 +5,7 @@ import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { Wordmark } from '../components/Wordmark'
 import { cn } from '../lib/cn'
+import { ProfileNameForm } from '../features/auth/ProfileNameForm'
 import { useSession } from '../features/auth/session'
 import { AccessBanner } from '../features/manager/AccessBanner'
 import { isManagerRole, ManagerContext } from '../features/manager/ManagerContext'
@@ -104,7 +105,8 @@ function ManagerLayout() {
         </div>
       </header>
       <AccessBanner companyId={company.id} />
-      <main className="mx-auto grid max-w-(--wide) gap-6 px-4 pt-5 pb-16">
+      <main key={company.id} className="mx-auto grid max-w-(--wide) grid-cols-1 gap-6 px-4 pt-5 pb-16">
+        {!me.first_name && <ProfileNameForm me={me} />}
         <Outlet />
       </main>
     </ManagerContext.Provider>

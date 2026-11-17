@@ -253,6 +253,7 @@ def command_context(location: Location, sc, today: date) -> str:
     period_words = "; ".join(f"od {p.start.isoformat()} do {p.end.isoformat()}" for p in periods) or "jeszcze żadnych"
     lines = [
         _today_line(today),
+        f"Bieżący lokal: {location.name}.",
         f"Okresy grafiku od dzisiaj: {period_words}. Polecenie może dotyczyć każdego dnia od dzisiaj, "
         "także w miesiącach, na które nie ma jeszcze okresu.",
         f"Osoby: {', '.join(people) or '(brak)'}.",

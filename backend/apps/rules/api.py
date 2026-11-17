@@ -29,7 +29,7 @@ from apps.scheduling.models import ScheduleVersion
 from apps.scheduling.problem_builder import build_problem_for_version
 from apps.staffing.models import Position, ShiftType
 from apps.tenancy.context import TenantContext, context_for
-from apps.tenancy.models import Location, LocationGroup
+from apps.tenancy.models import Location, LocationGroup, Role
 from engine.rules_catalog import RULES, RULES_BY_CODE
 from engine.scoring import score
 from engine.validator import validate
@@ -46,6 +46,7 @@ class NamedOut(Schema):
 
 
 class RuleValueOut(Schema):
+    position: int
     enabled: bool
     is_hard: bool
     params: dict[str, Any]
@@ -141,8 +142,8 @@ def _scope(request, scope: ScopeType, scope_id: UUID) -> _Scope:
         return _Scope(ctx, scope, location)
     ctx, group = context_for(request, LocationGroup, scope_id)
     locations = ctx.qs(Location).filter(group=group, archived_at__isnull=True)
-    if not locations.exists():
-        ctx.require_manager()
+    if ctx.role != Role.OWNER and not locations.exists():
+        raise HttpError(403, "Tą grupą zarządza właściciel firmy.")
     for location in locations:
         ctx.require_manager_of(location)
     return _Scope(ctx, scope, group)
@@ -168,7 +169,7 @@ def _rules_out(sc: _Scope) -> RulesOut:
         elif group_row is None:
             source = "own"
         else:
-            source = "group" if same_setting(group_row, row) else "location"
+            source = "location"  # A stored override also fixes the rule's order.
         items.append(
             RuleItemOut(
                 code=rule.code,
@@ -181,7 +182,10 @@ def _rules_out(sc: _Scope) -> RulesOut:
                 param_names=list(rule.params),
                 source=source,
                 group_value=RuleValueOut(
-                    enabled=group_row.enabled, is_hard=group_row.is_hard, params=_params_of(rule.code, group_row.params)
+                    position=group_row.position,
+                    enabled=group_row.enabled,
+                    is_hard=group_row.is_hard,
+                    params=_params_of(rule.code, group_row.params),
                 )
                 if group_row is not None
                 else None,
@@ -245,9 +249,17 @@ def _clean_params(sc: _Scope, code: str, given: dict[str, Any], enabled: bool) -
         else:
             model = Position if name == "position" else ShiftType
             location = sc.location
-            if location is None or not sc.ctx.qs(model).filter(pk=str(value), location=location).exists():
+            try:
+                object_id = UUID(str(value))
+            except ValueError:
+                raise HttpError(400, f"„{rule.label}”: wybierz z listy tego lokalu.") from None
+            if location is None or not sc.ctx.qs(model).filter(pk=object_id, location=location).exists():
+                if not enabled and location is not None:
+                    # A disabled legacy rule may still point to a position that no longer exists.
+                    params[name] = None
+                    continue
                 raise HttpError(400, f"„{rule.label}”: wybierz z listy tego lokalu.")
-            value = str(value)
+            value = str(object_id)
         params[name] = value
     return params
 
@@ -282,10 +294,12 @@ def save_scope_rules(request, scope: ScopeType, scope_id: UUID, payload: RulesIn
 def save_rules(sc: _Scope, payload: RulesIn) -> None:
     """Check and store the whole list of one scope (also used when the manager accepts the assistant's plan)."""
     scope = sc.scope
-    rows = _clean_items(sc, payload)
     group_rows = {row.rule_code: row for row in sc.group_rows()}
     field = "location" if scope == "location" else "group"
     with transaction.atomic():
+        if sc.location is not None:
+            sc.ctx.qs(Location).select_for_update().get(pk=sc.location.pk)
+        rows = _clean_items(sc, payload)
         existing = {row.rule_code: row for row in sc.own_rows().order_by("pk").select_for_update()}
         keep = set()
         for row in rows:

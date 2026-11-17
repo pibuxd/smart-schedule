@@ -384,9 +384,9 @@ def my_schedule(request, company_id: UUID):
     published = ctx.qs(Assignment).filter(employee=profile, shift__version__status=ScheduleVersion.Status.PUBLISHED)
     published = published.select_related("shift__location", "shift__position", "shift__shift_type")
     upcoming = list(
-        published.filter(shift__date__gte=today, shift__date__lte=today + timedelta(days=MY_SCHEDULE_DAYS)).order_by(
-            "shift__start_at"
-        )
+        published.filter(
+            shift__end_at__gt=timezone.now(), shift__date__lte=today + timedelta(days=MY_SCHEDULE_DAYS)
+        ).order_by("shift__start_at")
     )
 
     others: dict = defaultdict(list)

@@ -15,7 +15,7 @@ const item = (code: string, label: string, extra = {}) => ({
   params: {},
   param_names: [],
   source: 'group',
-  group_value: { enabled: true, is_hard: false, params: {} },
+  group_value: { enabled: true, is_hard: false, position: code === 'target_hours' ? 2 : 1, params: code === 'min_rest_between_shifts' ? { hours: 11 } : {} },
   location_only: false,
   ...extra,
 })
@@ -58,6 +58,11 @@ describe('RulesScreen', () => {
     expect(save).toBeDisabled()
     expect(screen.getAllByText('z grupy')).toHaveLength(2)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Wyżej: Cel godzin' }))
+    const movedCard = screen.getByText('Cel godzin', { selector: 'b' }).closest('li')!
+    expect(within(movedCard).getByText('zmienione w tym lokalu')).toBeInTheDocument()
+    fireEvent.click(within(movedCard).getByRole('button', { name: 'Przywróć jak w grupie' }))
+    expect(save).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Wyżej: Cel godzin' }))
     fireEvent.click(save)
     const dialog = await screen.findByRole('dialog')

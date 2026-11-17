@@ -27,7 +27,7 @@ export function LocationLayout({ locationId }: { locationId: string }) {
   }
   const data = location.data.data as LocationOut
   return (
-    <div className="grid gap-5">
+    <div className="grid min-w-0 grid-cols-1 gap-5">
       <div className="grid gap-2">
         <Link
           to="/kierownik"

@@ -117,6 +117,18 @@ class TestOverviewAndLocations:
         assert api.patch(f"/api/locations/{shop['location'].pk}", {"name": "Nowa nazwa"}).status_code == 200
         assert api.patch(f"/api/locations/{shop['location'].pk}", {"archived": True}).status_code == 403
 
+    def test_overview_groups_follow_managed_locations(self, api, shop):
+        company = shop["company"]
+        mine = LocationGroup.objects.create(company=company, name="Kawiarnie")
+        LocationGroup.objects.create(company=company, name="Piekarnie")
+        shop["location"].group = mine
+        shop["location"].save(update_fields=["group"])
+        user = User.objects.create_user(next_phone())
+        member = Membership.objects.create(company=company, user=user, role=Role.MANAGER)
+        member.locations.add(shop["location"])
+        body = api.login(user).get(f"/api/manager/overview?company_id={company.pk}").json()
+        assert body["groups"] == [{"id": str(mine.pk), "name": mine.name}]
+
     def test_groups(self, api, shop):
         as_manager(api, shop)
         response = api.post("/api/groups", {"company_id": str(shop["company"].pk), "name": "Piekarnie"})
@@ -267,6 +279,16 @@ class TestSettings:
 
 
 class TestEmployees:
+    def test_stale_employee_form_cannot_remove_a_new_limit(self, api, shop):
+        employee = shop["employee"]
+        employees = as_manager(api, shop).get(f"/api/locations/{shop['location'].pk}/employees").json()
+        revision = next(row["revision"] for row in employees if row["id"] == str(employee.pk))
+        url = f"/api/employees/{employee.pk}"
+        assert api.patch(url, {"max_hours_month": 16, "revision": revision}).status_code == 200
+        assert api.patch(url, {"max_hours_month": None, "revision": revision}).status_code == 409
+        employee.refresh_from_db()
+        assert employee.max_hours_month == 16
+
     def test_list_and_update(self, api, shop):
         as_manager(api, shop)
         [row] = api.get(f"/api/locations/{shop['location'].pk}/employees").json()
@@ -558,6 +580,17 @@ class TestRules:
         assert items["experience_mix"]["location_only"] is False
         assert len(body["items"]) == len(RULES)
 
+    def test_reordered_rule_is_local_until_its_original_place_is_restored(self, api, shop, group):
+        as_manager(api, shop)
+        original = [
+            {k: i[k] for k in ("code", "enabled", "is_hard", "params")} for i in api.get(self.url(shop)).json()["items"]
+        ]
+        moved = [original[1], original[0], *original[2:]]
+        changed = put(api, self.url(shop), {"items": moved}).json()["items"][1]
+        assert changed["source"] == "location" and changed["group_value"]["position"] == 1
+        restored = put(api, self.url(shop), {"items": original}).json()["items"][0]
+        assert restored["source"] == "group"
+
     def test_saving_unchanged_list_keeps_following_the_group(self, api, shop, group):
         as_manager(api, shop)
         items = api.get(self.url(shop)).json()["items"]
@@ -593,8 +626,11 @@ class TestRules:
         )
         closing = {"code": "min_position_on_closing", "enabled": True, "params": {"count": 1}}
         assert put(api, url, {"items": [closing]}).status_code == 400
+        closing["params"]["position"] = "invalid"
+        assert api.post(f"{url}/preview", {"items": [closing]}).status_code == 400
         closing["params"]["position"] = str(shop["position"].pk)
         assert put(api, url, {"items": [closing]}).status_code == 200
+        assert api.client.delete(f"/api/positions/{shop['position'].pk}").status_code == 409
         group_url = f"/api/scopes/group/{group.pk}/rules"
         assert put(api, group_url, {"items": [closing]}).status_code == 400
         mix = {"code": "experience_mix", "enabled": True, "params": {}}

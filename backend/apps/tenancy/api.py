@@ -407,6 +407,9 @@ def manager_overview(request, company_id: UUID):
                 setup_missing=_setup_missing(ctx, location),
             )
         )
+    groups = ctx.qs(LocationGroup)
+    if ctx.role != Role.OWNER:
+        groups = groups.filter(pk__in=[loc.group_id for loc in managed if loc.group_id])
     return ManagerOverviewOut(
         company_id=ctx.company.pk,
         company_name=ctx.company.name,
@@ -419,7 +422,7 @@ def manager_overview(request, company_id: UUID):
             days_left=state.days_left,
             expiring_soon=state.expiring_soon,
         ),
-        groups=[GroupOut(id=g.pk, name=g.name) for g in ctx.qs(LocationGroup).order_by("name")],
+        groups=[GroupOut(id=g.pk, name=g.name) for g in groups.order_by("name")],
         locations=summaries,
         archived=[_location_out(loc) for loc in managed if loc.archived_at is not None],
     )

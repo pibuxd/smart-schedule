@@ -1777,10 +1777,15 @@ export type updateEmployeeResponse404 = {
   status: 404
 }
 
+export type updateEmployeeResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type updateEmployeeResponseSuccess = (updateEmployeeResponse200) & {
   headers: Headers;
 };
-export type updateEmployeeResponseError = (updateEmployeeResponse400 | updateEmployeeResponse402 | updateEmployeeResponse403 | updateEmployeeResponse404) & {
+export type updateEmployeeResponseError = (updateEmployeeResponse400 | updateEmployeeResponse402 | updateEmployeeResponse403 | updateEmployeeResponse404 | updateEmployeeResponse409) & {
   headers: Headers;
 };
 

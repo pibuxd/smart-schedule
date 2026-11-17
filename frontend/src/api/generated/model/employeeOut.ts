@@ -8,6 +8,7 @@ import type { EmployeeOutExperience } from './employeeOutExperience';
 import type { PositionLevel } from './positionLevel';
 
 export interface EmployeeOut {
+  revision: string;
   id: string;
   first_name: string;
   last_name: string;

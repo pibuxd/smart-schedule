@@ -87,6 +87,7 @@ export function RequestsSection({
   const [removing, setRemoving] = useState<string | null>(null)
   const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } })
   const [text, setText] = useState('')
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
   const list = (requests.data?.data as MyRequestOut[] | undefined) ?? []
 
   return (
@@ -107,16 +108,41 @@ export function RequestsSection({
         <ul className="m-0 grid list-none gap-2 p-0">
           {list.map((request) => (
             <li key={request.id} className="grid gap-2 rounded-md border border-line bg-surface p-3.5">
-              <p className="m-0">{request.text}</p>
+              {editable && editing?.id === request.id ? (
+                <form className="grid gap-2" onSubmit={(event) => {
+                  event.preventDefault()
+                  update.mutate({ requestId: request.id, data: { text: editing.text.trim() } }, {
+                    onSuccess: () => setEditing(null),
+                  })
+                }}>
+                  <label className="grid gap-1">Treść prośby
+                    <textarea className="rounded-md border-2 border-ink p-2" maxLength={1000} rows={3}
+                      value={editing.text} onChange={(e) => setEditing({ id: request.id, text: e.target.value })} />
+                  </label>
+                  <p className="m-0 text-sm text-ink-muted">
+                    Kierownik zobaczy poprawioną treść. Jego wcześniejsza decyzja i nadana prośbie ważność pozostaną w mocy.{' '}
+                    {assistantReads && 'Po zmianie tekstu zewnętrzny asystent AI (Claude) przeczyta prośbę ponownie.'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="submit" disabled={update.isPending || !editing.text.trim() || editing.text.trim() === request.text}>Zapisz prośbę</Button>
+                    <Button type="button" variant="quiet" disabled={update.isPending} onClick={() => setEditing(null)}>Anuluj</Button>
+                  </div>
+                </form>
+              ) : <p className="m-0">{request.text}</p>}
               <RequestStatus
                 request={request}
                 editable={editable}
                 busy={update.isPending}
                 onWrong={() => update.mutate({ requestId: request.id, data: { understood: false } })}
               />
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-sm text-ink-muted">Wysłane do kierownika</span>
-                {editable &&
+                {editable && editing?.id !== request.id && removing !== request.id && (
+                  <Button variant="quiet" size="normal" onClick={() => setEditing({ id: request.id, text: request.text })}>
+                    Edytuj prośbę
+                  </Button>
+                )}
+                {editable && editing?.id !== request.id &&
                   (removing === request.id ? (
                     <span className="flex flex-wrap items-center justify-end gap-1">
                       <span className="text-sm font-semibold">Usunąć tę prośbę?</span>

@@ -61,7 +61,7 @@ export function AvailabilityCalendar({
     <div
       role="grid"
       aria-label="Kalendarz dni"
-      className="grid touch-none grid-cols-7 gap-1 select-none"
+      className="-mx-3 grid touch-none grid-cols-7 gap-x-0 gap-y-1 select-none min-[400px]:mx-0 min-[400px]:gap-1"
     >
       <div role="row" className="contents">
         {WEEKDAY_HEADERS.map((name, i) => (

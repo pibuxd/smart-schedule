@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { MyScheduleOut, MyShiftOut } from '../../api/generated/model'
 import { useMySchedule } from '../../api/generated/scheduling/scheduling'
@@ -7,7 +7,8 @@ import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
 import {
-  dayTitle,
+  dayAndMonth,
+  weekdayGenitive,
   hoursText,
   inMonth,
   monthGenitive,
@@ -24,13 +25,24 @@ import { buildRows, coworkersText } from './rows'
 export function MyScheduleScreen({
   companyId,
   readOnly = false,
-  today = new Date(),
+  today: fixedTime,
 }: {
   companyId: string
   readOnly?: boolean
   today?: Date
 }) {
   const schedule = useMySchedule({ company_id: companyId })
+  const [clock, setClock] = useState(() => new Date())
+  const today = fixedTime ?? clock
+  const shifts = (schedule.data?.data as MyScheduleOut | undefined)?.shifts
+  useEffect(() => {
+    if (fixedTime || !shifts?.length) return
+    const now = Date.now()
+    const boundaries = shifts.flatMap((s) => [Date.parse(s.start_at), Date.parse(s.end_at)]).filter((t) => t > now)
+    const delay = Math.min(86_400_000, Math.min(...boundaries) - now + 1)
+    const timer = window.setTimeout(() => setClock(new Date()), delay)
+    return () => window.clearTimeout(timer)
+  }, [fixedTime, shifts, clock])
   const [giving, setGiving] = useState<string | null>(null)
 
   if (schedule.isPending) return <Loading>Wczytuję Twój grafik…</Loading>
@@ -42,14 +54,14 @@ export function MyScheduleScreen({
     )
   }
   const data = schedule.data.data as MyScheduleOut
-  const [next, ...rest] = data.shifts
+  const [next, ...rest] = data.shifts.filter((shift) => Date.parse(shift.end_at) > today.getTime())
   const give = readOnly ? undefined : (shift: MyShiftOut) => setGiving(shift.id)
 
   return (
     <div className="grid gap-5">
       <OffersToTake companyId={companyId} readOnly={readOnly} />
       {next ? (
-        <NextShift shift={next} today={today} onGive={give} />
+        <NextShift shift={next} today={today} onGive={Date.parse(next.start_at) > today.getTime() ? give : undefined} />
       ) : (
         <EmptyState title="Nie masz jeszcze zmian w grafiku">
           <p className="m-0">Gdy kierownik opublikuje grafik, zobaczysz tu swoje zmiany i godziny.</p>
@@ -67,7 +79,7 @@ export function MyScheduleScreen({
       )}
       {data.published_until && (
         <p className="m-0 text-ink-muted">
-          Grafik jest opublikowany do {dayTitle(parseDate(data.published_until))}. Dalsze dni pokażemy, gdy kierownik
+          Grafik jest opublikowany do {weekdayGenitive(parseDate(data.published_until))} {dayAndMonth(parseDate(data.published_until))}. Dalsze dni pokażemy, gdy kierownik
           opublikuje kolejny grafik.
         </p>
       )}
@@ -129,7 +141,7 @@ function NextShift({
   return (
     <article aria-label="Najbliższa zmiana" className="overflow-hidden rounded-lg border border-line bg-surface">
       <div className="flex justify-between border-b-2 border-dashed border-accent-ink/55 bg-accent px-4 py-2 font-semibold text-accent-ink">
-        <span>Najbliższa zmiana</span>
+        <span>{Date.parse(shift.start_at) <= today.getTime() ? 'Trwa Twoja zmiana' : 'Najbliższa zmiana'}</span>
         <span>{relativeDay(day, today)}</span>
       </div>
       <div className="grid grid-cols-[auto_1fr] items-center gap-4 px-4 pt-3.5 pb-4.5">

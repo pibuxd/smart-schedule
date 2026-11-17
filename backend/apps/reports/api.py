@@ -54,9 +54,9 @@ class HoursReportOut(Schema):
 def _month(value: str) -> tuple[date, date]:
     try:
         first = date.fromisoformat(f"{value}-01")
+        nxt = date(first.year + (first.month == 12), first.month % 12 + 1, 1)
     except ValueError:
         raise HttpError(400, "Podaj miesiąc w postaci RRRR-MM, np. 2026-12.") from None
-    nxt = date(first.year + (first.month == 12), first.month % 12 + 1, 1)
     return first, nxt
 
 

@@ -70,7 +70,7 @@ describe('AvailabilityScreen', () => {
     api()
     show()
     expect(await screen.findByRole('heading', { name: 'Grudzień 2026' })).toBeInTheDocument()
-    expect(screen.getByText(/Zaznacz, kiedy możesz pracować w grudniu/)).toBeInTheDocument()
+    expect(await screen.findByText(/Zaznacz, kiedy możesz pracować w grudniu/)).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Wyślij kierownikowi' })).toBeInTheDocument()
   })
 
@@ -107,6 +107,27 @@ describe('AvailabilityScreen', () => {
 
     expect(screen.queryByRole('button', { name: 'Cofnij' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Więcej opcji' })).not.toBeInTheDocument()
+  })
+
+  it('finishes a delayed write before sending the next choice for the same day', async () => {
+    const calls = api()
+    const respond = globalThis.fetch
+    let release!: () => void
+    const delayed = new Promise<void>((resolve) => { release = resolve })
+    let writes = 0
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+      if (init.method === 'PUT' && ++writes === 1) await delayed
+      return respond(url, init)
+    })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'wtorek 1 grudnia: mogę' }), { detail: 0 })
+    await waitFor(() => expect(writes).toBe(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Chętnie' }))
+    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: nie mogę' }), { detail: 0 })
+    release()
+    await screen.findByText('Zapisane')
+    const saved = calls.filter((c) => c.method === 'PUT').map((c) => (c.body as { days: { state: string }[] }).days[0].state)
+    expect(saved).toEqual(['cannot', 'prefer'])
   })
 
   it('warns plainly that "chętnie" with hours blocks other shifts that day', async () => {

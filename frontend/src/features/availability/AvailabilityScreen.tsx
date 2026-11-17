@@ -1,5 +1,7 @@
+import { Link } from '@tanstack/react-router'
 import { Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { onlineManager, useIsMutating } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 import {
   useMyAvailability,
@@ -73,8 +75,8 @@ export function AvailabilityScreen({
 }) {
   // gcTime 0: the editor keeps its own copy while open, so a visit later always starts from the server.
   const query = useMyAvailability({ company_id: companyId }, { query: { gcTime: 0 } })
+  const saving = useIsMutating({ predicate: (mutation) => mutation.options.scope?.id === `availability:${companyId}` }) > 0
   const [chosen, setChosen] = useState<string | null>(null)
-  const [submittedNow, setSubmittedNow] = useState<string | null>(null)
 
   if (query.isPending) return <Loading>Wczytuję kalendarz…</Loading>
   if (query.isError) {
@@ -94,22 +96,19 @@ export function AvailabilityScreen({
   return (
     <div className="grid gap-4">
       <h1 className="m-0 text-xl font-extrabold">Kiedy mogę pracować</h1>
-      <PeriodNote period={period} readOnly={readOnly} today={today} />
       <MonthPager
         month={month}
         onChange={setChosen}
-        canGoBack={month > thisMonth}
-        canGoForward={month < lastMonth}
+        canGoBack={!saving && month > thisMonth}
+        canGoForward={!saving && month < lastMonth}
       />
       <MonthEditor
-        key={month}
+        key={`${companyId}:${month}`}
         companyId={companyId}
         month={month}
         readOnly={readOnly}
-        period={period}
+        today={today}
         assistantReads={data.assistant_reads ?? false}
-        submittedAt={submittedNow ?? data.submitted_at}
-        onSubmitted={setSubmittedNow}
       />
     </div>
   )
@@ -189,10 +188,8 @@ function MonthEditor(props: {
   companyId: string
   month: string
   readOnly: boolean
-  period: AvailabilityPeriodOut | null
+  today: Date
   assistantReads: boolean
-  submittedAt: string | null | undefined
-  onSubmitted: (at: string | null) => void
 }) {
   const { start, end } = monthBounds(props.month)
   const calendar = useMyCalendar({ company_id: props.companyId, start, end }, { query: { gcTime: 0 } })
@@ -204,29 +201,35 @@ function MonthEditor(props: {
       </ErrorState>
     )
   }
-  return <AvailabilityEditor {...props} initial={calendar.data.data as MyCalendarOut} />
+  const initial = calendar.data.data as MyCalendarOut
+  return (
+    <>
+      <PeriodNote period={initial.period} readOnly={props.readOnly} today={props.today} />
+      <AvailabilityEditor key={initial.period?.id ?? props.month} {...props} initial={initial} />
+    </>
+  )
 }
 
 function AvailabilityEditor({
   companyId,
   readOnly,
-  period,
   assistantReads,
-  submittedAt,
-  onSubmitted,
   initial,
 }: {
   companyId: string
   readOnly: boolean
-  period: AvailabilityPeriodOut | null
   assistantReads: boolean
-  submittedAt: string | null | undefined
-  onSubmitted: (at: string | null) => void
   initial: MyCalendarOut
 }) {
+  const period = initial.period
+  const [submittedAt, setSubmittedAt] = useState(initial.submitted_at)
+  const online = useSyncExternalStore(
+    useCallback((notify) => onlineManager.subscribe(notify), []),
+    () => onlineManager.isOnline(),
+  )
   const dates: string[] = []
   for (let d = parseDate(initial.start); d <= parseDate(initial.end); d = addDays(d, 1)) dates.push(toIsoDate(d))
-  const [locked] = useState(() => new Set(initial.locked))
+  const locked = useMemo(() => new Set(initial.locked), [initial.locked])
   const editable = !readOnly && locked.size < dates.length
   const [marks, setMarks] = useState<Marks>(() => marksFromServer(initial.days))
   const marksRef = useRef(marks)
@@ -238,7 +241,14 @@ function AvailabilityEditor({
   const failed = useRef<Marks>({})
   const stroke = useRef<Marks | null>(null)
 
-  const save = useSaveMyCalendar()
+  useEffect(() => {
+    if (status === 'saved') return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [status])
+
+  const { mutateAsync: save } = useSaveMyCalendar({ mutation: { scope: { id: `availability:${companyId}` } } })
   const submit = useSubmitMyAvailability()
 
   const apply = (changes: Marks) => {
@@ -252,26 +262,20 @@ function AvailabilityEditor({
       if (changed.length === 0) return
       pending.current += 1
       setStatus('saving')
-      save.mutate(
-        { data: { company_id: companyId, days: changed.map((date) => toDayIn(date, changes[date])) } },
-        {
-          onSuccess: () => {
-            for (const date of changed) delete failed.current[date]
-            pending.current -= 1
-            if (pending.current === 0) setStatus(Object.keys(failed.current).length ? 'failed' : 'saved')
-          },
-          onError: (error) => {
-            for (const date of changed) failed.current[date] = markOf(marksRef.current, date)
-            pending.current -= 1
-            setSaveError(errorMessage(error, NETWORK_PROBLEM))
-            setStatus('failed')
-          },
-        },
-      )
+      void save({ data: { company_id: companyId, days: changed.map((date) => toDayIn(date, changes[date])) } })
+        .then(() => {
+          for (const date of changed) delete failed.current[date]
+        })
+        .catch((error) => {
+          for (const date of changed) failed.current[date] = markOf(marksRef.current, date)
+          setSaveError(errorMessage(error, NETWORK_PROBLEM))
+        })
+        .finally(() => {
+          pending.current -= 1
+          if (pending.current === 0) setStatus(Object.keys(failed.current).length ? 'failed' : 'saved')
+        })
     },
-    // `save.mutate` is stable for the life of the editor.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [companyId],
+    [companyId, save],
   )
 
   const paint = useCallback(
@@ -312,13 +316,20 @@ function AvailabilityEditor({
     <div className="grid gap-4">
       {editable && (
         <div className="flex justify-end">
-          <SaveIndicator status={status} />
+          {!online && status === 'saving'
+            ? <span role="status">Brak internetu. Zapiszę zmiany po połączeniu. Zostaw tę stronę otwartą.</span>
+            : <SaveIndicator status={status} />}
         </div>
       )}
 
       {arranged && (
         <p className="m-0 text-sm text-ink-muted">
-          Na szare dni grafik jest już ułożony, więc ich nie zmienisz. Jeśli coś Ci wypadło, powiedz kierownikowi.
+          Na szare dni grafik jest już ułożony.{' '}
+          {readOnly ? 'Jeśli coś Ci wypadło, skontaktuj się z kierownikiem.' : <>
+            Jeśli masz opublikowaną zmianę, która jeszcze się nie zaczęła, możesz ją oddać w{' '}
+            <Link to="/grafik" className="font-semibold text-accent underline">Moim grafiku</Link>.
+            W pozostałych przypadkach skontaktuj się z kierownikiem.
+          </>}
         </p>
       )}
 
@@ -394,11 +405,11 @@ function AvailabilityEditor({
             <div className="grid gap-2">
               <Button
                 wide
-                disabled={submit.isPending}
+                disabled={submit.isPending || status !== 'saved'}
                 onClick={() =>
                   submit.mutate(
                     { data: { company_id: companyId, period_id: period.id } },
-                    { onSuccess: (r) => onSubmitted((r.data as MyAvailabilityOut).submitted_at ?? null) },
+                    { onSuccess: (r) => setSubmittedAt((r.data as MyAvailabilityOut).submitted_at ?? null) },
                   )
                 }
               >

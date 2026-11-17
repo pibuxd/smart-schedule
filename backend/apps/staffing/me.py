@@ -15,10 +15,12 @@ def employee_context(request, company_id: UUID | str) -> tuple[TenantContext, Em
     ctx = tenant_context(request, company_id)
     profile = (
         ctx.qs(EmployeeProfile)
-        .filter(membership=ctx.membership, is_active=True)
+        .filter(membership=ctx.membership)
         .select_related("home_location", "membership__user")
         .first()
     )
     if profile is None:
         raise HttpError(404, NO_PROFILE)
+    if not profile.is_active:
+        raise HttpError(404, "Twój profil pracownika jest wyłączony. Poproś kierownika o ponowne włączenie.")
     return ctx, profile

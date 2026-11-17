@@ -91,7 +91,7 @@ def request_login_code(raw_phone: str, purpose: Purpose, ip: str | None) -> Issu
         if allowed and ip and _is_new_number(phone):
             _check_new_numbers_limit(ip, hour_ago)
         if allowed:
-            _issue_code(phone, ip, now)
+            _issue_code(phone, ip)
         elif ip:
             # A row without a code (empty hash, already "used"): it can never log anyone in.
             LoginCode.objects.create(
@@ -132,8 +132,9 @@ def _check_new_numbers_limit(ip: str, hour_ago) -> None:
         raise HttpError(429, TOO_MANY_REGISTRATIONS)
 
 
-def _issue_code(phone: str, ip: str | None, now) -> None:
+def _issue_code(phone: str, ip: str | None) -> None:
     _lock(f"login-phone:{phone}")
+    now = timezone.now()
     recent = list(
         LoginCode.objects.filter(phone_e164=phone, created_at__gt=now - timedelta(hours=1))
         .exclude(code_hash="")
@@ -167,19 +168,21 @@ def verify_login_code(raw_phone: str, raw_code: str) -> User:
     """Check the code and return the account (created on first login). Raises HttpError when the code is wrong."""
     phone = parse_phone(raw_phone)
     submitted = "".join(ch for ch in str(raw_code) if not ch.isspace())
-    now = timezone.now()
     error: HttpError | None = None
     user: User | None = None
 
     # Errors are raised after the block: raising inside would roll back the attempt counter.
     with transaction.atomic():
+        _lock(f"login-phone:{phone}")
+        now = timezone.now()
         login_code = (
             LoginCode.objects.select_for_update()
-            .filter(phone_e164=phone, used_at__isnull=True, expires_at__gt=now)
+            .filter(phone_e164=phone)
+            .exclude(code_hash="")
             .order_by("-created_at")
             .first()
         )
-        if login_code is None:
+        if login_code is None or login_code.used_at is not None or login_code.expires_at <= now:
             error = HttpError(400, NO_ACTIVE_CODE)
         elif login_code.attempts >= settings.LOGIN_CODE_MAX_ATTEMPTS:
             error = HttpError(429, TOO_MANY_ATTEMPTS)
