@@ -51,6 +51,7 @@ Wszystkie polecenia z katalogu `/opt/grafikomat`.
 ```bash
 docker compose exec api python manage.py createsuperuser     # konto do panelu /api/admin/ (login = numer telefonu)
 docker compose exec api python manage.py seed_demo           # opcjonalnie: dane przykładowe (4 piekarnie i kawiarnia)
+docker compose exec api python manage.py seed_test_data --reset  # opcjonalnie: 3 firmy testowe do testów ręcznych
 ```
 
 Bramka SMS nie jest jeszcze podłączona, więc kod logowania nie przychodzi SMS-em, tylko trafia do logu serwera.

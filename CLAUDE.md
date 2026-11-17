@@ -40,6 +40,7 @@ cd backend
 uv sync
 uv run python manage.py migrate
 uv run python manage.py seed_demo [--reset]              # demo data: 4 bakeries + a separate café
+uv run python manage.py seed_test_data [--reset|--delete]  # 3 test companies for manual testing (+48 510/520/530…)
 # log in: POST /api/auth/request-code, the code is printed by runserver ("SMS to +48…")
 DJANGO_DEBUG=1 uv run python manage.py runserver          # API on :8000
 DJANGO_DEBUG=1 uv run python manage.py procrastinate worker   # all queues (in Docker: `worker` + `solver`)
