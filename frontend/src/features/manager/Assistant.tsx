@@ -132,7 +132,7 @@ export function AssistantPanel({ locationId }: { locationId: string }) {
       aria-label="Asystent grafiku"
       className="assistant-shell overflow-hidden rounded-lg border border-line bg-surface shadow-chat"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-grid px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+      <header className="relative flex items-center justify-between gap-2 border-b border-grid px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <AssistantMark />
           <div className="min-w-0">
@@ -145,14 +145,14 @@ export function AssistantPanel({ locationId }: { locationId: string }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <details className="relative">
+          <details>
             <summary
               aria-label="Jak działa asystent"
               className="flex min-h-(--touch) w-(--touch) cursor-pointer list-none items-center justify-center rounded-md text-ink-muted hover:bg-paper [&::-webkit-details-marker]:hidden"
             >
               <Info size={20} aria-hidden="true" />
             </summary>
-            <div className="absolute top-full right-0 z-20 mt-2 grid w-[min(320px,80vw)] gap-3 rounded-md border border-line bg-surface p-4 text-sm shadow-chat">
+            <div className="absolute inset-x-3 top-full z-20 mt-2 grid gap-3 rounded-md border border-line bg-surface p-4 text-sm shadow-chat sm:right-6 sm:left-auto sm:w-[320px]">
               <b>Ty decydujesz o zmianach</b>
               <p className="m-0">
                 Zatwierdzenie zapisuje ustawienia do następnego układania grafiku. Polecenia o osobach są
