@@ -20,7 +20,7 @@ const person = (id: string, first: string, experience: 1 | 2 | 3) => ({
   draft_shifts: 0,
 })
 
-const setup = { positions: [{ id: 'p1', name: 'Kelner', employees: 2 }], shift_types: [], staffing: [], exceptions: [], closures: [] }
+const setup = { positions: [{ id: 'p1', name: 'Kelner', employees: 2 }], shift_types: [], staffing: [], exceptions: [], closures: [], arranged: [] }
 
 describe('EmployeesScreen', () => {
   afterEach(() => vi.unstubAllGlobals())

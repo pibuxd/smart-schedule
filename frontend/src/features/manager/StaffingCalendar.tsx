@@ -108,10 +108,11 @@ export function StaffingCalendar({ locationId, setup, today = new Date() }: { lo
         open={open !== null}
         onOpenChange={(o) => !o && setOpen(null)}
         title={open ? dayTitle(parseDate(open)) : ''}
-        description="Obsada tylko tego dnia. Działa w grafikach, które ułożysz od teraz."
+        description="Obsada tylko tego dnia."
       >
         {open && (
           <DayForm key={open} locationId={locationId} setup={setup} date={open} closure={closed.get(open)}
+            arranged={setup.arranged.some((p) => p.start <= open && open <= p.end)}
             exceptions={setup.exceptions.filter((e) => e.date === open)} onDone={() => setOpen(null)} />
         )}
       </Sheet>
@@ -123,11 +124,13 @@ function usualHours(st: ShiftTypeOut): string {
   return st.start_time && st.end_time ? `${shortTime(hhmm(st.start_time))}–${shortTime(hhmm(st.end_time))}` : 'dowolne godziny'
 }
 
-function DayForm({ locationId, setup, date, closure, exceptions, onDone }: {
+function DayForm({ locationId, setup, date, closure, arranged, exceptions, onDone }: {
   locationId: string
   setup: LocationSetupOut
   date: string
   closure: ClosureOut | undefined
+  /** The date is in a period that already has a schedule (a draft or the published one). */
+  arranged: boolean
   exceptions: StaffingExceptionOut[]
   onDone: () => void
 }) {
@@ -143,10 +146,17 @@ function DayForm({ locationId, setup, date, closure, exceptions, onDone }: {
   const done = { onSuccess: () => { void queryClient.invalidateQueries(); onDone() } }
   const error = save.error ?? close.error ?? reopen.error
 
+  const arrangedNote = arranged && (
+    <p className="m-0 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+      Ten dzień jest już w ułożonym grafiku. Zmiana obsady albo zamknięcie lokalu zadziała, gdy ułożysz grafik od nowa.
+    </p>
+  )
+
   if (closure) {
     return (
       <div className="grid gap-4">
         <p className="m-0">Lokal jest tego dnia zamknięty{closure.note ? ` (${closure.note})` : ''}. Nikt nie dostanie zmiany.</p>
+        {arrangedNote}
         {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
         <Button variant="secondary" wide disabled={busy || readOnly} onClick={() => reopen.mutate({ closureId: closure.id }, done)}>
           Otwórz lokal w ten dzień
@@ -172,6 +182,7 @@ function DayForm({ locationId, setup, date, closure, exceptions, onDone }: {
 
   return (
     <form onSubmit={submit} className="grid gap-4">
+      {arrangedNote}
       {setup.shift_types.map((st) => (
         <fieldset key={st.id} disabled={readOnly || busy} className="m-0 grid gap-2 rounded-md border border-line bg-surface p-3">
           <legend className="px-1 font-bold">{st.name} <span className="font-normal text-ink-muted">({usualHours(st)})</span></legend>

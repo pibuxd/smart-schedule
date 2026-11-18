@@ -16,7 +16,7 @@ from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
 from apps.rules.models import RuleSetting
-from apps.scheduling.models import Assignment, ScheduleVersion
+from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion
 from apps.staffing import day_staffing
 from apps.staffing.models import (
     EmployeeProfile,
@@ -137,12 +137,19 @@ class ClosureOut(Schema):
     in_published: bool = Field(False, description="The published schedule still has people on this day.")
 
 
+class ArrangedOut(Schema):
+    start: date
+    end: date
+
+
 class LocationSetupOut(Schema):
     positions: list[PositionOut]
     shift_types: list[ShiftTypeOut]
     staffing: list[StaffingCellOut]
     exceptions: list[StaffingExceptionOut]
     closures: list[ClosureOut]
+    # Periods (not over yet) that already have a schedule: staffing changed there works after arranging again.
+    arranged: list[ArrangedOut]
 
 
 class PositionLevel(Schema):
@@ -253,6 +260,18 @@ def _setup_out(ctx: TenantContext, location: Location) -> LocationSetupOut:
             _exception_out(e) for e in ctx.qs(StaffingException).filter(location=location).order_by("date", "pk")
         ],
         closures=_closures_out(ctx, location),
+        arranged=[
+            ArrangedOut(start=start, end=end)
+            for start, end in ctx.qs(SchedulePeriod)
+            .filter(
+                location=location,
+                end__gte=timezone.localdate(),
+                versions__status__in=[ScheduleVersion.Status.DRAFT, ScheduleVersion.Status.PUBLISHED],
+            )
+            .values_list("start", "end")
+            .distinct()
+            .order_by("start")
+        ],
     )
 
 

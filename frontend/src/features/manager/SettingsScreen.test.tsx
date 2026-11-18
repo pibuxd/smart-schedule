@@ -15,7 +15,7 @@ it('keeps each weekday’s hours and experience quota when saving the staffing f
   const setup = {
     positions: [{ id: 'p', name: 'Kasa', employees: 1 }],
     shift_types: [{ id: 's', name: 'Dostawa', kind: 'flexible', start_time: null, end_time: null }],
-    staffing: [monday, saturday], closures: [], exceptions: [],
+    staffing: [monday, saturday], closures: [], exceptions: [], arranged: [],
   }
   const calls = mockApi((_method, path) => {
     if (path.endsWith('/setup') || path.endsWith('/staffing')) return [200, setup]
@@ -40,6 +40,7 @@ it('shows each day’s staffing in a calendar and saves one day with other numbe
     staffing: [0, 1, 2, 3, 4].map((weekday) => ({ ...cell, weekday, count: 2 })),
     exceptions: [{ ...cell, id: 'x', date: '2026-12-24', count: 1, note: 'Wigilia' }],
     closures: [{ id: 'c', date: '2026-12-25', note: 'Boże Narodzenie', in_draft: false, in_published: false }],
+    arranged: [{ start: '2026-12-21', end: '2026-12-27' }],
   }
   const calls = mockApi((_method, path) => {
     if (path.endsWith('/setup') || path.includes('/staffing-days/')) return [200, setup]
@@ -53,6 +54,7 @@ it('shows each day’s staffing in a calendar and saves one day with other numbe
   expect(screen.getByRole('button', { name: 'piątek 25 grudnia: lokal zamknięty' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'środa 23 grudnia: 2 os.' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Więcej osób: Ranna, Kasa' }))
+  expect(screen.getByText(/Ten dzień jest już w ułożonym grafiku/)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Zapisz obsadę dnia' }))
   await waitFor(() => expect(calls.find((c) => c.method === 'PUT')).toMatchObject({
     url: '/api/locations/l/staffing-days/2026-12-23',

@@ -327,6 +327,8 @@ def test_adding_a_place_makes_a_hole_and_survives_arranging_again(api, shop, dra
     body = api.get(url(draft)).json()
     assert len([s for s in body["shifts"] if s["date"] == str(MON)]) == 3 and body["scores"]["holes"] == 1
     assert StaffingException.objects.get(date=MON).count == 3  # Monday usually needs 2
+    setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+    assert setup["arranged"] == [{"start": str(MON), "end": str(MON + timedelta(days=6))}]
 
     again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
     assert Shift.objects.filter(version=again, date=MON).count() == 3

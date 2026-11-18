@@ -704,3 +704,5 @@ Założenia:
 5. Kolumnę, której w grafiku jeszcze nie ma (zmiana i stanowisko bez żadnego miejsca w okresie), dodaje się
    w kalendarzu obsady i przez "Ułóż od nowa". Na telefonie pustych komórek siatki nie pokazujemy.
 6. Zmiana obsady w kalendarzu nie rusza gotowych szkiców; działa od następnego ułożenia grafiku (jak dotąd).
+   Po przeglądzie Prelinta (PR #39): arkusz dnia mówi to wprost, gdy data jest w okresie z ułożonym grafikiem
+   (`LocationSetupOut.arranged`), także przy "Zamknij lokal w ten dzień".

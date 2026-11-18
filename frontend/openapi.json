@@ -9911,6 +9911,26 @@
         "title": "RequestDecisionIn",
         "type": "object"
       },
+      "ArrangedOut": {
+        "properties": {
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ArrangedOut",
+        "type": "object"
+      },
       "ClosureOut": {
         "properties": {
           "id": {
@@ -9984,6 +10004,13 @@
             },
             "title": "Closures",
             "type": "array"
+          },
+          "arranged": {
+            "items": {
+              "$ref": "#/components/schemas/ArrangedOut"
+            },
+            "title": "Arranged",
+            "type": "array"
           }
         },
         "required": [
@@ -9991,7 +10018,8 @@
           "shift_types",
           "staffing",
           "exceptions",
-          "closures"
+          "closures",
+          "arranged"
         ],
         "title": "LocationSetupOut",
         "type": "object"

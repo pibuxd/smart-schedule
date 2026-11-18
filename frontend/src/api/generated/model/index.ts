@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './arrangedOut';
 export * from './askAvailabilityIn';
 export * from './askAvailabilityOut';
 export * from './assistantCommandOut';
