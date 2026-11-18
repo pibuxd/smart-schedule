@@ -270,6 +270,9 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
         version.published_at = timezone.now()
         save_scores(version, loaded.scores)
         version.save(update_fields=["status", "published_at"])
+        from apps.assistant.agreements import consume
+
+        consume(version.period, version.published_at)
         period.status = SchedulePeriod.Status.PUBLISHED
         period.save(update_fields=["status"])
         from apps.marketplace.services import refresh_after_publish

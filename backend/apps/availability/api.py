@@ -448,7 +448,7 @@ def _summary(row: TextRequest) -> str | None:
 
     summary = (
         (row.interpretation or {}).get("summary")
-        if row.status in (TextRequest.Status.INTERPRETED, TextRequest.Status.ANSWERED)
+        if row.status in (TextRequest.Status.INTERPRETED, TextRequest.Status.ANSWERED, TextRequest.Status.REJECTED)
         else None
     )
     return str(summary) + legacy_hours_notice(row.interpretation, row.text) if summary else None
@@ -716,6 +716,7 @@ def period_requests(request, period_id: UUID):
         ctx.qs(TextRequest)
         .filter(TextRequest.for_periods([period]))
         .exclude(status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED])
+        .exclude(interpretation__type="out_of_scope", interpretation__type__isnull=False)
         .select_related("employee__membership__user")
     )
     return [_manager_request_out(r) for r in rows.order_by("created_at")]

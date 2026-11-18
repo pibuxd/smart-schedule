@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './agreedRuleOut';
 export * from './askAvailabilityIn';
 export * from './askAvailabilityOut';
 export * from './assistantCommandOut';
@@ -68,6 +69,7 @@ export * from './locationColumnOut';
 export * from './locationHoursOut';
 export * from './locationIn';
 export * from './locationInSchedulePeriod';
+export * from './locationInstructionsParams';
 export * from './locationOut';
 export * from './locationOutSchedulePeriod';
 export * from './locationSetupOut';

@@ -118,7 +118,7 @@
   }
   @media (max-width: 639px) {
     .assistant-shell {
-      height: max(460px, calc(100dvh - 255px));
+      height: max(620px, calc(100dvh - 255px));
     }
   }
   /* Availability states: colour + pattern (the icon is in the markup). */

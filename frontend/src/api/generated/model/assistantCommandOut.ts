@@ -17,4 +17,8 @@ export interface AssistantCommandOut {
   notes: string[];
   can_apply: boolean;
   created_at: string;
+  expires_at: string;
+  rule_set_id: string | null;
+  period_label: string;
+  consumed_at: string | null;
 }

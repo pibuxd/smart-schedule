@@ -81,6 +81,8 @@ export function ChatComposer({
   inputRef,
   label = 'Twoja wiadomość',
   placeholder = 'Napisz wiadomość…',
+  sendLabel = 'Wyślij wiadomość',
+  enterSends = true,
   footer,
 }: {
   text: string
@@ -92,6 +94,8 @@ export function ChatComposer({
   inputRef?: RefObject<HTMLTextAreaElement | null>
   label?: string
   placeholder?: string
+  sendLabel?: string
+  enterSends?: boolean
   footer?: ReactNode
 }) {
   const ownRef = useRef<HTMLTextAreaElement>(null)
@@ -112,7 +116,12 @@ export function ChatComposer({
       }}
       className="grid gap-2"
     >
-      <div className="flex items-end gap-2 rounded-lg border border-line bg-surface p-2 transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
+      <div
+        className={cn(
+          'flex items-end gap-2 rounded-lg border border-line bg-surface p-2 transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft',
+          !enterSends && 'flex-col',
+        )}
+      >
         <textarea
           ref={ref}
           rows={1}
@@ -121,10 +130,10 @@ export function ChatComposer({
           value={text}
           maxLength={1000}
           disabled={disabled || sending}
-          enterKeyHint="send"
+          enterKeyHint={enterSends ? 'send' : 'enter'}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            if (enterSends && event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
               if (canSend) onSend()
             }
@@ -133,11 +142,15 @@ export function ChatComposer({
         />
         <button
           type="submit"
-          aria-label={sending ? 'Wysyłam wiadomość' : 'Wyślij wiadomość'}
+          aria-label={sending ? 'Wysyłam…' : sendLabel}
           disabled={!canSend}
-          className="flex h-(--touch) w-(--touch) shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-ink transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-paper disabled:text-ink-muted"
+          className={cn(
+            'flex h-(--touch) shrink-0 cursor-pointer items-center justify-center gap-2 bg-accent text-accent-ink transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-paper disabled:text-ink-muted',
+            enterSends ? 'w-(--touch) rounded-full' : 'rounded-md px-4 text-sm font-semibold',
+          )}
         >
-          <ArrowUp size={24} aria-hidden="true" />
+          {!enterSends && <span>{sendLabel}</span>}
+          <ArrowUp size={enterSends ? 24 : 18} aria-hidden="true" />
         </button>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 text-xs text-ink-muted">
@@ -145,13 +158,13 @@ export function ChatComposer({
           {sending
             ? 'Wysyłam…'
             : waiting
-              ? 'Poczekaj na odpowiedź. Możesz już napisać kolejną wiadomość.'
+              ? 'Możesz pisać. Wyślesz kolejną wiadomość po otrzymaniu odpowiedzi.'
               : footer}
         </span>
         {text.length > 800 ? (
           <span>{text.length}/1000</span>
         ) : (
-          <span className="hidden sm:inline">Enter — wyślij · Shift+Enter — nowy wiersz</span>
+          enterSends && <span className="hidden sm:inline">Enter — wyślij · Shift+Enter — nowy wiersz</span>
         )}
       </div>
     </form>

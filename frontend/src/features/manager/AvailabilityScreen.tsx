@@ -22,6 +22,7 @@ import { Section, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { AssistantRulesTable } from './AssistantRulesTable'
 import { AskAvailabilityButton } from './AskAvailabilityButton'
 import { AvailabilityGrid, GridLegend } from './AvailabilityGrid'
 import { useManager } from './ManagerContext'
@@ -177,6 +178,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
         )}
       </Section>
 
+      <AssistantRulesTable locationId={period.location_id} periodId={period.id} />
       <RequestsSection periodId={period.id} />
     </div>
   )

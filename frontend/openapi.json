@@ -5927,6 +5927,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -6190,6 +6200,23 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -6301,6 +6328,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         },
         "description": "Change the order (importance) of the instructions; the list must name each of them once.",
@@ -6366,6 +6403,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -11502,6 +11549,39 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "rule_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Set Id"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "consumed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed At"
           }
         },
         "required": [
@@ -11514,7 +11594,11 @@
           "effects",
           "notes",
           "can_apply",
-          "created_at"
+          "created_at",
+          "expires_at",
+          "rule_set_id",
+          "period_label",
+          "consumed_at"
         ],
         "title": "AssistantCommandOut",
         "type": "object"
@@ -11526,12 +11610,62 @@
             "minLength": 1,
             "title": "Text",
             "type": "string"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
           }
         },
         "required": [
           "text"
         ],
         "title": "CommandIn",
+        "type": "object"
+      },
+      "AgreedRuleOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "is_hard": {
+            "title": "Is Hard",
+            "type": "boolean"
+          },
+          "details": {
+            "title": "Details",
+            "type": "string"
+          },
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "enabled",
+          "is_hard",
+          "details",
+          "changed"
+        ],
+        "title": "AgreedRuleOut",
         "type": "object"
       },
       "InstructionOut": {
@@ -11570,11 +11704,73 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "rule_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Set Id"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "period_requested": {
+            "title": "Period Requested",
+            "type": "boolean"
+          },
+          "consumed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed At"
+          },
+          "closed": {
+            "title": "Closed",
+            "type": "boolean"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/AgreedRuleOut"
+            },
+            "title": "Rules",
+            "type": "array"
           }
         },
         "required": [
           "assistant_enabled",
-          "items"
+          "items",
+          "rule_set_id",
+          "period_id",
+          "period_label",
+          "period_requested",
+          "consumed_at",
+          "closed",
+          "rules"
         ],
         "title": "InstructionsOut",
         "type": "object"
@@ -11589,6 +11785,18 @@
             "maxItems": 200,
             "title": "Ids",
             "type": "array"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
           }
         },
         "required": [

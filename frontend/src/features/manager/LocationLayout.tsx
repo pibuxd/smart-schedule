@@ -15,7 +15,7 @@ const TABS = [
   { to: '/kierownik/lokal/$locationId/zasady', label: 'Zasady' },
 ] as const
 
-/** One location; a compact heading for the chat and scrollable tabs on small screens. */
+/** One location; a compact heading for the chat and wrapping tabs on small screens. */
 export function LocationLayout({ locationId }: { locationId: string }) {
   const chat = useRouterState({ select: (state) => state.location.pathname.endsWith('/asystent') })
   const location = useLocationDetail(locationId)
@@ -23,7 +23,10 @@ export function LocationLayout({ locationId }: { locationId: string }) {
   if (location.isError) {
     return (
       <ErrorState onRetry={() => void location.refetch()}>
-        {errorMessage(location.error, 'Nie udało się wczytać lokalu. Sprawdź internet i spróbuj jeszcze raz.')}
+        {errorMessage(
+          location.error,
+          'Nie udało się wczytać lokalu. Sprawdź internet i spróbuj jeszcze raz.',
+        )}
       </ErrorState>
     )
   }
@@ -33,18 +36,20 @@ export function LocationLayout({ locationId }: { locationId: string }) {
       <div className="grid gap-2">
         <Link
           to="/kierownik"
-          className={`${chat ? 'hidden sm:inline-flex' : 'inline-flex'} min-h-(--touch) w-fit items-center gap-1.5 font-semibold text-accent underline underline-offset-4`}
+          className="inline-flex min-h-(--touch) w-fit items-center gap-1.5 font-semibold text-accent underline underline-offset-4"
         >
           <ArrowLeft aria-hidden="true" size={20} />
           Wszystkie lokale
         </Link>
         <div className="flex flex-wrap items-baseline gap-x-3">
           <h1 className={`m-0 ${chat ? 'text-xl font-semibold' : 'text-2xl font-extrabold'}`}>{data.name}</h1>
-          {data.group_name && <span className={`${chat ? 'hidden sm:inline' : ''} text-ink-muted`}>{data.group_name}</span>}
+          {data.group_name && (
+            <span className={`${chat ? 'hidden sm:inline' : ''} text-ink-muted`}>{data.group_name}</span>
+          )}
           {data.archived && <span className="font-semibold text-cannot">W archiwum</span>}
         </div>
       </div>
-      <nav aria-label="Ekrany lokalu" className="flex min-w-0 gap-1 overflow-x-auto border-b border-line whitespace-nowrap">
+      <nav aria-label="Ekrany lokalu" className="flex min-w-0 flex-wrap gap-1 border-b border-line">
         {TABS.map((tab) => (
           <Link
             key={tab.to}

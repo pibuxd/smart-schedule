@@ -57,7 +57,7 @@ describe('AvailabilityScreen', () => {
     const box = await screen.findByLabelText('Twoja prośba')
     expect(screen.getByText(/Prośba dotyczy tego miesiąca/)).toBeInTheDocument()
     fireEvent.change(box, { target: { value: 'W grudniu bez nocek.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Wyślij wiadomość' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij prośbę' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/me/requests')).toBe(true))
     expect(calls.find((c) => c.method === 'POST' && c.url === '/api/me/requests')?.body).toEqual({
       company_id: 'c1',

@@ -28,7 +28,8 @@ import type {
   CommandIn,
   ErrorOut,
   InstructionOrderIn,
-  InstructionsOut
+  InstructionsOut,
+  LocationInstructionsParams
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -215,6 +216,11 @@ export type sendAssistantCommandResponse404 = {
   status: 404
 }
 
+export type sendAssistantCommandResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type sendAssistantCommandResponse429 = {
   data: ErrorOut
   status: 429
@@ -223,7 +229,7 @@ export type sendAssistantCommandResponse429 = {
 export type sendAssistantCommandResponseSuccess = (sendAssistantCommandResponse201) & {
   headers: Headers;
 };
-export type sendAssistantCommandResponseError = (sendAssistantCommandResponse400 | sendAssistantCommandResponse402 | sendAssistantCommandResponse403 | sendAssistantCommandResponse404 | sendAssistantCommandResponse429) & {
+export type sendAssistantCommandResponseError = (sendAssistantCommandResponse400 | sendAssistantCommandResponse402 | sendAssistantCommandResponse403 | sendAssistantCommandResponse404 | sendAssistantCommandResponse409 | sendAssistantCommandResponse429) & {
   headers: Headers;
 };
 
@@ -698,21 +704,30 @@ export type locationInstructionsResponseError = (locationInstructionsResponse403
 
 export type locationInstructionsResponse = (locationInstructionsResponseSuccess | locationInstructionsResponseError)
 
-export const getLocationInstructionsUrl = (locationId: string,) => {
+export const getLocationInstructionsUrl = (locationId: string,
+    params?: LocationInstructionsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/locations/${locationId}/instructions`
+  return stringifiedParams.length > 0 ? `/api/locations/${locationId}/instructions?${stringifiedParams}` : `/api/locations/${locationId}/instructions`
 }
 
 /**
  * The manager's instructions about people, most important first.
  * @summary Location Instructions
  */
-export const locationInstructions = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<locationInstructionsResponse> => {
+export const locationInstructions = async (locationId: string,
+    params?: LocationInstructionsParams, options?: Parameters<typeof apiFetch>[1]): Promise<locationInstructionsResponse> => {
 
-  return apiFetch<locationInstructionsResponse>(getLocationInstructionsUrl(locationId),
+  return apiFetch<locationInstructionsResponse>(getLocationInstructionsUrl(locationId,params),
   {
     ...options,
     method: 'GET'
@@ -725,23 +740,25 @@ export const locationInstructions = async (locationId: string, options?: Paramet
 
 
 
-export const getLocationInstructionsQueryKey = (locationId: string,) => {
+export const getLocationInstructionsQueryKey = (locationId: string,
+    params?: LocationInstructionsParams,) => {
     return [
-    `/api/locations/${locationId}/instructions`
+    `/api/locations/${locationId}/instructions`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getLocationInstructionsQueryOptions = <TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getLocationInstructionsQueryOptions = <TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getLocationInstructionsQueryKey(locationId);
+  const queryKey =  queryOptions?.queryKey ?? getLocationInstructionsQueryKey(locationId,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof locationInstructions>>> = ({ signal }) => locationInstructions(locationId, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof locationInstructions>>> = ({ signal }) => locationInstructions(locationId,params, { signal, ...requestOptions });
 
 
 
@@ -759,7 +776,8 @@ export type LocationInstructionsQueryError = ErrorOut
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
+ locationId: string,
+    params: undefined |  LocationInstructionsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof locationInstructions>>,
           TError,
@@ -773,7 +791,8 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
+ locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof locationInstructions>>,
           TError,
@@ -787,7 +806,8 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -795,11 +815,12 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getLocationInstructionsQueryOptions(locationId,options)
+  const queryOptions = getLocationInstructionsQueryOptions(locationId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -836,10 +857,15 @@ export type orderLocationInstructionsResponse404 = {
   status: 404
 }
 
+export type orderLocationInstructionsResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type orderLocationInstructionsResponseSuccess = (orderLocationInstructionsResponse200) & {
   headers: Headers;
 };
-export type orderLocationInstructionsResponseError = (orderLocationInstructionsResponse400 | orderLocationInstructionsResponse402 | orderLocationInstructionsResponse403 | orderLocationInstructionsResponse404) & {
+export type orderLocationInstructionsResponseError = (orderLocationInstructionsResponse400 | orderLocationInstructionsResponse402 | orderLocationInstructionsResponse403 | orderLocationInstructionsResponse404 | orderLocationInstructionsResponse409) & {
   headers: Headers;
 };
 
@@ -955,10 +981,15 @@ export type deleteInstructionResponse404 = {
   status: 404
 }
 
+export type deleteInstructionResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type deleteInstructionResponseSuccess = (deleteInstructionResponse204) & {
   headers: Headers;
 };
-export type deleteInstructionResponseError = (deleteInstructionResponse402 | deleteInstructionResponse403 | deleteInstructionResponse404) & {
+export type deleteInstructionResponseError = (deleteInstructionResponse402 | deleteInstructionResponse403 | deleteInstructionResponse404 | deleteInstructionResponse409) & {
   headers: Headers;
 };
 
