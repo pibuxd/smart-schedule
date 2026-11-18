@@ -715,4 +715,5 @@ Założenia:
    `editing.MANAGER_MAY_BREAK` przenosi takie naruszenia do ostrzeżeń (`CheckOut.warnings`,
    `VersionOut.accepted_problems`, żółta ramka nad siatką), a `hard_problems` zawiera tylko to, co blokuje publikację.
    Przypięta zmiana kierownika zmniejsza wymóg przy "Ułóż od nowa" (`_keep_pinned_beginners`), zamiast przerywać
-   układanie. Oddawanie zmian między pracownikami nadal wymaga doświadczonej osoby.
+   układanie. Oddawanie zmian między pracownikami nadal wymaga doświadczonej osoby, bo tam o przejęciu decyduje
+   pracownik (albo zasada lokalu bez zatwierdzania), a władza łamania wymogu należy tylko do kierownika.
