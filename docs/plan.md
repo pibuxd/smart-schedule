@@ -676,3 +676,30 @@ Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi odda
   w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
   sprawiedliwe (np. osoba blisko limitu godzin).
 
+## 24. Usuwanie ludzi, stanowisk, grup, lokali, okresów i powiadomień (18.11.2026)
+
+Prośba Piotra: w aplikacji nie było jak usunąć osoby z lokalu ani powiadomienia. Przegląd pokazał też, że stanowiska
+użytego w grafiku nie dało się usunąć nigdy (409), a grup, lokali i okresów w ogóle. Zasada z sekcji o historii zostaje:
+zapisane grafiki i godziny nie giną, więc tam, gdzie baza blokuje usunięcie (`RESTRICT`), rzecz jest ukrywana.
+
+- `EmployeeProfile.removed_at` i `Position.removed_at` (migracja `staffing.0007`). Usunięta osoba ma zawsze
+  `is_active = false` (ograniczenie w bazie), więc wszystkie miejsca, które biorą aktywnych, pomijają ją same.
+  Nazwa stanowiska jest unikalna tylko wśród nieusuniętych.
+- `DELETE /employees/{id}` (`apps/staffing/removal.py`): bez przypisań usuwa profil, a przy roli pracownika także
+  członkostwo i powiadomienia; z przypisaniami cofa otwarte oddania i zgłoszenia, usuwa polecenia kierownika o tej
+  osobie i jej stanowiska, ustawia `removed_at`. `tenant_context` i `GET /me` nie wpuszczają usuniętego pracownika
+  (404). Nowe zaproszenie przywraca profil w lokalu, który zaprasza.
+- `DELETE /positions/{id}`: gdy stanowisko jest w jakiejś zmianie, ustawia `removed_at`, usuwa obsadę, wyjątki
+  i powiązania z ludźmi. Zasada lokalu, która go używa, nadal blokuje (409), jak wcześniej.
+- `DELETE /groups/{id}` (właściciel): przed usunięciem kopiuje zasady i profil wag grupy do lokali, które nie mają
+  własnych, więc połączona lista zasad lokalu się nie zmienia.
+- `DELETE /locations/{id}` (właściciel): 409, gdy lokal ma okres grafiku albo pracowników.
+- `DELETE /periods/{id}`: 409, gdy jakaś wersja była opublikowana albo trwa układanie; inaczej usuwa szkice i okres.
+- `DELETE /me/notifications/{id}` i `DELETE /me/notifications?company_id=`: tylko własne, bez `require_writable`.
+- Ekrany: "Usuń z lokalu" w formularzu pracownika, krzyżyk i "Usuń wszystkie" w powiadomieniach, "Usuń grupę" na
+  liście lokali, "Usuń lokal" w ustawieniach, "Usuń ten okres" w dyspozycjach, pytanie przed usunięciem stanowiska
+  (`components/ui/confirm.tsx`).
+
+Założenia: usunięcie osoby nie zmienia zapisanych grafików, więc jej przyszłe zmiany kierownik przenosi ręcznie albo
+układa grafik od nowa (tak samo jak przy wyłączeniu z grafiku). Działało już wcześniej i zostało bez zmian: usuwanie
+zmian (typów zmian), dni zamknięcia, wyjątków w obsadzie, poleceń kierownika i próśb pracownika.

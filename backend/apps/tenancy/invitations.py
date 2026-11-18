@@ -8,6 +8,7 @@ from django.utils import timezone
 from ninja.errors import HttpError
 
 from apps.staffing.models import EmployeeProfile
+from apps.staffing.removal import restore_employee
 from apps.tenancy.models import Invitation, InvitationStatus, Location, Membership, Role
 
 ALREADY_DECIDED = "To zaproszenie nie jest już aktualne."
@@ -23,7 +24,8 @@ def create_invitation(
         .first()
     )
     if membership is not None:
-        if role == Role.EMPLOYEE and hasattr(membership, "employee_profile"):
+        profile = getattr(membership, "employee_profile", None)
+        if role == Role.EMPLOYEE and profile is not None and profile.removed_at is None:
             raise HttpError(409, "Ta osoba jest już pracownikiem tej firmy.")
         if role == Role.MANAGER and (
             membership.role == Role.OWNER
@@ -78,10 +80,14 @@ def accept_invitation(invitation_id, user) -> Invitation:
             membership.save(update_fields=["role"])
         if membership.role == Role.MANAGER:
             membership.locations.add(location)
-    elif not EmployeeProfile.objects.for_company(invitation.company_id).filter(membership=membership).exists():
-        # A person who already works in another location of this company keeps their home location;
+    else:
+        profile = EmployeeProfile.objects.for_company(invitation.company_id).filter(membership=membership).first()
+        if profile is None:
+            EmployeeProfile.objects.create(membership=membership, home_location=location)
+        elif profile.removed_at is not None:
+            restore_employee(profile, location)
+        # Otherwise the person already works in another location of this company and keeps their home location;
         # work elsewhere stays an exception arranged by the manager.
-        EmployeeProfile.objects.create(membership=membership, home_location=location)
 
     changed = []
     if not user.first_name and invitation.first_name:

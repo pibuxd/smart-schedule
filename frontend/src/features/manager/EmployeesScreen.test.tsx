@@ -118,6 +118,32 @@ describe('EmployeesScreen', () => {
     await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Dodaj mnie jako pracownika' })).not.toBeInTheDocument())
   })
 
+  it('removes a person from the location after asking once more', async () => {
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 3 }]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      if (method === 'DELETE') return [204, null]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Usuń z lokalu' }))
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+    const question = within(sheet).getByRole('alert')
+    expect(question).toHaveTextContent('Usunąć z lokalu: Ala Nowak?')
+    expect(question).toHaveTextContent('Ta osoba ma 3 zmiany w szkicu grafiku.')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Tak, usuń z lokalu' }))
+
+    await vi.waitFor(() => expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/employees/e1'))
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it('corrects the name, and warns about shifts in the draft before switching someone off', async () => {
     const calls = mockApi((method, path) => {
       if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 8, revision: 'initial' }]]

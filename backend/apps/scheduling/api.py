@@ -254,6 +254,27 @@ def update_period(request, period_id: UUID, payload: PeriodUpdateIn):
     return _period_out(period)
 
 
+@router.delete(
+    "/periods/{uuid:period_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
+)
+def delete_period(request, period_id: UUID):
+    """Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+    published stays: employees saw it and hours are counted from it."""
+    ctx, period = context_for(request, SchedulePeriod, period_id)
+    ctx.require_manager_of(period.location)
+    ctx.require_writable()
+    with transaction.atomic():
+        period = ctx.qs(SchedulePeriod).select_for_update().get(pk=period.pk)
+        versions = ctx.qs(ScheduleVersion).filter(period=period)
+        if versions.filter(published_at__isnull=False).exists():
+            raise HttpError(409, "Ten grafik był już opublikowany, więc okresu nie można usunąć.")
+        if period.generation_runs.filter(status__in=ACTIVE).exists():
+            raise HttpError(409, "Grafik na ten okres właśnie się układa. Poczekaj albo przerwij układanie.")
+        versions.delete()
+        period.delete()
+    return Status(204, None)
+
+
 @router.post(
     "/periods/{period_id}/ask-availability",
     response={200: AskAvailabilityOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},

@@ -1065,6 +1065,138 @@
             "SessionAuth": []
           }
         ]
+      },
+      "delete": {
+        "operationId": "delete_location",
+        "summary": "Delete Location",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a location added by mistake (owner only): one without employees and without any schedule period.\nA location that has worked is archived instead, so its schedules and hours stay.",
+        "tags": [
+          "tenancy"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/groups/{group_id}": {
+      "delete": {
+        "operationId": "delete_group",
+        "summary": "Delete Group",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Group Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a location group (owner only). Its locations stay, without a group, and keep working as before:\neach one gets the group's rules and weights it was using as its own.",
+        "tags": [
+          "tenancy"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
       }
     },
     "/api/companies/{company_id}/subscription": {
@@ -1464,6 +1596,76 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "delete_period",
+        "summary": "Delete Period",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "period_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Period Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever\npublished stays: employees saw it and hours are counted from it.",
+        "tags": [
+          "scheduling"
+        ],
         "security": [
           {
             "SessionAuth": []
@@ -3831,7 +4033,7 @@
             }
           }
         },
-        "description": "Also removes its staffing; refused when a schedule already uses it (history stays intact).",
+        "description": "Also removes its staffing and takes it from people. A position that a saved schedule uses is kept hidden\n(old schedules still show its name), so the manager can always get rid of it.",
         "tags": [
           "staffing"
         ],
@@ -4752,6 +4954,76 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "remove_employee",
+        "summary": "Remove Employee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Employee Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain\nemployee loses access to the company and can come back only through a new invitation.",
+        "tags": [
+          "staffing"
+        ],
         "security": [
           {
             "SessionAuth": []
@@ -5756,6 +6028,46 @@
             "SessionAuth": []
           }
         ]
+      },
+      "delete": {
+        "operationId": "dismiss_all_notifications",
+        "summary": "Dismiss All Notifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove all of my notifications in this company.",
+        "tags": [
+          "notifications"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
       }
     },
     "/api/me/notifications/read": {
@@ -5792,6 +6104,48 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/me/notifications/{notification_id}": {
+      "delete": {
+        "operationId": "dismiss_notification",
+        "summary": "Dismiss Notification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Notification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove one of my notifications for good (the \"X\" on it). Allowed in read-only mode, like marking as seen.",
+        "tags": [
+          "notifications"
+        ],
         "security": [
           {
             "SessionAuth": []

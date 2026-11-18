@@ -55,6 +55,13 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 6. Okres grafiku: kierownik wpisuje daty okresu i dzień, w którym będzie układał grafik. Może jednym przyciskiem poprosić wszystkich pracowników lokalu o dyspozycje (powiadomienie w aplikacji z okresem i terminem). Widzi, kto już wpisał dyspozycje, a kto nie, i może przypomnieć tylko tym, którzy jeszcze nie wpisali.
    Grafik powstaje wyłącznie na świadome polecenie kierownika, gdy minie termin albo gdy wszyscy wpiszą dyspozycje (Piotr, 12.11.2026: ludzie zwlekają do ostatniej chwili, więc grafik ma sens dopiero przy komplecie danych). Aplikacja nie układa grafiku sama, okresowo ani automatycznie; może jedynie podpowiedzieć, że przyszła pora.
 7. Podsumowanie godzin w miesiącu z podziałem na lokale, eksport CSV.
+8. Usuwanie (prośba Piotra z 18.11.2026): kierownik może usunąć każdą rzecz, którą dodał, a historia grafików i godzin zostaje.
+   - Osoba: "Usuń z lokalu" w formularzu pracownika (obok wyłączenia z grafiku), po potwierdzeniu. Osoba bez żadnej zmiany w grafikach znika całkiem. Osoba ze zmianami w zapisanych grafikach znika z list i traci dostęp do firmy, ale jej dawne zmiany i godziny zostają; wraca tylko przez nowe zaproszenie. Kierownik usunięty z listy pracowników dalej jest kierownikiem.
+   - Stanowisko: zawsze da się usunąć. Gdy jest w zapisanym grafiku, znika z ustawień, obsady i od ludzi, a dawne grafiki dalej pokazują jego nazwę.
+   - Grupa lokali (właściciel): lokale zostają bez grupy i zachowują zasady grupy jako własne.
+   - Lokal (właściciel): usunąć można tylko lokal bez pracowników i bez okresów grafiku (dodany przez pomyłkę); lokal, który działał, przenosi się do archiwum.
+   - Okres grafiku: można usunąć, dopóki grafik nie był opublikowany (np. złe daty); znika ze szkicami i prośbami pracowników na ten okres, dyspozycje w kalendarzu zostają.
+   - Powiadomienie: każdy usuwa swoje krzyżykiem albo wszystkie naraz (działa też w trybie tylko do odczytu).
 
 ## Reguły (bez typu umowy)
 
@@ -102,7 +109,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Tabela subscriptions niezależna od dostawcy płatności: firma, status (aktywna / wygasła), data końca, źródło ("kod", w przyszłości "stripe"). Kolejny kod przedłuża dostęp od daty końca, nie od dnia wpisania.
 - 7 dni przed końcem baner w panelu kierownika. Po wygaśnięciu tryb tylko do odczytu: grafik widoczny, bez edycji i generowania. Danych nie usuwamy.
 - Firma założona bez kodu dostaje 30 dni okresu próbnego z pełnym dostępem (decyzja Piotra z 12.11.2026; 13.11.2026 wydłużone z 14 do 30 dni, żeby zmieścił się pełny miesięczny cykl: dyspozycje, termin, ułożenie, publikacja). Okres próbny dostaje tylko pierwsza firma zakładana przez daną osobę; limit ułożeń grafiku obowiązuje także wtedy. Po okresie próbnym firma jest tylko do odczytu, dopóki kierownik nie wpisze kodu; kod wpisany w okresie próbnym dolicza swoje dni do końca okresu próbnego, więc nic nie przepada.
-- W trybie tylko do odczytu każda zmiana danych firmy jest odrzucana (HTTP 402 z komunikatem po polsku); wyjątki: wpisanie kodu, odpowiedź zaproszonej osoby na zaproszenie oraz oznaczenie własnych powiadomień jako przeczytane (pracownik nadal widzi grafik i powiadomienia; oddawać ani brać zmian nie można).
+- W trybie tylko do odczytu każda zmiana danych firmy jest odrzucana (HTTP 402 z komunikatem po polsku); wyjątki: wpisanie kodu, odpowiedź zaproszonej osoby na zaproszenie oraz oznaczenie i usunięcie własnych powiadomień (pracownik nadal widzi grafik i powiadomienia; oddawać ani brać zmian nie można).
 - Limit prób wpisania kodu: 5 błędnych na konto i 20 na adres IP w ciągu godziny. Kod ma 12 znaków, pokazywany w grupach po 4 (ABCD-EFGH-JKMN); spacje i myślniki nie mają znaczenia. Jeden kod można użyć w danej firmie tylko raz. Kody widać w całości tylko raz, zaraz po wygenerowaniu; w bazie jest skrót i pierwsze 4 znaki.
 - Limit generowań grafiku na firmę (roboczo 30 na miesiąc), także w okresie darmowym.
 

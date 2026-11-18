@@ -443,6 +443,117 @@ export const useUpdatePeriod = <TError = ErrorOut,
       > => {
       return useMutation(getUpdatePeriodMutationOptions(options), queryClient);
     }
+    export type deletePeriodResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deletePeriodResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type deletePeriodResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type deletePeriodResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type deletePeriodResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type deletePeriodResponseSuccess = (deletePeriodResponse204) & {
+  headers: Headers;
+};
+export type deletePeriodResponseError = (deletePeriodResponse402 | deletePeriodResponse403 | deletePeriodResponse404 | deletePeriodResponse409) & {
+  headers: Headers;
+};
+
+export type deletePeriodResponse = (deletePeriodResponseSuccess | deletePeriodResponseError)
+
+export const getDeletePeriodUrl = (periodId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}`
+}
+
+/**
+ * Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+ * published stays: employees saw it and hours are counted from it.
+ * @summary Delete Period
+ */
+export const deletePeriod = async (periodId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deletePeriodResponse> => {
+
+  return apiFetch<deletePeriodResponse>(getDeletePeriodUrl(periodId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePeriodMutationKey = () => ['deletePeriod'] as const;
+
+export const getDeletePeriodMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext> => {
+
+const mutationKey = getDeletePeriodMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePeriod>>, DeletePeriodMutationVariables> = (props) => {
+          const {periodId} = props ?? {};
+
+          return  deletePeriod(periodId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePeriodMutationResult = NonNullable<Awaited<ReturnType<typeof deletePeriod>>>
+
+    export type DeletePeriodMutationError = ErrorOut
+    export type DeletePeriodMutationVariables = {periodId: string}
+
+    /**
+ * Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+ * published stays: employees saw it and hours are counted from it.
+ * @summary Delete Period
+ */
+export const useDeletePeriod = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deletePeriod>>,
+        TError,
+        DeletePeriodMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeletePeriodMutationOptions(options), queryClient);
+    }
     export type askForAvailabilityResponse200 = {
   data: AskAvailabilityOut
   status: 200

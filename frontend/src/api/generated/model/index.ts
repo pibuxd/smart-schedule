@@ -33,6 +33,7 @@ export * from './companyIn';
 export * from './companyOut';
 export * from './dayIn';
 export * from './dayInState';
+export * from './dismissAllNotificationsParams';
 export * from './employeeHoursOut';
 export * from './employeeIn';
 export * from './employeeInExperience';

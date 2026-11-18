@@ -25,12 +25,19 @@ class Position(CompanyOwnedModel):
 
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="positions")
     name = models.CharField("nazwa", max_length=100)
+    # A position used in a saved schedule cannot be deleted, so "Usuń" hides it instead: it leaves staffing,
+    # people and every list, and only old schedules still show its name. Read live positions with `removed_at=None`.
+    removed_at = models.DateTimeField("usunięte", null=True, blank=True)
 
     class Meta:
         verbose_name = "stanowisko"
         verbose_name_plural = "stanowiska"
         ordering = ["location", "name"]
-        constraints = [models.UniqueConstraint(fields=["location", "name"], name="position_unique_name")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["location", "name"], condition=Q(removed_at__isnull=True), name="position_unique_name"
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.location})"
@@ -193,6 +200,9 @@ class EmployeeProfile(CompanyOwnedModel):
     max_hours_month = models.PositiveSmallIntegerField("maks. godzin w miesiącu", null=True, blank=True)
     target_hours_month = models.PositiveSmallIntegerField("cel godzin w miesiącu", null=True, blank=True)
     is_active = models.BooleanField("aktywny", default=True)
+    # Removed from the location by a manager, but kept because old schedules point at the person (always with
+    # `is_active=False`). Hidden from every list; a plain employee loses access to the company until invited again.
+    removed_at = models.DateTimeField("usunięty z lokalu", null=True, blank=True)
 
     class Meta:
         verbose_name = "pracownik"
@@ -205,6 +215,9 @@ class EmployeeProfile(CompanyOwnedModel):
                 name="employee_target_le_max_hours",
             ),
             models.CheckConstraint(condition=Q(experience__gte=1, experience__lte=3), name="employee_experience_level"),
+            models.CheckConstraint(
+                condition=Q(removed_at__isnull=True) | Q(is_active=False), name="employee_removed_is_inactive"
+            ),
         ]
 
     def __str__(self) -> str:
