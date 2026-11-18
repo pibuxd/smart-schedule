@@ -35,6 +35,7 @@ function RequestStatus({
     return (
       <div className="grid gap-2 rounded-sm bg-accent-soft p-3">
         <p className="m-0">{request.summary}</p>
+        <p className="m-0 text-sm">To odpowiedź asystenta. Przekaż wiadomość, aby dodać ją do listy próśb kierownika.</p>
         {editable && (
           <div>
             <Button variant="quiet" size="normal" disabled={busy} onClick={onWrong}>

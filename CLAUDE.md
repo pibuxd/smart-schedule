@@ -124,8 +124,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   handover (checked by the validator, pinned, `AssignmentEvent` reason `offer`). In-app notifications are written with
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
 - Assistant (Claude): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
-  Its answer is a proposal: `apps/assistant/services.py` checks every name against the location's data and builds
-  the Polish sentences itself. Without `ANTHROPIC_API_KEY` requests go to the manager uninterpreted. Tests replace
+  Its action plan is a proposal: `apps/assistant/services.py` checks names against the location's data and builds
+  action descriptions itself. Informational answers are model-generated from scoped facts, labelled in the UI,
+  and can be forwarded to the manager by the employee. Without `ANTHROPIC_API_KEY` requests go uninterpreted. Tests replace
   `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
   `apps/assistant/context.py` supplies bounded read-only facts: manager data for that location, employee data only

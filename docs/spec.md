@@ -12,6 +12,7 @@ Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu
 - Kolejne wiadomości kierownika zawierają ostatnie wiadomości tego samego autora w tym lokalu z ostatnich 24 godzin, z informacją, czy plan został przyjęty. Korekta pracownika może zastąpić jedną wcześniejszą prośbę tego pracownika w tym samym okresie lub miesiącu. Stara treść pozostaje w historii jako zastąpiona; nie bierze udziału w układaniu grafiku. Niejasna lub nieaktualna korekta trafia do kierownika bez nowej interpretacji. Decyzja i ważność nadane przez kierownika przechodzą na poprawioną prośbę.
 - Interfejs informuje o zakresie danych czytanych przez zewnętrzny asystent. Ten etap nie dodaje publikacji, generowania, wysyłania wiadomości ani edycji kalendarza przez LLM.
 - Jeśli asystent błędnie potraktuje prośbę jako pytanie informacyjne, pracownik może przekazać jej oryginalną treść kierownikowi jednym przyciskiem.
+- Odpowiedź informacyjną formułuje model na podstawie kontekstu, a aplikacja oznacza ją jako odpowiedź asystenta i wyjaśnia, jak dodać wiadomość do listy próśb kierownika. Opisy zmian do zatwierdzenia nadal powstają ze sprawdzonej struktury.
 
 Budujemy działający prototyp webowy aplikacji do układania grafików pracy dla lokali zmianowych (piekarnie, kawiarnie, restauracje, hotele). To własny, oryginalny produkt: nie kopiuj nazwy, wyglądu ani brandingu istniejących aplikacji. Nazwa robocza: "Grafikomat". Produkt będzie sprzedawany wielu firmom; pierwszym testerem jest sieć 4 piekarni pod Krakowem, w której grafik dla wszystkich lokali układa jedna osoba.
 

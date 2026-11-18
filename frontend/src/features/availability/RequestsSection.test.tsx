@@ -63,6 +63,7 @@ describe('RequestsSection', () => {
     mockApi(() => [200, [request({ status: 'answered', summary: 'W publikacji masz 120 godzin.' })]])
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
     expect(await screen.findByText('W publikacji masz 120 godzin.')).toBeInTheDocument()
+    expect(screen.getByText(/Przekaż wiadomość, aby dodać ją do listy próśb kierownika/)).toBeInTheDocument()
     expect(screen.queryByText('Wysłane do kierownika')).not.toBeInTheDocument()
   })
 
