@@ -30,6 +30,8 @@ export type ShiftTarget = {
   offer_id?: string | null
 }
 
+const NOT_PINNED = 'Zmiana wbrew zasadom nie będzie przypięta. Ponowne układanie grafiku może ją zmienić.'
+
 const hoursOf = (shift: OfferShiftOut) => `${shortTime(shift.start_time)}–${shortTime(shift.end_time)}`
 
 /** Days that have shifts, and the one to open first: today, or the nearest day after it. */
@@ -213,6 +215,9 @@ function PersonPicker({ target, onSwap, onDone }: { target: ShiftTarget; onSwap:
           ))}
         </ul>
       )}
+      {candidates.isSuccess && (candidates.data.data as HandoverCandidateOut[]).some((c) => c.problems.length > 0) && (
+        <p className="m-0 text-sm text-ink-muted">{NOT_PINNED}</p>
+      )}
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
       <div className="flex flex-wrap gap-2">
         {target.employee_name && (
@@ -311,6 +316,7 @@ function SwapPicker({ target, onBack, onDone }: { target: ShiftTarget; onBack: (
               {problem}
             </span>
           ))}
+          {problems.length > 0 && <span className="text-sm text-ink-muted">{NOT_PINNED}</span>}
           {check.isSuccess && (
             <Button
               size="normal"

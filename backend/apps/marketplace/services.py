@@ -577,7 +577,8 @@ def manager_close_offer(offer: ShiftOffer, user) -> ShiftOffer:
         offer.decided_at = now
         offer.save(update_fields=["status", "decided_at"])
         payload = offer_payload(offer)
-        notify(offer.company_id, users, "claim_rejected", payload)
+        # Not a refusal of the volunteer: nobody takes the shift, the giver stays on it.
+        notify(offer.company_id, users, "offer_cancelled", payload)
         notify(offer.company_id, {offer.offered_by.membership.user_id} - {user.pk}, "offer_closed", payload)
     return offer
 

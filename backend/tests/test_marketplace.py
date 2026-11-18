@@ -576,7 +576,7 @@ def test_manager_offers_a_shift_for_an_employee_and_can_close_it(api, market):
 
     assert closed.status_code == 200 and closed.json()["status"] == "rejected"
     assert ShiftClaim.objects.get().status == "rejected"
-    assert told("claim_rejected") == {user_of(m["free"]).pk}
+    assert told("offer_cancelled") == {user_of(m["free"]).pk} and told("claim_rejected") == set()
     assert told("offer_closed") == {user_of(m["giver"]).pk}
     assert Assignment.objects.get(pk=m["row"].pk).employee_id == m["giver"].pk
     assert api.post(f"/api/offers/{made.json()['id']}/close").status_code == 409
