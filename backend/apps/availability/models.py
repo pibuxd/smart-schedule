@@ -106,13 +106,15 @@ class AvailabilitySubmission(CompanyOwnedModel):
 
 
 class TextRequest(CompanyOwnedModel):
-    """A request written as text. Seen only by managers. Interpretation by the LLM arrives in stage 10."""
+    """An employee message, its reading/reply, and any correction history. Requests are shared with managers."""
 
     class Status(models.TextChoices):
         NEW = "new", "nowa"
         INTERPRETED = "interpreted", "zrozumiana"
         NEEDS_MANAGER = "needs_manager", "do decyzji menedżera"
         REJECTED = "rejected", "odrzucona"
+        ANSWERED = "answered", "odpowiedź informacyjna"
+        SUPERSEDED = "superseded", "zastąpiona"
 
     class ManagerPriority(models.TextChoices):
         LOWER = "lower", "mniej ważna"
@@ -152,6 +154,7 @@ class TextRequest(CompanyOwnedModel):
     # "why", or {"error": ...} when the call failed. Empty when the request was understood.
     assistant_answer = models.JSONField("odpowiedź asystenta (nieużyta)", null=True, blank=True)
     employee_corrected = models.BooleanField("poprawiona przez pracownika", default=False)
+    supersedes = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="corrections")
     manager_priority = models.CharField(
         "ważność wg menedżera", max_length=8, choices=ManagerPriority.choices, default=ManagerPriority.NORMAL
     )

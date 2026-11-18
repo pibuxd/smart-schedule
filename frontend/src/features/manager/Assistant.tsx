@@ -42,10 +42,10 @@ export function AssistantPanel({ locationId }: { locationId: string }) {
           Powiedz asystentowi, co zmienić
         </h2>
         <p className="m-0 max-w-[75ch] text-ink-muted">
-          Napisz zwykłymi słowami, na przykład: „Ania i Kasia nie na jednej zmianie”, „Marek tylko rano”, „na sali
-          zawsze ktoś doświadczony z początkującym” albo „równe weekendy są ważniejsze niż cel godzin”. Asystent
-          pokaże, co zmieni w zasadach. Nic się nie zmieni, dopóki tego nie zatwierdzisz. Grafik układa generator,
-          nie asystent.
+          Zapytaj o grafik, godziny lub dyspozycje albo napisz, co zmienić, na przykład: „Marek 13 stycznia rano”.
+          Asystent pokaże propozycję ustawień. Zatwierdzenie zapisuje je do następnego układania grafiku.
+          Polecenia o osobach są preferencjami, bez gwarancji przydziału. Asystent nie uruchamia generatora.
+          Zewnętrzna usługa Claude czyta wiadomość, dane tego lokalu i Twoje ostatnie wiadomości z 24 godzin.
         </p>
       </div>
 
@@ -162,7 +162,7 @@ function CommandCard({ commandId, onDone }: { commandId: string; onDone: () => v
       <div className={frame} role="status">
         <p className="m-0 font-semibold">
           {data.status === 'applied'
-            ? 'Zastosowane. Zmiany zadziałają przy następnym układaniu grafiku.'
+            ? 'Ustawienia zapisane. Zostaną uwzględnione przy następnym układaniu grafiku. Gotowy grafik się nie zmienił.'
             : 'Plan odrzucony. Nic się nie zmieniło.'}
         </p>
         <div>
@@ -210,7 +210,7 @@ function CommandCard({ commandId, onDone }: { commandId: string; onDone: () => v
           ))}
         </ul>
       )}
-      {!data.can_apply && !data.question && data.lines.length === 0 && (
+      {!data.can_apply && !data.question && !data.reply && data.lines.length === 0 && (
         <p className="m-0 text-ink-muted">Asystent nie zaproponował żadnej zmiany. Napisz polecenie inaczej.</p>
       )}
       {(apply.isError || dismiss.isError) && (

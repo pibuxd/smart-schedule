@@ -731,7 +731,8 @@ class _Builder:
                 need = request.wanted_days()
                 by_day = defaultdict(list)
                 for slot, var in own:
-                    by_day[slot.date].append(var)
+                    if request.shift_type is None or slot.shift_type == request.shift_type:
+                        by_day[slot.date].append(var)
                 good = []
                 for day, vars_ in by_day.items():
                     kept = self.m.new_bool_var(f"want_work[{request.id},{day}]")

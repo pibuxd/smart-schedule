@@ -1748,10 +1748,15 @@ export type updateRequestResponse404 = {
   status: 404
 }
 
+export type updateRequestResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type updateRequestResponseSuccess = (updateRequestResponse200) & {
   headers: Headers;
 };
-export type updateRequestResponseError = (updateRequestResponse402 | updateRequestResponse403 | updateRequestResponse404) & {
+export type updateRequestResponseError = (updateRequestResponse402 | updateRequestResponse403 | updateRequestResponse404 | updateRequestResponse409) & {
   headers: Headers;
 };
 

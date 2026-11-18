@@ -13,4 +13,6 @@ export const MyRequestOutStatus = {
   interpreted: 'interpreted',
   needs_manager: 'needs_manager',
   rejected: 'rejected',
+  answered: 'answered',
+  superseded: 'superseded',
 } as const;

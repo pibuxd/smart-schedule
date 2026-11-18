@@ -60,7 +60,7 @@ describe('AssistantPanel', () => {
     expect(calls.some((c) => c.url.endsWith('/apply'))).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: 'Zatwierdź zmiany' }))
-    expect(await screen.findByText(/Zastosowane/)).toBeInTheDocument()
+    expect(await screen.findByText(/Ustawienia zapisane/)).toBeInTheDocument()
     expect(await screen.findByText('Ania i Kasia: osobno')).toBeInTheDocument()
   })
 
@@ -69,6 +69,21 @@ describe('AssistantPanel', () => {
     panel()
     expect(await screen.findByText(/Asystent jest wyłączony/)).toBeInTheDocument()
     expect(screen.queryByLabelText('Twoje polecenie')).not.toBeInTheDocument()
+  })
+
+  it('shows a factual reply without suggesting another command or offering approval', async () => {
+    mockApi((method, path) => {
+      if (path.endsWith('/instructions')) return [200, instructions([])]
+      return [method === 'POST' ? 201 : 200, {
+        ...command, reply: 'Anna ma 120 godzin w opublikowanym grafiku.', lines: [], notes: [], can_apply: false,
+      }]
+    })
+    panel()
+    fireEvent.change(await screen.findByLabelText('Twoje polecenie'), { target: { value: 'Ile godzin ma Anna?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij asystentowi' }))
+    expect(await screen.findByText('Anna ma 120 godzin w opublikowanym grafiku.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Zatwierdź zmiany' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Napisz polecenie inaczej/)).not.toBeInTheDocument()
   })
 
   it('reorders and removes instructions', async () => {

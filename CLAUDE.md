@@ -128,4 +128,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   the Polish sentences itself. Without `ANTHROPIC_API_KEY` requests go to the manager uninterpreted. Tests replace
   `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
+  `apps/assistant/context.py` supplies bounded read-only facts: manager data for that location, employee data only
+  from their own published shifts/availability/requests. A correction may supersede one earlier request in the
+  same employee/scope, atomically and only against an unchanged snapshot. `answered` and `superseded` requests
+  never reach the solver. An invalid part blocks the entire manager plan; informational replies are not misses.
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

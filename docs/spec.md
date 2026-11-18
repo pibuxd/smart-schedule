@@ -4,6 +4,14 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Poprawki asystenta po niezależnym QA (18.11.2026)
+
+- Polecenie pracy w danym dniu może wskazywać konkretną zmianę. Zapis, opis i ocena generatora zachowują ten sam zakres. Nieobsługiwanej części odpowiedzi modelu nie wolno po cichu pominąć ani zatwierdzić niepełnego planu.
+- Polecenia o osobach i prośby pozostają preferencjami. Potwierdzenie nie obiecuje przydziału ani zmiany dyspozycji w kalendarzu. Zatwierdzenie ustawień nie uruchamia układania grafiku.
+- Asystent odpowiada także na pytania o dane dostępne w kontekście: grafik, godziny, obsadę i dyspozycje. Kierownik widzi dane swojego lokalu; pracownik tylko opublikowany własny grafik ze współpracownikami na swoich zmianach oraz własne dyspozycje i prośby. Kontekst jest ograniczony i opisuje swoje granice; brak danych nie oznacza wolnego dnia. Odpowiedź informacyjna pracownika nie jest prośbą dla generatora.
+- Kolejne wiadomości kierownika zawierają ostatnie wiadomości tego samego autora w tym lokalu z ostatnich 24 godzin, z informacją, czy plan został przyjęty. Korekta pracownika może zastąpić jedną wcześniejszą prośbę tego pracownika w tym samym okresie lub miesiącu. Stara treść pozostaje w historii jako zastąpiona; nie bierze udziału w układaniu grafiku. Niejasna lub nieaktualna korekta trafia do kierownika bez nowej interpretacji. Decyzja i ważność nadane przez kierownika przechodzą na poprawioną prośbę.
+- Interfejs informuje o zakresie danych czytanych przez zewnętrzny asystent. Ten etap nie dodaje publikacji, generowania, wysyłania wiadomości ani edycji kalendarza przez LLM.
+
 Budujemy działający prototyp webowy aplikacji do układania grafików pracy dla lokali zmianowych (piekarnie, kawiarnie, restauracje, hotele). To własny, oryginalny produkt: nie kopiuj nazwy, wyglądu ani brandingu istniejących aplikacji. Nazwa robocza: "Grafikomat". Produkt będzie sprzedawany wielu firmom; pierwszym testerem jest sieć 4 piekarni pod Krakowem, w której grafik dla wszystkich lokali układa jedna osoba.
 
 

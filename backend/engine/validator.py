@@ -759,7 +759,8 @@ class _Checker:
                 need = request.wanted_days()
                 per_day: dict[date, int] = defaultdict(int)
                 for s in own:
-                    per_day[s.date] += 1
+                    if request.shift_type is None or s.shift_type == request.shift_type:
+                        per_day[s.date] += 1
                 good = sum(1 for count in per_day.values() if count >= request.shifts_per_day)
                 return max(0, need - good) / need
             case _:

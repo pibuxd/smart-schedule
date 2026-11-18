@@ -17,9 +17,10 @@ from django.db import transaction
 from django.utils import timezone
 from ninja.errors import HttpError
 
+from apps.assistant import context as facts
 from apps.assistant import llm, readings
 from apps.assistant.models import AssistantCommand, ManagerInstruction
-from apps.availability.models import TextRequest
+from apps.availability.models import AvailabilityDay, AvailabilityState, TextRequest
 from apps.rules.services import NUMBER_PARAMS
 from apps.scheduling.models import SchedulePeriod
 from apps.staffing.models import EmployeeProfile, Position, ShiftType
@@ -74,7 +75,9 @@ def request_span(text_request: TextRequest) -> tuple[date, date]:
     return first, (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
 
 
-def request_context(text_request: TextRequest, today: date) -> tuple[str, dict[str, str], dict[str, str]]:
+def request_context(
+    text_request: TextRequest, today: date, previous: list[TextRequest] | None = None
+) -> tuple[str, dict[str, str], dict[str, str]]:
     location = text_request.location
     start, end = request_span(text_request)
     people = _people(location, exclude_id=text_request.employee_id)
@@ -85,6 +88,9 @@ def request_context(text_request: TextRequest, today: date) -> tuple[str, dict[s
             f"Okres grafiku: od {start.isoformat()} do {end.isoformat()}.",
             f"Współpracownicy: {', '.join(people) or '(brak)'}.",
             f"Zmiany: {_shift_lines(shift_types)}.",
+            facts.location_snapshot(location, today, employee=text_request.employee),
+            facts.own_availability(text_request, start, end),
+            facts.request_history(previous if previous is not None else facts.prior_requests(text_request)),
         ]
     )
     return context, people, {s.name: str(s.pk) for s in shift_types}
@@ -117,13 +123,21 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         return "skipped"  # deleted, already read, or edited since (the newer job reads it)
     today = today or timezone.localdate()
     status, interpretation, answer = TextRequest.Status.NEEDS_MANAGER, None, None
+    replacement = None
     reason = TextRequest.UnreadReason.OFF
     if llm.is_enabled():
         reason = TextRequest.UnreadReason.FAILED
-        context, people, shift_types = request_context(row, today)
         try:
+            previous = facts.prior_requests(row)
+            context, people, shift_types = request_context(row, today, previous)
             reading = llm.read_request(row.text, context)
             status, interpretation, why = _checked_request(reading, request_span(row), people, shift_types, row.text)
+            if reading.replaces_request is not None:
+                n = reading.replaces_request
+                if status == TextRequest.Status.INTERPRETED and 1 <= n <= len(previous):
+                    replacement = previous[n - 1]
+                else:
+                    status, interpretation, why = TextRequest.Status.NEEDS_MANAGER, None, "niejednoznaczna korekta"
             reason = TextRequest.UnreadReason.NONE if interpretation else TextRequest.UnreadReason.UNSURE
             if interpretation is None:
                 answer = {"why": why, **reading.model_dump(mode="json")}
@@ -134,16 +148,56 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
             # Whatever goes wrong, the request must not stay "being read" forever: the manager reads it.
             logger.exception("request %s left to the manager after an unexpected error", row.pk)
             answer = {"error": type(exc).__name__}
-    updated = TextRequest.objects.for_company(row.company_id).filter(
-        pk=row.pk, status=TextRequest.Status.NEW, text=row.text
-    )
-    updated.update(
-        status=status,
-        interpretation=interpretation,
-        unread_reason=reason,
-        assistant_answer=answer,
-        updated_at=timezone.now(),
-    )
+    with transaction.atomic():
+        rows = TextRequest.objects.for_company(row.company_id)
+        locked = rows.select_for_update().filter(pk=row.pk, status=TextRequest.Status.NEW, text=row.text).first()
+        if locked is None:
+            return "skipped"
+        if replacement is not None:
+            old = (
+                rows.select_for_update()
+                .filter(
+                    pk=replacement.pk,
+                    employee_id=row.employee_id,
+                    period_id=row.period_id,
+                    month=row.month,
+                    updated_at=replacement.updated_at,
+                )
+                .exclude(
+                    status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.NEW, TextRequest.Status.ANSWERED]
+                )
+                .first()
+            )
+            if old is None:
+                status, interpretation = TextRequest.Status.NEEDS_MANAGER, None
+                reason = TextRequest.UnreadReason.UNSURE
+                answer = {"why": "wcześniejsza prośba zmieniła się podczas odczytu", **reading.model_dump(mode="json")}
+            else:
+                locked.supersedes = old
+                locked.employee_corrected = True
+                if locked.updated_at == row.updated_at:
+                    # A newer manager decision on the correction itself takes precedence.
+                    locked.manager_priority = old.manager_priority
+                    locked.manager_rejected = old.manager_rejected or old.status == TextRequest.Status.REJECTED
+                old.status = TextRequest.Status.SUPERSEDED
+                old.save(update_fields=["status", "updated_at"])
+        locked.status = status
+        locked.interpretation = interpretation
+        locked.unread_reason = reason
+        locked.assistant_answer = answer
+        locked.save(
+            update_fields=[
+                "status",
+                "interpretation",
+                "unread_reason",
+                "assistant_answer",
+                "updated_at",
+                "supersedes",
+                "employee_corrected",
+                "manager_priority",
+                "manager_rejected",
+            ]
+        )
     return status
 
 
@@ -157,6 +211,17 @@ def _checked_request(
     """(status, interpretation, why it could not be used: "" when it could). `span`: the days it can be about."""
     start, end = span[0].isoformat(), span[1].isoformat()
     confidence = min(1.0, max(0.0, float(reading.confidence)))
+    if reading.type == "informacja":
+        if (
+            confidence >= settings.ASSISTANT_MIN_CONFIDENCE
+            and reading.summary.strip()
+            and not any((reading.person, reading.shift_type, reading.avoid_shift_type, reading.dates, reading.weekdays))
+            and reading.max_hours is None
+            and reading.min_days is None
+            and reading.shifts_per_day is None
+        ):
+            return TextRequest.Status.ANSWERED, {"type": "informacja", "summary": reading.summary.strip()[:1500]}, ""
+        return TextRequest.Status.NEEDS_MANAGER, None, "niepewna odpowiedź informacyjna"
     data = readings.clean(
         type=reading.type,
         person=reading.person,
@@ -176,7 +241,7 @@ def _checked_request(
         why = "typ inne"
     elif data is None:
         why = "osoba, zmiana, godziny lub dni nie pasują do lokalu"
-    elif reading.dates and not data["dates"] and not data["weekdays"]:
+    elif any(not start <= d <= end for d in reading.dates):
         data, why = None, "dni spoza okresu"
     elif confidence < settings.ASSISTANT_MIN_CONFIDENCE:
         why = f"pewność {confidence:.2f}"
@@ -186,7 +251,13 @@ def _checked_request(
     if why:
         # Not sure enough: the manager reads the request as written, with no interpretation.
         return TextRequest.Status.NEEDS_MANAGER, None, why
-    data.update(level=reading.level, confidence=round(confidence, 2), summary=summary)
+    summary = readings.describe(
+        data,
+        "Ty" if data["type"] in ("unikaj_osoby", "preferuj_osobe") else "",
+        {pid: name for name, pid in people.items()},
+        {sid: name for name, sid in shift_types.items()},
+    ).lstrip(": ")
+    data.update(level=reading.level, confidence=round(confidence, 2), summary=f"Preferencja: {summary}.")
     return TextRequest.Status.INTERPRETED, data, ""
 
 
@@ -291,6 +362,7 @@ def command_context(location: Location, sc, today: date, instructions: list[Mana
         lines.append(f"{number}. {instruction_text(row, names, shift_names)}")
     if not instructions:
         lines.append("(brak)")
+    lines.append(facts.location_snapshot(location, today))
     return "\n".join(lines)
 
 
@@ -304,7 +376,8 @@ def run_command(command_id: str, today: date | None = None) -> str:
     try:
         sc = rules_scope(_SystemContext(command.company), command.location)
         instructions = _instructions(command.location)
-        answer = llm.plan_command(command.text, command_context(command.location, sc, today, instructions))
+        context = command_context(command.location, sc, today, instructions) + "\n" + facts.command_history(command)
+        answer = llm.plan_command(command.text, context)
         raw = answer.model_dump(mode="json")
         status, plan = (
             AssistantCommand.Status.READY,
@@ -347,7 +420,7 @@ def check_plan(
     """Turn the assistant's answer into a plan made only of things that exist in this location.
 
     `lines` say in plain Polish what accepting the plan will do; `notes` say what was left out and warn about
-    side effects. Anything unknown is dropped with a note, never guessed.
+    side effects. An unusable part blocks the whole proposal, including paired removals in corrections.
     """
     from apps.rules.api import RulesIn, _clean_items, _location_preview
 
@@ -358,6 +431,12 @@ def check_plan(
     positions = {p.name: str(p.pk) for p in Position.objects.for_company(location.company_id).filter(location=location)}
     lines: list[str] = []
     notes: list[str] = []
+    rejected = False
+    if any(
+        len(items) > MAX_ACTIONS for items in (answer.rule_changes, answer.new_instructions, answer.remove_instructions)
+    ):
+        notes.append("Polecenie ma za dużo zmian. Podziel je na mniejsze części.")
+        rejected = True
     today = timezone.localdate()
     periods = list(SchedulePeriod.objects.for_company(location.company_id).filter(location=location, end__gte=today))
 
@@ -368,6 +447,7 @@ def check_plan(
         item = by_code.get(change.code)
         if item is None:
             notes.append("Pominąłem zmianę zasady, której nie ma na liście zasad.")
+            rejected = True
             continue
         rule = RULES_BY_CODE[change.code]
         entry: dict[str, Any] = {"code": rule.code}
@@ -378,6 +458,14 @@ def check_plan(
         enabled = entry.get("enabled", item.enabled)
         params = {}
         number = _number_param(rule.code)
+        if (
+            (change.number is not None and number is None)
+            or (change.position and "position" not in rule.params)
+            or (change.shift_type and "shift_type" not in rule.params)
+        ):
+            notes.append(f"„{rule.label}”: ta zasada nie obsługuje wszystkich podanych ustawień.")
+            rejected = True
+            continue
         if change.number is not None and number and change.number != item.params.get(number):
             params[number] = change.number
             said.append(f"{NUMBER_PARAMS[number][2]}: {change.number}")
@@ -389,6 +477,7 @@ def check_plan(
                 found = readings._lookup(given, known)
                 if found is None:
                     notes.append(f"„{rule.label}”: nie ma tu takiej pozycji jak „{given}” ({what}).")
+                    rejected = True
                 elif found != item.params.get(name):
                     params[name] = found
                     said.append(f"{what}: {given}")
@@ -412,11 +501,15 @@ def check_plan(
             row = instructions[number - 1]
             removed.append(str(row.pk))
             lines.append(f"Usunę polecenie: {instruction_text(row, names, shift_names)}.")
+        else:
+            notes.append("Nie znalazłem polecenia, które ma zostać usunięte.")
+            rejected = True
     new_instructions = []
     for new in answer.new_instructions[:MAX_ACTIONS]:
         employee = readings._lookup(new.person, people)
         if employee is None:
             notes.append(f"Nie znalazłem w tym lokalu osoby „{new.person}”.")
+            rejected = True
             continue
         others = {label: pid for label, pid in people.items() if pid != employee}
         data = readings.clean(
@@ -436,12 +529,16 @@ def check_plan(
             shift_types=shift_types,
         )
         if data is None:
-            notes.append(f"Nie umiem zapisać polecenia o osobie „{new.person}”: brakuje osoby, zmiany, godzin lub dni.")
+            notes.append(
+                f"Nie umiem zapisać całego polecenia o osobie „{new.person}”: sprawdź osobę, zmianę, godziny i dni."
+            )
+            rejected = True
             continue
         days = sorted(d for d in (readings._parse_date(v) for v in data["dates"]) if d is not None)
         if days and not data["weekdays"]:
             if days[0] > today + timedelta(days=MAX_DAYS_AHEAD):
                 notes.append(f"Pominąłem polecenie o osobie „{new.person}”: dotyczy dni ponad rok naprzód.")
+                rejected = True
                 continue
             if not any(p.start <= d <= p.end for p in periods for d in days):
                 notes.append(
@@ -450,6 +547,20 @@ def check_plan(
                 )
         new_instructions.append({"employee": employee, "data": data, "place": new.place})
         lines.append(f"Nowe polecenie: {readings.describe(data, names[employee], names, shift_names)}.")
+        if data["type"] == "chce_pracowac":
+            conflicts = list(
+                AvailabilityDay.objects.for_company(location.company_id)
+                .filter(
+                    employee_id=employee,
+                    state=AvailabilityState.CANNOT,
+                    date__in=readings.dates_in(data, today, today + timedelta(days=MAX_DAYS_AHEAD)),
+                )
+                .order_by("date")
+                .values_list("date", flat=True)[:6]
+            )
+            if conflicts:
+                dates = ", ".join(d.isoformat() for d in conflicts)
+                notes.append(f"{names[employee]} ma zapisane „nie mogę”: {dates}. Polecenie nie usuwa tej blokady.")
 
     effects: list[str] = []
     if rule_changes:
@@ -458,8 +569,14 @@ def check_plan(
             effects, _ = _location_preview(sc, location, proposed)
         except HttpError as exc:
             notes.append(f"Tych zmian zasad nie da się zapisać: {exc.message}")
+            rejected = True
             lines = [line for line in lines if not line.startswith("Zasada „")]
             rule_changes = []
+    if answer.question and (rule_changes or new_instructions or removed):
+        rejected = True  # a clarification must not leave a partial plan available for acceptance
+        notes.append("Najpierw odpowiedz na pytanie asystenta. Nie można jeszcze zatwierdzić tego planu.")
+    if rejected:
+        rule_changes, new_instructions, removed, lines, effects = [], [], [], [], []
     if new_instructions or removed:
         effects.extend(_personal_effects(sc, location, new_instructions, removed, names, shift_names))
     hard = sum(1 for item in _changed_items(items, rule_changes) if item.enabled and item.is_hard)
@@ -473,9 +590,28 @@ def check_plan(
             "Polecenia mają kolejność: to wyżej wygrywa, gdy nie da się spełnić wszystkich. "
             "Kolejność możesz zmienić na liście poleceń."
         )
+    if new_instructions:
+        notes.append(
+            "Polecenia o osobach są preferencjami. Generator spróbuje je spełnić, ale nie gwarantują przydziału. "
+            "Zatwierdzenie nie zmienia dyspozycji ani gotowego grafiku i nie uruchamia układania."
+        )
+    reply = answer.reply.strip()[:1500]
+    if rejected:
+        reply = (
+            "Nie mogę zapisać całego proponowanego planu. Sprawdź uwagi i doprecyzuj polecenie. Nic się nie zmieniło."
+        )
+    elif rule_changes or new_instructions or removed:
+        reply = (
+            "Po zatwierdzeniu zapiszę ustawienia wymienione poniżej. "
+            "Zostaną uwzględnione przy następnym układaniu grafiku."
+        )
+    elif not answer.informational and not answer.question:
+        reply = "Nie ma żadnych zmian do zatwierdzenia. Ustawienia i grafik pozostały bez zmian."
     return {
         "relative_append": True,
-        "reply": answer.reply.strip()[:600],
+        "blocked": rejected,
+        "informational": answer.informational and not (rejected or lines or answer.question),
+        "reply": reply,
         "question": (answer.question or "").strip()[:300] or None,
         "rule_changes": rule_changes,
         "new_instructions": new_instructions,
@@ -576,6 +712,23 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
         if locked.status != AssistantCommand.Status.READY or not has_changes(plan):
             raise HttpError(409, "Tego planu nie można już zastosować. Napisz polecenie jeszcze raz.")
         location = ctx.qs(Location).select_for_update().get(pk=command.location_id)
+        removed = set(plan.get("remove_instructions") or [])
+        existing = {
+            str(pk)
+            for pk in ctx.qs(ManagerInstruction).filter(location=location, pk__in=removed).values_list("pk", flat=True)
+        }
+        if removed != existing:
+            raise HttpError(409, "Polecenie poprawiane w tym planie już się zmieniło. Napisz polecenie jeszcze raz.")
+        people = set(_people(location).values())
+        shifts = {str(s.pk) for s in _shift_types(location)}
+        for new in plan.get("new_instructions") or []:
+            data = new["data"]
+            if (
+                new["employee"] not in people
+                or (data.get("subject_employee") and data["subject_employee"] not in people)
+                or (data.get("shift_type") and data["shift_type"] not in shifts)
+            ):
+                raise HttpError(409, "Osoby lub zmiany z tego planu już się zmieniły. Napisz polecenie jeszcze raz.")
         if plan.get("rule_changes"):
             sc = rules_scope(ctx, location)
             save_rules(

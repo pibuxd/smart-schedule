@@ -43,11 +43,26 @@ describe('RequestsSection', () => {
   it('says that the assistant also reads the request, only when it does', async () => {
     mockApi(() => [200, []])
     const { unmount } = renderScreen(<RequestsSection companyId="c1" periodId="p1" editable assistantReads />)
-    expect(await screen.findByText(/Przeczyta to kierownik i asystent AI/)).toBeInTheDocument()
+    expect(await screen.findByText(/Twoje wcześniejsze prośby, dyspozycje i opublikowany grafik/)).toBeInTheDocument()
     expect(screen.queryByText(/Przeczyta to tylko kierownik/)).not.toBeInTheDocument()
     unmount()
 
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
     expect(await screen.findByText(/Przeczyta to tylko kierownik/)).toBeInTheDocument()
+  })
+
+  it('keeps superseded requests visible without an edit action', async () => {
+    mockApi(() => [200, [request({ status: 'superseded', summary: null })]])
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
+    expect(await screen.findByText(/Ta prośba została zastąpiona/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edytuj prośbę' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Nie o to mi chodziło' })).not.toBeInTheDocument()
+  })
+
+  it('shows an informational answer without claiming it was sent to the manager', async () => {
+    mockApi(() => [200, [request({ status: 'answered', summary: 'W publikacji masz 120 godzin.' })]])
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
+    expect(await screen.findByText('W publikacji masz 120 godzin.')).toBeInTheDocument()
+    expect(screen.queryByText('Wysłane do kierownika')).not.toBeInTheDocument()
   })
 })

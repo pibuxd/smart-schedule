@@ -28,6 +28,12 @@ function RequestStatus({
   busy: boolean
   onWrong: () => void
 }) {
+  if (request.status === 'superseded') {
+    return <p className="m-0 text-sm text-ink-muted">Ta prośba została zastąpiona nowszą. Nie wpływa już na układanie grafiku.</p>
+  }
+  if (request.status === 'answered' && request.summary) {
+    return <p className="m-0 rounded-sm bg-accent-soft p-3">{request.summary}</p>
+  }
   if (request.status === 'interpreted' && request.summary) {
     return (
       <div className="grid gap-2 rounded-sm bg-accent-soft p-3">
@@ -35,6 +41,7 @@ function RequestStatus({
           <span className="font-semibold">Tak to zrozumieliśmy: </span>
           {request.summary}
         </p>
+        <p className="m-0 text-sm">To preferencja, którą generator spróbuje spełnić. Nie zmienia kalendarza dyspozycji. Jeśli nie możesz pracować, zaznacz „nie mogę” w kalendarzu.</p>
         {editable && (
           <div>
             <Button variant="quiet" size="normal" disabled={busy} onClick={onWrong}>
@@ -100,7 +107,7 @@ export function RequestsSection({
         pracować. Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny.{' '}
         {!periodId && 'Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. '}
         {assistantReads
-          ? 'Przeczyta to kierownik i asystent AI. Asystent to zewnętrzna usługa (Claude), która pomaga zrozumieć prośby. Grafiku nie układa. Nie wpisuj tu nic, czego nie chcesz jej przekazać.'
+          ? 'Asystent AI (zewnętrzna usługa Claude) czyta tę wiadomość, Twoje wcześniejsze prośby, dyspozycje i opublikowany grafik ze współpracownikami na Twoich zmianach. Możesz zapytać o te dane lub poprawić wcześniejszą prośbę. Prośby czyta też kierownik. Asystent nie układa grafiku ani nie zmienia kalendarza. Nie wpisuj tu nic, czego nie chcesz mu przekazać.'
           : 'Przeczyta to tylko kierownik.'}
       </p>
       {requests.isError && <InlineError>Nie udało się wczytać Twoich próśb. Spróbuj za chwilę.</InlineError>}
@@ -131,13 +138,13 @@ export function RequestsSection({
               ) : <p className="m-0">{request.text}</p>}
               <RequestStatus
                 request={request}
-                editable={editable}
+                editable={editable && request.status !== 'superseded'}
                 busy={update.isPending}
                 onWrong={() => update.mutate({ requestId: request.id, data: { understood: false } })}
               />
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-sm text-ink-muted">Wysłane do kierownika</span>
-                {editable && editing?.id !== request.id && removing !== request.id && (
+                <span className="text-sm text-ink-muted">{request.status === 'answered' ? 'Odpowiedź asystenta' : request.status === 'superseded' ? 'Historia prośby' : 'Wysłane do kierownika'}</span>
+                {editable && request.status !== 'superseded' && editing?.id !== request.id && removing !== request.id && (
                   <Button variant="quiet" size="normal" onClick={() => setEditing({ id: request.id, text: request.text })}>
                     Edytuj prośbę
                   </Button>
