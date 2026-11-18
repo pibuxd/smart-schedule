@@ -11,10 +11,16 @@ Publikacja oznacza zestaw jako wykorzystany i usuwa go z domyślnej listy aktywn
 
 Technicznie `AssistantRuleSet` przechowuje migawkę zasad katalogowych, zmienione kody, lokal, opcjonalny okres oraz datę wykorzystania. Polecenia o osobach i wiadomości wskazują zestaw. Stałe zasady lokalu/grupy pozostają bazą nowych zestawów; rozmowa zmienia wyłącznie zestaw okresu. Migracja zachowuje wcześniejsze polecenia i przypisuje wykorzystane do ostatniej publikacji po ich utworzeniu, a pozostałe do otwartego zbierania dyspozycji lub kolejki oczekującej. Wszystkie zapisy serializują się z publikacją przez blokadę firmy. Zakres firmy, lokalu i wybranego okresu sprawdzany jest na serwerze.
 
+## Kopiowanie ustaleń i przekazanie odrzuconej prośby (18.11.2026)
+
+- `GET /locations/{id}/agreements/previous?period_id=` zwraca to, co można skopiować z najnowszego wcześniejszego okresu z ustaleniami (`agreements.previous`, `agreements.copyable`). `POST /locations/{id}/agreements/copy` kopiuje wyłącznie wskazane kody zasad i identyfikatory poleceń do zestawu okresu docelowego (albo kolejki oczekującej, gdy o dyspozycje jeszcze nie poproszono), pod blokadą firmy i lokalu. Pusty wybór niczego nie zmienia; wybór spoza aktualnej oferty daje 409; opublikowany okres docelowy daje 409. `bind_pending` nadal niczego nie przenosi z innych okresów.
+- UI: `CopyPreviousAgreements` w tabeli ustaleń okresu (dyspozycje i zasady), zwinięte, bez zaznaczonych pozycji.
+- `PATCH /me/requests/{id}` z `understood: false` dla statusu `rejected` ustawia `needs_manager`, czyści interpretację i zapisuje `unread_reason="rejected"` (migracja `availability.0008`). Generator traktuje taki wpis jak każdą nieodczytaną prośbę (`RequestType.OTHER`, bez punktacji). Karta prośby kierownika opisuje powód.
+
 ## Ograniczenie zakresu asystenta (18.11.2026)
 
 - Obie struktury LLM wymagają klasyfikacji `scope=rules|out_of_scope`. Prompt dopuszcza wyłącznie zasady i preferencje. Mieszane żądania są poza zakresem. Serwer odrzuca taki wynik w całości, niezależnie od dodatkowych akcji lub tekstu zwróconego przez model.
-- Kierownik otrzymuje stałą odmowę, puste listy i `can_apply=false`. Wyjaśnienia zasad są dozwolone; pozostałe odpowiedzi informacyjne nie są. Pracownik otrzymuje istniejący status `rejected` z bezpiecznym opisem; wpis jest wyłączony z generatora i listy kierownika, bez możliwości przekazania jako prośby bez zmiany treści.
+- Kierownik otrzymuje stałą odmowę, puste listy i `can_apply=false`. Wyjaśnienia zasad są dozwolone; pozostałe odpowiedzi informacyjne nie są. Pracownik otrzymuje istniejący status `rejected` z bezpiecznym opisem; wpis jest wyłączony z generatora i listy kierownika, dopóki pracownik nie przekaże go kierownikowi do ręcznej oceny (bez punktacji w generatorze).
 - Kontekst nie zawiera już `location_snapshot` ani `own_availability`; historia służy wyłącznie korektom ustawień. Brak nowych narzędzi modelu. UI i opis przekazywanych danych odpowiadają temu ograniczeniu.
 
 ## Czat asystenta (18.11.2026)

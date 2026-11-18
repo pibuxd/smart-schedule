@@ -57,4 +57,11 @@ describe('RequestCard', () => {
     card(request({ unread_reason: 'unsure' }))
     expect(await screen.findByText(/Asystent przeczytał tę prośbę, ale nie umiał/)).toBeInTheDocument()
   })
+
+  it('says when the employee forwarded a message the assistant refused', async () => {
+    mockApi(() => [200, {}])
+    card(request({ unread_reason: 'rejected', employee_corrected: true, can_reread: false }))
+    expect(await screen.findByText(/Pracownik przekazał ją Tobie do oceny/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Daj asystentowi do przeczytania' })).not.toBeInTheDocument()
+  })
 })

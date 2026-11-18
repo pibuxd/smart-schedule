@@ -133,4 +133,7 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   are not sent to the model. Both structured outputs require a rules/out-of-scope classification. A correction may supersede one earlier request in the
   same employee/scope, atomically and only against an unchanged snapshot. `answered` and `superseded` requests
   never reach the solver. An invalid part blocks the entire manager plan; informational replies are not misses.
+  Agreements belong to one availability period (`apps/assistant/agreements.py`): a new period starts empty and the
+  manager copies chosen ones from the previous period (`copy_from_previous`); nothing carries over by itself. An
+  employee may forward a rejected message to the manager (`unread_reason="rejected"`); it is never scored.
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

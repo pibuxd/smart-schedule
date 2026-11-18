@@ -13,4 +13,5 @@ export const ManagerRequestOutUnreadReason = {
   off: 'off',
   unsure: 'unsure',
   failed: 'failed',
+  rejected: 'rejected',
 } as const;
