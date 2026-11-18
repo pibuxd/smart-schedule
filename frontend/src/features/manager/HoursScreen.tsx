@@ -29,8 +29,8 @@ export function HoursScreen({ today = new Date() }: { today?: Date }) {
         <div className="grid gap-1">
           <h1 className="m-0 text-2xl font-extrabold">Godziny w miesiącu</h1>
           <p className="m-0 max-w-[62ch] text-ink-muted">
-            Liczymy zmiany z opublikowanych grafików w Twoich lokalach, bez szkiców. To plan, a nie ewidencja czasu
-            pracy. Przed wypłatą sprawdź, czy ktoś się nie zamienił albo nie pracował dłużej.
+            Liczymy zmiany z opublikowanych grafików. Jeśli ktoś zamienił się poza aplikacją, popraw ten dzień w
+            grafiku i opublikuj, a godziny się przeliczą.
           </p>
         </div>
         <a
