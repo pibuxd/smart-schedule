@@ -72,7 +72,14 @@ export function AssistantRulesTable({
             : "Jeszcze bez okresu. Przypiszesz je przyciskiem „Poproś o dyspozycje”."}
       </p>
       {!data.closed && (
-        <CopyPreviousAgreements locationId={locationId} periodId={periodId} />
+        <CopyPreviousAgreements
+          locationId={locationId}
+          periodId={periodId}
+          defaultOpen={
+            data.items.length === 0 &&
+            !(data.rules ?? []).some((rule) => rule.changed)
+          }
+        />
       )}
       {rules.length > 0 || data.items.length > 0 ? (
         <div className="overflow-x-auto">

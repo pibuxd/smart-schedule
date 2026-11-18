@@ -14,9 +14,12 @@ import { useManager } from "./ManagerContext";
 export function CopyPreviousAgreements({
   locationId,
   periodId,
+  defaultOpen = false,
 }: {
   locationId: string;
   periodId?: string;
+  /** Open at first sight while the period has no agreements of its own, so the offer is not missed. */
+  defaultOpen?: boolean;
 }) {
   const { readOnly } = useManager();
   const queryClient = useQueryClient();
@@ -35,7 +38,10 @@ export function CopyPreviousAgreements({
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
   const chosen = codes.length + ids.length;
   return (
-    <details className="rounded-md border border-line px-3 text-sm">
+    <details
+      className="rounded-md border border-line px-3 text-sm"
+      open={defaultOpen || undefined}
+    >
       <summary className="flex min-h-(--touch) cursor-pointer items-center font-semibold">
         Skopiuj z poprzedniego okresu ({rules.length + items.length})
       </summary>
