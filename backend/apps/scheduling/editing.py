@@ -238,7 +238,8 @@ def add_seat(version: ScheduleVersion, day: date, shift_type: ShiftType, positio
 
 def remove_seat(version: ScheduleVersion, shift_id: str) -> None:
     """One place fewer on this shift that day; whoever had this place loses it. The other places keep their people
-    and their numbers stay 1…n, as arranging the schedule again would number them."""
+    and their numbers stay 1…n, as arranging the schedule again would number them. Refused (409) when the
+    schedule would break a hard rule it kept before (e.g. a beginner left without an experienced person)."""
     with transaction.atomic():
         version = ScheduleVersion.objects.select_for_update().select_related("period__location").get(pk=version.pk)
         if not is_editable(version):
@@ -248,6 +249,7 @@ def remove_seat(version: ScheduleVersion, shift_id: str) -> None:
             raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
         if shift.date < timezone.localdate():
             raise HttpError(409, DAY_PASSED)
+        known = {v.message for v in load_version(version).report.hard}
         seats = _seats(version, shift.slot_key.rsplit("/", 1)[0] + "/")
         last = seats[-1]
         if last.pk != shift.pk:
@@ -260,7 +262,11 @@ def remove_seat(version: ScheduleVersion, shift_id: str) -> None:
             day_staffing.set_day_count(
                 version.period.location, shift.date, shift.shift_type, shift.position, len(seats) - 1
             )
-        save_scores(version, load_version(version).scores)
+        loaded = load_version(version)
+        problems = [v.message for v in loaded.report.hard if v.message not in known]
+        if problems:  # like any manual change; raising here undoes the removal
+            raise HttpError(409, "Tego miejsca nie można usunąć: " + " ".join(problems))
+        save_scores(version, loaded.scores)
 
 
 # ----------------------------------------------------------------------------------------------- drafts, publishing

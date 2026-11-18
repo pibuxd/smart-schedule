@@ -10,9 +10,10 @@ from django.utils import timezone
 
 from apps.availability.models import AvailabilityDay
 from apps.notifications.models import Notification
+from apps.rules.models import RuleSetting
 from apps.scheduling.generation import request_generation, run_generation
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
-from apps.staffing.models import LocationClosure, StaffingException
+from apps.staffing.models import EmployeeProfile, LocationClosure, StaffingException
 from tests.test_generation import FAST, MON, _ctx, shop  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.django_db
@@ -384,3 +385,18 @@ def test_places_cannot_change_on_closed_or_past_days_or_in_a_published_schedule(
     assert api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=4))).status_code == 409
     assert api.client.delete(url(draft, f"/shifts/{later.shift_id}")).status_code == 409
     assert not StaffingException.objects.exists()
+
+
+def test_removing_a_place_is_refused_when_it_breaks_a_hard_rule(api, shop, draft):
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    hours = 8 * Assignment.objects.filter(shift__version=draft, employee=taken.employee_id).count()
+    # The person's hours goal becomes a rule without exceptions, met exactly by the shifts they have now.
+    EmployeeProfile.objects.filter(pk=taken.employee_id).update(target_hours_month=round(hours * 31 / 7))
+    RuleSetting.objects.create(location=shop["location"], rule_code="target_hours", position=1, is_hard=True)
+    assert api.get(url(draft)).json()["hard_problems"] == []
+
+    refused = api.client.delete(url(draft, f"/shifts/{taken.shift_id}"))
+
+    assert refused.status_code == 409 and "Tego miejsca nie można usunąć" in refused.json()["detail"]
+    assert Shift.objects.filter(pk=taken.shift_id).exists() and not StaffingException.objects.exists()

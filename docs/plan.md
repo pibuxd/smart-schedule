@@ -699,6 +699,8 @@ Założenia:
 2. Dni, które minęły, dni zamknięcia i opublikowane wersje: bez zmian miejsc (409), tak jak przy ręcznej zmianie osoby.
 3. Nowe miejsce bierze godziny innych miejsc tej zmiany w tym dniu, a gdy ich nie ma: godziny z obsady daty, dnia
    tygodnia albo typu zmiany. Zmiana "dowolne godziny" bez godzin: 409 z prośbą o ustawienie ich w kalendarzu.
+3a. Usunięcie miejsca przechodzi przez walidator jak każda ręczna zmiana: gdy grafik złamałby przez to twardą
+   regułę, której wcześniej nie łamał, jest odrzucane (409 z powodem). Po przeglądzie Prelinta (PR #39).
 4. Miejsce usunięte z poprawki opublikowanego grafiku trafia do historii (`AssignmentEvent`, "ręcznie", do nikogo),
    a osoba jest na liście osób, którym zmienia się grafik (`changed_people`).
 5. Kolumnę, której w grafiku jeszcze nie ma (zmiana i stanowisko bez żadnego miejsca w okresie), dodaje się
