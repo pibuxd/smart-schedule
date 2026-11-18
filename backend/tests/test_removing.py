@@ -81,6 +81,8 @@ class TestRemoveEmployee:
         assert me_companies(api, shop["worker"]) == [company]
 
         api.login(shop["manager"])
+        [row] = api.get(f"/api/locations/{shop['location'].pk}/employees").json()
+        assert row["published_shifts"] == 1 and row["draft_shifts"] == 0  # the form warns before removing
         assert api.client.delete(f"/api/employees/{shop['employee'].pk}").status_code == 204
         assert api.get(f"/api/locations/{shop['location'].pk}/employees").json() == []
         overview = api.get(f"/api/manager/overview?company_id={company}").json()

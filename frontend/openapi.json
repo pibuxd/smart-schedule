@@ -10723,6 +10723,11 @@
             "default": 0,
             "title": "Draft Shifts",
             "type": "integer"
+          },
+          "published_shifts": {
+            "default": 0,
+            "title": "Published Shifts",
+            "type": "integer"
           }
         },
         "required": [

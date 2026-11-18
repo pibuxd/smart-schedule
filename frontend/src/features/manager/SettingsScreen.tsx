@@ -413,6 +413,7 @@ function ShiftTypeForm({
   const [start, setStart] = useState(hhmm(shiftType?.start_time))
   const [end, setEnd] = useState(hhmm(shiftType?.end_time))
   const [closing, setClosing] = useState(shiftType?.is_closing ?? false)
+  const [removing, setRemoving] = useState(false)
   const done = () => {
     void queryClient.invalidateQueries()
     onDone()
@@ -478,16 +479,30 @@ function ShiftTypeForm({
       <Button type="submit" wide disabled={create.isPending || update.isPending || tooLong}>
         Zapisz zmianę
       </Button>
-      {shiftType && (
-        <Button
-          variant="danger"
-          wide
-          disabled={remove.isPending}
-          onClick={() => remove.mutate({ shiftTypeId: shiftType.id }, { onSuccess: done })}
-        >
+      {shiftType && !removing && (
+        <Button variant="danger" wide onClick={() => setRemoving(true)}>
           <Trash2 aria-hidden="true" size={18} />
-          Usuń tę zmianę (razem z jej obsadą)
+          Usuń tę zmianę
         </Button>
+      )}
+      {shiftType && removing && (
+        <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
+          <p className="m-0">
+            <b>{`Usunąć zmianę „${shiftType.name}”?`}</b> Zniknie razem z obsadą na każdy dzień tygodnia i z wyjątkami.
+            W ułożonych już grafikach zostaje.
+          </p>
+          <Button
+            variant="danger"
+            wide
+            disabled={remove.isPending}
+            onClick={() => remove.mutate({ shiftTypeId: shiftType.id }, { onSuccess: done })}
+          >
+            Tak, usuń zmianę
+          </Button>
+          <Button variant="secondary" wide onClick={() => setRemoving(false)}>
+            Zostaw
+          </Button>
+        </div>
       )}
     </form>
   )

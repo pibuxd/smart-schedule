@@ -374,6 +374,11 @@ function RemoveEmployee({ employee, onDone }: { employee: EmployeeOut; onDone: (
           : 'Zniknie z listy i straci dostęp do firmy w Grafikomacie. Wróci tylko przez nowe zaproszenie.'}{' '}
         Zmiany w dawnych grafikach i godziny zostają.
       </p>
+      {(employee.published_shifts ?? 0) > 0 && (
+        <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
+          {`Ta osoba ma jeszcze ${shifts(employee.published_shifts ?? 0)} w opublikowanym grafiku. Zostanie na nich wpisana, ale nie zobaczy już grafiku. Najpierw przenieś te zmiany na kogoś innego.`}
+        </p>
+      )}
       {(employee.draft_shifts ?? 0) > 0 && (
         <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
           {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Potem ułóż grafik od nowa albo przenieś je ręcznie.`}

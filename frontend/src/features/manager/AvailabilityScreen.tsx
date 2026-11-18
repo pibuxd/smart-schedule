@@ -222,7 +222,7 @@ function DeletePeriod({ period, disabled }: { period: PeriodOut; disabled: boole
         }
       >
         <p className="m-0">
-          {`Okres ${periodTitle(period.start, period.end)} zniknie razem ze szkicem grafiku i prośbami pracowników na ten okres. `}
+          {`Okres ${periodTitle(period.start, period.end)} zniknie razem ze szkicem grafiku, Twoimi ręcznymi poprawkami i prośbami pracowników na ten okres. `}
           Zaznaczone w kalendarzu dyspozycje zostają.
         </p>
       </ConfirmSheet>

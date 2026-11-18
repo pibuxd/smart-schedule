@@ -161,6 +161,8 @@ class EmployeeOut(Schema):
     is_manager: bool
     # Shifts from today on in drafts not published yet: switching the person off leaves them to be moved.
     draft_shifts: int = 0
+    # Shifts from today on in published schedules: removing the person leaves them on these shifts.
+    published_shifts: int = 0
 
 
 class EmployeeIn(Schema):
@@ -564,9 +566,12 @@ def location_employees(request, location_id: UUID):
     )
     positions = _position_ids(profiles)
     levels = _position_levels(profiles)
-    drafts = _draft_shifts(ctx, profiles)
+    drafts = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.DRAFT)
+    published = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.PUBLISHED)
     return [
-        _employee_out(p, positions[p.pk], levels[p.pk]).model_copy(update={"draft_shifts": drafts.get(p.pk, 0)})
+        _employee_out(p, positions[p.pk], levels[p.pk]).model_copy(
+            update={"draft_shifts": drafts.get(p.pk, 0), "published_shifts": published.get(p.pk, 0)}
+        )
         for p in profiles
     ]
 
@@ -600,13 +605,13 @@ def _closures_out(ctx: TenantContext, location: Location, closures=None) -> list
     ]
 
 
-def _draft_shifts(ctx: TenantContext, profiles) -> dict:
-    """profile id -> number of shifts from today on in drafts (not yet published)."""
+def _upcoming_shifts(ctx: TenantContext, profiles, status: str) -> dict:
+    """profile id -> number of shifts from today on in drafts (not yet published) or in published schedules."""
     rows = (
         ctx.qs(Assignment)
         .filter(
             employee__in=profiles,
-            shift__version__status=ScheduleVersion.Status.DRAFT,
+            shift__version__status=status,
             shift__date__gte=timezone.localdate(),
         )
         .values("employee")

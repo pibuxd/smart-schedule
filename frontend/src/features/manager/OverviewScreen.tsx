@@ -394,7 +394,7 @@ function DeleteGroupSheet({ group, onClose }: { group: { id: string; name: strin
     >
       <p className="m-0">
         {group.locations > 0
-          ? 'Lokale zostają, już bez grupy. Każdy zachowa zasady, które miał z grupy, jako własne.'
+          ? 'Lokale zostają, już bez grupy. Każdy zachowa zasady, które miał z grupy, jako własne. Od teraz zasady zmieniasz w każdym lokalu osobno.'
           : 'W tej grupie nie ma lokali. Zniknie razem ze swoimi zasadami.'}
       </p>
     </ConfirmSheet>

@@ -120,7 +120,7 @@ describe('EmployeesScreen', () => {
 
   it('removes a person from the location after asking once more', async () => {
     const calls = mockApi((method, path) => {
-      if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 3 }]]
+      if (path.endsWith('/employees')) return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 3, published_shifts: 2 }]]
       if (path.endsWith('/setup')) return [200, setup]
       if (path.endsWith('/invitations')) return [200, []]
       if (method === 'DELETE') return [204, null]
@@ -138,6 +138,7 @@ describe('EmployeesScreen', () => {
     const question = within(sheet).getByRole('alert')
     expect(question).toHaveTextContent('Usunąć z lokalu: Ala Nowak?')
     expect(question).toHaveTextContent('Ta osoba ma 3 zmiany w szkicu grafiku.')
+    expect(question).toHaveTextContent('Ta osoba ma jeszcze 2 zmiany w opublikowanym grafiku.')
     fireEvent.click(within(sheet).getByRole('button', { name: 'Tak, usuń z lokalu' }))
 
     await vi.waitFor(() => expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/employees/e1'))
