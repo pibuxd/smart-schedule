@@ -19,6 +19,7 @@ from apps.staffing.models import (
     ShiftType,
     StaffingException,
     StaffingRule,
+    works_in_q,
 )
 
 
@@ -65,7 +66,7 @@ def experienced_shortage(company_id, location_id, start: date, end: date) -> lis
     needed = _needed(company_id, location_id, start, end)
     if not needed:
         return []
-    people = EmployeeProfile.objects.for_company(company_id).filter(home_location=location_id, is_active=True)
+    people = EmployeeProfile.objects.for_company(company_id).filter(works_in_q(location_id), is_active=True)
     default = dict(people.values_list("pk", "experience"))
     own = {
         (employee, position): level

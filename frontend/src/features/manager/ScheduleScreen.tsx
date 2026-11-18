@@ -684,16 +684,25 @@ function PeopleHours({ data }: { data: VersionOut }) {
           </thead>
           <tbody>
             {data.employees.map((e) => {
-              const over = e.max_hours !== null && e.hours > e.max_hours
+              const elsewhere = e.hours_elsewhere ?? 0
+              const over = e.max_hours !== null && e.hours + elsewhere > e.max_hours
               return (
                 <tr key={e.id} className="border-b border-grid">
                   <td className="px-3 py-2">
                     {e.name}
+                    {e.home_location_name && (
+                      <span className="block text-sm text-ink-muted">lokal główny: {e.home_location_name}</span>
+                    )}
                     {!e.active && <span className="block text-sm text-ink-muted">wyłączony z grafiku</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{e.shifts}</td>
                   <td className={cn('px-3 py-2 text-right tabular-nums', over && 'font-semibold text-cannot')}>
                     {String(e.hours).replace('.', ',')}
+                    {elsewhere > 0 && (
+                      <span className="block text-sm font-normal text-ink-muted">
+                        +{String(elsewhere).replace('.', ',')} w innych lokalach
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right text-ink-muted tabular-nums">
                     {e.target_hours ?? '–'} / {e.max_hours ?? '–'}

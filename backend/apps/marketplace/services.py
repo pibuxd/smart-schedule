@@ -162,7 +162,7 @@ def offer_shift(assignment: Assignment, profile: EmployeeProfile) -> tuple[Shift
         able = [v.employee for v in check_people(offer) if v.possible]
         payload = offer_payload(offer)
         told = notify(offer.company_id, [p.membership.user_id for p in able], "shift_offered", payload)
-        told_here = len({p.membership.user_id for p in able if p.home_location_id == assignment.shift.location_id})
+        told_here = len({p.membership.user_id for p in able if p.works_in(assignment.shift.location_id)})
         # The managers know early, especially when nobody can take it (the giver still has to come).
         managers = set(location_manager_ids(assignment.shift.location)) - {profile.membership.user_id}
         notify(offer.company_id, managers, "offer_made", {**payload, "able": told})
@@ -266,7 +266,7 @@ def withdraw_claim(claim: ShiftClaim, profile: EmployeeProfile) -> ShiftClaim:
 
 def _move(assignment: Assignment, to: EmployeeProfile) -> None:
     assignment.employee = to
-    assignment.borrowed = to.home_location_id != assignment.shift.location_id
+    assignment.borrowed = not to.works_in(assignment.shift.location_id)
     assignment.manual = True
     # The new person was agreed on: arranging the period again keeps them there.
     assignment.pinned = True
@@ -333,7 +333,7 @@ def _hand_over(offer: ShiftOffer, claim: ShiftClaim, taker: EmployeeProfile, by,
         notify(offer.company_id, [taker.membership.user_id], "claim_approved", payload)
         notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_taken", payload)
     notify(offer.company_id, other_users, "claim_rejected", payload)
-    if taker.home_location_id != shift.location_id:
+    if not taker.works_in(shift.location_id):
         # The taker's own manager learns that they work elsewhere that day.
         home = set(location_manager_ids(taker.home_location)) - managers
         notify(offer.company_id, home, "borrowed", {**payload, "auto": auto})

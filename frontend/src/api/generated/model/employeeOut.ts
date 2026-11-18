@@ -21,4 +21,7 @@ export interface EmployeeOut {
   is_active: boolean;
   is_manager: boolean;
   draft_shifts?: number;
+  home_location_id?: string | null;
+  home_location_name?: string;
+  is_home?: boolean;
 }

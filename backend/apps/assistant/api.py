@@ -14,7 +14,7 @@ from ninja.responses import Status
 from apps.assistant import llm, services
 from apps.assistant.models import AssistantCommand, ManagerInstruction
 from apps.core.schemas import ErrorOut
-from apps.staffing.models import EmployeeProfile, ShiftType
+from apps.staffing.models import EmployeeProfile, ShiftType, works_in_q
 from apps.tenancy.context import TenantContext, context_for
 from apps.tenancy.models import Location
 
@@ -89,7 +89,7 @@ def _managed_command(request, command_id: UUID) -> tuple[TenantContext, Assistan
 
 
 def _instructions_out(ctx: TenantContext, location: Location) -> InstructionsOut:
-    people = ctx.qs(EmployeeProfile).filter(home_location=location).select_related("membership__user")
+    people = ctx.qs(EmployeeProfile).filter(works_in_q(location)).select_related("membership__user")
     names = {str(p.pk): p.membership.user.full_name or "Bez imienia" for p in people}
     shift_names = {str(s.pk): s.name for s in ctx.qs(ShiftType).filter(location=location)}
     today = timezone.localdate()

@@ -30,7 +30,7 @@ from apps.core.schemas import ErrorOut
 from apps.notifications.services import notify
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion
 from apps.staffing.me import employee_context
-from apps.staffing.models import EmployeeProfile
+from apps.staffing.models import EmployeeProfile, works_in_q
 from apps.tenancy.context import TenantContext, context_for
 
 router = Router(tags=["availability"])
@@ -165,8 +165,8 @@ def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
 
 
 def _my_period(ctx: TenantContext, profile: EmployeeProfile, period_id: UUID) -> SchedulePeriod:
-    """A period of my home location; 404 for any other."""
-    period = ctx.qs(SchedulePeriod).filter(pk=period_id, location=profile.home_location).select_related("location")
+    """A period of one of my locations (main or extra); 404 for any other."""
+    period = ctx.qs(SchedulePeriod).filter(pk=period_id, location__in=profile.location_ids()).select_related("location")
     period = period.first()
     if period is None:
         raise HttpError(404, "Nie znaleziono tego okresu grafiku.")
@@ -254,14 +254,24 @@ def my_availability(request, company_id: UUID, period_id: UUID | None = None):
         period = _my_period(ctx, profile, period_id)
     else:
         today = timezone.localdate()
-        period = (
-            ctx.qs(SchedulePeriod)
-            .filter(location=profile.home_location, status=SchedulePeriod.Status.COLLECTING, end__gte=today)
-            .select_related("location")
-            .order_by("start")
-            .first()
+        period = _first_open_period(
+            ctx,
+            profile,
+            ctx.qs(SchedulePeriod).filter(
+                location__in=profile.location_ids(), status=SchedulePeriod.Status.COLLECTING, end__gte=today
+            ),
         )
     return _availability_out(ctx, profile, period)
+
+
+def _first_open_period(ctx: TenantContext, profile: EmployeeProfile, periods) -> SchedulePeriod | None:
+    """The earliest period that still waits for my "Gotowe" (someone working in several locations can be asked
+    by each of them); the earliest one when all are done."""
+    periods = list(periods.select_related("location").order_by("start", "location__name"))
+    done = set(
+        ctx.qs(AvailabilitySubmission).filter(employee=profile, period__in=periods).values_list("period_id", flat=True)
+    )
+    return next((p for p in periods if p.pk not in done), periods[0] if periods else None)
 
 
 @router.put(
@@ -295,17 +305,17 @@ def _locked_days(ctx: TenantContext, profile: EmployeeProfile, start: date, end:
     """Days between `start` and `end` that the employee cannot change any more."""
     today = timezone.localdate()
     locked = {start + timedelta(days=i) for i in range(max(0, min((today - start).days, (end - start).days + 1)))}
-    arranged = (
-        ctx.qs(SchedulePeriod)
-        .filter(location=profile.home_location, start__lte=end, end__gte=start)
-        .exclude(status=SchedulePeriod.Status.COLLECTING)
-    )
-    for period_start, period_end in arranged.values_list("start", "end"):
+    periods = ctx.qs(SchedulePeriod).filter(location__in=profile.location_ids(), start__lte=end, end__gte=start)
+    arranged: set[date] = set()
+    collecting: set[date] = set()
+    for period_start, period_end, status in periods.values_list("start", "end", "status"):
+        target = collecting if status == SchedulePeriod.Status.COLLECTING else arranged
         day = max(period_start, start)
         while day <= min(period_end, end):
-            locked.add(day)
+            target.add(day)
             day += timedelta(days=1)
-    return locked | _published_dates(ctx, profile, start, end)
+    # Availability is shared by all my locations: a day stays open while one of them still collects it.
+    return locked | (arranged - collecting) | _published_dates(ctx, profile, start, end)
 
 
 @router.get("/me/calendar", response={200: MyCalendarOut, 400: ErrorOut, 404: ErrorOut})
@@ -314,16 +324,15 @@ def my_calendar(request, company_id: UUID, start: date, end: date):
     ctx, profile = employee_context(request, company_id)
     if end < start or (end - start).days >= MAX_CALENDAR_DAYS:
         raise HttpError(400, f"Kalendarz pokazuje najwyżej {MAX_CALENDAR_DAYS} dni naraz.")
-    period = (
-        ctx.qs(SchedulePeriod)
-        .filter(
-            location=profile.home_location,
+    period = _first_open_period(
+        ctx,
+        profile,
+        ctx.qs(SchedulePeriod).filter(
+            location__in=profile.location_ids(),
             status=SchedulePeriod.Status.COLLECTING,
             end__gte=max(start, timezone.localdate()),
             start__lte=end,
-        )
-        .order_by("start")
-        .first()
+        ),
     )
     submission = ctx.qs(AvailabilitySubmission).filter(employee=profile, period=period).first() if period else None
     days = ctx.qs(AvailabilityDay).filter(employee=profile, date__gte=start, date__lte=end).order_by("date")
@@ -427,9 +436,17 @@ def submit_my_availability(request, payload: PeriodRefIn):
     """ "Gotowe": tells the manager I have finished. Days left unmarked mean "mogę"."""
     ctx, profile = employee_context(request, payload.company_id)
     period = _editable_period(ctx, profile, payload.period_id)
-    AvailabilitySubmission.objects.for_company(ctx.company).get_or_create(
-        company=ctx.company, employee=profile, period=period
+    # Availability is shared by all my locations, so "Gotowe" also answers their periods within the same days.
+    covered = ctx.qs(SchedulePeriod).filter(
+        location__in=profile.location_ids(),
+        status=SchedulePeriod.Status.COLLECTING,
+        start__gte=period.start,
+        end__lte=period.end,
     )
+    for each in {period, *covered}:
+        AvailabilitySubmission.objects.for_company(ctx.company).get_or_create(
+            company=ctx.company, employee=profile, period=each
+        )
     return _availability_out(ctx, profile, period)
 
 
@@ -646,7 +663,7 @@ def availability_grid(request, period_id: UUID):
     ctx, period = _managed_period(request, period_id)
     profiles = list(
         ctx.qs(EmployeeProfile)
-        .filter(home_location=period.location, is_active=True)
+        .filter(works_in_q(period.location), is_active=True)
         .select_related("membership__user")
         .prefetch_related("positions")
         .order_by("membership__user__last_name", "membership__user__first_name")
@@ -672,7 +689,7 @@ def availability_grid(request, period_id: UUID):
             GridEmployeeOut(
                 id=p.pk,
                 name=p.membership.user.full_name or "Bez imienia",
-                positions=sorted(pos.name for pos in p.positions.all()),
+                positions=sorted(pos.name for pos in p.positions.all() if pos.location_id == period.location_id),
                 submitted_at=submitted.get(p.pk),
                 days=days[p.pk],
                 late_days=sum(1 for d in days[p.pk] if d.late),

@@ -9,11 +9,13 @@ from collections import defaultdict
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
+from django.db.models import Q
+
 from apps.assistant import readings
 from apps.assistant.models import AssistantCommand
 from apps.availability.models import AvailabilityDay, AvailabilitySubmission, TextRequest
 from apps.scheduling.models import SchedulePeriod, ScheduleVersion, Shift
-from apps.staffing.models import EmployeeProfile
+from apps.staffing.models import EmployeeProfile, works_in_q
 
 MAX_PERIODS = 6
 MAX_ROWS = 600
@@ -97,7 +99,7 @@ def location_snapshot(location, today, *, employee=None) -> str:
     company = location.company_id
     profiles = list(
         EmployeeProfile.objects.for_company(company)
-        .filter(home_location=location, is_active=True)
+        .filter(works_in_q(location), is_active=True)
         .select_related("membership__user")
         .order_by("pk")[: MAX_ROWS + 1]
     )
@@ -204,11 +206,11 @@ def location_snapshot(location, today, *, employee=None) -> str:
                 }
             )
         scope = (
-            {"employee": employee} if employee else {"employee__home_location": location, "employee__is_active": True}
+            Q(employee=employee) if employee else Q(works_in_q(location, prefix="employee__"), employee__is_active=True)
         )
         days = list(
             AvailabilityDay.objects.for_company(company)
-            .filter(date__range=(period.start, period.end), **scope)
+            .filter(scope, date__range=(period.start, period.end))
             .order_by("date", "employee_id")[: availability_remaining + 1]
         )
         info["availability_truncated"] = len(days) > availability_remaining
@@ -229,7 +231,7 @@ def location_snapshot(location, today, *, employee=None) -> str:
         ]
         submitted = set(
             AvailabilitySubmission.objects.for_company(company)
-            .filter(period=period, **scope)
+            .filter(scope, period=period)
             .values_list("employee_id", flat=True)
         )
         info["submitted"] = {

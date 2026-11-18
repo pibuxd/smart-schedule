@@ -140,7 +140,35 @@ describe('EmployeesScreen', () => {
 
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
-    expect(body).toEqual({ first_name: 'Alicja', is_active: false, revision: 'initial' })
+    expect(body).toEqual({ first_name: 'Alicja', is_active: false, revision: 'initial', location_id: 'l1' })
     expect(body).not.toHaveProperty('phone') // the login number is changed only by the superadmin
+  })
+
+  it('shows the main location of someone from another location and does not offer switching them off', async () => {
+    const guest = { ...person('e3', 'Kasia', 2), is_home: false, home_location_name: 'Rynek' }
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) return [200, [guest]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      if (method === 'PATCH') return [200, guest]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    expect(await screen.findByText('Lokal główny: Rynek')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień: Kasia Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).queryByRole('checkbox', { name: /W grafiku/ })).not.toBeInTheDocument()
+    expect(within(sheet).getByText(/Wyłączyć ją z grafiku może kierownik lokalu głównego/)).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('radio', { name: /Doświadczony/ }))
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
+    expect(body.location_id).toBe('l1')
   })
 })

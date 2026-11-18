@@ -14,4 +14,6 @@ export interface VersionEmployeeOut {
   target_hours: number | null;
   max_hours: number | null;
   active: boolean;
+  hours_elsewhere?: number;
+  home_location_name?: string | null;
 }

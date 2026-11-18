@@ -23,8 +23,13 @@ def create_invitation(
         .first()
     )
     if membership is not None:
-        if role == Role.EMPLOYEE and hasattr(membership, "employee_profile"):
-            raise HttpError(409, "Ta osoba jest już pracownikiem tej firmy.")
+        # Someone working in another location of the company can work here too (an extra location).
+        if (
+            role == Role.EMPLOYEE
+            and hasattr(membership, "employee_profile")
+            and membership.employee_profile.works_in(location)
+        ):
+            raise HttpError(409, "Ta osoba już pracuje w tym lokalu.")
         if role == Role.MANAGER and (
             membership.role == Role.OWNER
             or (membership.role == Role.MANAGER and membership.locations.filter(pk=location.pk).exists())
@@ -78,10 +83,14 @@ def accept_invitation(invitation_id, user) -> Invitation:
             membership.save(update_fields=["role"])
         if membership.role == Role.MANAGER:
             membership.locations.add(location)
-    elif not EmployeeProfile.objects.for_company(invitation.company_id).filter(membership=membership).exists():
-        # A person who already works in another location of this company keeps their home location;
-        # work elsewhere stays an exception arranged by the manager.
-        EmployeeProfile.objects.create(membership=membership, home_location=location)
+    else:
+        profile = EmployeeProfile.objects.for_company(invitation.company_id).filter(membership=membership).first()
+        if profile is None:
+            EmployeeProfile.objects.create(membership=membership, home_location=location)
+        elif not profile.works_in(location):
+            # A person who already works in another location of this company keeps their main location and gets
+            # this one as an extra location (docs/plan.md, section 24).
+            profile.extra_locations.add(location)
 
     changed = []
     if not user.first_name and invitation.first_name:

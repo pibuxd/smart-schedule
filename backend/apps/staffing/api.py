@@ -25,6 +25,7 @@ from apps.staffing.models import (
     ShiftType,
     StaffingException,
     StaffingRule,
+    works_in_q,
 )
 from apps.tenancy.context import TenantContext, context_for
 from apps.tenancy.models import Location
@@ -160,6 +161,11 @@ class EmployeeOut(Schema):
     is_manager: bool
     # Shifts from today on in drafts not published yet: switching the person off leaves them to be moved.
     draft_shifts: int = 0
+    # The person's main location. In the list of another location the person works there as an extra location
+    # (`is_home` false); `position_ids` are then their positions in the listed location only.
+    home_location_id: UUID | None = None
+    home_location_name: str = ""
+    is_home: bool = True
 
 
 class EmployeeIn(Schema):
@@ -176,6 +182,9 @@ class EmployeeIn(Schema):
     max_hours_month: int | None = Field(None, ge=1, le=400)
     target_hours_month: int | None = Field(None, ge=1, le=400)
     is_active: bool | None = None
+    # The location whose list the manager edits the person in: positions and their levels change only there.
+    # Left out: the person's main location.
+    location_id: UUID | None = None
 
 
 # --------------------------------------------------------------------------------------------- helpers
@@ -493,7 +502,15 @@ def delete_closure(request, closure_id: UUID):
 # --------------------------------------------------------------------------------------------- employees
 
 
-def _employee_out(profile: EmployeeProfile, position_ids: list, levels: dict | None = None) -> EmployeeOut:
+def _employee_out(
+    profile: EmployeeProfile,
+    position_ids: list,
+    levels: dict | None = None,
+    location: Location | None = None,
+    here: set | None = None,
+) -> EmployeeOut:
+    """`position_ids`: all of the person's positions (the revision covers them all). With `location`, only that
+    location's positions are shown."""
     levels = levels or {}
     user = profile.membership.user
     # Include settings stored on the account and position links as well as the profile row.
@@ -506,7 +523,16 @@ def _employee_out(profile: EmployeeProfile, position_ids: list, levels: dict | N
         profile.target_hours_month,
         sorted((str(pid), levels.get(pid, profile.experience)) for pid in position_ids),
     )
+    home = profile.home_location
+    if location is not None:
+        if here is None:
+            positions = Position.objects.for_company(profile.company_id).filter(location=location)
+            here = set(positions.values_list("pk", flat=True))
+        position_ids = [pid for pid in position_ids if pid in here]
     return EmployeeOut(
+        home_location_id=home.pk,
+        home_location_name=home.name,
+        is_home=location is None or location.pk == home.pk,
         revision=hashlib.sha256(json.dumps(snapshot).encode()).hexdigest(),
         id=profile.pk,
         first_name=user.first_name,
@@ -545,19 +571,23 @@ def _position_levels(profiles) -> dict:
 
 @router.get("/locations/{location_id}/employees", response={200: list[EmployeeOut], 403: ErrorOut, 404: ErrorOut})
 def location_employees(request, location_id: UUID):
-    """People whose home location this is: active first, then switched off; by surname."""
+    """People who work in this location (as their main location or an extra one): active first, then switched
+    off; by surname."""
     ctx, location, _ = _manage(request, Location, location_id)
     profiles = list(
         ctx.qs(EmployeeProfile)
-        .filter(home_location=location)
-        .select_related("membership__user")
+        .filter(works_in_q(location))
+        .select_related("membership__user", "home_location")
         .order_by("-is_active", "membership__user__last_name", "membership__user__first_name")
     )
     positions = _position_ids(profiles)
     levels = _position_levels(profiles)
     drafts = _draft_shifts(ctx, profiles)
+    here = set(ctx.qs(Position).filter(location=location).values_list("pk", flat=True))
     return [
-        _employee_out(p, positions[p.pk], levels[p.pk]).model_copy(update={"draft_shifts": drafts.get(p.pk, 0)})
+        _employee_out(p, positions[p.pk], levels[p.pk], location, here).model_copy(
+            update={"draft_shifts": drafts.get(p.pk, 0)}
+        )
         for p in profiles
     ]
 
@@ -622,18 +652,19 @@ def add_myself_as_employee(request, location_id: UUID):
                 company=ctx.company, membership=ctx.membership, home_location=location
             )
             profile.positions.set(ctx.qs(Position).filter(location=location))
-        elif profile.home_location_id != location.pk:
-            raise HttpError(
-                409,
-                f"Jesteś już pracownikiem lokalu {profile.home_location.name}. Pracownik ma jeden lokal domowy.",
-            )
+        elif not profile.works_in(location):
+            # Working in another location already: this one becomes an extra location (docs/plan.md, section 24).
+            profile.extra_locations.add(location)
+            profile.positions.add(*ctx.qs(Position).filter(location=location))
         elif profile.is_active:
             raise HttpError(409, "Jesteś już na liście pracowników tego lokalu.")
         else:
             profile.is_active = True
             profile.save(update_fields=["is_active"])
-    profile = ctx.qs(EmployeeProfile).select_related("membership__user").get(pk=profile.pk)
-    return _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])
+    profile = ctx.qs(EmployeeProfile).select_related("membership__user", "home_location").get(pk=profile.pk)
+    return _employee_out(
+        profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk], location
+    )
 
 
 def _changed_account(ctx: TenantContext, profile: EmployeeProfile, payload: EmployeeIn):
@@ -663,8 +694,13 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
     """Name, positions, experience level, monthly maximum and target, or switching the person off
     (history stays)."""
     ctx, profile = context_for(request, EmployeeProfile, employee_id)
-    profile = ctx.qs(EmployeeProfile).select_for_update().get(pk=profile.pk)
-    ctx.require_manager_of(profile.home_location)
+    profile = ctx.qs(EmployeeProfile).select_for_update().select_related("home_location").get(pk=profile.pk)
+    location = profile.home_location
+    if payload.location_id is not None and payload.location_id != location.pk:
+        location = ctx.get(Location, pk=payload.location_id)
+        if not profile.works_in(location):
+            raise HttpError(404, "Ta osoba nie pracuje w tym lokalu.")
+    ctx.require_manager_of(location)
     ctx.require_writable()
     if payload.revision is not None:
         current = _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])
@@ -677,7 +713,12 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
         profile.max_hours_month = payload.max_hours_month
     if "target_hours_month" in sent:
         profile.target_hours_month = payload.target_hours_month
-    if "is_active" in sent and payload.is_active is not None:
+    if "is_active" in sent and payload.is_active is not None and payload.is_active != profile.is_active:
+        if location.pk != profile.home_location_id:
+            raise HttpError(
+                409,
+                f"Wyłączyć lub włączyć tę osobę może kierownik jej lokalu głównego ({profile.home_location.name}).",
+            )
         profile.is_active = payload.is_active
     if (
         profile.max_hours_month is not None
@@ -690,17 +731,20 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
         if user is not None:
             user.save(update_fields=["first_name", "last_name"])
         profile.save()
+        here = set(ctx.qs(Position).filter(location=location).values_list("pk", flat=True))
         if "position_ids" in sent and payload.position_ids is not None:
-            positions = list(ctx.qs(Position).filter(pk__in=payload.position_ids, location=profile.home_location))
+            # Only this location's positions change; the person keeps their positions in other locations.
+            positions = list(ctx.qs(Position).filter(pk__in=payload.position_ids, location=location))
             if len(positions) != len(set(payload.position_ids)):
                 raise HttpError(400, "Wybierz stanowiska z lokalu tej osoby.")
-            profile.positions.set(positions)
+            elsewhere = list(profile.positions.exclude(location=location))
+            profile.positions.set([*elsewhere, *positions])
         own = set(profile.positions.values_list("pk", flat=True))
         if "position_experience" in sent and payload.position_experience is not None:
             wanted = {item.position_id: item.experience for item in payload.position_experience}
-            if not set(wanted) <= own:
+            if not set(wanted) <= own & here:
                 raise HttpError(400, "Stopień można ustawić tylko na stanowisku, na którym ta osoba pracuje.")
-            ctx.qs(PositionExperience).filter(employee=profile).delete()
+            ctx.qs(PositionExperience).filter(employee=profile, position__location=location).delete()
             for position_id, level in wanted.items():
                 if level != profile.experience:  # only what differs from the default is kept
                     PositionExperience(employee=profile, position_id=position_id, level=level).save()
@@ -708,5 +752,7 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
         stale = ctx.qs(PositionExperience).filter(employee=profile)
         stale.exclude(position_id__in=own).delete()
         stale.filter(level=profile.experience).delete()
-    profile = ctx.qs(EmployeeProfile).select_related("membership__user").get(pk=profile.pk)
-    return _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])
+    profile = ctx.qs(EmployeeProfile).select_related("membership__user", "home_location").get(pk=profile.pk)
+    return _employee_out(
+        profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk], location
+    )

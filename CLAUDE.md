@@ -92,6 +92,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   the `sms_outbox` fixture). Rate limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`.
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
+- A person can work in several locations of a company: `EmployeeProfile.home_location` (main) plus
+  `extra_locations`. "People of a location" is `works_in_q(location)` / `profile.works_in(location)`, never
+  `home_location=` alone; in the engine `Employee.works_in`. Availability and monthly hours are per person.
 - Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.
   Each catalog rule needs a `rule_<code>` method in `engine/validator.py` and a `_rule_<code>` method in
   `engine/solver.py` (hard: a constraint; soft: a penalty matching the validator's degree), checked by a test.

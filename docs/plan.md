@@ -177,7 +177,7 @@ kara = manager_share × Σ_z  w_z × naruszenie_z            (zasady menedżera)
 - `w_z` z miejsca na liście: najwyższa zasada dostaje największą wagę, każda kolejna mniejszą (stały współczynnik `rank_decay`, np. 0,75). Dzięki temu "wszystko najważniejsze" jest niemożliwe z definicji.
 - `w_p` z poziomu prośby (bardzo ważne / ważne / mile widziane) i korekty menedżera (ważniejsza / mniej ważna).
 - Czas dzielony między fazy (np. 40/60 % limitu). Wynik fazy 1 trafia jako podpowiedź do fazy 2.
-- Każdy lokal generujemy osobno (decyzja Piotra z 12.11.2026: lokale są niezależne, każdy z własnymi zasadami i wagami); "Ułóż grafik dla wszystkich" uruchamia osobne generowanie dla każdego lokalu. Przypisania tylko do lokalu domowego; pożyczenie do innego lokalu robi menedżer ręcznie. Opublikowane zmiany tych samych osób w innych lokalach liczą się do odpoczynku i nakładania.
+- Każdy lokal generujemy osobno (decyzja Piotra z 12.11.2026: lokale są niezależne, każdy z własnymi zasadami i wagami); "Ułóż grafik dla wszystkich" uruchamia osobne generowanie dla każdego lokalu. Przypisania tylko do lokali osoby (główny i dodatkowe, od 19.11.2026); pożyczenie do innego lokalu robi menedżer ręcznie. Opublikowane zmiany tych samych osób w innych lokalach oraz ich zmiany z najnowszych szkiców innych lokali liczą się do odpoczynku, nakładania i godzin.
 - Kod przygotowany pod 3 warianty: funkcja `solve(problem, profile, diversity_from=[...])`; drugi i trzeci wariant to inne `manager_share` i ograniczenie min. 15 % różnych przypisań. W tej wersji wołamy ją raz.
 
 Ocena (`scoring.py`, ten sam kod dla każdego wariantu i dla ręcznej edycji): liczba dziur, "zasady menedżera" % i "prośby pracowników" % wg wzoru `100 × (1 − Σ w_i v_i / Σ w_i)`. Grafik z dziurami ma flagę "niekompletny" i nie pokazuje zielonej oceny.
@@ -263,7 +263,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 1. Dyspozycyjność: stan na cały dzień, z opcjonalnym zakresem godzin wybieranym z listy, nie pisanym (znaczenie godzin: spec.md, Pracownik, punkt 2). Domyślnie cały dzień.
 2. Brak zgłoszenia dyspozycji = dzień bez zaznaczenia ("mogę"), ale osoba jest na liście "nie zgłosił" u menedżera.
-3. Generator przypisuje ludzi tylko do ich lokalu domowego; praca w innym lokalu tylko ręcznie albo przez wzięcie oddanej zmiany.
+3. Generator przypisuje ludzi tylko do ich lokali (główny i dodatkowe, sekcja 24); praca w innym lokalu tylko ręcznie albo przez wzięcie oddanej zmiany.
 4. Zmiany typu "dowolne godziny" generator traktuje jak sloty z godzinami ustawionymi w obsadzie lub wyjątku na dany dzień; menedżer może też dodać zmianę z dowolnymi godzinami ręcznie.
 5. Tydzień zaczyna się w poniedziałek, strefa czasowa Europe/Warsaw, godziny zmian liczone w czasie lokalnym z uwzględnieniem zmiany czasu.
 6. Menedżer też może mieć profil pracownika (np. kierownik, który sam stoi na zmianach).
@@ -297,7 +297,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 Założenia:
 1. Ekrany logowania, zaproszeń i subskrypcji powstają w etapie 6 (po akceptacji kierunku wizualnego); etap 3 dostarcza API, testy i wygenerowanego klienta.
-2. Osoba, która już pracuje w innym lokalu tej samej firmy i przyjmie zaproszenie pracownika do kolejnego, zachowuje dotychczasowy lokal domowy.
+2. Osoba, która już pracuje w innym lokalu tej samej firmy i przyjmie zaproszenie pracownika do kolejnego, zachowuje dotychczasowy lokal domowy, a nowy lokal dostaje jako dodatkowy (od 19.11.2026, sekcja 24).
 3. Zaproszenie na rolę menedżera przyjęte przez pracownika podnosi rolę do menedżera i zostawia profil pracownika.
 4. Odpowiedź na zaproszenie (akceptacja, odrzucenie) działa także wtedy, gdy firma jest w trybie tylko do odczytu; nowych zaproszeń wysłać wtedy nie można.
 5. Stan subskrypcji i kody widzi właściciel i menedżer firmy; pracownik widzi tylko, czy firma jest w trybie tylko do odczytu (`GET /me`).
@@ -428,7 +428,7 @@ Piotr z kolegą przetestowali wdrożoną aplikację. Zmiany w tej części (nadp
 6. Anulowanie układania grafiku: `POST /generation-runs/{id}/cancel` (kierownik lokalu, firma z dostępem) ustawia `GenerationRun.status = cancelled` i oddaje ułożenie do limitu. Zadanie w kolejce po prostu nic nie zrobi; liczący solver pyta o anulowanie mniej więcej co sekundę (`engine.solver.solve(should_stop=...)`, wątek pomocniczy wywołuje `stop_search`) i kończy bez wyniku. Wynik, który dotarł już po anulowaniu, nie jest zapisywany. Ekran: przycisk "Anuluj" obok "Układam grafik…" na liście lokali i w zakładce "Grafik".
 7. Pędzel nadal zdejmuje godziny dnia przy zmianie stanu (uwaga Prelinta do PR #20: bez "Cofnij" źle przeciągnięty palec kasuje godziny i trzeba je wpisać jeszcze raz). Zostaje do decyzji Piotra po pilotażu: pędzel zachowujący godziny albo powrót "Cofnij".
 
-8. Kierownik jako pracownik (prośba Piotra z 13.11.2026: w kawiarniach kierownik często sam staje na zmianie i każdego zastąpi): w zakładce "Pracownicy" przycisk "Dodaj mnie jako pracownika" (`POST /locations/{id}/employees/me`) zakłada kierownikowi profil pracownika w tym lokalu ze wszystkimi stanowiskami lokalu, bez zaproszenia na własny numer. Profil wyłączony wcześniej włącza się z powrotem. Jedna osoba ma nadal jeden lokal domowy, więc kierownik kilku lokali dodaje się w jednym (w pozostałych może być pożyczany jak każdy).
+8. Kierownik jako pracownik (prośba Piotra z 13.11.2026: w kawiarniach kierownik często sam staje na zmianie i każdego zastąpi): w zakładce "Pracownicy" przycisk "Dodaj mnie jako pracownika" (`POST /locations/{id}/employees/me`) zakłada kierownikowi profil pracownika w tym lokalu ze wszystkimi stanowiskami lokalu, bez zaproszenia na własny numer. Profil wyłączony wcześniej włącza się z powrotem. Jedna osoba ma jeden lokal główny; kierownik, który jest już pracownikiem innego lokalu, dodaje się tym przyciskiem jako lokal dodatkowy (od 19.11.2026).
 
 9. "Kiedy mogę" jest zawsze otwarte (prośba Piotra z 13.11.2026: pracownicy mają móc zaznaczać dostępność na przyszłość, także zanim kierownik o nią poprosi; wcześniej ekran był pusty do czasu prośby). Ekran pokazuje kalendarz miesiącami (bieżący i trzy kolejne, strzałki), a nie jeden okres. Nowe endpointy: `GET /me/calendar?start&end` (dni, lista dni zamkniętych, najbliższy okres zbierający dyspozycje, data wysłania) i `PUT /me/calendar` (zapis bez `period_id`). Zamknięte są tylko dni, które minęły, i dni okresu z ułożonym grafikiem (szkic albo opublikowany); zapis najwyżej rok naprzód. `AvailabilityDay` było od początku kluczowane datą, więc kierownik widzi wcześniejsze zaznaczenia w siatce okresu bez zmian po swojej stronie. Gdy kierownik poprosi o dyspozycje, ekran otwiera się na miesiącu tego okresu i pokazuje termin oraz "Gotowe, wysyłam kierownikowi"; prośby tekstem nadal pisze się do konkretnego okresu, więc pojawiają się dopiero po prośbie kierownika. Stare `PUT /me/availability` zostaje w API (nieużywane przez ekran).
 
@@ -675,4 +675,38 @@ Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi odda
   czy osoba z innego lokalu też bierze od razu (dziś tak, a jej kierownik dostaje powiadomienie). Do sprawdzenia
   w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
   sprawiedliwe (np. osoba blisko limitu godzin).
+
+## 24. Praca w kilku lokalach (19.11.2026)
+
+Pytanie Piotra 18.11.2026: czy pracownik z jednym numerem może pracować w kilku lokalach firmy i czy jego dyspozycje oraz
+zmiany są wtedy liczone między lokalami. Dotąd nie mógł (zaproszenie kończyło się odmową, generator układał tylko w lokalu
+domowym). Piotr wybrał pełną pracę w kilku lokalach, jak w Kadromierzu i 7shifts: lokal główny plus lokale dodatkowe,
+wspólna dyspozycyjność.
+
+- `EmployeeProfile.extra_locations` (wiele do wielu, `related_name="extra_employees"`): lokale dodatkowe. `home_location`
+  zostaje lokalem głównym (cel godzin, okresy z prośbami bez okresu, raporty). `EmployeeProfile.works_in(...)` i
+  `works_in_q(...)` mówią, kto pracuje w lokalu; każde miejsce, które dotąd filtrowało po `home_location` dla listy ludzi
+  lokalu, używa ich.
+- Zaproszenie pracownika na numer osoby, która już pracuje w firmie, jest dozwolone, gdy lokal nie jest jej lokalem; przy
+  akceptacji lokal trafia do `extra_locations`. "Dodaj mnie jako pracownika" w innym lokalu robi to samo i daje wszystkie
+  stanowiska tego lokalu.
+- Lista pracowników lokalu pokazuje też osoby z lokalem dodatkowym (`home_location_name`, `is_home = false`), z
+  ich stanowiskami tylko z tego lokalu. `PATCH /employees/{id}` z `location_id` zmienia stanowiska i stopnie tylko w tym
+  lokalu; imię, stopień domyślny i godziny może zmienić kierownik każdego lokalu osoby, a wyłączyć ją tylko kierownik
+  lokalu głównego.
+- Dyspozycje są zapisane na osobę i dzień, więc są wspólne. Pracownik widzi okresy i prośby o dyspozycje ze wszystkich
+  swoich lokali; "Gotowe" zaznacza dany okres.
+- Silnik: `Employee.extra_locations`, `Employee.works_in(location)`. Solver daje osobie tylko zmiany jej lokali; zasady
+  lokalu obejmują wszystkie osoby, które w nim pracują, poza celem godzin (tylko lokal główny, żeby lokal dodatkowy,
+  ułożony pierwszy, nie zabrał całego celu). Miesięczne maksimum i cel liczą też zmiany z innych lokali w dniach okresu
+  (`ExternalShift`): granica w tym lokalu to `max(0, granica − godziny gdzie indziej)`, w walidatorze i solverze tak samo.
+  `Request.location` mówi, do którego lokalu należy prośba (ocena lokalu liczy tylko jego prośby).
+- Zmiany z innych lokali (`ExternalShift`) przy generowaniu: opublikowane wersje innych okresów oraz ich najnowszy szkic,
+  jeśli jest nowszy od opublikowanej, żeby dwa lokale ułożone jeden po drugim nie dały tej samej osobie tych samych
+  godzin. Edycja i publikacja sprawdzają twardo tylko opublikowane zmiany innych lokali (dwie zmiany naraz zostają
+  zablokowane, decyzja Piotra z 18.11.2026 w PR #44); zmiana ze szkicu innego lokalu w tym samym czasie to ostrzeżenie
+  przy ręcznej zmianie.
+- Między różnymi firmami nic się nie łączy: to osobni pracodawcy i ich dane są rozdzielone.
+- Założenia: lokal ułożony pierwszy "ma pierwszeństwo" do osoby (kolejność układania decyduje, jak w Kadromierzu).
+  Usuwanie osoby z lokalu dodatkowego (PR #40) zdejmuje tylko ten lokal i jego stanowiska.
 

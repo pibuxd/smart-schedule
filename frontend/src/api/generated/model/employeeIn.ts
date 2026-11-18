@@ -17,4 +17,5 @@ export interface EmployeeIn {
   max_hours_month?: number | null;
   target_hours_month?: number | null;
   is_active?: boolean | null;
+  location_id?: string | null;
 }

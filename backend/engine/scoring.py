@@ -93,7 +93,7 @@ def score(problem: Problem, report: ValidationReport, location: str | None = Non
         unscored_requests=sum(
             1
             for request_id in report.unscored_requests
-            if _in(location, problem.employee_by_id[request_by_id[request_id].employee].home_location)
+            if _in(location, problem.request_location(request_by_id[request_id]))
         ),
     )
 

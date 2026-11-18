@@ -4570,7 +4570,7 @@
             }
           }
         },
-        "description": "People whose home location this is: active first, then switched off; by surname.",
+        "description": "People who work in this location (as their main location or an extra one): active first, then switched\noff; by surname.",
         "tags": [
           "staffing"
         ],
@@ -8228,6 +8228,22 @@
           "active": {
             "title": "Active",
             "type": "boolean"
+          },
+          "hours_elsewhere": {
+            "default": 0,
+            "title": "Hours Elsewhere",
+            "type": "number"
+          },
+          "home_location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Location Name"
           }
         },
         "required": [
@@ -10369,6 +10385,28 @@
             "default": 0,
             "title": "Draft Shifts",
             "type": "integer"
+          },
+          "home_location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Location Id"
+          },
+          "home_location_name": {
+            "default": "",
+            "title": "Home Location Name",
+            "type": "string"
+          },
+          "is_home": {
+            "default": true,
+            "title": "Is Home",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10531,6 +10569,18 @@
               }
             ],
             "title": "Is Active"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
           }
         },
         "title": "EmployeeIn",

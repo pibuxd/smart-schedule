@@ -77,7 +77,13 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
         title={editing ? `${editing.first_name} ${editing.last_name}`.trim() || 'Pracownik' : ''}
       >
         {editing && (
-          <EmployeeForm key={editing.id} employee={editing} positions={positions} onDone={() => setEditing(null)} />
+          <EmployeeForm
+            key={editing.id}
+            employee={editing}
+            positions={positions}
+            locationId={locationId}
+            onDone={() => setEditing(null)}
+          />
         )}
       </Sheet>
     </div>
@@ -154,6 +160,7 @@ function EmployeeList({
               <Tag tone="warn">Bez stanowiska</Tag>
             )}
             {e.is_manager && <Tag tone="accent">Kierownik</Tag>}
+            {e.is_home === false && <Tag>{`Lokal główny: ${e.home_location_name}`}</Tag>}
           </span>
           <span className="flex flex-wrap gap-1">
             <Tag tone={EXPERIENCE[e.experience].tone}>{EXPERIENCE[e.experience].label}</Tag>
@@ -180,7 +187,17 @@ type Level = 1 | 2 | 3
 
 const toNumber = (value: string) => (value.trim() === '' ? null : Number(value))
 
-function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; positions: PositionOut[]; onDone: () => void }) {
+function EmployeeForm({
+  employee,
+  positions,
+  locationId,
+  onDone,
+}: {
+  employee: EmployeeOut
+  positions: PositionOut[]
+  locationId: string
+  onDone: () => void
+}) {
   const update = useUpdateEmployee()
   const queryClient = useQueryClient()
   const [chosen, setChosen] = useState<string[]>(employee.position_ids)
@@ -201,7 +218,8 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    const data: EmployeeIn = { revision: employee.revision }
+    // Positions and their levels change only in this location (a person can work in several).
+    const data: EmployeeIn = { revision: employee.revision, location_id: locationId }
     if (first !== employee.first_name) data.first_name = first
     if (last !== employee.last_name) data.last_name = last
     if (experience !== employee.experience) data.experience = experience
@@ -330,12 +348,18 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
           hint="Puste = bez limitu."
         />
       </div>
-      <CheckField
-        label="W grafiku"
-        hint="Odznacz, gdy ktoś odchodzi albo długo nie pracuje. Dawne zmiany tej osoby zostaną."
-        checked={active}
-        onChange={(e) => setActive(e.target.checked)}
-      />
+      {employee.is_home === false ? (
+        <p className="m-0 text-sm text-ink-muted">
+          {`Lokal główny tej osoby to ${employee.home_location_name}. Godziny i doświadczenie są wspólne dla wszystkich jej lokali. Wyłączyć ją z grafiku może kierownik lokalu głównego.`}
+        </p>
+      ) : (
+        <CheckField
+          label="W grafiku"
+          hint="Odznacz, gdy ktoś odchodzi albo długo nie pracuje. Dawne zmiany tej osoby zostaną."
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
+        />
+      )}
       {!active && employee.is_active && (employee.draft_shifts ?? 0) > 0 && (
         <p role="alert" className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
           {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Po zapisaniu ułóż grafik od nowa albo przenieś je ręcznie.`}

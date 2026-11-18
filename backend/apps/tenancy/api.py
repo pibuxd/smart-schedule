@@ -325,7 +325,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
     from apps.scheduling.editing import latest_version, manual_changes
     from apps.scheduling.generation import ACTIVE
     from apps.scheduling.models import GenerationRun, SchedulePeriod
-    from apps.staffing.models import EmployeeProfile
+    from apps.staffing.models import EmployeeProfile, works_in_q
 
     periods = ctx.qs(SchedulePeriod).filter(location=location).select_related("location")
     period = periods.filter(end__gte=today).order_by("start").first() or periods.order_by("-start").first()
@@ -333,7 +333,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
         return None
     people = list(
         ctx.qs(EmployeeProfile)
-        .filter(home_location=location, is_active=True)
+        .filter(works_in_q(location), is_active=True)
         .select_related("membership__user")
         .order_by("membership__user__last_name", "membership__user__first_name")
     )
@@ -367,7 +367,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
 
 
 def _setup_missing(ctx, location: Location) -> list[SetupStep]:
-    from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule
+    from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule, works_in_q
 
     checks: list[tuple[SetupStep, object]] = [
         ("positions", Position),
@@ -375,7 +375,7 @@ def _setup_missing(ctx, location: Location) -> list[SetupStep]:
         ("staffing", StaffingRule),
     ]
     missing: list[SetupStep] = [step for step, model in checks if not ctx.qs(model).filter(location=location).exists()]
-    if not ctx.qs(EmployeeProfile).filter(home_location=location, is_active=True).exists():
+    if not ctx.qs(EmployeeProfile).filter(works_in_q(location), is_active=True).exists():
         missing.append("employees")
     return missing
 
@@ -386,7 +386,7 @@ def manager_overview(request, company_id: UUID):
     from django.utils import timezone
 
     from apps.billing.services import subscription_state
-    from apps.staffing.models import EmployeeProfile
+    from apps.staffing.models import EmployeeProfile, works_in_q
 
     ctx = tenant_context(request, company_id)
     ctx.require_manager()
@@ -399,7 +399,7 @@ def manager_overview(request, company_id: UUID):
         summaries.append(
             LocationSummaryOut(
                 **_location_out(location).dict(),
-                employees=ctx.qs(EmployeeProfile).filter(home_location=location, is_active=True).count(),
+                employees=ctx.qs(EmployeeProfile).filter(works_in_q(location), is_active=True).count(),
                 pending_invitations=ctx.qs(Invitation)
                 .filter(location=location, status=InvitationStatus.PENDING)
                 .count(),

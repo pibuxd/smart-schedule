@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -38,6 +38,7 @@ from apps.staffing.models import (
     ShiftType,
     StaffingException,
     StaffingRule,
+    works_in_q,
 )
 from apps.tenancy.models import Location
 from engine.problem import (
@@ -180,6 +181,10 @@ def _employee_name(profile: EmployeeProfile) -> str:
 
 
 class _Reader:
+    # Shifts from the newest drafts of other locations count as taken (only when generating; editing and
+    # publishing check the published schedules of other locations).
+    include_drafts = True
+
     def __init__(self, periods: Sequence[SchedulePeriod], today: date | None) -> None:
         check_periods(periods)
         self.periods = list(periods)
@@ -327,17 +332,27 @@ class _Reader:
     def employees(self, referenced: set[str]) -> list[Employee]:
         rows = list(
             self.qs(EmployeeProfile)
-            .filter(Q(home_location__in=self.location_ids, is_active=True) | Q(pk__in=referenced))
+            .filter(Q(works_in_q(self.location_ids), is_active=True) | Q(pk__in=referenced))
             .select_related("membership__user")
             .order_by("pk")
         )
         ids = [p.pk for p in rows]
+        extra: dict = defaultdict(set)
+        for profile_id, location_id in EmployeeProfile.extra_locations.through.objects.filter(  # tenant-ok: profiles
+            employeeprofile_id__in=ids
+        ).values_list("employeeprofile_id", "location_id"):
+            extra[profile_id].add(location_id)
+        here_ids = set(self.location_ids)
+
+        def works_here(p: EmployeeProfile) -> bool:
+            return p.home_location_id in here_ids or bool(extra[p.pk] & here_ids)
+
         # A person from another location (borrowed, or taking a given-away shift) counts as having a position
         # here when one of their own positions has the same name (positions are per location).
         here = defaultdict(set)
         for pk, name in self.qs(Position).filter(location__in=self.location_ids).values_list("pk", "name"):
             here[name.casefold()].add(str(pk))
-        away = {p.pk for p in rows if p.home_location_id not in self.location_ids}
+        away = {p.pk for p in rows if not works_here(p)}
         positions: dict = defaultdict(set)
         for profile_id, position_id, name in EmployeeProfile.positions.through.objects.filter(
             employeeprofile_id__in=ids
@@ -364,12 +379,13 @@ class _Reader:
                 id=str(p.pk),
                 name=_employee_name(p),
                 home_location=str(p.home_location_id),
+                extra_locations=frozenset(str(loc) for loc in extra[p.pk]),
                 positions=frozenset(positions[p.pk]),
                 max_hours_month=p.max_hours_month,
                 target_hours_month=p.target_hours_month,
                 experience=p.experience,
                 experience_by_position=levels[p.pk],
-                available=p.is_active and p.home_location_id in self.location_ids,
+                available=p.is_active and works_here(p),
             )
             for p in rows
         ]
@@ -392,16 +408,38 @@ class _Reader:
             for a in rows
         ]
 
+    def external_versions(self) -> list:
+        """Versions of other periods whose shifts the same people already have: the published one of each period,
+        and (when generating) its newest draft instead, if there is one newer, so that locations arranged one after
+        another do not give a person the same hours twice (docs/plan.md, section 24)."""
+        statuses = [ScheduleVersion.Status.PUBLISHED]
+        if self.include_drafts:
+            statuses.append(ScheduleVersion.Status.DRAFT)
+        newest: dict = {}
+        rows = (
+            self.qs(ScheduleVersion)
+            .filter(
+                status__in=statuses,
+                period__start__lte=self.end + EXTERNAL_MARGIN,
+                period__end__gte=self.start - EXTERNAL_MARGIN,
+            )
+            .exclude(period__in=self.periods)
+            .order_by("number")
+            .values_list("pk", "period_id")
+        )
+        for version_id, period_id in rows:
+            newest[period_id] = version_id
+        return list(newest.values())
+
     def external_shifts(self, employee_ids: list[str]) -> list[ExternalShift]:
         rows = (
             self.qs(Assignment)
             .filter(
                 employee__in=employee_ids,
-                shift__version__status=ScheduleVersion.Status.PUBLISHED,
+                shift__version__in=self.external_versions(),
                 shift__date__range=(self.start - EXTERNAL_MARGIN, self.end + EXTERNAL_MARGIN),
             )
-            .exclude(shift__version__period__in=self.periods)
-            .select_related("shift", "shift__location")
+            .select_related("shift", "shift__location", "shift__version")
         )
         return [
             ExternalShift(
@@ -409,7 +447,8 @@ class _Reader:
                 date=a.shift.date,
                 start=a.shift.start_at.astimezone(self.tz),
                 end=a.shift.end_at.astimezone(self.tz),
-                label=f"{a.shift.date:%d.%m} {a.shift.location.name}",
+                label=f"{a.shift.date:%d.%m} {a.shift.location.name}"
+                + (" (szkic)" if a.shift.version.status == ScheduleVersion.Status.DRAFT else ""),
             )
             for a in rows
         ]
@@ -426,7 +465,11 @@ class _Reader:
 
     def requests(self, employee_ids: set[str]) -> list[Request]:
         result = []
-        rows = self.qs(TextRequest).filter(TextRequest.for_periods(self.periods), manager_rejected=False)
+        rows = (
+            self.qs(TextRequest)
+            .filter(TextRequest.for_periods(self.periods), manager_rejected=False)
+            .select_related("period")
+        )
         for row in rows.exclude(
             status__in=[TextRequest.Status.REJECTED, TextRequest.Status.ANSWERED, TextRequest.Status.SUPERSEDED]
         ).order_by("created_at"):
@@ -462,6 +505,8 @@ class _Reader:
                     min_days=_min_days(data),
                     shifts_per_day=_shifts_per_day(data),
                     summary=str(data.get("summary") or row.text[:200]),
+                    # A request for a month (no period) is about the person: it counts where they work.
+                    location=str(row.period.location_id) if row.period_id else None,
                 )
             )
         return result + self.instructions(employee_ids)
@@ -487,7 +532,7 @@ class _Reader:
             )
             if request is not None:
                 places[row.location_id] = rank
-                result.append(request)
+                result.append(replace(request, location=str(row.location_id)))
         return result
 
     def weights(self) -> WeightProfile:
@@ -548,6 +593,8 @@ class _Reader:
 
 class _VersionReader(_Reader):
     """The slots and people of one saved version, as they were (not as the settings say today)."""
+
+    include_drafts = False
 
     def __init__(self, version: ScheduleVersion, extra_employees: Sequence[str] = ()) -> None:
         # No frozen days: the version is read as a whole.

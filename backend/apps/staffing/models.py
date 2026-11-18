@@ -186,6 +186,11 @@ class EmployeeProfile(CompanyOwnedModel):
     home_location = models.ForeignKey(
         Location, on_delete=models.RESTRICT, related_name="employees", verbose_name="lokal domowy"
     )
+    # Other locations of the company where the person also works (docs/plan.md, section 24). The generator of each of
+    # them may put the person in; availability and hours are shared.
+    extra_locations = models.ManyToManyField(
+        Location, blank=True, related_name="extra_employees", verbose_name="lokale dodatkowe"
+    )
     positions = models.ManyToManyField(Position, blank=True, related_name="employees", verbose_name="stanowiska")
     experience = models.PositiveSmallIntegerField(
         "stopień doświadczenia", choices=Experience.choices, default=Experience.SKILLED
@@ -209,6 +214,25 @@ class EmployeeProfile(CompanyOwnedModel):
 
     def __str__(self) -> str:
         return str(self.membership.user)
+
+    def location_ids(self) -> set:
+        """The main location and every extra one."""
+        return {self.home_location_id, *self.extra_locations.values_list("pk", flat=True)}
+
+    def works_in(self, location) -> bool:
+        location_id = getattr(location, "pk", location)
+        return self.home_location_id == location_id or self.extra_locations.filter(pk=location_id).exists()
+
+
+def works_in_q(locations, prefix: str = "") -> Q:
+    """People (EmployeeProfile, or a model with `prefix` + "home_location") working in any of `locations`:
+    as their main location or an extra one. A subquery, so there are no duplicate rows."""
+    ids = [getattr(loc, "pk", loc) for loc in locations] if isinstance(locations, list | tuple | set) else None
+    if ids is None:
+        ids = [getattr(locations, "pk", locations)]
+    extra = EmployeeProfile.extra_locations.through.objects.filter(location_id__in=ids).values("employeeprofile_id")
+    pk = f"{prefix}pk" if prefix else "pk"
+    return Q(**{f"{prefix}home_location__in": ids}) | Q(**{f"{pk}__in": extra})
 
 
 class PositionExperience(CompanyOwnedModel):

@@ -182,7 +182,7 @@ class _Builder:
         return fixed
 
     def _eligible(self, employee: Employee, slot: Slot) -> bool:
-        if not employee.available or employee.home_location != slot.location or slot.position not in employee.positions:
+        if not employee.available or not employee.works_in(slot.location) or slot.position not in employee.positions:
             return False
         if self.p.availability_for(employee.id, slot) == AvailabilityState.CANNOT:
             return False
@@ -334,7 +334,8 @@ class _Builder:
         return {key: self.share * 100 * w / total for key, w in weights.items()}
 
     def employees_of(self, location: str) -> list[Employee]:
-        return [e for e in self.p.employees if e.home_location == location]
+        """Everyone who works in the location: as their main location or an extra one (as in the validator)."""
+        return [e for e in self.p.employees if e.works_in(location)]
 
     def slots_of(self, location: str) -> list[Slot]:
         return [s for s in self.p.slots if s.location == location]
@@ -436,8 +437,11 @@ class _Builder:
     def _monthly_hours(self, rule: RuleConfig, hard: bool, points: float, attr: str) -> None:
         shares = self._month_shares()
         people = [e for e in self.employees_of(rule.location) if getattr(e, attr) is not None]
+        if attr == "target_hours_month":  # as in the validator: the target only in the main location
+            people = [e for e in people if e.home_location == rule.location]
         for employee in people:
             monthly = float(getattr(employee, attr))
+            elsewhere = self.p.minutes_elsewhere(employee.id, self.p.period_start, self.p.period_end)
             expected = sum(monthly * share * 60 for share in shares.values())
             per_month: dict[tuple[int, int], list] = defaultdict(list)
             for slot, var in self.x_of_emp.get(employee.id, ()):
@@ -449,6 +453,8 @@ class _Builder:
                 bound = monthly * share * 60
                 if attr == "max_hours_month":
                     bound *= 1 + max_hours_tolerance(rule)
+                bound = max(0.0, bound - elsewhere.get(month, 0))  # minutes already worked in other locations
+                if attr == "max_hours_month":
                     if hard:
                         if per_month.get(month):
                             self.m.add(hours <= math.floor(bound))
@@ -662,7 +668,7 @@ class _Builder:
                     and a.state == AvailabilityState.PREFER
                     and p.period_start <= a.date <= p.period_end
                 )
-                possible = max(1.0, min(marked, self._per_person_estimate(p.employee_by_id[employee_id].home_location)))
+                possible = max(1.0, min(marked, self._per_person_estimate(p.main_location(employee_id))))
                 for day, vars_ in by_day.items():
                     self.add_penalty(-weight / possible, self._or(vars_, f"prefer[{employee_id},{day}]"))
             elif measure.request_id is not None:
@@ -672,7 +678,7 @@ class _Builder:
         own = [(s, v) for s, v in self.x_of_emp.get(request.employee, ()) if request.covers(s.date)]
         if not own:
             return
-        location = self.p.employee_by_id[request.employee].home_location
+        location = self.p.request_location(request)
         covered_days = len(request.dates) if request.dates else (self.p.period_end - self.p.period_start).days + 1
         period_days = (self.p.period_end - self.p.period_start).days + 1
         estimate = max(1.0, self._per_person_estimate(location) * min(1.0, covered_days / period_days))

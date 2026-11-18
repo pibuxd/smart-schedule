@@ -1537,7 +1537,8 @@ export const getLocationEmployeesUrl = (locationId: string,) => {
 }
 
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export const locationEmployees = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<locationEmployeesResponse> => {
@@ -1585,7 +1586,8 @@ export type LocationEmployeesQueryError = ErrorOut
 
 
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(
@@ -1599,7 +1601,8 @@ export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationE
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(
@@ -1613,7 +1616,8 @@ export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(
@@ -1621,7 +1625,8 @@ export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(

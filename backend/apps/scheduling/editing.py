@@ -23,7 +23,7 @@ from ninja.errors import HttpError
 from apps.notifications.models import Notification
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version
-from apps.staffing.models import EmployeeProfile
+from apps.staffing.models import EmployeeProfile, works_in_q
 from engine.explain import new_soft_violations, without_pin
 from engine.problem import Problem
 from engine.scoring import Scores, score
@@ -106,6 +106,48 @@ def _resolve(loaded: LoadedVersion, changes: Mapping[str, str | None], today: da
     return result
 
 
+def draft_clashes(loaded: LoadedVersion, by_key: Mapping[str, str | None]) -> list[str]:
+    """Warnings when a person put on a shift has a shift at the same time in a draft of another location (not
+    published yet, so not a hard problem: docs/plan.md, section 24)."""
+    slots = loaded.problem.slot_by_id
+    wanted = {key: employee for key, employee in by_key.items() if employee and key in slots}
+    if not wanted:
+        return []
+    names = {e.id: e.name for e in loaded.problem.employees}
+    version = loaded.version
+    newer_than_published = {}
+    for period_id, status in (
+        ScheduleVersion.objects.for_company(version.company_id)
+        .filter(status__in=[ScheduleVersion.Status.DRAFT, ScheduleVersion.Status.PUBLISHED])
+        .exclude(period_id=version.period_id)
+        .filter(period__start__lte=version.period.end, period__end__gte=version.period.start)
+        .order_by("number")
+        .values_list("period_id", "status")
+    ):
+        newer_than_published[period_id] = status == ScheduleVersion.Status.DRAFT
+    drafts = (
+        Assignment.objects.for_company(version.company_id)
+        .filter(
+            employee__in=set(wanted.values()),
+            shift__version__status=ScheduleVersion.Status.DRAFT,
+            shift__version__period__in=[p for p, is_draft in newer_than_published.items() if is_draft],
+        )
+        .select_related("shift__location")
+    )
+    result = []
+    for assignment in drafts:
+        shift = assignment.shift
+        for key, employee in wanted.items():
+            slot = slots[key]
+            if str(assignment.employee_id) == employee and shift.start_at < slot.end and slot.start < shift.end_at:
+                local = timezone.localtime(shift.start_at)
+                result.append(
+                    f"{names.get(employee, 'Ta osoba')} ma w tym czasie zmianę w szkicu lokalu {shift.location.name} "
+                    f"({local:%d.%m %H:%M}). Ten lokal musi ją przesunąć przed publikacją."
+                )
+    return list(dict.fromkeys(result))
+
+
 def check_changes(
     loaded: LoadedVersion, changes: Mapping[str, str | None], today: date | None = None
 ) -> tuple[CheckResult, dict[str, str | None]]:
@@ -120,7 +162,7 @@ def check_changes(
     after = validate(problem, after_schedule)
     known = {v.message for v in before.hard}
     problems = [v.message for v in after.hard if v.message not in known]
-    warnings = new_soft_violations(before, after)
+    warnings = draft_clashes(loaded, by_key) + new_soft_violations(before, after)
     result = CheckResult(
         ok=not problems,
         problems=problems,
@@ -141,7 +183,7 @@ def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], u
         result, by_key = check_changes(loaded, changes)
         if not result.ok:
             raise HttpError(409, "Tej zmiany nie można zapisać: " + " ".join(result.problems))
-        home = {e.id: e.home_location for e in loaded.problem.employees}
+        people = loaded.problem.employee_by_id
         rows = Assignment.objects.for_company(version.company_id).filter(
             shift__version=version, shift__slot_key__in=list(by_key)
         )
@@ -151,7 +193,9 @@ def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], u
                 continue
             assignment.employee_id = employee_id
             assignment.manual = True
-            assignment.borrowed = employee_id is not None and home.get(employee_id) != str(assignment.shift.location_id)
+            assignment.borrowed = employee_id is not None and not (
+                employee_id in people and people[employee_id].works_in(str(assignment.shift.location_id))
+            )
             # A new person (or a hole) is not pinned until the manager pins it, as check_changes assumed.
             assignment.pinned = False
             assignment.save(update_fields=["employee", "manual", "borrowed", "pinned"])
@@ -348,7 +392,7 @@ def _notify_published(version: ScheduleVersion, *, first: bool) -> None:
     )
     profiles = EmployeeProfile.objects.for_company(version.company_id).filter(
         pk__in=in_schedule.values("employee")
-    ) | EmployeeProfile.objects.for_company(version.company_id).filter(home_location=period.location, is_active=True)
+    ) | EmployeeProfile.objects.for_company(version.company_id).filter(works_in_q(period.location), is_active=True)
     user_ids = set(profiles.values_list("membership__user_id", flat=True))
     payload = {
         "period_id": str(period.pk),
