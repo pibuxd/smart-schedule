@@ -27,6 +27,7 @@ import { Route as KierownikPracownicyRouteImport } from './routes/kierownik/prac
 import { Route as KierownikLokalLocationIdRouteImport } from './routes/kierownik/lokal.$locationId'
 import { Route as KierownikGrupaGroupIdZasadyRouteImport } from './routes/kierownik/grupa.$groupId/zasady'
 import { Route as KierownikLokalLocationIdIndexRouteImport } from './routes/kierownik/lokal.$locationId/index'
+import { Route as KierownikLokalLocationIdAsystentRouteImport } from './routes/kierownik/lokal.$locationId/asystent'
 import { Route as KierownikLokalLocationIdDyspozycjeRouteImport } from './routes/kierownik/lokal.$locationId/dyspozycje'
 import { Route as KierownikLokalLocationIdGrafikRouteImport } from './routes/kierownik/lokal.$locationId/grafik'
 import { Route as KierownikLokalLocationIdPracownicyRouteImport } from './routes/kierownik/lokal.$locationId/pracownicy'
@@ -125,6 +126,12 @@ const KierownikLokalLocationIdIndexRoute =
     path: '/',
     getParentRoute: () => KierownikLokalLocationIdRoute,
   } as any)
+const KierownikLokalLocationIdAsystentRoute =
+  KierownikLokalLocationIdAsystentRouteImport.update({
+    id: '/asystent',
+    path: '/asystent',
+    getParentRoute: () => KierownikLokalLocationIdRoute,
+  } as any)
 const KierownikLokalLocationIdDyspozycjeRoute =
   KierownikLokalLocationIdDyspozycjeRouteImport.update({
     id: '/dyspozycje',
@@ -173,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/kierownik/': typeof KierownikIndexRoute
   '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
+  '/kierownik/lokal/$locationId/asystent': typeof KierownikLokalLocationIdAsystentRoute
   '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
   '/kierownik/lokal/$locationId/grafik': typeof KierownikLokalLocationIdGrafikRoute
   '/kierownik/lokal/$locationId/pracownicy': typeof KierownikLokalLocationIdPracownicyRoute
@@ -195,6 +203,7 @@ export interface FileRoutesByTo {
   '/kierownik/pracownicy': typeof KierownikPracownicyRoute
   '/kierownik': typeof KierownikIndexRoute
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
+  '/kierownik/lokal/$locationId/asystent': typeof KierownikLokalLocationIdAsystentRoute
   '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
   '/kierownik/lokal/$locationId/grafik': typeof KierownikLokalLocationIdGrafikRoute
   '/kierownik/lokal/$locationId/pracownicy': typeof KierownikLokalLocationIdPracownicyRoute
@@ -221,6 +230,7 @@ export interface FileRoutesById {
   '/kierownik/': typeof KierownikIndexRoute
   '/kierownik/lokal/$locationId': typeof KierownikLokalLocationIdRouteWithChildren
   '/kierownik/grupa/$groupId/zasady': typeof KierownikGrupaGroupIdZasadyRoute
+  '/kierownik/lokal/$locationId/asystent': typeof KierownikLokalLocationIdAsystentRoute
   '/kierownik/lokal/$locationId/dyspozycje': typeof KierownikLokalLocationIdDyspozycjeRoute
   '/kierownik/lokal/$locationId/grafik': typeof KierownikLokalLocationIdGrafikRoute
   '/kierownik/lokal/$locationId/pracownicy': typeof KierownikLokalLocationIdPracownicyRoute
@@ -247,6 +257,7 @@ export interface FileRouteTypes {
     | '/kierownik/'
     | '/kierownik/lokal/$locationId'
     | '/kierownik/grupa/$groupId/zasady'
+    | '/kierownik/lokal/$locationId/asystent'
     | '/kierownik/lokal/$locationId/dyspozycje'
     | '/kierownik/lokal/$locationId/grafik'
     | '/kierownik/lokal/$locationId/pracownicy'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/kierownik/pracownicy'
     | '/kierownik'
     | '/kierownik/grupa/$groupId/zasady'
+    | '/kierownik/lokal/$locationId/asystent'
     | '/kierownik/lokal/$locationId/dyspozycje'
     | '/kierownik/lokal/$locationId/grafik'
     | '/kierownik/lokal/$locationId/pracownicy'
@@ -294,6 +306,7 @@ export interface FileRouteTypes {
     | '/kierownik/'
     | '/kierownik/lokal/$locationId'
     | '/kierownik/grupa/$groupId/zasady'
+    | '/kierownik/lokal/$locationId/asystent'
     | '/kierownik/lokal/$locationId/dyspozycje'
     | '/kierownik/lokal/$locationId/grafik'
     | '/kierownik/lokal/$locationId/pracownicy'
@@ -439,6 +452,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KierownikLokalLocationIdIndexRouteImport
       parentRoute: typeof KierownikLokalLocationIdRoute
     }
+    '/kierownik/lokal/$locationId/asystent': {
+      id: '/kierownik/lokal/$locationId/asystent'
+      path: '/asystent'
+      fullPath: '/kierownik/lokal/$locationId/asystent'
+      preLoaderRoute: typeof KierownikLokalLocationIdAsystentRouteImport
+      parentRoute: typeof KierownikLokalLocationIdRoute
+    }
     '/kierownik/lokal/$locationId/dyspozycje': {
       id: '/kierownik/lokal/$locationId/dyspozycje'
       path: '/dyspozycje'
@@ -494,6 +514,7 @@ const PracownikRouteWithChildren = PracownikRoute._addFileChildren(
 )
 
 interface KierownikLokalLocationIdRouteChildren {
+  KierownikLokalLocationIdAsystentRoute: typeof KierownikLokalLocationIdAsystentRoute
   KierownikLokalLocationIdDyspozycjeRoute: typeof KierownikLokalLocationIdDyspozycjeRoute
   KierownikLokalLocationIdGrafikRoute: typeof KierownikLokalLocationIdGrafikRoute
   KierownikLokalLocationIdPracownicyRoute: typeof KierownikLokalLocationIdPracownicyRoute
@@ -504,6 +525,8 @@ interface KierownikLokalLocationIdRouteChildren {
 
 const KierownikLokalLocationIdRouteChildren: KierownikLokalLocationIdRouteChildren =
   {
+    KierownikLokalLocationIdAsystentRoute:
+      KierownikLokalLocationIdAsystentRoute,
     KierownikLokalLocationIdDyspozycjeRoute:
       KierownikLokalLocationIdDyspozycjeRoute,
     KierownikLokalLocationIdGrafikRoute: KierownikLokalLocationIdGrafikRoute,

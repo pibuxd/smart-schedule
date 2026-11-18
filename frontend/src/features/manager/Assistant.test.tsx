@@ -1,104 +1,177 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { AssistantCommandOut } from '../../api/generated/model'
 import { mockApi, renderScreen } from '../../test/render'
 import { AssistantPanel } from './Assistant'
 import { AsManager } from './test-utils'
 
-const command = {
+const command: AssistantCommandOut = {
   id: 'cmd1',
   text: 'Ania i Kasia nie razem',
   status: 'ready',
-  reply: 'Dodam polecenie, żeby Ania i Kasia nie pracowały razem.',
+  reply: 'Proponuję osobne zmiany.',
   question: null,
-  lines: ['Nowe polecenie: Ania i Kasia: osobno, nie na tej samej zmianie.'],
+  lines: ['Ania i Kasia: osobno, nie na tej samej zmianie.'],
   effects: [],
-  notes: ['Polecenia mają kolejność: to wyżej wygrywa, gdy nie da się spełnić wszystkich.'],
+  notes: [],
   can_apply: true,
-  created_at: '2026-11-13T10:00:00Z',
+  created_at: '2026-11-18T10:00:00Z',
 }
-
-const instructions = (items: { id: string; text: string; active: boolean }[], enabled = true) => ({
+const instructions = (items: { id: string; text: string; active: boolean }[] = [], enabled = true) => ({
   assistant_enabled: enabled,
   items,
 })
-
-const panel = () =>
+const panel = (readOnly = false) =>
   renderScreen(
-    <AsManager>
+    <AsManager readOnly={readOnly}>
       <AssistantPanel locationId="l1" />
     </AsManager>,
   )
 
-describe('AssistantPanel', () => {
+function chatApi(initial: AssistantCommandOut[] = []) {
+  let rows = [...initial]
+  const calls = mockApi((method, path, body) => {
+    if (path.endsWith('/instructions')) return [200, instructions()]
+    if (path === '/api/locations/l1/assistant-commands') {
+      if (method === 'GET') return [200, rows]
+      const row = { ...command, id: `cmd${rows.length + 1}`, text: (body as { text: string }).text }
+      rows = [...rows, row]
+      return [201, row]
+    }
+    if (path.endsWith('/apply') || path.endsWith('/dismiss')) {
+      const id = path.split('/')[3]
+      rows = rows.map((row) =>
+        row.id === id
+          ? { ...row, status: path.endsWith('/apply') ? 'applied' : 'dismissed', can_apply: false }
+          : row,
+      )
+      return [200, rows.find((row) => row.id === id)]
+    }
+    return [404, { detail: 'Nie znaleziono.' }]
+  })
+  return calls
+}
+
+describe('Assistant chat', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('sends a command, shows the plan in plain words and changes nothing until accepted', async () => {
-    let applied = false
-    const calls = mockApi((method, path) => {
-      if (path === '/api/locations/l1/instructions') {
-        return [200, instructions(applied ? [{ id: 'i1', text: 'Ania i Kasia: osobno', active: true }] : [])]
-      }
-      if (method === 'POST' && path === '/api/locations/l1/assistant-commands') {
-        return [201, { ...command, status: 'queued', lines: [], notes: [], reply: null, can_apply: false }]
-      }
-      if (path === '/api/assistant-commands/cmd1/apply') {
-        applied = true
-        return [200, { ...command, status: 'applied', can_apply: false }]
-      }
-      if (path === '/api/assistant-commands/cmd1') return [200, applied ? { ...command, status: 'applied' } : command]
-      return [404, { detail: 'nie ma' }]
-    })
+  it('retains the message and proposal after acceptance, and does not apply before the click', async () => {
+    const calls = chatApi()
     panel()
-    expect(await screen.findByText(/Nie ma jeszcze żadnych/)).toBeInTheDocument()
-
-    fireEvent.change(screen.getByLabelText('Twoje polecenie'), { target: { value: 'Ania i Kasia nie razem' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Wyślij asystentowi' }))
-
-    expect(await screen.findByText(/Nowe polecenie: Ania i Kasia: osobno/)).toBeInTheDocument()
-    expect(screen.getByText(/to wyżej wygrywa/)).toBeInTheDocument()
+    fireEvent.change(await screen.findByLabelText('Twoja wiadomość'), { target: { value: command.text } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Wyślij wiadomość' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij wiadomość' }))
+    expect(await screen.findByText(command.lines[0])).toBeInTheDocument()
     expect(calls.some((c) => c.url.endsWith('/apply'))).toBe(false)
-
     fireEvent.click(screen.getByRole('button', { name: 'Zatwierdź zmiany' }))
     expect(await screen.findByText(/Ustawienia zapisane/)).toBeInTheDocument()
-    expect(await screen.findByText('Ania i Kasia: osobno')).toBeInTheDocument()
+    expect(screen.getByText(command.text)).toBeInTheDocument()
+    expect(screen.getByText(command.lines[0])).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Zatwierdź zmiany' })).not.toBeInTheDocument()
   })
 
-  it('says so when the assistant is switched off', async () => {
-    mockApi(() => [200, instructions([], false)])
+  it('loads prior replies and keeps successive messages after reopening', async () => {
+    chatApi([{ ...command, can_apply: false, lines: [], reply: 'Anna ma 120 godzin.' }])
+    const first = panel()
+    expect(await screen.findByText('Anna ma 120 godzin.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Twoja wiadomość'), { target: { value: 'A Kasia?' } })
+    fireEvent.keyDown(screen.getByLabelText('Twoja wiadomość'), { key: 'Enter' })
+    expect(await screen.findByText('A Kasia?')).toBeInTheDocument()
+    expect(screen.getByText('Anna ma 120 godzin.')).toBeInTheDocument()
+    first.unmount()
+    panel()
+    expect(await screen.findByText('A Kasia?')).toBeInTheDocument()
+    expect(screen.getByText('Anna ma 120 godzin.')).toBeInTheDocument()
+  })
+
+  it('prefills a suggestion without submitting it, and Shift+Enter does not send', async () => {
+    const calls = chatApi()
+    panel()
+    const starter = await screen.findByRole('button', { name: 'Sprawdź dyspozycje' })
+    await waitFor(() => expect(starter).toBeEnabled())
+    fireEvent.click(starter)
+    const field = screen.getByLabelText('Twoja wiadomość')
+    expect(field).toHaveValue('Kto nie oddał dyspozycji na najbliższy okres?')
+    fireEvent.keyDown(field, { key: 'Enter', shiftKey: true })
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('preserves the draft after a failed send', async () => {
+    mockApi((method, path) =>
+      method === 'POST' ? [500, {}] : [200, path.endsWith('/instructions') ? instructions() : []],
+    )
+    panel()
+    const field = await screen.findByLabelText('Twoja wiadomość')
+    await waitFor(() => expect(field).toBeEnabled())
+    fireEvent.change(field, { target: { value: 'Moja ważna wiadomość' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij wiadomość' }))
+    expect(await screen.findByText(/Tekst pozostał w polu wiadomości/)).toBeInTheDocument()
+    expect(field).toHaveValue('Moja ważna wiadomość')
+  })
+
+  it('keeps informational replies without approval or close buttons', async () => {
+    chatApi([{ ...command, reply: 'Anna ma 120 godzin.', lines: [], can_apply: false }])
+    panel()
+    expect(await screen.findByText('Anna ma 120 godzin.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Zatwierdź zmiany' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Zamknij' })).not.toBeInTheDocument()
+  })
+
+  it('keeps rejected plans in the conversation', async () => {
+    chatApi([command])
+    panel()
+    fireEvent.click(await screen.findByRole('button', { name: 'Odrzuć' }))
+    expect(await screen.findByText(/Propozycja odrzucona/)).toBeInTheDocument()
+    expect(screen.getByText(command.lines[0])).toBeInTheDocument()
+  })
+
+  it('disables posting and approvals in read-only mode', async () => {
+    const calls = chatApi([command])
+    panel(true)
+    expect(await screen.findByRole('button', { name: 'Zatwierdź zmiany' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Odrzuć' })).toBeDisabled()
+    expect(screen.getByLabelText('Twoja wiadomość')).toBeDisabled()
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('keeps history readable when the assistant is off', async () => {
+    mockApi((_method, path) => [200, path.endsWith('/instructions') ? instructions([], false) : [command]])
     panel()
     expect(await screen.findByText(/Asystent jest wyłączony/)).toBeInTheDocument()
-    expect(screen.queryByLabelText('Twoje polecenie')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Twoja wiadomość')).toBeDisabled()
+    expect(screen.getByText(command.text)).toBeInTheDocument()
   })
 
-  it('shows a factual reply without suggesting another command or offering approval', async () => {
-    mockApi((method, path) => {
-      if (path.endsWith('/instructions')) return [200, instructions([])]
-      return [method === 'POST' ? 201 : 200, {
-        ...command, reply: 'Anna ma 120 godzin w opublikowanym grafiku.', lines: [], notes: [], can_apply: false,
-      }]
-    })
+  it('offers a read retry for a delayed answer without resending the prompt', async () => {
+    const calls = chatApi([
+      { ...command, status: 'queued', created_at: new Date(Date.now() - 100_000).toISOString() },
+    ])
     panel()
-    fireEvent.change(await screen.findByLabelText('Twoje polecenie'), { target: { value: 'Ile godzin ma Anna?' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Wyślij asystentowi' }))
-    expect(await screen.findByText('Anna ma 120 godzin w opublikowanym grafiku.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Zatwierdź zmiany' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/Napisz polecenie inaczej/)).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Sprawdź odpowiedź' }))
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0)
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url.endsWith('/assistant-commands')).length).toBeGreaterThan(1),
+    )
   })
 
-  it('reorders and removes instructions', async () => {
+  it('reorders and removes accepted instructions', async () => {
     const items = [
       { id: 'i1', text: 'Ania i Kasia: osobno', active: true },
-      { id: 'i2', text: 'Marek: tylko zmiana „Ranna”', active: true },
+      { id: 'i2', text: 'Marek: rano', active: true },
     ]
-    const calls = mockApi((method) => (method === 'DELETE' ? [204, null] : [200, instructions(items)]))
+    const calls = mockApi((method, path) =>
+      path.endsWith('/assistant-commands')
+        ? [200, []]
+        : method === 'DELETE'
+          ? [204, null]
+          : [200, instructions(items)],
+    )
     panel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Wyżej: Marek: tylko zmiana „Ranna”' }))
-    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
+    fireEvent.click(await screen.findByRole('button', { name: 'Wyżej: Marek: rano' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
     expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ ids: ['i2', 'i1'] })
-
     fireEvent.click(screen.getByRole('button', { name: 'Usuń: Ania i Kasia: osobno' }))
-    await vi.waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true))
-    expect(calls.find((c) => c.method === 'DELETE')!.url).toBe('/api/instructions/i1')
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true))
   })
 })

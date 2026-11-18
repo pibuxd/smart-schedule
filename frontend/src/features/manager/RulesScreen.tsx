@@ -16,7 +16,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { ArrowDown, ArrowUp, GripVertical, MessageCircle } from 'lucide-react'
 import { useState } from 'react'
 
 import { useManagerOffers } from '../../api/generated/marketplace/marketplace'
@@ -29,7 +30,6 @@ import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
-import { AssistantPanel } from './Assistant'
 import { useManager } from './ManagerContext'
 
 type Scope = 'location' | 'group'
@@ -68,10 +68,13 @@ export function RulesScreen({ scope, scopeId }: { scope: Scope; scopeId: string 
     )
   }
   const data = rules.data.data as RulesOut
-  // The assistant's panel stays mounted while the list below is rebuilt after its plan is accepted.
   return (
     <div className="grid gap-8">
-      {scope === 'location' && <AssistantPanel locationId={scopeId} />}
+      {scope === 'location' && <Link to="/kierownik/lokal/$locationId/asystent" params={{ locationId: scopeId }} className="flex items-center gap-4 rounded-lg border border-line bg-surface p-4 text-ink no-underline hover:border-accent">
+        <MessageCircle size={24} className="shrink-0 text-accent" aria-hidden="true" />
+        <span className="min-w-0 flex-1"><b className="block font-semibold">Wolisz opisać zmianę?</b><span className="text-sm text-ink-muted">Porozmawiaj z asystentem. Pokaże propozycję do zatwierdzenia.</span></span>
+        <ArrowUp className="shrink-0 rotate-45 text-accent" size={20} aria-hidden="true" />
+      </Link>}
       <RulesEditor key={JSON.stringify(data.items)} data={data} scope={scope} scopeId={scopeId} />
       {scope === 'location' && <HandoverRule locationId={scopeId} />}
     </div>

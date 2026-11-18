@@ -66,6 +66,7 @@
 
   --shadow-*: initial;
   --shadow-sheet: 0 -12px 32px -16px rgb(23 33 47 / 0.35);
+  --shadow-chat: 0 8px 30px -18px rgb(23 33 47 / 0.18);
 }
 
 :root {
@@ -110,6 +111,16 @@
 }
 
 @layer components {
+  .assistant-shell {
+    display: flex;
+    flex-direction: column;
+    height: clamp(540px, calc(100dvh - 300px), 840px);
+  }
+  @media (max-width: 639px) {
+    .assistant-shell {
+      height: max(460px, calc(100dvh - 255px));
+    }
+  }
   /* Availability states: colour + pattern (the icon is in the markup). */
   .avail-cannot {
     color: var(--color-cannot);

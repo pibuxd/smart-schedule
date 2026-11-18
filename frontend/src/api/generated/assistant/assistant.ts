@@ -53,6 +53,143 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
+export type assistantHistoryResponse200 = {
+  data: AssistantCommandOut[]
+  status: 200
+}
+
+export type assistantHistoryResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type assistantHistoryResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type assistantHistoryResponseSuccess = (assistantHistoryResponse200) & {
+  headers: Headers;
+};
+export type assistantHistoryResponseError = (assistantHistoryResponse403 | assistantHistoryResponse404) & {
+  headers: Headers;
+};
+
+export type assistantHistoryResponse = (assistantHistoryResponseSuccess | assistantHistoryResponseError)
+
+export const getAssistantHistoryUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/assistant-commands`
+}
+
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export const assistantHistory = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<assistantHistoryResponse> => {
+
+  return apiFetch<assistantHistoryResponse>(getAssistantHistoryUrl(locationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAssistantHistoryQueryKey = (locationId: string,) => {
+    return [
+    `/api/locations/${locationId}/assistant-commands`
+    ] as const;
+    }
+
+
+export const getAssistantHistoryQueryOptions = <TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAssistantHistoryQueryKey(locationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof assistantHistory>>> = ({ signal }) => assistantHistory(locationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: locationId !== null && locationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AssistantHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof assistantHistory>>>
+export type AssistantHistoryQueryError = ErrorOut
+
+
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof assistantHistory>>,
+          TError,
+          Awaited<ReturnType<typeof assistantHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof assistantHistory>>,
+          TError,
+          Awaited<ReturnType<typeof assistantHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getAssistantHistoryQueryOptions(locationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 export type sendAssistantCommandResponse201 = {
   data: AssistantCommandOut
   status: 201

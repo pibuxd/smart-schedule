@@ -5800,6 +5800,67 @@
       }
     },
     "/api/locations/{location_id}/assistant-commands": {
+      "get": {
+        "operationId": "assistant_history",
+        "summary": "Assistant History",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssistantCommandOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The current manager's latest 50 messages in this location, oldest first.",
+        "tags": [
+          "assistant"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
       "post": {
         "operationId": "send_assistant_command",
         "summary": "Send Assistant Command",

@@ -4,6 +4,12 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Widok rozmowy z asystentem (18.11.2026)
+
+Asystent kierownika ma własną zakładkę „Asystent” w lokalu. Wiadomości i odpowiedzi tworzą rozmowę, pole pisania jest pod nią, a propozycje zawierają osobne przyciski zatwierdzenia i odrzucenia. Przyjęte lub odrzucone propozycje pozostają w historii. Ostatnie 50 wiadomości danego kierownika w lokalu wraca po odświeżeniu; nie oznacza to rozszerzenia pamięci LLM poza istniejące 6 wiadomości z 24 godzin. Zapisane polecenia są w bocznym panelu, dostępnym również na telefonie. Ekran zasad prowadzi do rozmowy linkiem.
+
+Wiadomości pracownika w kalendarzu korzystają z tego samego stylu rozmowy i pola pisania. Zachowują dotychczasowy zakres miesiąca/okresu, możliwość edycji i usunięcia oraz przekazania prośby kierownikowi. Enter wysyła, Shift+Enter dodaje wiersz. Podczas wysyłania nie można wysłać duplikatu. Błędy pozostawiają tekst do poprawy, a nieaktualne odpowiedzi nigdy nie zatwierdzają się same.
+
 ## Poprawki asystenta po niezależnym QA (18.11.2026)
 
 - Polecenie pracy w danym dniu może wskazywać konkretną zmianę. Zapis, opis i ocena generatora zachowują ten sam zakres. Nieobsługiwanej części odpowiedzi modelu nie wolno po cichu pominąć ani zatwierdzić niepełnego planu.

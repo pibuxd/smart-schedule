@@ -107,6 +107,19 @@ def _instructions_out(ctx: TenantContext, location: Location) -> InstructionsOut
     )
 
 
+@router.get(
+    "/locations/{location_id}/assistant-commands",
+    response={200: list[AssistantCommandOut], 403: ErrorOut, 404: ErrorOut},
+)
+def assistant_history(request, location_id: UUID):
+    """The current manager's latest 50 messages in this location, oldest first."""
+    ctx, location = _managed_location(request, location_id)
+    rows = list(
+        ctx.qs(AssistantCommand).filter(location=location, created_by=ctx.user).order_by("-created_at", "-pk")[:50]
+    )
+    return [_command_out(row) for row in reversed(rows)]
+
+
 @router.post(
     "/locations/{location_id}/assistant-commands",
     response={201: AssistantCommandOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 429: ErrorOut},

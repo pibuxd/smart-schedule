@@ -1,237 +1,491 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp } from 'lucide-react'
-import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarCheck,
+  Check,
+  ChevronDown,
+  Clock3,
+  Info,
+  PanelRight,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
+  getAssistantHistoryQueryKey,
   useApplyAssistantCommand,
-  useAssistantCommand,
+  useAssistantHistory,
   useDeleteInstruction,
   useDismissAssistantCommand,
   useLocationInstructions,
   useOrderLocationInstructions,
   useSendAssistantCommand,
+  type assistantHistoryResponse,
 } from '../../api/generated/assistant/assistant'
 import type { AssistantCommandOut, InstructionOut, InstructionsOut } from '../../api/generated/model'
+import { AssistantMark, ChatComposer, ChatMessage, ChatTyping } from '../../components/assistant/Chat'
 import { Button } from '../../components/ui/button'
 import { Tag } from '../../components/ui/field'
 import { InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { cn } from '../../lib/cn'
 import { useManager } from './ManagerContext'
 
-// The assistant answers within seconds; after this long the worker is probably not running.
 const WAIT_MS = 90_000
+const STARTERS = [
+  { icon: CalendarCheck, title: 'Sprawdź dyspozycje', text: 'Kto nie oddał dyspozycji na najbliższy okres?' },
+  {
+    icon: Clock3,
+    title: 'Podsumuj godziny',
+    text: 'Podsumuj godziny pracowników w ostatnim opublikowanym grafiku.',
+  },
+  {
+    icon: SlidersHorizontal,
+    title: 'Zmień zasady',
+    text: 'Chcę zmienić zasady układania grafiku. Jakie mam możliwości?',
+  },
+]
 
-/**
- * "Powiedz asystentowi": the manager writes what should change, the assistant answers with a plan in plain
- * words, and nothing changes until the manager accepts it. Below: the accepted instructions about people,
- * in order of importance.
- */
+/** A persisted conversation. Model memory remains bounded independently of the visible history. */
 export function AssistantPanel({ locationId }: { locationId: string }) {
   const { readOnly } = useManager()
+  const queryClient = useQueryClient()
   const instructions = useLocationInstructions(locationId)
+  const history = useAssistantHistory(locationId, {
+    query: {
+      refetchInterval: (query) => {
+        const result = query.state.data
+        return result?.status === 200 &&
+          result.data.some(
+            (row) => row.status === 'queued' && Date.now() - Date.parse(row.created_at) < WAIT_MS,
+          )
+          ? 1500
+          : false
+      },
+    },
+  })
   const send = useSendAssistantCommand()
   const [text, setText] = useState('')
-  const [commandId, setCommandId] = useState<string | null>(null)
-  const data = instructions.data?.data as InstructionsOut | undefined
-  const enabled = data?.assistant_enabled ?? true
+  const [showInstructions, setShowInstructions] = useState(false)
+  const [now, setNow] = useState(Date.now)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const feedRef = useRef<HTMLDivElement>(null)
+  const follow = useRef(true)
+  const data = instructions.data?.status === 200 ? instructions.data.data : undefined
+  const rows = history.data?.status === 200 ? history.data.data : []
+  const enabled = data?.assistant_enabled ?? false
+  const pendingUntil = Math.max(
+    0,
+    ...rows.filter((r) => r.status === 'queued').map((r) => Date.parse(r.created_at) + WAIT_MS),
+  )
+  const waiting = pendingUntil > now
+  const changeKey = rows.map((r) => `${r.id}:${r.status}`).join(',')
+
+  useEffect(() => {
+    if (pendingUntil <= Date.now()) return
+    const timer = setTimeout(() => setNow(Date.now()), pendingUntil - Date.now() + 20)
+    return () => clearTimeout(timer)
+  }, [pendingUntil])
+  useEffect(() => {
+    const feed = feedRef.current
+    if (feed && follow.current) feed.scrollTop = feed.scrollHeight
+  }, [changeKey, send.isPending])
+
+  const remember = async (row: AssistantCommandOut) => {
+    const queryKey = getAssistantHistoryQueryKey(locationId)
+    await queryClient.cancelQueries({ queryKey })
+    queryClient.setQueryData<assistantHistoryResponse>(queryKey, (old) => ({
+      status: 200,
+      headers: old?.headers ?? new Headers(),
+      data: [...(old?.status === 200 ? old.data : []).filter((r) => r.id !== row.id), row]
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .slice(-50),
+    }))
+    void queryClient.invalidateQueries()
+  }
+  const draft = (value: string) => {
+    setText(value)
+    setShowInstructions(false)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+  const submit = () => {
+    if (readOnly || !enabled || send.isPending || waiting || !text.trim()) return
+    follow.current = true
+    send.mutate(
+      { locationId, data: { text: text.trim() } },
+      {
+        onSuccess: async (response) => {
+          if (response.status !== 201) return
+          await remember(response.data)
+          setText('')
+          requestAnimationFrame(() => inputRef.current?.focus())
+        },
+      },
+    )
+  }
 
   return (
-    <section aria-labelledby="assistant-title" className="grid gap-4 rounded-lg border border-line bg-surface p-5">
-      <div className="grid gap-2">
-        <h2 id="assistant-title" className="m-0 text-xl font-extrabold">
-          Powiedz asystentowi, co zmienić
-        </h2>
-        <p className="m-0 max-w-[75ch] text-ink-muted">
-          Zapytaj o grafik, godziny lub dyspozycje albo napisz, co zmienić, na przykład: „Marek 13 stycznia rano”.
-          Asystent pokaże propozycję ustawień. Zatwierdzenie zapisuje je do następnego układania grafiku.
-          Polecenia o osobach są preferencjami, bez gwarancji przydziału. Asystent nie uruchamia generatora.
-          Zewnętrzna usługa Claude czyta wiadomość, dane tego lokalu i Twoje ostatnie wiadomości z 24 godzin.
-        </p>
-      </div>
-
-      {!enabled && (
-        <p className="m-0 rounded-sm border border-line bg-paper px-3 py-2 text-ink-muted">
-          Asystent jest wyłączony, bo w ustawieniach serwera nie ma klucza do Claude. Zasady możesz ustawić ręcznie na
-          liście poniżej, a prośby pracowników przeczytasz sam w „Dyspozycjach”.
-        </p>
-      )}
-
-      {enabled && (
-        <form
-          className="grid gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!text.trim()) return
-            send.mutate(
-              { locationId, data: { text } },
-              {
-                onSuccess: (response) => {
-                  setCommandId((response.data as AssistantCommandOut).id)
-                  setText('')
-                },
-              },
-            )
-          }}
-        >
-          <label htmlFor="assistant-text" className="font-semibold">
-            Twoje polecenie
-          </label>
-          <textarea
-            id="assistant-text"
-            rows={3}
-            maxLength={1000}
-            value={text}
-            disabled={readOnly}
-            onChange={(event) => setText(event.target.value)}
-            className="min-h-24 rounded-md border-2 border-ink bg-surface p-3 text-base"
-          />
-          {send.isError && <InlineError>{errorMessage(send.error, NETWORK_PROBLEM)}</InlineError>}
-          <div>
-            <Button type="submit" disabled={readOnly || send.isPending || !text.trim()}>
-              {send.isPending ? 'Wysyłam…' : 'Wyślij asystentowi'}
-            </Button>
+    <section
+      aria-label="Asystent grafiku"
+      className="assistant-shell overflow-hidden rounded-lg border border-line bg-surface shadow-chat"
+    >
+      <header className="flex items-center justify-between gap-2 border-b border-grid px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <AssistantMark />
+          <div className="min-w-0">
+            <h2 className="m-0 text-base font-semibold tracking-tight sm:text-lg">
+              Asystent<span className="hidden sm:inline"> grafiku</span>
+            </h2>
+            <p className="m-0 hidden text-xs text-ink-muted sm:block">
+              Mniej układania. Więcej czasu dla zespołu.
+            </p>
           </div>
-        </form>
-      )}
-
-      {commandId && <CommandCard key={commandId} commandId={commandId} onDone={() => setCommandId(null)} />}
-
-      <InstructionList locationId={locationId} loading={instructions.isPending} failed={instructions.isError} data={data} />
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <details className="relative">
+            <summary
+              aria-label="Jak działa asystent"
+              className="flex min-h-(--touch) w-(--touch) cursor-pointer list-none items-center justify-center rounded-md text-ink-muted hover:bg-paper [&::-webkit-details-marker]:hidden"
+            >
+              <Info size={20} aria-hidden="true" />
+            </summary>
+            <div className="absolute top-full right-0 z-20 mt-2 grid w-[min(320px,80vw)] gap-3 rounded-md border border-line bg-surface p-4 text-sm shadow-chat">
+              <b>Ty decydujesz o zmianach</b>
+              <p className="m-0">
+                Zatwierdzenie zapisuje ustawienia do następnego układania grafiku. Polecenia o osobach są
+                preferencjami, bez gwarancji przydziału.
+              </p>
+              <p className="m-0">
+                Claude czyta wiadomości i dane tego lokalu. Pamięta do 6 Twoich poprzednich wiadomości z 24
+                godzin. W historii widzisz ostatnie 50.
+              </p>
+            </div>
+          </details>
+          <button
+            type="button"
+            aria-label="Zapisane polecenia"
+            aria-expanded={showInstructions}
+            onClick={() => setShowInstructions(!showInstructions)}
+            className="flex min-h-(--touch) w-(--touch) cursor-pointer items-center justify-center rounded-md text-ink-muted hover:bg-paper lg:hidden"
+          >
+            <PanelRight aria-hidden="true" size={20} />
+          </button>
+        </div>
+      </header>
+      <div className="flex min-h-0 flex-1">
+        <div className={cn('min-w-0 flex-1 flex-col', showInstructions ? 'hidden lg:flex' : 'flex')}>
+          <div
+            ref={feedRef}
+            onScroll={() => {
+              const f = feedRef.current
+              if (f) follow.current = f.scrollHeight - f.scrollTop - f.clientHeight < 100
+            }}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-8 sm:py-6"
+            role="log"
+            aria-label="Rozmowa z asystentem"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
+            {history.isPending && <Loading>Wczytuję rozmowę…</Loading>}
+            {history.isError && (
+              <div className="grid gap-3">
+                <InlineError>{errorMessage(history.error, 'Nie udało się wczytać rozmowy.')}</InlineError>
+                <Button variant="secondary" size="normal" onClick={() => void history.refetch()}>
+                  Wczytaj ponownie
+                </Button>
+              </div>
+            )}
+            {!history.isPending && !history.isError && rows.length === 0 && !send.isPending && (
+              <div className="mx-auto flex min-h-full max-w-[42rem] flex-col justify-center gap-4 sm:gap-6 sm:py-8">
+                <div>
+                  <span className="mb-4 hidden rounded-full sm:inline-flex bg-paper px-3 py-1 text-xs font-semibold tracking-wide text-ink-muted">
+                    TWÓJ ZESPÓŁ. DOBRY PLAN.
+                  </span>
+                  <h3 className="m-0 text-xl font-semibold tracking-tight sm:text-[40px]">
+                    W czym mogę pomóc?
+                  </h3>
+                  <p className="mt-3 mb-0 max-w-[34rem] text-sm leading-relaxed text-ink-muted sm:text-base">
+                    Zapytaj o grafik lub opisz zmianę. Resztę ustalimy w rozmowie.
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {STARTERS.map(({ icon: Icon, title, text }) => (
+                    <button
+                      key={title}
+                      type="button"
+                      disabled={!enabled || readOnly}
+                      onClick={() => draft(text)}
+                      className="group flex min-h-(--touch-main) cursor-pointer items-center gap-3 rounded-md border border-grid bg-surface p-3 text-left transition-colors hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60 sm:flex-col sm:items-start sm:gap-4 sm:p-4"
+                    >
+                      <Icon size={22} strokeWidth={1.6} className="shrink-0 text-accent" aria-hidden="true" />
+                      <span className="text-sm font-medium">{title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <ol className="m-0 mx-auto grid max-w-[48rem] list-none gap-8 p-0">
+              {rows.map((row, i) => (
+                <li key={row.id} className="grid gap-5">
+                  {(i === 0 ||
+                    new Date(row.created_at).toLocaleDateString('pl-PL') !==
+                      new Date(rows[i - 1].created_at).toLocaleDateString('pl-PL')) && (
+                    <p className="m-0 text-center text-xs text-ink-muted">
+                      {new Date(row.created_at).toLocaleDateString('pl-PL', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  )}
+                  <ChatMessage from="user" date={row.created_at}>
+                    <p className="m-0 whitespace-pre-wrap">{row.text}</p>
+                  </ChatMessage>
+                  <ChatMessage from="assistant">
+                    <CommandReply
+                      data={row}
+                      late={now - Date.parse(row.created_at) >= WAIT_MS}
+                      readOnly={readOnly}
+                      onChanged={remember}
+                      onRetry={() => void history.refetch()}
+                      onRewrite={() => draft(row.text)}
+                    />
+                  </ChatMessage>
+                </li>
+              ))}
+              {send.isPending && (
+                <li className="grid gap-5">
+                  <ChatMessage from="user">
+                    <p className="m-0 whitespace-pre-wrap">{send.variables?.data.text}</p>
+                  </ChatMessage>
+                  <ChatMessage from="assistant">
+                    <ChatTyping>Wysyłam wiadomość…</ChatTyping>
+                  </ChatMessage>
+                </li>
+              )}
+            </ol>
+          </div>
+          <div className="shrink-0 border-t border-grid bg-surface px-4 pt-4 pb-3 sm:px-6">
+            {send.isError && (
+              <div className="mb-3">
+                <InlineError>
+                  {errorMessage(send.error, NETWORK_PROBLEM)} Tekst pozostał w polu wiadomości.
+                </InlineError>
+              </div>
+            )}
+            {instructions.isError && (
+              <InlineError>
+                Nie udało się sprawdzić dostępności asystenta.{' '}
+                <button
+                  type="button"
+                  className="min-h-(--touch) cursor-pointer underline"
+                  onClick={() => void instructions.refetch()}
+                >
+                  Spróbuj ponownie
+                </button>
+              </InlineError>
+            )}
+            {data && !enabled && (
+              <p className="mt-0 text-sm text-ink-muted">
+                Asystent jest wyłączony. Możesz przejrzeć rozmowę i zmienić zasady ręcznie.
+              </p>
+            )}
+            {readOnly && <p className="mt-0 text-sm text-ink-muted">Masz dostęp tylko do odczytu.</p>}
+            <ChatComposer
+              text={text}
+              onChange={setText}
+              onSend={submit}
+              sending={send.isPending}
+              waiting={waiting}
+              inputRef={inputRef}
+              disabled={readOnly || !enabled || history.isPending || history.isError}
+              footer="Zmiany wymagają zatwierdzenia."
+            />
+            <p className="mt-2 mb-0 text-center text-xs text-ink-muted">
+              Rozmawiasz z AI. Claude czyta wiadomości i dane tego lokalu.
+            </p>
+          </div>
+        </div>
+        <aside
+          aria-label="Zapisane polecenia o osobach"
+          className={cn(
+            'w-full shrink-0 flex-col overflow-y-auto bg-paper p-5 lg:w-[300px] lg:border-l lg:border-grid',
+            showInstructions ? 'flex' : 'hidden lg:flex',
+          )}
+        >
+          <div className="mb-4 flex items-center gap-2 text-xs font-semibold tracking-wide text-ink-muted">
+            <SlidersHorizontal aria-hidden="true" size={16} /> USTAWIENIA GRAFIKU
+          </div>
+          <InstructionList
+            locationId={locationId}
+            loading={instructions.isPending}
+            failed={instructions.isError}
+            data={data}
+          />
+          <div className="mt-auto border-t border-grid pt-5 text-sm text-ink-muted">
+            <p className="m-0 mb-2">Chcesz zajrzeć do wszystkich zasad?</p>
+            <Link
+              to="/kierownik/lokal/$locationId/zasady"
+              params={{ locationId }}
+              className="inline-flex min-h-(--touch) items-center gap-2 font-semibold text-accent no-underline"
+            >
+              Otwórz zasady <ArrowUp size={16} className="rotate-45" aria-hidden="true" />
+            </Link>
+          </div>
+        </aside>
+      </div>
     </section>
   )
 }
 
-function CommandCard({ commandId, onDone }: { commandId: string; onDone: () => void }) {
-  const [started] = useState(() => Date.now())
-  const queryClient = useQueryClient()
-  const command = useAssistantCommand(commandId, {
-    query: {
-      refetchInterval: (query) => {
-        const now = query.state.data?.data as AssistantCommandOut | undefined
-        return now && now.status !== 'queued' ? false : Date.now() - started > WAIT_MS ? false : 1500
-      },
-    },
-  })
+function CommandReply({
+  data,
+  late,
+  readOnly,
+  onChanged,
+  onRetry,
+  onRewrite,
+}: {
+  data: AssistantCommandOut
+  late: boolean
+  readOnly: boolean
+  onChanged: (row: AssistantCommandOut) => Promise<void>
+  onRetry: () => void
+  onRewrite: () => void
+}) {
   const apply = useApplyAssistantCommand()
   const dismiss = useDismissAssistantCommand()
-  const data = command.data?.data as AssistantCommandOut | undefined
-
-  if (command.isError) return <InlineError>{errorMessage(command.error, NETWORK_PROBLEM)}</InlineError>
-  if (!data) return <Loading>Asystent czyta polecenie…</Loading>
-
-  const frame = 'grid gap-3 rounded-md border-2 border-accent bg-accent-soft p-4'
-  if (data.status === 'queued') {
-    const late = Date.now() - started > WAIT_MS
-    return (
-      <div className={frame} role="status">
-        <Quote text={data.text} />
-        <p className="m-0">
-          {late
-            ? 'Asystent nie odpowiada. Spróbuj za chwilę jeszcze raz albo ustaw zasady ręcznie na liście poniżej.'
-            : 'Asystent czyta polecenie…'}
-        </p>
-        {late && (
-          <div>
-            <Button variant="secondary" size="normal" onClick={onDone}>
-              Zamknij
-            </Button>
-          </div>
-        )}
+  if (data.status === 'queued')
+    return late ? (
+      <div className="grid gap-2">
+        <p className="m-0">Odpowiedź zajmuje więcej czasu niż zwykle.</p>
+        <div>
+          <Button variant="secondary" size="normal" onClick={onRetry}>
+            Sprawdź odpowiedź
+          </Button>
+        </div>
       </div>
+    ) : (
+      <ChatTyping />
     )
-  }
-  if (data.status === 'failed' || data.status === 'unavailable') {
+  if (data.status === 'failed' || data.status === 'unavailable')
     return (
-      <div className={frame} role="alert">
-        <Quote text={data.text} />
-        <p className="m-0">
+      <div className="grid gap-3">
+        <p role="alert" className="m-0">
           {data.status === 'failed'
-            ? 'Asystent nie dał rady odpowiedzieć. Spróbuj jeszcze raz za chwilę. Nic się nie zmieniło.'
-            : 'Asystent jest wyłączony. Ustaw zasady ręcznie na liście poniżej.'}
+            ? 'Nie udało się przygotować odpowiedzi. Nic się nie zmieniło.'
+            : 'Asystent jest teraz niedostępny. Spróbuj później.'}
         </p>
         <div>
-          <Button variant="secondary" size="normal" onClick={onDone}>
-            Zamknij
+          <Button variant="secondary" size="normal" disabled={readOnly} onClick={onRewrite}>
+            Wpisz ponownie
           </Button>
         </div>
       </div>
     )
+  const applied = data.status === 'applied'
+  const dismissed = data.status === 'dismissed'
+  const busy = readOnly || apply.isPending || dismiss.isPending
+  const done = {
+    onSuccess: async (response: { status: number; data: unknown }) => {
+      if (response.status === 200) await onChanged(response.data as AssistantCommandOut)
+    },
   }
-  if (data.status === 'applied' || data.status === 'dismissed') {
-    return (
-      <div className={frame} role="status">
-        <p className="m-0 font-semibold">
-          {data.status === 'applied'
-            ? 'Ustawienia zapisane. Zostaną uwzględnione przy następnym układaniu grafiku. Gotowy grafik się nie zmienił.'
-            : 'Plan odrzucony. Nic się nie zmieniło.'}
-        </p>
-        <div>
-          <Button variant="secondary" size="normal" onClick={onDone}>
-            Zamknij
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  const busy = apply.isPending || dismiss.isPending
-  const done = { onSuccess: () => void queryClient.invalidateQueries() }
   return (
-    <div className={frame}>
-      <Quote text={data.text} />
-      {data.reply && <p className="m-0">{data.reply}</p>}
+    <>
+      {data.reply && <p className="m-0 whitespace-pre-wrap">{data.reply}</p>}
       {data.question && <p className="m-0 font-semibold">{data.question}</p>}
       {data.lines.length > 0 && (
-        <div className="grid gap-1">
-          <h3 className="m-0 text-base font-extrabold">Co się zmieni, jeśli zatwierdzisz</h3>
-          <ul className="m-0 grid gap-1 pl-5">
-            {data.lines.map((line) => (
-              <li key={line}>{line}</li>
+        <div className="overflow-hidden rounded-md border border-grid">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-grid bg-paper px-4 py-3">
+            <span className="text-sm font-semibold">Propozycja zmian</span>
+            {applied ? (
+              <span className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-prefer">
+                <Check size={16} aria-hidden="true" /> Zatwierdzona
+              </span>
+            ) : dismissed ? (
+              <span className="flex items-center gap-1 whitespace-nowrap text-xs text-ink-muted">
+                <X size={16} aria-hidden="true" /> Odrzucona
+              </span>
+            ) : (
+              <span className="text-xs text-ink-muted">Do zatwierdzenia</span>
+            )}
+          </div>
+          <ul className="m-0 grid list-none gap-3 p-4">
+            {data.lines.map((line, i) => (
+              <li key={`${i}:${line}`} className="flex gap-3">
+                <span
+                  aria-hidden="true"
+                  className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
+                >
+                  {i + 1}
+                </span>
+                <span>{line}</span>
+              </li>
             ))}
           </ul>
+          {data.can_apply && data.status === 'ready' && (
+            <div className="flex flex-wrap gap-2 border-t border-grid px-4 py-3">
+              <Button
+                size="normal"
+                disabled={busy}
+                onClick={() => apply.mutate({ commandId: data.id }, done)}
+              >
+                <Check size={18} aria-hidden="true" />
+                {apply.isPending ? 'Zapisuję…' : 'Zatwierdź zmiany'}
+              </Button>
+              <Button
+                variant="quiet"
+                size="normal"
+                disabled={busy}
+                onClick={() => dismiss.mutate({ commandId: data.id }, done)}
+              >
+                Odrzuć
+              </Button>
+            </div>
+          )}
         </div>
       )}
-      {data.effects.length > 0 && (
-        <div className="grid gap-1">
-          <h3 className="m-0 text-base font-extrabold">Skutek na ostatnim grafiku</h3>
-          <ul className="m-0 grid gap-1 pl-5">
-            {data.effects.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </div>
+      {applied && (
+        <p role="status" className="m-0 text-sm text-prefer">
+          Ustawienia zapisane. Zostaną uwzględnione przy następnym układaniu grafiku.
+        </p>
+      )}
+      {dismissed && (
+        <p role="status" className="m-0 text-sm text-ink-muted">
+          Propozycja odrzucona. Ustawienia pozostały bez zmian.
+        </p>
       )}
       {data.notes.length > 0 && (
-        <ul className="m-0 grid list-none gap-1 p-0">
-          {data.notes.map((note) => (
-            <li key={note} className="rounded-sm border border-prefer-not bg-prefer-not-soft px-3 py-2 text-sm">
-              {note}
-            </li>
+        <ul className="m-0 grid list-none gap-2 rounded-md bg-prefer-not-soft p-3 text-sm text-prefer-not">
+          {data.notes.map((note, i) => (
+            <li key={i}>{note}</li>
           ))}
         </ul>
       )}
-      {!data.can_apply && !data.question && !data.reply && data.lines.length === 0 && (
-        <p className="m-0 text-ink-muted">Asystent nie zaproponował żadnej zmiany. Napisz polecenie inaczej.</p>
+      {data.effects.length > 0 && (
+        <details className="text-sm text-ink-muted">
+          <summary className="flex min-h-(--touch) cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+            <ChevronDown size={16} aria-hidden="true" /> Wpływ na ostatni grafik
+          </summary>
+          <ul className="mt-0 grid gap-2 pl-5">
+            {data.effects.map((effect, i) => (
+              <li key={i}>{effect}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {!data.reply && !data.question && !data.lines.length && !applied && !dismissed && (
+        <p className="m-0 text-ink-muted">Nie mam jeszcze propozycji. Opisz dokładniej, co chcesz zmienić.</p>
       )}
       {(apply.isError || dismiss.isError) && (
         <InlineError>{errorMessage(apply.error ?? dismiss.error, NETWORK_PROBLEM)}</InlineError>
       )}
-      <div className="flex flex-wrap gap-3">
-        {data.can_apply && (
-          <Button disabled={busy} onClick={() => apply.mutate({ commandId }, done)}>
-            {apply.isPending ? 'Zapisuję…' : 'Zatwierdź zmiany'}
-          </Button>
-        )}
-        <Button variant="secondary" disabled={busy} onClick={() => dismiss.mutate({ commandId }, done)}>
-          {data.can_apply ? 'Odrzuć' : 'Zamknij'}
-        </Button>
-      </div>
-    </div>
+    </>
   )
-}
-
-function Quote({ text }: { text: string }) {
-  return <p className="m-0 text-sm text-ink-muted">Twoje polecenie: „{text}”</p>
 }
 
 function InstructionList({
@@ -259,24 +513,31 @@ function InstructionList({
   }
 
   return (
-    <div className="grid gap-2 border-t border-line pt-4">
-      <h3 className="m-0 text-lg font-extrabold">Twoje polecenia o osobach</h3>
+    <div className="mb-6 grid gap-3">
+      <h3 className="m-0 flex items-center justify-between gap-2 text-base font-semibold">
+        Zapisane polecenia{' '}
+        <span className="rounded-full border border-line px-2 text-xs tabular-nums">{items.length}</span>
+      </h3>
       {loading && <Loading>Wczytuję polecenia…</Loading>}
       {failed && <InlineError>Nie udało się wczytać poleceń. Odśwież stronę za chwilę.</InlineError>}
       {data && items.length === 0 && (
-        <p className="m-0 text-ink-muted">
-          Nie ma jeszcze żadnych. Pojawią się tu polecenia o konkretnych osobach, które zatwierdzisz u asystenta.
+        <p className="m-0 text-sm leading-relaxed text-ink-muted">
+          Nie ma jeszcze żadnych. Pojawią się tu polecenia o konkretnych osobach, które zatwierdzisz u
+          asystenta.
         </p>
       )}
       {items.length > 0 && (
         <>
           <p className="m-0 max-w-[75ch] text-sm text-ink-muted">
-            Wyżej = ważniejsze. Gdy nie da się spełnić wszystkich, wygrywa polecenie wyżej. Generator stara się je
-            spełnić, ale nie zostawi przez nie zmiany bez obsady.
+            Wyżej = ważniejsze. Gdy nie da się spełnić wszystkich, wygrywa polecenie wyżej. Generator stara
+            się je spełnić, ale nie zostawi przez nie zmiany bez obsady.
           </p>
           <ol className="m-0 grid list-none gap-2 p-0">
             {items.map((item, index) => (
-              <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-paper p-3">
+              <li
+                key={item.id}
+                className="flex flex-wrap items-center gap-2 rounded-md border border-grid bg-surface p-3 text-sm"
+              >
                 <span className="font-extrabold tabular-nums">{index + 1}.</span>
                 <span className="min-w-0 flex-1">{item.text}</span>
                 {!item.active && <Tag>minęło</Tag>}

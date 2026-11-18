@@ -3,6 +3,13 @@
 Plan do akceptacji przed pisaniem kodu aplikacji. Zakres i wymagania: [spec.md](spec.md).
 Kod, nazwy w kodzie i commity po angielsku; teksty interfejsu po polsku.
 
+## Czat asystenta (18.11.2026)
+
+- Nowa trasa `/kierownik/lokal/$locationId/asystent`, dostępna z zakładek lokalu i zasad. Rozmowa oraz osobny panel przyjętych poleceń; na małym ekranie przełączanie między nimi. Istniejące kolory i typografia, lżejsze obramowania, wyraźny podział nadawców i pole pisania na dole.
+- GET `/locations/{location_id}/assistant-commands` zwraca ostatnie 50 wpisów aktualnego autora w lokalu chronionym uprawnieniami, od najstarszego do najnowszego. W historii nie ma wiadomości innych kierowników ani innych firm. Bez nowego modelu rozmów i bez przechowywania treści w localStorage.
+- Wspólne elementy rozmowy i edytora dla kierownika i pracownika. Polling tylko podczas oczekiwania, stan wydłużonego oczekiwania z ponownym odczytem, przewijanie do nowych odpowiedzi bez odrywania od czytanej historii. Przyciski zmieniające dane respektują tryb tylko do odczytu.
+- Testy: zakres historii, trwałość widoku po ponownym wejściu, kolejne wiadomości i zatwierdzenia, obsługa błędów i klawiatury. Sprawdzenie widoku na komputerze i telefonie.
+
 ## Uzupełnienie etapu 10 po QA (18.11.2026)
 
 - `chce_pracowac` przechowuje opcjonalne `shift_type`; solver i validator liczą tylko pasujące zmiany. Walidacja nie dopuszcza planu po utracie części danych. Komunikaty o zapisie wynikają ze sprawdzonego planu, a prośby mają opis zbudowany ze sprawdzonej struktury.
