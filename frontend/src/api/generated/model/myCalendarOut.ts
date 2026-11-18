@@ -14,4 +14,5 @@ export interface MyCalendarOut {
   locked: string[];
   period: AvailabilityPeriodOut | null;
   submitted_at: string | null;
+  location_names: string[];
 }

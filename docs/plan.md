@@ -696,7 +696,11 @@ wspólna dyspozycyjność.
   lokalu głównego (uwaga Prelinta do #45: zmiana w lokalu dodatkowym zmieniałaby grafik lokalu głównego bez wiedzy jego
   kierownika); formularz w lokalu dodatkowym ich nie pokazuje.
 - Dyspozycje są zapisane na osobę i dzień, więc są wspólne. Pracownik widzi okresy i prośby o dyspozycje ze wszystkich
-  swoich lokali; "Gotowe" zaznacza dany okres.
+  swoich lokali, a ekran "Kiedy mogę" mówi, że dyspozycje są wspólne dla jego lokali (`MyCalendarOut.location_names`).
+  "Wyślij kierownikowi" ("Gotowe") zaznacza dany okres i te okresy jego innych lokali, które zbierają dyspozycje i
+  mieszczą się w dniach tego okresu (jeden kalendarz, więc jedno wysłanie). Dzień okresu z ułożonym grafikiem (szkic
+  albo opublikowany) w którymkolwiek lokalu osoby jest zamknięty dla wszystkich jej lokali (15a pkt 9), także gdy inny
+  lokal jeszcze zbiera te dni: zmiana różniłaby się po cichu od tego, czego użył tamten grafik (uwaga Prelinta do #45).
 - Silnik: `Employee.extra_locations`, `Employee.works_in(location)`. Solver daje osobie tylko zmiany jej lokali; zasady
   lokalu obejmują wszystkie osoby, które w nim pracują, poza celem godzin (tylko lokal główny, żeby lokal dodatkowy,
   ułożony pierwszy, nie zabrał całego celu). Miesięczne maksimum i cel liczą też zmiany z innych lokali w dniach okresu

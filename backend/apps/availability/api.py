@@ -92,6 +92,8 @@ class MyCalendarOut(Schema):
     # The nearest period the manager is collecting availability for (None: no request is open now).
     period: AvailabilityPeriodOut | None
     submitted_at: datetime | None
+    # My locations, the main one first: with more than one the screen says that availability is shared by all.
+    location_names: list[str]
 
 
 class CalendarIn(Schema):
@@ -305,17 +307,19 @@ def _locked_days(ctx: TenantContext, profile: EmployeeProfile, start: date, end:
     """Days between `start` and `end` that the employee cannot change any more."""
     today = timezone.localdate()
     locked = {start + timedelta(days=i) for i in range(max(0, min((today - start).days, (end - start).days + 1)))}
-    periods = ctx.qs(SchedulePeriod).filter(location__in=profile.location_ids(), start__lte=end, end__gte=start)
-    arranged: set[date] = set()
-    collecting: set[date] = set()
-    for period_start, period_end, status in periods.values_list("start", "end", "status"):
-        target = collecting if status == SchedulePeriod.Status.COLLECTING else arranged
+    # Availability is shared by all my locations, so a day arranged in any of them is closed for all of them: a change
+    # would silently differ from what that schedule used, even while another location still collects these days.
+    arranged = (
+        ctx.qs(SchedulePeriod)
+        .filter(location__in=profile.location_ids(), start__lte=end, end__gte=start)
+        .exclude(status=SchedulePeriod.Status.COLLECTING)
+    )
+    for period_start, period_end in arranged.values_list("start", "end"):
         day = max(period_start, start)
         while day <= min(period_end, end):
-            target.add(day)
+            locked.add(day)
             day += timedelta(days=1)
-    # Availability is shared by all my locations: a day stays open while one of them still collects it.
-    return locked | (arranged - collecting) | _published_dates(ctx, profile, start, end)
+    return locked | _published_dates(ctx, profile, start, end)
 
 
 @router.get("/me/calendar", response={200: MyCalendarOut, 400: ErrorOut, 404: ErrorOut})
@@ -343,6 +347,10 @@ def my_calendar(request, company_id: UUID, start: date, end: date):
         locked=sorted(_locked_days(ctx, profile, start, end)),
         period=_period_out(period) if period else None,
         submitted_at=submission.submitted_at if submission else None,
+        location_names=[
+            profile.home_location.name,
+            *profile.extra_locations.order_by("name").values_list("name", flat=True),
+        ],
     )
 
 

@@ -322,6 +322,13 @@ function AvailabilityEditor({
         </div>
       )}
 
+      {initial.location_names.length > 1 && (
+        <p className="m-0 text-sm text-ink-muted">
+          Pracujesz w kilku lokalach ({initial.location_names.join(', ')}). Dyspozycje są wspólne: widzą je kierownicy
+          każdego z nich, a „Wyślij kierownikowi” wysyła je do wszystkich, które o nie proszą w tych dniach.
+        </p>
+      )}
+
       {arranged && (
         <p className="m-0 text-sm text-ink-muted">
           Na szare dni grafik jest już ułożony.{' '}

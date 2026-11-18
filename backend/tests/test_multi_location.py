@@ -233,6 +233,17 @@ def test_employee_marks_availability_once_for_all_their_locations(api, two):
     }
 
 
+def test_days_arranged_in_one_location_stay_closed_while_another_collects(api, two):
+    arrange(two, two["market_period"])  # Rynek has a draft; the shop still collects the same days
+    api.login(two["kasia"].membership.user)
+
+    end = MON + timedelta(days=6)
+    body = api.get(f"/api/me/calendar?company_id={two['company'].id}&start={MON}&end={end}").json()
+
+    assert body["locked"] == [str(MON + timedelta(days=i)) for i in range(7)]
+    assert body["location_names"] == [two["location"].name, "Rynek"]  # the screen says availability is shared
+
+
 def test_other_company_cannot_see_or_change_the_person(api, two, make_company):
     other = make_company("Inna")
     api.login(other["manager"])

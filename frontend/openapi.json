@@ -9259,6 +9259,13 @@
               }
             ],
             "title": "Submitted At"
+          },
+          "location_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Location Names",
+            "type": "array"
           }
         },
         "required": [
@@ -9267,7 +9274,8 @@
           "days",
           "locked",
           "period",
-          "submitted_at"
+          "submitted_at",
+          "location_names"
         ],
         "title": "MyCalendarOut",
         "type": "object"
