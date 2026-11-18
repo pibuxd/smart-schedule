@@ -65,4 +65,19 @@ describe('RequestsSection', () => {
     expect(await screen.findByText('W publikacji masz 120 godzin.')).toBeInTheDocument()
     expect(screen.queryByText('Wysłane do kierownika')).not.toBeInTheDocument()
   })
+
+  it('lets the employee forward a misclassified question to the manager', async () => {
+    let row = request({ status: 'answered', summary: 'Odpowiedź asystenta.' })
+    const calls = mockApi((method) => {
+      if (method === 'PATCH') {
+        row = request({ status: 'needs_manager', summary: null })
+        return [200, row]
+      }
+      return [200, [row]]
+    })
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Przekaż kierownikowi' }))
+    expect(await screen.findByText('Kierownik przeczyta tę prośbę sam.')).toBeInTheDocument()
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ understood: false })
+  })
 })

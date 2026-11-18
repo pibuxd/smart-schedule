@@ -32,7 +32,18 @@ function RequestStatus({
     return <p className="m-0 text-sm text-ink-muted">Ta prośba została zastąpiona nowszą. Nie wpływa już na układanie grafiku.</p>
   }
   if (request.status === 'answered' && request.summary) {
-    return <p className="m-0 rounded-sm bg-accent-soft p-3">{request.summary}</p>
+    return (
+      <div className="grid gap-2 rounded-sm bg-accent-soft p-3">
+        <p className="m-0">{request.summary}</p>
+        {editable && (
+          <div>
+            <Button variant="quiet" size="normal" disabled={busy} onClick={onWrong}>
+              Przekaż kierownikowi
+            </Button>
+          </div>
+        )}
+      </div>
+    )
   }
   if (request.status === 'interpreted' && request.summary) {
     return (

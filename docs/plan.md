@@ -10,6 +10,7 @@ Kod, nazwy w kodzie i commity po angielsku; teksty interfejsu po polsku.
 - `TextRequest.status` otrzymuje `answered` (odpowiedź informacyjna) i `superseded` (zastąpiona). `supersedes` wskazuje poprzednią prośbę. Odpowiedzi i zastąpione wpisy są wyłączone z problemu generatora i aktywnej listy kierownika. Edycja zastąpionej prośby jest blokowana, aby nie wskrzesić jej przypadkiem.
 - LLM wskazuje korektę przez numer z migawki własnych wcześniejszych próśb. Worker sprawdza zakres, status i `updated_at`, blokuje bieżący i poprzedni wpis w transakcji oraz zapisuje oba stany razem. Obca, nieznana, zmieniona lub już zastąpiona prośba nie może być usunięta z działania przez korektę. Dane menedżerskie poprzedniej prośby pozostają w mocy.
 - Historia kierownika: maks. 6 wcześniejszych zakończonych wiadomości tego samego autora w lokalu, nie starszych niż 24 h. Nieprzyjęta propozycja nie jest obowiązującym ustawieniem.
+- Przy `answered` pracownik ma przycisk „Przekaż kierownikowi”: istniejący PATCH `understood=false` zmienia stan na `needs_manager`, zachowując treść wiadomości.
 - Testy regresyjne: konkretna zmiana w żądaniu pracy, solver i validator, częściowo nieobsługiwany plan, odczyt i izolacja danych, informacyjne odpowiedzi, korekty z zachowaniem audytu, wyścig z edycją i decyzje kierownika. Testy komponentów sprawdzają nowe stany i uczciwe potwierdzenia.
 
 ## 1. Architektura

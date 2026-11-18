@@ -140,6 +140,11 @@ def test_information_is_shown_to_employee_but_not_a_solver_request(api, shop, wi
     assert mine[0]["status"] == "answered" and mine[0]["summary"] == row.interpretation["summary"]
     api.login(shop["manager"])
     assert api.get(f"/api/periods/{shop['period'].pk}/requests").json() == []
+    api.login(shop["worker"])
+    assert api.patch(f"/api/me/requests/{row.pk}", {"understood": False}).json()["status"] == "needs_manager"
+    api.login(shop["manager"])
+    [forwarded] = api.get(f"/api/periods/{shop['period'].pk}/requests").json()
+    assert forwarded["text"] == row.text
 
 
 def test_correction_replaces_old_days_and_preserves_audit_and_manager_priority(api, shop, with_key, monkeypatch):
