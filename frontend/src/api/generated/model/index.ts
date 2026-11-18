@@ -142,6 +142,7 @@ export * from './requestCodeOut';
 export * from './requestDecisionIn';
 export * from './requestDecisionInManagerPriority';
 export * from './requestIn';
+export * from './revertAgreedRuleParams';
 export * from './ruleItemIn';
 export * from './ruleItemInParams';
 export * from './ruleItemOut';

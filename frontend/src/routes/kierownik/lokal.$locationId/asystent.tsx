@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AssistantPanel } from '../../../features/manager/Assistant'
+import { AssistantRulesTable } from '../../../features/manager/AssistantRulesTable'
 
 export const Route = createFileRoute('/kierownik/lokal/$locationId/asystent')({
   validateSearch: (search: Record<string, unknown>): { periodId?: string } => ({
@@ -12,5 +12,5 @@ export const Route = createFileRoute('/kierownik/lokal/$locationId/asystent')({
 function Page() {
   const { locationId } = Route.useParams()
   const { periodId } = Route.useSearch()
-  return <AssistantPanel key={`${locationId}:${periodId}`} locationId={locationId} periodId={periodId} />
+  return <AssistantRulesTable key={`${locationId}:${periodId}`} locationId={locationId} periodId={periodId} />
 }

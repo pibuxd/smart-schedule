@@ -24,6 +24,14 @@ Wiadomości pracownika w kalendarzu korzystają z tego samego stylu rozmowy i po
 
 Po przeglądzie czatu: limit pamięci (do 6 zakończonych wiadomości z ostatnich 24 godzin) jest widoczny przy polu pisania, a starsze wpisy są oznaczone jako archiwum poza pamięcią. Otwarte propozycje wygasają 24 godziny od wysłania polecenia; API odmawia zapisu, historia zostaje, a ponowne przygotowanie wymaga świadomego wysłania treści. Porównanie z grafikiem jest opisane jako pochodzące z chwili przygotowania propozycji. Polecenia o osobach są widoczne także na ekranie zasad, w kolejności ważności. Na telefonie panel ma przycisk z nazwą, a link powrotny i wszystkie zakładki lokalu pozostają widoczne. Prośby pracownika zachowują zasadę „jedna prośba, jedna sprawa” oraz jawny opis danych czytanych przez Claude; potwierdzenia systemowe nie udają odpowiedzi rozmówcy.
 
+## Wysuwany czat i okienko ustaleń (decyzja Piotra z 18.11.2026)
+
+Zastępuje opis zakładki „Asystent” i rozmowy wbudowanej w kalendarz z sekcji wyżej; zakres asystenta, pamięć, wygasanie propozycji i przypisanie ustaleń do okresu zostają bez zmian.
+
+- Czat asystenta wysuwa się z prawej krawędzi ekranu. Kierownik otwiera go przyciskiem „Asystent” w nagłówku lokalu, z każdej zakładki; pracownik przyciskiem „Napisz do asystenta” (bez asystenta: „Napisz prośbę”) w okienku „Twoje prośby” pod kalendarzem. Panel nie zasłania pracy: strona pod nim działa dalej, zamyka go „Zamknij” albo Esc. Na telefonie zajmuje cały ekran.
+- Kierownik: zasada lub polecenie trafia do okienka „Ustalenia z asystentem” dopiero po zatwierdzeniu propozycji w rozmowie. Okienko jest w zakładce „Ustalenia” (dawniej „Asystent”), przy dyspozycjach okresu i na ekranie zasad. Kierownik edytuje w nim ustalenia: zmienia kolejność poleceń o osobach, usuwa polecenie, przywraca zasadzie ustawienie lokalu, a „Zmień” otwiera czat z gotowym początkiem wiadomości (nic nie wysyła się samo, zmiana wymaga zatwierdzenia nowej propozycji). Po publikacji grafiku okresu ustalenia są tylko do odczytu.
+- Pracownik: w okienku „Twoje prośby” są tylko prośby, które się liczą: zrozumiane przez asystenta (trafiają do generatora) albo zostawione kierownikowi do przeczytania. Pracownik może w nim poprawić treść prośby (asystent czyta ją ponownie) albo ją usunąć. Odpowiedzi informacyjne, prośby odrzucone i zastąpione zostają tylko w historii rozmowy.
+
 ## Poprawki asystenta po niezależnym QA (18.11.2026)
 
 - Polecenie pracy w danym dniu może wskazywać konkretną zmianę. Zapis, opis i ocena generatora zachowują ten sam zakres. Nieobsługiwanej części odpowiedzi modelu nie wolno po cichu pominąć ani zatwierdzić niepełnego planu.

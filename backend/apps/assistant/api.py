@@ -262,6 +262,24 @@ def location_instructions(request, location_id: UUID, period_id: UUID | None = N
     return _instructions_out(ctx, location, period_id)
 
 
+@router.delete(
+    "/locations/{location_id}/agreed-rules/{code}",
+    response={200: InstructionsOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def revert_agreed_rule(request, location_id: UUID, code: str, period_id: UUID | None = None):
+    """Undo one rule agreed in the chat: the period uses the location's own setting for it again."""
+    ctx, location = _managed_location(request, location_id)
+    ctx.require_writable()
+    with transaction.atomic():
+        agreements.lock_location(location)
+        rule_set = agreements.current(location, period_id)
+        if rule_set is None or code not in rule_set.changed_codes:
+            raise HttpError(404, "Tej zasady nie ma wśród ustaleń tego okresu.")
+        agreements.require_open(rule_set)
+        agreements.revert_rule(rule_set, code)
+    return _instructions_out(ctx, location, period_id)
+
+
 @router.put(
     "/locations/{location_id}/instructions/order",
     response={200: InstructionsOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},

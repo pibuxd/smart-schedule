@@ -17,6 +17,14 @@ Technicznie `AssistantRuleSet` przechowuje migawkę zasad katalogowych, zmienion
 - Kierownik otrzymuje stałą odmowę, puste listy i `can_apply=false`. Wyjaśnienia zasad są dozwolone; pozostałe odpowiedzi informacyjne nie są. Pracownik otrzymuje istniejący status `rejected` z bezpiecznym opisem; wpis jest wyłączony z generatora i listy kierownika, bez możliwości przekazania jako prośby bez zmiany treści.
 - Kontekst nie zawiera już `location_snapshot` ani `own_availability`; historia służy wyłącznie korektom ustawień. Brak nowych narzędzi modelu. UI i opis przekazywanych danych odpowiadają temu ograniczeniu.
 
+## Wysuwany czat i okienko ustaleń (18.11.2026)
+
+- `components/ui/drawer.tsx`: panel z prawej na Radix Dialog w trybie niemodalnym (bez tła, kliknięcie obok go nie zamyka). `features/manager/AssistantDrawer.tsx` trzyma jeden czat na lokal (`AssistantDrawerProvider` w `LocationLayout`), a `useAssistantDrawer().openChat({ periodId, text })` otwiera go z dowolnego ekranu lokalu, opcjonalnie z wpisanym początkiem wiadomości. Na ekranie od 1280 px treść strony odsuwa się, żeby okienko ustaleń było widać obok rozmowy.
+- Trasa `/kierownik/lokal/$locationId/asystent` pokazuje teraz okienko ustaleń (`AssistantRulesTable`), zakładka nazywa się „Ustalenia”. To samo okienko jest przy dyspozycjach okresu i (skrócone) na ekranie zasad.
+- Nowy endpoint `DELETE /locations/{location_id}/agreed-rules/{code}?period_id=` (`revert_agreed_rule`): zasada ustalona w rozmowie wraca do bieżącego ustawienia lokalu i znika z `changed_codes`; 404, gdy zasady nie ma wśród ustaleń, 409 po publikacji. Kolejność i usuwanie poleceń korzystają z istniejących endpointów.
+- Pracownik: `RequestsSection` to okienko „Twoje prośby” (statusy `interpreted` i `needs_manager`, edycja i usuwanie istniejącymi endpointami) oraz ten sam `Drawer` z historią rozmowy i polem pisania. Bez zmian w API.
+- Założenie: rozmowa pracownika zostaje jednokrokowa (jedna wiadomość, jedno odczytanie; poprawka zastępuje wcześniejszą prośbę). Wieloetapowe dopytywanie pracownika wymagałoby zmian w `interpret_request` i nie jest częścią tego etapu.
+
 ## Czat asystenta (18.11.2026)
 
 - Nowa trasa `/kierownik/lokal/$locationId/asystent`, dostępna z zakładek lokalu i zasad. Rozmowa oraz osobny panel przyjętych poleceń; na małym ekranie przełączanie między nimi. Istniejące kolory i typografia, lżejsze obramowania, wyraźny podział nadawców i pole pisania na dole.

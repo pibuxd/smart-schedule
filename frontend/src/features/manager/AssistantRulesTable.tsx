@@ -1,131 +1,234 @@
-import { Link } from "@tanstack/react-router";
+import { useQueryClient } from '@tanstack/react-query'
+import { ArrowDown, ArrowUp, Pencil, Trash2, Undo2 } from 'lucide-react'
+import type { ReactNode } from 'react'
 
-import { useLocationInstructions } from "../../api/generated/assistant/assistant";
-import { InlineError, Loading } from "../../components/ui/status";
+import {
+  useDeleteInstruction,
+  useLocationInstructions,
+  useOrderLocationInstructions,
+  useRevertAgreedRule,
+} from '../../api/generated/assistant/assistant'
+import type { AgreedRuleOut } from '../../api/generated/model'
+import { Tag } from '../../components/ui/field'
+import { InlineError, Loading } from '../../components/ui/status'
+import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { useAssistantDrawer } from './assistant-drawer'
+import { OpenAssistantButton } from './AssistantDrawer'
+import { useManager } from './ManagerContext'
 
-/** The settings attached to the availability period, preserved after publication. */
+function RowButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string
+  disabled: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex min-h-(--touch) min-w-(--touch) cursor-pointer items-center justify-center rounded-md text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {children}
+    </button>
+  )
+}
+
+const ruleValue = (rule: AgreedRuleOut) =>
+  [rule.enabled ? (rule.is_hard ? 'Bez wyjątków' : 'Włączona') : 'Wyłączona', rule.details].filter(Boolean).join(' · ')
+
+/**
+ * "Ustalenia": what the manager approved in the assistant chat for one availability period. Rules changed in the
+ * chat can be reworded there or put back to the location's setting; instructions about people can be reordered
+ * (higher = more important), reworded or removed. Kept read-only once the period's schedule is published.
+ */
 export function AssistantRulesTable({
   locationId,
   periodId,
   compact = false,
 }: {
-  locationId: string;
-  periodId?: string;
-  compact?: boolean;
+  locationId: string
+  periodId?: string
+  compact?: boolean
 }) {
-  const query = useLocationInstructions(
-    locationId,
-    periodId ? { period_id: periodId } : undefined,
-  );
-  if (query.isPending) return <Loading>Wczytuję ustalone zasady…</Loading>;
+  const { readOnly } = useManager()
+  const drawer = useAssistantDrawer()
+  const queryClient = useQueryClient()
+  const params = periodId ? { period_id: periodId } : undefined
+  const query = useLocationInstructions(locationId, params)
+  const done = { onSuccess: () => void queryClient.invalidateQueries() }
+  const order = useOrderLocationInstructions()
+  const remove = useDeleteInstruction()
+  const revert = useRevertAgreedRule()
+
+  if (query.isPending) return <Loading>Wczytuję ustalenia…</Loading>
   if (query.isError)
     return (
       <InlineError>
-        Nie udało się wczytać ustaleń asystenta.{" "}
-        <button
-          type="button"
-          className="min-h-(--touch) underline"
-          onClick={() => void query.refetch()}
-        >
+        Nie udało się wczytać ustaleń.{' '}
+        <button type="button" className="min-h-(--touch) cursor-pointer underline" onClick={() => void query.refetch()}>
           Spróbuj ponownie
         </button>
       </InlineError>
-    );
-  if (query.data?.status !== 200) return null;
-  const data = query.data.data;
-  const rules = (data.rules ?? []).filter((rule) => !compact || rule.changed);
+    )
+  if (query.data?.status !== 200) return null
+  const data = query.data.data
+  const chatPeriod = data.period_id ?? periodId
+  const agreed = data.rules.filter((rule) => rule.changed)
+  const inherited = data.rules.filter((rule) => !rule.changed)
+  const items = data.items
+  const busy = readOnly || data.closed || order.isPending || remove.isPending || revert.isPending
+  const canChat = !!drawer && data.assistant_enabled && !readOnly && !data.closed
+  const reword = (text: string) => drawer?.openChat({ periodId: chatPeriod, text })
+  const move = (from: number, to: number) => {
+    const ids = items.map((item) => item.id)
+    ids.splice(to, 0, ...ids.splice(from, 1))
+    order.mutate({ locationId, data: { ids, period_id: periodId } }, done)
+  }
+  const failure = order.error ?? remove.error ?? revert.error
+
   return (
-    <section
-      className="grid gap-3 rounded-lg border border-line bg-surface p-4"
-      aria-label="Ustalenia asystenta"
-    >
+    <section className="grid gap-3 rounded-lg border border-line bg-surface p-4" aria-label="Ustalenia z asystentem">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="m-0 text-lg font-semibold">
-            {compact ? "Ustalenia z asystentem" : "Zasady tego okresu"}
-          </h2>
-          <p className="mt-1 mb-0 text-sm text-ink-muted">
-            {data.period_label}
+          <h2 className="m-0 text-lg font-semibold">Ustalenia z asystentem</h2>
+          <p className="m-0 text-sm text-ink-muted">
+            {data.closed
+              ? `${data.period_label} · wykorzystane w opublikowanym grafiku`
+              : data.period_requested
+                ? `Na okres ${data.period_label}`
+                : 'Czekają na prośbę o dyspozycje'}
           </p>
         </div>
-        {data.closed ? (
-          <span className="text-sm text-ink-muted">
-            Wykorzystane w opublikowanym grafiku
-          </span>
-        ) : (
-          <Link
-            to="/kierownik/lokal/$locationId/asystent"
-            params={{ locationId }}
-            search={{ periodId: data.period_id ?? undefined }}
-            className="inline-flex min-h-(--touch) items-center font-semibold text-accent underline"
-          >
-            Ustal zasady w rozmowie
-          </Link>
-        )}
+        {!data.closed && !readOnly && <OpenAssistantButton periodId={chatPeriod}>Ustal w rozmowie</OpenAssistantButton>}
       </div>
-      <p className="m-0 text-sm text-ink-muted">
-        {data.closed
-          ? "Te ustalenia pozostają przy tym okresie i obowiązują także przy jego korektach. Nie przejdą na następny okres."
-          : data.period_requested
-            ? "Zatwierdzone ustalenia dotyczą tego okresu. Po publikacji znikną z listy oczekujących."
-            : "Zatwierdzone ustalenia zaczekają na nową prośbę o dyspozycje. Samo utworzenie okresu ich nie przypisuje."}
-      </p>
-      {rules.length > 0 || data.items.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-sm">
-            <caption className="sr-only">
-              Zasady i polecenia o osobach — {data.period_label}
-            </caption>
-            <thead>
-              <tr className="border-b border-line">
-                <th className="py-2 pr-4">Zasada</th>
-                <th className="py-2">Ustalenie</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.map((rule) => (
-                <tr key={rule.code} className="border-b border-grid align-top">
-                  <th scope="row" className="py-3 pr-4 font-semibold">
-                    {rule.label}
-                    <span className="block text-xs font-normal text-ink-muted">
-                      {rule.changed ? "Ustalone w rozmowie" : "Z zasad lokalu"}
-                    </span>
-                  </th>
-                  <td className="py-3">
-                    {rule.enabled
-                      ? rule.is_hard
-                        ? "Bez wyjątków"
-                        : "Włączona"
-                      : "Wyłączona"}
-                    {rule.details && (
-                      <span className="block">{rule.details}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {data.items.map((item, index) => (
-                <tr key={item.id} className="border-b border-grid align-top">
-                  <th scope="row" className="py-3 pr-4 font-semibold">
-                    Polecenie o osobach {index + 1}
-                  </th>
-                  <td className="py-3">
-                    {item.text}
-                    {!item.active && (
-                      <span className="block text-ink-muted">
-                        Wskazane dni już minęły.
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
+
+      {agreed.length === 0 && items.length === 0 && (
         <p className="m-0 text-sm text-ink-muted">
-          Nie ma jeszcze dodatkowych ustaleń.
+          {data.closed
+            ? 'Na ten okres nic nie ustalono.'
+            : 'Nic jeszcze nie ustalono. Zasada pojawi się tutaj, gdy zatwierdzisz ją w rozmowie z asystentem.'}
         </p>
       )}
+
+      {agreed.length > 0 && (
+        <div className="grid gap-1">
+          <h3 className="m-0 text-sm font-semibold text-ink-muted">Zasady</h3>
+          <ul className="m-0 grid list-none gap-2 p-0">
+            {agreed.map((rule) => (
+              <li key={rule.code} className="flex items-center gap-2 rounded-md border border-grid py-1 pr-1 pl-3">
+                <span className="min-w-0 flex-1 py-2">
+                  <span className="font-semibold">{rule.label}</span>
+                  <span className="block text-sm text-ink-muted">{ruleValue(rule)}</span>
+                </span>
+                {!data.closed && (
+                  <span className="flex shrink-0">
+                    {canChat && (
+                      <RowButton
+                        label={`Zmień: ${rule.label}`}
+                        disabled={busy}
+                        onClick={() => reword(`Zmień zasadę „${rule.label}”: `)}
+                      >
+                        <Pencil aria-hidden="true" size={18} />
+                      </RowButton>
+                    )}
+                    <RowButton
+                      label={`Przywróć zasadę lokalu: ${rule.label}`}
+                      disabled={busy}
+                      onClick={() => revert.mutate({ locationId, code: rule.code, params }, done)}
+                    >
+                      <Undo2 aria-hidden="true" size={18} />
+                    </RowButton>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="grid gap-1">
+          <h3 className="m-0 text-sm font-semibold text-ink-muted">
+            Polecenia o osobach{items.length > 1 && ' · wyżej = ważniejsze'}
+          </h3>
+          <ol className="m-0 grid list-none gap-2 p-0">
+            {items.map((item, index) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-center gap-x-2 rounded-md border border-grid py-1 pr-1 pl-3"
+              >
+                <span className="font-extrabold tabular-nums">{index + 1}.</span>
+                <span className="min-w-0 flex-1 basis-40 py-2">{item.text}</span>
+                {!item.active && <Tag>minęło</Tag>}
+                {!data.closed && (
+                  <span className="ml-auto flex shrink-0">
+                    {items.length > 1 && (
+                      <>
+                        <RowButton
+                          label={`Wyżej: ${item.text}`}
+                          disabled={busy || index === 0}
+                          onClick={() => move(index, index - 1)}
+                        >
+                          <ArrowUp aria-hidden="true" size={18} />
+                        </RowButton>
+                        <RowButton
+                          label={`Niżej: ${item.text}`}
+                          disabled={busy || index === items.length - 1}
+                          onClick={() => move(index, index + 1)}
+                        >
+                          <ArrowDown aria-hidden="true" size={18} />
+                        </RowButton>
+                      </>
+                    )}
+                    {canChat && (
+                      <RowButton
+                        label={`Zmień: ${item.text}`}
+                        disabled={busy}
+                        onClick={() => reword(`Zmień polecenie „${item.text}”: `)}
+                      >
+                        <Pencil aria-hidden="true" size={18} />
+                      </RowButton>
+                    )}
+                    <RowButton
+                      label={`Usuń: ${item.text}`}
+                      disabled={busy}
+                      onClick={() => remove.mutate({ instructionId: item.id }, done)}
+                    >
+                      <Trash2 aria-hidden="true" size={18} />
+                    </RowButton>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {failure && <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>}
+
+      {!compact && inherited.length > 0 && (
+        <details className="text-sm">
+          <summary className="flex min-h-(--touch) cursor-pointer items-center text-ink-muted">
+            Pozostałe zasady lokalu w tym okresie ({inherited.length})
+          </summary>
+          <ul className="mt-0 mb-1 grid list-none gap-1 p-0">
+            {inherited.map((rule) => (
+              <li key={rule.code}>
+                <span className="font-semibold">{rule.label}</span>
+                <span className="text-ink-muted"> · {ruleValue(rule)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
-  );
+  )
 }

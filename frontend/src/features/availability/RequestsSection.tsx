@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
@@ -11,14 +11,18 @@ import {
 } from "../../api/generated/availability/availability";
 import type { MyRequestOut } from "../../api/generated/model";
 import {
-  AssistantMark,
   ChatComposer,
   ChatMessage,
   ChatTyping,
 } from "../../components/assistant/Chat";
 import { Button } from "../../components/ui/button";
+import { Drawer } from "../../components/ui/drawer";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
+
+/** Requests that count: understood by the assistant (they reach the generator) or left for the manager. */
+const isSaved = (request: MyRequestOut) =>
+  request.status === "interpreted" || request.status === "needs_manager";
 
 // How long a fresh request is shown as "being read" before we stop asking the server.
 const READING_MS = 60_000;
@@ -109,10 +113,12 @@ function RequestStatus({
 }
 
 /**
- * "Coś jeszcze?": a request in words, only for what the calendar cannot say. The manager reads it; when the
- * assistant is on (`assistantReads`), the text also goes to an outside AI service, and the screen says so.
- * It belongs to the period the manager asked for (`periodId`), or, before that, to the month on the screen
- * (`month`, its first day): the manager sees it in every period that covers that month.
+ * "Twoje prośby": requests in words, only for what the calendar cannot say. The person writes in a chat that
+ * slides in from the right; a request the assistant understood (or one left for the manager to read) lands in
+ * the "Twoje prośby" window, where it can be edited or removed. When the assistant is on (`assistantReads`),
+ * the text also goes to an outside AI service, and the chat says so.
+ * A request belongs to the period the manager asked for (`periodId`), or, before that, to the month on the
+ * screen (`month`, its first day): the manager sees it in every period that covers that month.
  */
 function RequestsChat({
   companyId,
@@ -154,10 +160,13 @@ function RequestsChat({
   const [removing, setRemoving] = useState<string | null>(null);
   const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } });
   const [text, setText] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(
     null,
   );
   const list = (requests.data?.data as MyRequestOut[] | undefined) ?? [];
+  const saved = list.filter(isSaved);
+  const reading = assistantReads && list.some((r) => r.status === "new");
 
   const feedRef = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -165,86 +174,102 @@ function RequestsChat({
   useEffect(() => {
     const feed = feedRef.current;
     if (feed && follow.current) feed.scrollTop = feed.scrollHeight;
-  }, [changeKey]);
+  }, [changeKey, chatOpen]);
+
+  const removeControl = (request: MyRequestOut) =>
+    removing === request.id ? (
+      <span className="flex flex-wrap items-center justify-end gap-1">
+        <span className="text-sm font-semibold">Usunąć tę prośbę?</span>
+        <Button
+          variant="quiet"
+          size="normal"
+          disabled={remove.isPending}
+          onClick={() =>
+            remove.mutate(
+              { requestId: request.id },
+              { onSettled: () => setRemoving(null) },
+            )
+          }
+        >
+          Tak, usuń
+        </Button>
+        <Button variant="quiet" size="normal" onClick={() => setRemoving(null)}>
+          Nie
+        </Button>
+      </span>
+    ) : (
+      <Button
+        variant="quiet"
+        size="normal"
+        aria-label="Usuń prośbę"
+        title="Usuń prośbę"
+        className="min-w-(--touch) px-2"
+        onClick={() => setRemoving(request.id)}
+      >
+        <Trash2 size={18} aria-hidden="true" />
+      </Button>
+    );
+  const failure = update.error ?? remove.error ?? create.error;
 
   return (
     <section
       aria-labelledby="requests-title"
-      className="overflow-hidden rounded-lg border border-line bg-surface shadow-chat"
+      className="grid gap-3 rounded-lg border border-line bg-surface p-4"
     >
-      <header className="flex items-center gap-3 border-b border-grid p-4">
-        <AssistantMark />
-        <div>
-          <h2 id="requests-title" className="m-0 text-lg font-semibold">
-            Twoje prośby
-          </h2>
-          <p className="m-0 text-xs text-ink-muted">
-            {assistantReads
-              ? "Opisz jedną preferencję układania grafiku."
-              : "Napisz prośbę do kierownika."}
-          </p>
-        </div>
-      </header>
-      <details className="border-b border-grid px-4 text-sm text-ink-muted">
-        <summary className="flex min-h-(--touch) cursor-pointer items-center">
-          O prośbach i Twoich danych
-        </summary>
-        <p className="mt-0 mb-4 leading-relaxed">
-          Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny.
-          Dyspozycje zaznacz w kalendarzu.{" "}
-          {!periodId &&
-            "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
-          {assistantReads
-            ? "Asystent AI (zewnętrzna usługa Claude) czyta tę prośbę, Twoje wcześniejsze prośby oraz nazwy osób i zmian w lokalu. Możesz poprawić wcześniejszą prośbę. Obsługuje tylko preferencje układania grafiku. Prośby czyta też kierownik. Asystent nie układa grafiku ani nie zmienia kalendarza. Nie wpisuj tu nic, czego nie chcesz mu przekazać."
-            : "Przeczyta to tylko kierownik."}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="requests-title" className="m-0 text-lg font-semibold">
+          Twoje prośby
+        </h2>
+        {(editable || list.length > 0) && (
+          <Button
+            variant="secondary"
+            size="normal"
+            onClick={() => setChatOpen(true)}
+          >
+            <MessageCircle size={18} aria-hidden="true" />
+            {!editable
+              ? "Pokaż rozmowę"
+              : assistantReads
+                ? "Napisz do asystenta"
+                : "Napisz prośbę"}
+          </Button>
+        )}
+      </div>
+      {requests.isPending && (
+        <p role="status" className="m-0 text-sm text-ink-muted">
+          Wczytuję prośby…
         </p>
-      </details>
-      <div
-        ref={feedRef}
-        onScroll={() => {
-          const f = feedRef.current;
-          if (f)
-            follow.current =
-              f.scrollHeight - f.scrollTop - f.clientHeight < 100;
-        }}
-        className="max-h-[560px] overflow-y-auto overscroll-contain p-4"
-        role="log"
-        aria-label="Twoje prośby o grafiku"
-        aria-live="polite"
-        aria-relevant="additions text"
-      >
-        {requests.isPending && (
-          <p role="status" className="m-0 text-sm text-ink-muted">
-            Wczytuję wiadomości…
-          </p>
-        )}
-        {requests.isError && (
-          <InlineError>
-            Nie udało się wczytać Twoich próśb.{" "}
-            <button
-              className="min-h-(--touch) cursor-pointer underline"
-              onClick={() => void requests.refetch()}
+      )}
+      {requests.isError && (
+        <InlineError>
+          Nie udało się wczytać Twoich próśb.{" "}
+          <button
+            className="min-h-(--touch) cursor-pointer underline"
+            onClick={() => void requests.refetch()}
+          >
+            Spróbuj ponownie
+          </button>
+        </InlineError>
+      )}
+      {!requests.isPending && !requests.isError && saved.length === 0 && (
+        <p className="m-0 text-sm text-ink-muted">
+          {editable
+            ? "Nie masz jeszcze próśb. Napisz, czego kalendarz nie powie, na przykład: „W piątki wolę pracować rano”."
+            : "Nie masz próśb na ten okres."}
+        </p>
+      )}
+      {saved.length > 0 && (
+        <ul
+          className="m-0 grid list-none gap-2 p-0"
+          aria-label="Zapisane prośby"
+        >
+          {saved.map((request) => (
+            <li
+              key={request.id}
+              className="rounded-md border border-grid py-1 pr-1 pl-3"
             >
-              Spróbuj ponownie
-            </button>
-          </InlineError>
-        )}
-        {!requests.isPending && !requests.isError && list.length === 0 && (
-          <div className="px-2 py-6">
-            <h3 className="m-0 mb-2 text-lg font-semibold">
-              Co warto uwzględnić w Twoim grafiku?
-            </h3>
-            <p className="m-0 text-sm text-ink-muted">
-              Na przykład: „W piątki wolę pracować rano”. Twoje prośby i
-              odpowiedzi pojawią się tutaj.
-            </p>
-          </div>
-        )}
-        <ol className="m-0 grid list-none gap-7 p-0">
-          {list.map((request) => (
-            <li key={request.id} className="grid gap-3">
-              <ChatMessage from="user" date={request.created_at}>
-                {editable && editing?.id === request.id ? (
+              {editable && editing?.id === request.id ? (
+                <div className="py-2 pr-2">
                   <form
                     className="grid gap-2"
                     onSubmit={(event) => {
@@ -299,147 +324,179 @@ function RequestsChat({
                       </Button>
                     </div>
                   </form>
-                ) : (
-                  <p className="m-0 whitespace-pre-wrap">{request.text}</p>
-                )}
-              </ChatMessage>
-              <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0 text-xs">
-                <span className="text-xs text-ink-muted">
-                  {request.status === "answered"
-                    ? "Odpowiedź asystenta"
-                    : request.status === "superseded"
-                      ? "Historia prośby"
-                      : request.status === "rejected"
-                        ? "Odrzucona"
-                        : "Wysłane do kierownika"}
-                </span>
-                {editable &&
-                  request.status !== "superseded" &&
-                  editing?.id !== request.id &&
-                  removing !== request.id && (
-                    <Button
-                      variant="quiet"
-                      size="normal"
-                      aria-label="Edytuj prośbę"
-                      className="min-w-(--touch) px-2 text-sm no-underline"
-                      onClick={() =>
-                        setEditing({ id: request.id, text: request.text })
-                      }
-                    >
-                      <Pencil size={18} aria-hidden="true" />
-                      <span className="hidden sm:inline">Edytuj prośbę</span>
-                    </Button>
-                  )}
-                {editable &&
-                  editing?.id !== request.id &&
-                  (removing === request.id ? (
-                    <span className="flex flex-wrap items-center justify-end gap-1">
-                      <span className="text-sm font-semibold">
-                        Usunąć tę prośbę?
-                      </span>
-                      <Button
-                        variant="quiet"
-                        size="normal"
-                        disabled={remove.isPending}
-                        onClick={() =>
-                          remove.mutate(
-                            { requestId: request.id },
-                            { onSettled: () => setRemoving(null) },
-                          )
-                        }
-                      >
-                        Tak, usuń
-                      </Button>
-                      <Button
-                        variant="quiet"
-                        size="normal"
-                        onClick={() => setRemoving(null)}
-                      >
-                        Nie
-                      </Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-x-2">
+                  <span className="min-w-0 flex-1 basis-48 py-2">
+                    <span className="block [overflow-wrap:anywhere]">
+                      {request.text}
                     </span>
-                  ) : (
-                    <Button
-                      variant="quiet"
-                      size="normal"
-                      aria-label="Usuń prośbę"
-                      className="min-w-(--touch) whitespace-nowrap px-2 text-sm no-underline"
-                      onClick={() => setRemoving(request.id)}
-                    >
-                      <Trash2 size={18} aria-hidden="true" />
-                      <span className="hidden sm:inline">Usuń prośbę</span>
-                    </Button>
-                  ))}
-              </div>
-              <RequestReply request={request} assistantReads={assistantReads}>
-                <RequestStatus
-                  request={request}
-                  editable={editable && request.status !== "superseded"}
-                  busy={update.isPending}
-                  onWrong={() =>
-                    update.mutate({
-                      requestId: request.id,
-                      data: { understood: false },
-                    })
-                  }
-                />
-              </RequestReply>
+                    <span className="block text-sm text-ink-muted">
+                      {request.status === "interpreted" && request.summary ? (
+                        <>
+                          Asystent zrozumiał: <span>{request.summary}</span>
+                        </>
+                      ) : request.status === "interpreted" ? (
+                        "Generator spróbuje ją spełnić."
+                      ) : (
+                        "Kierownik przeczyta ją sam."
+                      )}
+                    </span>
+                  </span>
+                  {editable && (
+                    <span className="ml-auto flex shrink-0 items-center">
+                      {removing !== request.id && (
+                        <Button
+                          variant="quiet"
+                          size="normal"
+                          aria-label="Edytuj prośbę"
+                          title="Edytuj prośbę"
+                          className="min-w-(--touch) px-2"
+                          onClick={() =>
+                            setEditing({ id: request.id, text: request.text })
+                          }
+                        >
+                          <Pencil size={18} aria-hidden="true" />
+                        </Button>
+                      )}
+                      {removeControl(request)}
+                    </span>
+                  )}
+                </div>
+              )}
             </li>
           ))}
-        </ol>
-      </div>
-      <div className="grid gap-3 border-t border-grid p-4">
-        {update.isError && (
-          <InlineError>
-            {errorMessage(update.error, NETWORK_PROBLEM)}
-          </InlineError>
-        )}
-        {remove.isError && (
-          <InlineError>
-            {errorMessage(remove.error, NETWORK_PROBLEM)}
-          </InlineError>
-        )}
-        {create.isError && (
-          <InlineError>
-            {errorMessage(create.error, NETWORK_PROBLEM)}
-          </InlineError>
-        )}
-        {editable ? (
-          <ChatComposer
-            text={text}
-            onChange={setText}
-            label="Twoja prośba"
-            sendLabel="Wyślij prośbę"
-            enterSends={false}
-            placeholder="Opisz swoją prośbę…"
-            disabled={requests.isPending || requests.isError}
-            sending={create.isPending}
-            onSend={() => {
-              if (!text.trim() || create.isPending) return;
-              follow.current = true;
-              create.mutate(
-                { data: { ...params, text: text.trim() } },
-                { onSuccess: () => setText("") },
-              );
-            }}
-            footer={
-              assistantReads
-                ? "Prośbę przeczyta też kierownik."
-                : "Wiadomość dla kierownika."
-            }
-          />
-        ) : (
-          <p className="m-0 text-sm text-ink-muted">
-            Wiadomości na ten okres są już zamknięte. Jeśli coś się zmieniło,
-            porozmawiaj z kierownikiem.
-          </p>
-        )}
-        {assistantReads && (
-          <p className="m-0 text-xs text-ink-muted">
-            Claude czyta Twoje prośby oraz nazwy osób i zmian w lokalu.
-          </p>
-        )}
-      </div>
+        </ul>
+      )}
+      {reading && <ChatTyping>Asystent czyta Twoją prośbę…</ChatTyping>}
+      {failure && !chatOpen && (
+        <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>
+      )}
+
+      <Drawer
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        title={assistantReads ? "Asystent" : "Prośby do kierownika"}
+        description={
+          assistantReads
+            ? "Opisz jedną preferencję układania grafiku."
+            : "Napisz prośbę do kierownika."
+        }
+      >
+        <div
+          ref={feedRef}
+          onScroll={() => {
+            const f = feedRef.current;
+            if (f)
+              follow.current =
+                f.scrollHeight - f.scrollTop - f.clientHeight < 100;
+          }}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"
+          role="log"
+          aria-label="Twoje prośby o grafiku"
+          aria-live="polite"
+          aria-relevant="additions text"
+        >
+          {list.length === 0 && (
+            <div className="py-4">
+              <h3 className="m-0 mb-2 text-lg font-semibold">
+                Co warto uwzględnić w Twoim grafiku?
+              </h3>
+              <p className="m-0 text-sm text-ink-muted">
+                Na przykład: „W piątki wolę pracować rano”.{" "}
+                {assistantReads
+                  ? "Gdy asystent zrozumie prośbę, zapisze ją w „Twoich prośbach”."
+                  : "Prośba trafi do „Twoich próśb” i do kierownika."}
+              </p>
+            </div>
+          )}
+          <ol className="m-0 grid list-none gap-6 p-0">
+            {list.map((request) => (
+              <li key={request.id} className="grid gap-2">
+                <ChatMessage from="user" date={request.created_at}>
+                  <p className="m-0 whitespace-pre-wrap">{request.text}</p>
+                </ChatMessage>
+                <div className="flex flex-wrap items-center justify-end gap-x-2 text-xs text-ink-muted">
+                  <span>
+                    {request.status === "answered"
+                      ? "Odpowiedź asystenta"
+                      : request.status === "superseded"
+                        ? "Historia prośby"
+                        : request.status === "rejected"
+                          ? "Odrzucona"
+                          : request.status === "new" && assistantReads
+                            ? "Wysłane"
+                            : "Zapisane w Twoich prośbach"}
+                  </span>
+                  {editable && !isSaved(request) && removeControl(request)}
+                </div>
+                <RequestReply request={request} assistantReads={assistantReads}>
+                  <RequestStatus
+                    request={request}
+                    editable={editable && request.status !== "superseded"}
+                    busy={update.isPending}
+                    onWrong={() =>
+                      update.mutate({
+                        requestId: request.id,
+                        data: { understood: false },
+                      })
+                    }
+                  />
+                </RequestReply>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className="grid shrink-0 gap-2 border-t border-grid px-4 pt-3 pb-2">
+          {failure && (
+            <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>
+          )}
+          {editable ? (
+            <ChatComposer
+              text={text}
+              onChange={setText}
+              label="Twoja prośba"
+              sendLabel="Wyślij prośbę"
+              enterSends={false}
+              placeholder="Opisz swoją prośbę…"
+              disabled={requests.isPending || requests.isError}
+              sending={create.isPending}
+              onSend={() => {
+                if (!text.trim() || create.isPending) return;
+                follow.current = true;
+                create.mutate(
+                  { data: { ...params, text: text.trim() } },
+                  { onSuccess: () => setText("") },
+                );
+              }}
+              footer={
+                assistantReads
+                  ? "Prośbę przeczyta też kierownik."
+                  : "Wiadomość dla kierownika."
+              }
+            />
+          ) : (
+            <p className="m-0 text-sm text-ink-muted">
+              Prośby na ten okres są już zamknięte. Jeśli coś się zmieniło,
+              porozmawiaj z kierownikiem.
+            </p>
+          )}
+          <details className="text-xs text-ink-muted">
+            <summary className="flex min-h-(--touch) cursor-pointer items-center">
+              O prośbach i Twoich danych
+            </summary>
+            <p className="mt-0 mb-2 leading-relaxed">
+              Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny.
+              Dyspozycje zaznacz w kalendarzu.{" "}
+              {!periodId &&
+                "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
+              {assistantReads
+                ? "Asystent AI (zewnętrzna usługa Claude) czyta tę prośbę, Twoje wcześniejsze prośby oraz nazwy osób i zmian w lokalu. Obsługuje tylko preferencje układania grafiku. Nie układa grafiku ani nie zmienia kalendarza. Prośby czyta też kierownik. Nie wpisuj tu nic, czego nie chcesz mu przekazać."
+                : "Przeczyta to tylko kierownik."}
+            </p>
+          </details>
+        </div>
+      </Drawer>
     </section>
   );
 }
