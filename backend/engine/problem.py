@@ -244,7 +244,7 @@ class Request:
     manager_priority: ManagerPriority = ManagerPriority.NORMAL
     dates: frozenset[date] = frozenset()  # empty = the whole period
     subject_employee: str | None = None  # avoid_person / prefer_person
-    shift_type: str | None = None  # shift_type
+    shift_type: str | None = None  # shift_type, or optional restriction for want_work
     avoid: bool = False  # shift_type: True = "not this shift type", False = "only this shift type"
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
     min_days: int | None = None  # want_work: how many of `dates` (None = all of them)

@@ -3405,6 +3405,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         },
         "description": "The manager rejects a request, or marks it as more or less important than usual.",
@@ -9276,7 +9286,9 @@
               "new",
               "interpreted",
               "needs_manager",
-              "rejected"
+              "rejected",
+              "answered",
+              "superseded"
             ],
             "title": "Status",
             "type": "string"
@@ -9629,7 +9641,9 @@
               "new",
               "interpreted",
               "needs_manager",
-              "rejected"
+              "rejected",
+              "answered",
+              "superseded"
             ],
             "title": "Status",
             "type": "string"

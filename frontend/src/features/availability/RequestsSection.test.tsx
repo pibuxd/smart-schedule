@@ -43,11 +43,42 @@ describe('RequestsSection', () => {
   it('says that the assistant also reads the request, only when it does', async () => {
     mockApi(() => [200, []])
     const { unmount } = renderScreen(<RequestsSection companyId="c1" periodId="p1" editable assistantReads />)
-    expect(await screen.findByText(/Przeczyta to kierownik i asystent AI/)).toBeInTheDocument()
+    expect(await screen.findByText(/Twoje wcześniejsze prośby, dyspozycje i opublikowany grafik/)).toBeInTheDocument()
     expect(screen.queryByText(/Przeczyta to tylko kierownik/)).not.toBeInTheDocument()
     unmount()
 
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
     expect(await screen.findByText(/Przeczyta to tylko kierownik/)).toBeInTheDocument()
+  })
+
+  it('keeps superseded requests visible without an edit action', async () => {
+    mockApi(() => [200, [request({ status: 'superseded', summary: null })]])
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
+    expect(await screen.findByText(/Ta prośba została zastąpiona/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edytuj prośbę' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Nie o to mi chodziło' })).not.toBeInTheDocument()
+  })
+
+  it('shows an informational answer without claiming it was sent to the manager', async () => {
+    mockApi(() => [200, [request({ status: 'answered', summary: 'W publikacji masz 120 godzin.' })]])
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
+    expect(await screen.findByText('W publikacji masz 120 godzin.')).toBeInTheDocument()
+    expect(screen.getByText(/Przekaż wiadomość, aby dodać ją do listy próśb kierownika/)).toBeInTheDocument()
+    expect(screen.queryByText('Wysłane do kierownika')).not.toBeInTheDocument()
+  })
+
+  it('lets the employee forward a misclassified question to the manager', async () => {
+    let row = request({ status: 'answered', summary: 'Odpowiedź asystenta.' })
+    const calls = mockApi((method) => {
+      if (method === 'PATCH') {
+        row = request({ status: 'needs_manager', summary: null })
+        return [200, row]
+      }
+      return [200, [row]]
+    })
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Przekaż kierownikowi' }))
+    expect(await screen.findByText('Kierownik przeczyta tę prośbę sam.')).toBeInTheDocument()
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ understood: false })
   })
 })

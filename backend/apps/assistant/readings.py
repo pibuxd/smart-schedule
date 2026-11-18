@@ -96,6 +96,19 @@ def clean(
     """
     if type not in TYPES or type == "inne":
         return None
+    # Reject combinations we cannot preserve, instead of silently narrowing the user's intent.
+    if (
+        (person and type not in ("unikaj_osoby", "preferuj_osobe"))
+        or (shift_type and type not in ("typ_zmiany", "chce_pracowac"))
+        or (avoid and type != "typ_zmiany")
+        or (max_hours is not None and type != "limit_godzin")
+        or (hours_period != "period" and type != "limit_godzin")
+        or ((min_days is not None or shifts_per_day is not None) and type != "chce_pracowac")
+    ):
+        return None
+    dates, weekdays = list(dates), list(weekdays)
+    if any(_parse_date(v) is None for v in dates) or any(not isinstance(w, int) or not 1 <= w <= 7 for w in weekdays):
+        return None
     days = sorted({d for d in (_parse_date(v) for v in dates) if d is not None})
     week = sorted({int(w) - 1 for w in weekdays if isinstance(w, int) and 1 <= w <= 7})
     data: dict[str, Any] = {"type": type, "dates": [d.isoformat() for d in days], "weekdays": week}
@@ -120,6 +133,11 @@ def clean(
     elif type == "chce_pracowac":
         if not days and not week:
             return None
+        if shift_type:
+            found = _lookup(shift_type, shift_types)
+            if found is None:
+                return None
+            data["shift_type"] = found
         if min_days is not None and (not isinstance(min_days, int) or min_days < 1):
             return None
         if shifts_per_day is not None and (not isinstance(shifts_per_day, int) or not 1 <= shifts_per_day <= 3):
@@ -194,6 +212,8 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
         case "chce_pracowac":
             shifts = data.get("shifts_per_day") or 1
             what = {1: "praca", 2: "dwie zmiany jednego dnia", 3: "trzy zmiany jednego dnia"}.get(shifts, "praca")
+            if data.get("shift_type"):
+                what += f" na zmianie „{shift_types.get(str(data['shift_type']), '?')}”"
             need = data.get("min_days")
             if need:
                 which = "jeden z tych dni" if need == 1 else f"{need} z tych dni"

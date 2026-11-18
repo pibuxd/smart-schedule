@@ -3,6 +3,16 @@
 Plan do akceptacji przed pisaniem kodu aplikacji. Zakres i wymagania: [spec.md](spec.md).
 Kod, nazwy w kodzie i commity po angielsku; teksty interfejsu po polsku.
 
+## Uzupełnienie etapu 10 po QA (18.11.2026)
+
+- `chce_pracowac` przechowuje opcjonalne `shift_type`; solver i validator liczą tylko pasujące zmiany. Walidacja nie dopuszcza planu po utracie części danych. Komunikaty o zapisie wynikają ze sprawdzonego planu, a prośby mają opis zbudowany ze sprawdzonej struktury.
+- Oddzielny moduł kontekstu odczytu ogranicza zakres do firmy, lokalu i roli. Obejmuje maksymalnie 6 okresów od bieżącego miesiąca, ostatni szkic i publikację, limity liczby wierszy z jawnym oznaczeniem obcięcia. Godziny liczy aplikacja w UTC. Pracownik nie otrzymuje szkiców, ocen doświadczenia ani cudzych prywatnych próśb/dyspozycji.
+- `TextRequest.status` otrzymuje `answered` (odpowiedź informacyjna) i `superseded` (zastąpiona). `supersedes` wskazuje poprzednią prośbę. Odpowiedzi i zastąpione wpisy są wyłączone z problemu generatora i aktywnej listy kierownika. Edycja zastąpionej prośby jest blokowana, aby nie wskrzesić jej przypadkiem.
+- LLM wskazuje korektę przez numer z migawki własnych wcześniejszych próśb. Worker sprawdza zakres, status i `updated_at`, blokuje bieżący i poprzedni wpis w transakcji oraz zapisuje oba stany razem. Obca, nieznana, zmieniona lub już zastąpiona prośba nie może być usunięta z działania przez korektę. Dane menedżerskie poprzedniej prośby pozostają w mocy.
+- Historia kierownika: maks. 6 wcześniejszych zakończonych wiadomości tego samego autora w lokalu, nie starszych niż 24 h. Nieprzyjęta propozycja nie jest obowiązującym ustawieniem.
+- Przy `answered` pracownik ma przycisk „Przekaż kierownikowi”: istniejący PATCH `understood=false` zmienia stan na `needs_manager`, zachowując treść wiadomości.
+- Testy regresyjne: konkretna zmiana w żądaniu pracy, solver i validator, częściowo nieobsługiwany plan, odczyt i izolacja danych, informacyjne odpowiedzi, korekty z zachowaniem audytu, wyścig z edycją i decyzje kierownika. Testy komponentów sprawdzają nowe stany i uczciwe potwierdzenia.
+
 ## 1. Architektura
 
 ```
@@ -118,7 +128,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `AvailabilityDay` | employee, date, state (cannot/neutral/prefer; neutral = dzień bez zaznaczenia, potrzebny tylko dla godzin "mogę tylko w tych godzinach"), from_time, to_time (opcjonalne), source (manual/pattern/copy) | unikalne (employee, date); brak wiersza = brak zgłoszenia |
 | `AvailabilityPattern` | employee, weekday, state, from/to, repeat_until | "powtarzaj co tydzień do [data]"; rozwijany do `AvailabilityDay` przy zapisie |
 | `AvailabilitySubmission` | employee, period, submitted_at | do listy "kto nie zgłosił" |
-| `TextRequest` | employee, period, text, status (new/interpreted/needs_manager/rejected), interpretation (JSON), employee_corrected, manager_priority (lower/normal/higher), manager_rejected | interpretacja: type, subject_employee, shift_type, avoid, max_hours, dates, weekdays, level, confidence, summary |
+| `TextRequest` | employee, period lub month, text, status (new/interpreted/needs_manager/rejected/answered/superseded), supersedes, interpretation (JSON), employee_corrected, manager_priority (lower/normal/higher), manager_rejected | interpretacja: type, subject_employee, shift_type, avoid, max_hours, dates, weekdays, level, confidence, summary; odpowiedzi informacyjne i zastąpione prośby nie trafiają do generatora |
 | `ManagerInstruction` | location, employee, data (JSON jak interpretacja prośby), position (kolejność), source_text, created_by | polecenie kierownika o osobie, przyjęte z planu asystenta (etap 10) |
 | `AssistantCommand` | location, text, status (queued/ready/unavailable/failed/applied/dismissed), plan (JSON), created_by, decided_at | polecenie kierownika dla asystenta i sprawdzony plan do akceptacji |
 

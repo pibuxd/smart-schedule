@@ -84,6 +84,10 @@ def _command_reason(command: AssistantCommand) -> str:
     if command.status == AssistantCommand.Status.FAILED:
         return "failed"
     plan = command.plan or {}
+    if plan.get("blocked"):
+        return "rejected_plan: " + " | ".join(str(n) for n in plan.get("notes", []))
+    if plan.get("informational") and not plan.get("question"):
+        return ""
     if plan.get("question"):
         return "question"
     if plan.get("notes"):

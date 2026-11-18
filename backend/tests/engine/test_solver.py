@@ -746,6 +746,26 @@ def test_want_work_two_shifts_on_one_day():
     assert score(p, report).employee_requests == 100
 
 
+@pytest.mark.parametrize("by_manager", [False, True])
+def test_want_work_on_specific_shift_counts_only_that_shift(by_manager):
+    slots = week(days=1)
+    request = Request(
+        "wish",
+        "anna",
+        "want_work",
+        dates=frozenset({day(0)}),
+        shift_type="afternoon",
+        by_manager=by_manager,
+    )
+    p = problem([employee("anna"), employee("ola")], slots, requests=[request])
+    wrong = validate(p, {"m0.0": "anna", "a0.0": "ola"})
+    right = validate(p, {"m0.0": "ola", "a0.0": "anna"})
+    assert next(r.degree for r in wrong.requests if r.request_id == "wish") == 1
+    assert next(r.degree for r in right.requests if r.request_id == "wish") == 0
+    result, _ = solved(p)
+    assert result.schedule["a0.0"] == "anna"
+
+
 def test_weekly_personal_hours_reset_on_monday_and_include_published_week_hours():
     # At the start of this period Anna already has eight published hours from Monday.
     start, end = shift_bounds(MON, time(6), time(14))

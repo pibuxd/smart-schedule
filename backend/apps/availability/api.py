@@ -37,7 +37,7 @@ router = Router(tags=["availability"])
 
 StateName = Literal["cannot", "neutral", "prefer"]
 PeriodStatusName = Literal["collecting", "draft", "published"]
-RequestStatusName = Literal["new", "interpreted", "needs_manager", "rejected"]
+RequestStatusName = Literal["new", "interpreted", "needs_manager", "rejected", "answered", "superseded"]
 
 # "Repeat every week until ..." reaches at most this far ahead.
 MAX_REPEAT_DAYS = 366
@@ -446,7 +446,11 @@ def _request_out(text_request: TextRequest) -> MyRequestOut:
 def _summary(row: TextRequest) -> str | None:
     from apps.assistant.readings import legacy_hours_notice
 
-    summary = (row.interpretation or {}).get("summary") if row.status == TextRequest.Status.INTERPRETED else None
+    summary = (
+        (row.interpretation or {}).get("summary")
+        if row.status in (TextRequest.Status.INTERPRETED, TextRequest.Status.ANSWERED)
+        else None
+    )
     return str(summary) + legacy_hours_notice(row.interpretation, row.text) if summary else None
 
 
@@ -529,6 +533,10 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
     if payload.text is not None and not text:
         raise HttpError(400, "Napisz, o co chodzi.")
     with transaction.atomic():
+        text_request = ctx.qs(TextRequest).select_for_update().get(pk=text_request.pk)
+        _require_request_open(text_request)
+        if text_request.status == TextRequest.Status.SUPERSEDED:
+            raise HttpError(409, "Ta prośba została zastąpiona. Edytuj jej nowszą wersję.")
         if text and text != text_request.text:
             text_request.text = text
             text_request.status = TextRequest.Status.NEW
@@ -536,7 +544,10 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
             text_request.employee_corrected = True
             text_request.save(update_fields=["text", "status", "interpretation", "employee_corrected", "updated_at"])
             queue_request(text_request)
-        elif payload.understood is False and text_request.status == TextRequest.Status.INTERPRETED:
+        elif payload.understood is False and text_request.status in (
+            TextRequest.Status.INTERPRETED,
+            TextRequest.Status.ANSWERED,
+        ):
             text_request.status = TextRequest.Status.NEEDS_MANAGER
             text_request.employee_corrected = True
             text_request.save(update_fields=["status", "employee_corrected", "updated_at"])
@@ -701,21 +712,33 @@ def _can_reread(row: TextRequest) -> bool:
 def period_requests(request, period_id: UUID):
     """Requests in words for this period, oldest first. Only managers see them."""
     ctx, period = _managed_period(request, period_id)
-    rows = ctx.qs(TextRequest).filter(TextRequest.for_periods([period])).select_related("employee__membership__user")
+    rows = (
+        ctx.qs(TextRequest)
+        .filter(TextRequest.for_periods([period]))
+        .exclude(status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED])
+        .select_related("employee__membership__user")
+    )
     return [_manager_request_out(r) for r in rows.order_by("created_at")]
 
 
-@router.patch("/requests/{request_id}", response={200: ManagerRequestOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut})
+@router.patch(
+    "/requests/{request_id}",
+    response={200: ManagerRequestOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
 def update_request(request, request_id: UUID, payload: RequestDecisionIn):
     """The manager rejects a request, or marks it as more or less important than usual."""
     ctx, row = context_for(request, TextRequest, request_id)
     ctx.require_manager_of(row.location)
     ctx.require_writable()
-    if payload.manager_priority is not None:
-        row.manager_priority = payload.manager_priority
-    if payload.manager_rejected is not None:
-        row.manager_rejected = payload.manager_rejected
-    row.save(update_fields=["manager_priority", "manager_rejected", "updated_at"])
+    with transaction.atomic():
+        row = ctx.qs(TextRequest).select_for_update().get(pk=row.pk)
+        if row.status in (TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED):
+            raise HttpError(409, "Ta wiadomość nie jest już aktywną prośbą. Odśwież listę.")
+        if payload.manager_priority is not None:
+            row.manager_priority = payload.manager_priority
+        if payload.manager_rejected is not None:
+            row.manager_rejected = payload.manager_rejected
+        row.save(update_fields=["manager_priority", "manager_rejected", "updated_at"])
     return _manager_request_out(row)
 
 
@@ -728,10 +751,11 @@ def reread_request(request, request_id: UUID):
     ctx, row = context_for(request, TextRequest, request_id)
     ctx.require_manager_of(row.location)
     ctx.require_writable()
-    if not _can_reread(row):
-        raise HttpError(409, "Tej prośby nie da się teraz dać asystentowi. Odśwież stronę.")
-    was_off = row.unread_reason == TextRequest.UnreadReason.OFF
     with transaction.atomic():
+        row = ctx.qs(TextRequest).select_for_update().get(pk=row.pk)
+        if not _can_reread(row):
+            raise HttpError(409, "Tej prośby nie da się teraz dać asystentowi. Odśwież stronę.")
+        was_off = row.unread_reason == TextRequest.UnreadReason.OFF
         row.status = TextRequest.Status.NEW
         row.interpretation = None
         row.unread_reason = TextRequest.UnreadReason.NONE

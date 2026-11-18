@@ -427,7 +427,9 @@ class _Reader:
     def requests(self, employee_ids: set[str]) -> list[Request]:
         result = []
         rows = self.qs(TextRequest).filter(TextRequest.for_periods(self.periods), manager_rejected=False)
-        for row in rows.exclude(status=TextRequest.Status.REJECTED).order_by("created_at"):
+        for row in rows.exclude(
+            status__in=[TextRequest.Status.REJECTED, TextRequest.Status.ANSWERED, TextRequest.Status.SUPERSEDED]
+        ).order_by("created_at"):
             employee_id = str(row.employee_id)
             if employee_id not in employee_ids:
                 continue
