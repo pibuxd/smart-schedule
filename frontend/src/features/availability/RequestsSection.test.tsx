@@ -227,6 +227,32 @@ describe("Twoje prośby window", () => {
     expect(saved).not.toHaveTextContent("Masz 120 godzin.");
     expect(saved).not.toHaveTextContent("Kup mi kawę");
     expect(screen.queryByRole("log")).not.toBeInTheDocument();
+    expect(screen.queryByText(/nie jest prośbą/)).not.toBeInTheDocument();
+  });
+
+  it("leaves a trace in the window when the newest message was rejected", async () => {
+    mockApi(() => [
+      200,
+      [
+        request(),
+        request({
+          id: "r3",
+          text: "Kup mi kawę",
+          status: "rejected",
+          summary: "Pomagam tylko z grafikiem.",
+        }),
+      ],
+    ]);
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    expect(
+      await screen.findByText(/została odrzucona i nie jest prośbą/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pokaż odpowiedź" }));
+    expect(
+      await screen.findByText("Pomagam tylko z grafikiem."),
+    ).toBeInTheDocument();
   });
 
   it("edits a saved request in the window", async () => {

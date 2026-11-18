@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, Pencil, Trash2, Undo2 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import {
   useDeleteInstruction,
@@ -9,6 +9,7 @@ import {
   useRevertAgreedRule,
 } from '../../api/generated/assistant/assistant'
 import type { AgreedRuleOut } from '../../api/generated/model'
+import { Button } from '../../components/ui/button'
 import { Tag } from '../../components/ui/field'
 import { InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
@@ -67,6 +68,8 @@ export function AssistantRulesTable({
   const order = useOrderLocationInstructions()
   const remove = useDeleteInstruction()
   const revert = useRevertAgreedRule()
+  // Removing or reverting takes a second tap: an agreement can cost a long chat to reach.
+  const [confirming, setConfirming] = useState<string | null>(null)
 
   if (query.isPending) return <Loading>Wczytuję ustalenia…</Loading>
   if (query.isError)
@@ -93,6 +96,25 @@ export function AssistantRulesTable({
     order.mutate({ locationId, data: { ids, period_id: periodId } }, done)
   }
   const failure = order.error ?? remove.error ?? revert.error
+  const confirm = (question: string, yes: string, act: () => void) => (
+    <span className="ml-auto flex flex-wrap items-center justify-end gap-1">
+      <span className="text-sm font-semibold">{question}</span>
+      <Button
+        variant="quiet"
+        size="normal"
+        disabled={busy}
+        onClick={() => {
+          setConfirming(null)
+          act()
+        }}
+      >
+        {yes}
+      </Button>
+      <Button variant="quiet" size="normal" onClick={() => setConfirming(null)}>
+        Nie
+      </Button>
+    </span>
+  )
 
   return (
     <section className="grid gap-3 rounded-lg border border-line bg-surface p-4" aria-label="Ustalenia z asystentem">
@@ -123,31 +145,39 @@ export function AssistantRulesTable({
           <h3 className="m-0 text-sm font-semibold text-ink-muted">Zasady</h3>
           <ul className="m-0 grid list-none gap-2 p-0">
             {agreed.map((rule) => (
-              <li key={rule.code} className="flex items-center gap-2 rounded-md border border-grid py-1 pr-1 pl-3">
-                <span className="min-w-0 flex-1 py-2">
+              <li
+                key={rule.code}
+                className="flex flex-wrap items-center gap-x-2 rounded-md border border-grid py-1 pr-1 pl-3"
+              >
+                <span className="min-w-0 flex-1 basis-40 py-2">
                   <span className="font-semibold">{rule.label}</span>
                   <span className="block text-sm text-ink-muted">{ruleValue(rule)}</span>
                 </span>
-                {!data.closed && (
-                  <span className="flex shrink-0">
-                    {canChat && (
+                {!data.closed &&
+                  (confirming === `rule:${rule.code}` ? (
+                    confirm('Przywrócić obecne ustawienie lokalu?', 'Tak, przywróć', () =>
+                      revert.mutate({ locationId, code: rule.code, params }, done),
+                    )
+                  ) : (
+                    <span className="flex shrink-0">
+                      {canChat && (
+                        <RowButton
+                          label={`Zmień: ${rule.label}`}
+                          disabled={busy}
+                          onClick={() => reword(`Zmień zasadę „${rule.label}”: `)}
+                        >
+                          <Pencil aria-hidden="true" size={18} />
+                        </RowButton>
+                      )}
                       <RowButton
-                        label={`Zmień: ${rule.label}`}
+                        label={`Przywróć obecne ustawienie lokalu: ${rule.label}`}
                         disabled={busy}
-                        onClick={() => reword(`Zmień zasadę „${rule.label}”: `)}
+                        onClick={() => setConfirming(`rule:${rule.code}`)}
                       >
-                        <Pencil aria-hidden="true" size={18} />
+                        <Undo2 aria-hidden="true" size={18} />
                       </RowButton>
-                    )}
-                    <RowButton
-                      label={`Przywróć zasadę lokalu: ${rule.label}`}
-                      disabled={busy}
-                      onClick={() => revert.mutate({ locationId, code: rule.code, params }, done)}
-                    >
-                      <Undo2 aria-hidden="true" size={18} />
-                    </RowButton>
-                  </span>
-                )}
+                    </span>
+                  ))}
               </li>
             ))}
           </ul>
@@ -168,44 +198,47 @@ export function AssistantRulesTable({
                 <span className="font-extrabold tabular-nums">{index + 1}.</span>
                 <span className="min-w-0 flex-1 basis-40 py-2">{item.text}</span>
                 {!item.active && <Tag>minęło</Tag>}
-                {!data.closed && (
-                  <span className="ml-auto flex shrink-0">
-                    {items.length > 1 && (
-                      <>
+                {!data.closed &&
+                  (confirming === `item:${item.id}` ? (
+                    confirm('Usunąć to polecenie?', 'Tak, usuń', () => remove.mutate({ instructionId: item.id }, done))
+                  ) : (
+                    <span className="ml-auto flex shrink-0">
+                      {items.length > 1 && (
+                        <>
+                          <RowButton
+                            label={`Wyżej: ${item.text}`}
+                            disabled={busy || index === 0}
+                            onClick={() => move(index, index - 1)}
+                          >
+                            <ArrowUp aria-hidden="true" size={18} />
+                          </RowButton>
+                          <RowButton
+                            label={`Niżej: ${item.text}`}
+                            disabled={busy || index === items.length - 1}
+                            onClick={() => move(index, index + 1)}
+                          >
+                            <ArrowDown aria-hidden="true" size={18} />
+                          </RowButton>
+                        </>
+                      )}
+                      {canChat && (
                         <RowButton
-                          label={`Wyżej: ${item.text}`}
-                          disabled={busy || index === 0}
-                          onClick={() => move(index, index - 1)}
+                          label={`Zmień: ${item.text}`}
+                          disabled={busy}
+                          onClick={() => reword(`Zmień polecenie „${item.text}”: `)}
                         >
-                          <ArrowUp aria-hidden="true" size={18} />
+                          <Pencil aria-hidden="true" size={18} />
                         </RowButton>
-                        <RowButton
-                          label={`Niżej: ${item.text}`}
-                          disabled={busy || index === items.length - 1}
-                          onClick={() => move(index, index + 1)}
-                        >
-                          <ArrowDown aria-hidden="true" size={18} />
-                        </RowButton>
-                      </>
-                    )}
-                    {canChat && (
+                      )}
                       <RowButton
-                        label={`Zmień: ${item.text}`}
+                        label={`Usuń: ${item.text}`}
                         disabled={busy}
-                        onClick={() => reword(`Zmień polecenie „${item.text}”: `)}
+                        onClick={() => setConfirming(`item:${item.id}`)}
                       >
-                        <Pencil aria-hidden="true" size={18} />
+                        <Trash2 aria-hidden="true" size={18} />
                       </RowButton>
-                    )}
-                    <RowButton
-                      label={`Usuń: ${item.text}`}
-                      disabled={busy}
-                      onClick={() => remove.mutate({ instructionId: item.id }, done)}
-                    >
-                      <Trash2 aria-hidden="true" size={18} />
-                    </RowButton>
-                  </span>
-                )}
+                    </span>
+                  ))}
               </li>
             ))}
           </ol>

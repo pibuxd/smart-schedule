@@ -167,6 +167,12 @@ function RequestsChat({
   const list = (requests.data?.data as MyRequestOut[] | undefined) ?? [];
   const saved = list.filter(isSaved);
   const reading = assistantReads && list.some((r) => r.status === "new");
+  // The newest message left a trace only in the chat: say so in the window, so it does not look lost.
+  const last = list.at(-1);
+  const notSaved =
+    last && (last.status === "rejected" || last.status === "answered")
+      ? last
+      : undefined;
 
   const feedRef = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -369,6 +375,20 @@ function RequestsChat({
         </ul>
       )}
       {reading && <ChatTyping>Asystent czyta Twoją prośbę…</ChatTyping>}
+      {notSaved && !chatOpen && (
+        <p className="m-0 text-sm text-ink-muted">
+          {notSaved.status === "rejected"
+            ? "Twoja ostatnia wiadomość została odrzucona i nie jest prośbą."
+            : "Na ostatnią wiadomość asystent odpowiedział. Nie zapisał jej jako prośby."}{" "}
+          <button
+            type="button"
+            className="min-h-(--touch) cursor-pointer font-semibold text-accent underline"
+            onClick={() => setChatOpen(true)}
+          >
+            Pokaż odpowiedź
+          </button>
+        </p>
+      )}
       {failure && !chatOpen && (
         <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>
       )}
@@ -405,7 +425,7 @@ function RequestsChat({
               <p className="m-0 text-sm text-ink-muted">
                 Na przykład: „W piątki wolę pracować rano”.{" "}
                 {assistantReads
-                  ? "Gdy asystent zrozumie prośbę, zapisze ją w „Twoich prośbach”."
+                  ? "Asystent czyta jedną prośbę naraz i nie dopytuje. Gdy ją zrozumie, zapisze ją w „Twoich prośbach”."
                   : "Prośba trafi do „Twoich próśb” i do kierownika."}
               </p>
             </div>

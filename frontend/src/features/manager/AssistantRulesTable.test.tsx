@@ -59,13 +59,19 @@ describe('AssistantRulesTable', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
     expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ ids: ['i2', 'i1'] })
     fireEvent.click(screen.getByRole('button', { name: 'Usuń: Ania i Kasia: osobno' }))
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Tak, usuń' }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/instructions/i1' && c.method === 'DELETE')).toBe(true))
   })
 
   it('puts a rule agreed in the chat back to the location setting', async () => {
     const calls = mockApi(() => [200, agreements()])
     show()
-    fireEvent.click(await screen.findByRole('button', { name: 'Przywróć zasadę lokalu: Zmiany w tygodniu' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Przywróć obecne ustawienie lokalu: Zmiany w tygodniu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nie' }))
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Przywróć obecne ustawienie lokalu: Zmiany w tygodniu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tak, przywróć' }))
     await waitFor(() =>
       expect(
         calls.some((c) => c.method === 'DELETE' && c.url === '/api/locations/l1/agreed-rules/max_shifts_per_week'),
