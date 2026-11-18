@@ -127,7 +127,8 @@ export function HandoverRule({ locationId }: { locationId: string }) {
           label="Przejęcie oddanej zmiany bez zatwierdzania"
           hint={
             <>
-              Pierwsza osoba, która może wtedy pracować, dostaje zmianę od razu. Dostaniesz powiadomienie.
+              Pierwsza osoba, która weźmie zmianę, dostaje ją od razu. Najpierw sprawdzamy dyspozycje, inne zmiany,
+              stanowisko i zasady „bez wyjątków”. Dostaniesz powiadomienie.
             </>
           }
           checked={data.handover_without_approval}

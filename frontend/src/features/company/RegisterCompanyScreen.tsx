@@ -47,7 +47,7 @@ export function RegisterCompanyScreen({ me, onCreated }: { me: MeOut; onCreated:
         <div className="grid gap-2">
           <h1 className="m-0 text-2xl font-extrabold">Załóż firmę</h1>
           <p className="m-0 text-ink-muted">
-            Lokale, stanowiska i pracowników dodasz w następnym kroku.
+            Firma to wszystkie Twoje lokale razem. Lokale i pracowników dodasz w następnym kroku.
           </p>
         </div>
         <TextField

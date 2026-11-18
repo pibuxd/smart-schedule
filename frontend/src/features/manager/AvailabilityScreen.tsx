@@ -166,7 +166,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
         </Section>
       )}
 
-      <Section title="Kto kiedy może">
+      <Section title="Kto kiedy może" description="Przewiń tabelę w bok, żeby zobaczyć kolejne dni.">
         <GridLegend />
         {total === 0 ? (
           <EmptyState title="Nikt jeszcze nie pracuje w tym lokalu">

@@ -162,7 +162,8 @@ function ArchiveSection({ location }: { location: LocationOut }) {
   return (
     <Section
       title="Archiwum"
-      description="Dawne grafiki i godziny zostaną."
+      alwaysExplain
+      description="Dawne grafiki i godziny zostaną. Dla lokalu w archiwum nie ułożysz nowego grafiku."
     >
       <div>
         <Button variant="danger" size="normal" onClick={() => setOpen(true)} disabled={readOnly}>
@@ -499,7 +500,7 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
   }
 
   return (
-    <Section title="Obsada" description="Ile osób potrzeba i ile z nich z doświadczeniem. Puste pole = zero.">
+    <Section title="Obsada" alwaysExplain description="Ile osób potrzeba i ile z nich z doświadczeniem. Puste pole = zero.">
       <form onSubmit={submit} className="grid min-w-0 gap-4">
         {setup.shift_types.flatMap((st) => setup.positions.map((pos) => (
           <fieldset key={cellKey(st.id, pos.id, 0)} disabled={readOnly || save.isPending} className="min-w-0 rounded-md border border-line bg-surface p-3">
@@ -573,6 +574,7 @@ function ClosuresSection({ locationId, setup }: { locationId: string; setup: Loc
   return (
     <Section
       title="Dni zamknięcia"
+      alwaysExplain
       description="Np. święta albo remont. Tego dnia nikt nie dostanie tu zmiany."
     >
       {setup.closures.length > 0 ? (

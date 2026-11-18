@@ -251,7 +251,7 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
       <fieldset className="m-0 grid gap-1 border-0 p-0">
         <legend className="mb-1 font-semibold">Doświadczenie</legend>
         <p className="m-0 text-sm text-ink-muted">
-          Widzisz to tylko Ty.
+          Widzisz to tylko Ty. Liczy się w zasadzie „Początkujący z doświadczonymi”.
         </p>
         {([1, 2, 3] as const).map((value) => (
           <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">

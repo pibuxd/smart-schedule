@@ -330,7 +330,7 @@ function PublishSheet({ data, open, onOpenChange }: { data: VersionOut; open: bo
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Pracownicy dostaną powiadomienie tylko w aplikacji, bez SMS-ów i e-maili.
+          Pracownicy dostaną powiadomienie tylko w aplikacji. Komuś, kto rzadko do niej zagląda, powiedz sam.
         </p>
         {holes > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2">

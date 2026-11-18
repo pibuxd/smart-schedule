@@ -91,6 +91,7 @@ export function Tag({ children, tone = 'muted' }: { children: ReactNode; tone?: 
 /**
  * A titled section of a screen: a heading with an optional action on the right.
  * The description stays hidden until the "i" button next to the heading is pressed, so screens are not walls of text.
+ * `alwaysExplain` keeps it in view: use it when the text states a consequence (hard to undo, a surprising empty value).
  * `collapsible` folds the whole section under its heading (closed at first), for things the manager rarely needs.
  */
 export function Section({
@@ -99,11 +100,13 @@ export function Section({
   children,
   description,
   collapsible = false,
+  alwaysExplain = false,
 }: {
   title: string
   action?: ReactNode
   description?: ReactNode
   collapsible?: boolean
+  alwaysExplain?: boolean
   children: ReactNode
 }) {
   const [explained, setExplained] = useState(false)
@@ -128,7 +131,7 @@ export function Section({
         <div className="grid gap-1">
           <div className="flex items-center gap-1">
             <h2 className="m-0 text-lg font-extrabold">{title}</h2>
-            {description && (
+            {description && !alwaysExplain && (
               <button
                 type="button"
                 aria-label={`Wyjaśnij: ${title}`}
@@ -141,7 +144,7 @@ export function Section({
               </button>
             )}
           </div>
-          {description && explained && (
+          {description && (explained || alwaysExplain) && (
             <p id={descriptionId} className="m-0 max-w-[70ch] text-sm text-ink-muted">
               {description}
             </p>
