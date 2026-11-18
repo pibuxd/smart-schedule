@@ -140,6 +140,12 @@ export function AssistantRulesTable({
         </p>
       )}
 
+      {(agreed.length > 0 || items.length > 0) && !data.closed && (
+        <p className="m-0 text-sm text-ink-muted">
+          Działają tylko w tym okresie i mają pierwszeństwo przed ustawieniem lokalu.
+        </p>
+      )}
+
       {agreed.length > 0 && (
         <div className="grid gap-1">
           <h3 className="m-0 text-sm font-semibold text-ink-muted">Zasady</h3>
