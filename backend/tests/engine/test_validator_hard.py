@@ -138,8 +138,10 @@ def test_forced_person_turns_hard_problems_into_waived_ones():
         forced={"s1": "anna", "s2": "anna"},
     )
     report = validate(p, {"s1": "anna", "s2": "anna"})
-    assert report.ok
-    assert sorted(v.code for v in report.waived) == [Code.CANNOT, Code.CANNOT, Code.OVERLAP]
+    # "Nie mogę" is overruled; two shifts at the same time never are.
+    assert codes(report) == [Code.OVERLAP]
+    assert sorted(v.code for v in report.waived) == [Code.CANNOT, Code.CANNOT]
+    assert validate(p, {"s1": "anna"}).ok
     # The override is about that person only: someone else on the slot is checked as usual.
     other = replace(p, availability=(Availability("ola", DAY, "cannot"),))
     assert codes(validate(other, {"s1": "ola"})) == [Code.CANNOT]

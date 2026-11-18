@@ -296,16 +296,22 @@ def test_manager_can_force_a_person_who_cannot_work(api, shop, draft):
     assert again.employee_id == free.pk and again.forced is True and again.pinned is True
 
 
-def test_manager_can_force_two_shifts_at_the_same_time(api, shop, draft):
+def test_two_shifts_at_the_same_time_cannot_be_forced(api, shop, draft):
+    """Nobody can work two shifts at once: that is a mistake, not a decision, so the override does not apply."""
     api.login(shop["manager"])
     a, b = Assignment.objects.filter(shift__version=draft, shift__date=MON).order_by("shift__slot_key")
     change = {"changes": [{"shift_id": str(a.shift_id), "employee_id": str(b.employee_id)}], "force": True}
 
-    assert api.patch(url(draft, "/assignments"), change).status_code == 200
+    check = api.post(url(draft, "/check"), change).json()
+    refused = api.patch(url(draft, "/assignments"), change)
 
+    assert check["ok"] is False and check["can_force"] is False
+    assert refused.status_code == 409 and "dwie zmiany" in refused.json()["detail"]
     a.refresh_from_db()
-    assert a.employee_id == b.employee_id and a.forced is True
-    assert api.get(url(draft)).json()["hard_problems"] == []
+    assert a.employee_id != b.employee_id and a.forced is False
+    explained = api.get(url(draft, f"/shifts/{a.shift_id}/explain")).json()
+    blocked = next(c for c in explained["candidates"] if c["employee_id"] == str(b.employee_id))
+    assert blocked["possible"] is False and blocked["can_force"] is False
 
 
 def test_an_override_does_not_cover_a_later_change_silently(api, shop, draft):
@@ -321,7 +327,9 @@ def test_an_override_does_not_cover_a_later_change_silently(api, shop, draft):
         rule_code="personal_max_hours",
         defaults={"enabled": True, "is_hard": True, "position": 1},
     )
-    others = Assignment.objects.filter(shift__version=draft).exclude(employee=person).order_by("shift__date")
+    works = Assignment.objects.filter(shift__version=draft, employee=person).values_list("shift__date", flat=True)
+    others = Assignment.objects.filter(shift__version=draft).exclude(shift__date__in=list(works))
+    others = others.order_by("shift__date")
     first, second = others[0], others.exclude(shift__date=others[0].shift.date)[0]
     put = lambda a: {"changes": [{"shift_id": str(a.shift_id), "employee_id": str(person.pk)}]}  # noqa: E731
 

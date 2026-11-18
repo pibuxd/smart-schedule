@@ -106,6 +106,7 @@ const explanation = {
       name: 'Anna Wróbel',
       current: false,
       possible: true,
+      can_force: false,
       problems: [],
       notes: [],
       wish: 'prefer',
@@ -121,6 +122,7 @@ const explanation = {
       name: 'Marek Zając',
       current: false,
       possible: false,
+      can_force: true,
       problems: ['Marek Zając ma zaznaczone „nie mogę” (02.12 Ranna 06:00–14:00).'],
       notes: [],
       wish: 'cannot',
@@ -259,7 +261,7 @@ describe('ScheduleScreen', () => {
     fireEvent.change(await screen.findByLabelText('Pokaż, kiedy ta osoba chce i może pracować'), { target: { value: 'e2' } })
     expect(await screen.findByRole('button', { name: /^Bez obsady.*wybrana osoba chętnie/ })).toHaveClass('avail-prefer')
     expect(screen.getByRole('button', { name: /^Anna Wróbel.*wybrana osoba nie może/ })).toHaveClass('fit-cannot')
-    expect(screen.getByText('nie może, ale możesz wpisać mimo to')).toBeInTheDocument()
+    expect(screen.getByText('nie może')).toBeInTheDocument()
   })
 
   it('keeps an empty shift empty on purpose and shows what to do when nobody can take it', async () => {

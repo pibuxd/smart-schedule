@@ -21,7 +21,7 @@ from dataclasses import dataclass, replace
 from engine.problem import AvailabilityState, Problem, Schedule
 from engine.rules_catalog import RULES_BY_CODE
 from engine.scoring import Scores, score
-from engine.validator import Code, ValidationReport, validate
+from engine.validator import WAIVABLE, Code, ValidationReport, validate
 
 WISH_WORDS = {
     AvailabilityState.PREFER: "chętnie pracuje tego dnia",
@@ -50,6 +50,7 @@ class Candidate:
     current: bool  # works this slot now
     blocked: tuple[str, ...]  # hard problems if they take it (empty: they can)
     block_code: Code | None  # the kind of the first hard problem
+    can_force: bool  # blocked, but only by problems the manager may overrule ("Wpisz mimo to")
     notes: tuple[str, ...]  # soft costs: rules they would break
     wish: AvailabilityState  # their calendar mark for this slot
     hours: float  # their hours in this schedule if they take the slot
@@ -129,6 +130,7 @@ def explain_slot(
                 current=is_current,
                 blocked=tuple(v.message for v in hard),
                 block_code=hard[0].code if hard else None,
+                can_force=bool(hard) and not is_current and all(v.code in WAIVABLE for v in hard),
                 notes=notes[:MAX_NOTES],
                 wish=problem.availability_for(employee.id, slot),
                 hours=round(report.hours.get(employee.id, 0.0), 2),

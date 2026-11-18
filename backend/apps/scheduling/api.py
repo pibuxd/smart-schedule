@@ -575,6 +575,8 @@ class CandidateOut(Schema):
     name: str
     current: bool
     possible: bool
+    # Not possible, but the manager may put the person in anyway ("Wpisz mimo to").
+    can_force: bool
     problems: list[str]
     notes: list[str]
     wish: Wish
@@ -652,7 +654,8 @@ class CheckOut(Schema):
 
 class ShiftFitOut(Schema):
     shift_id: UUID
-    # prefer: marked "chętnie"; can: marked "mogę"; cannot: "nie mogę" or another shift at that time.
+    # prefer: marked "chętnie"; can: marked "mogę"; cannot: "nie mogę" (the manager may overrule it) or another
+    # shift at that time (never possible).
     fit: Literal["prefer", "can", "cannot"]
     reason: str
 
@@ -892,6 +895,7 @@ def explain_shift(request, version_id: UUID, shift_id: UUID):
                 name=c.name,
                 current=c.current,
                 possible=c.possible,
+                can_force=c.can_force,
                 problems=list(c.blocked),
                 notes=list(c.notes),
                 wish=c.wish.value,

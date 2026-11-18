@@ -53,7 +53,8 @@ class Code(StrEnum):
 
 # What the manager may overrule by putting a person on a slot anyway (`Problem.forced`). The position and pins
 # stay hard: a person without the position is fixed in "Pracownicy", a pin is the manager's own earlier decision.
-WAIVABLE = frozenset({Code.CANNOT, Code.ONE_SHIFT, Code.OVERLAP, Code.EXPERIENCE, Code.RULE})
+# Two shifts at the same time stay hard too: nobody can work both, so it is a mistake, not a decision.
+WAIVABLE = frozenset({Code.CANNOT, Code.ONE_SHIFT, Code.EXPERIENCE, Code.RULE})
 
 
 @dataclass(frozen=True)

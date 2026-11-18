@@ -186,8 +186,8 @@ function ShiftDetails({
         <div className="grid gap-1 rounded-md border border-line bg-surface p-3">
           <span className="font-semibold">Nikt nie może wziąć tej zmiany.</span>
           <span className="text-sm">
-            Każda osoba ma powód, np. dzień „nie mogę”, inną zmianę o tej porze albo zasadę bez wyjątków. Możesz
-            wpisać kogoś mimo to (lista niżej) albo:
+            Każda osoba ma powód, np. dzień „nie mogę”, inną zmianę o tej porze albo zasadę bez wyjątków. Osobę z
+            „nie mogę” albo zasadą możesz wpisać mimo to (lista niżej). Możesz też:
           </span>
           <ul className="m-0 grid gap-1 pl-5 text-sm">
             <li>
@@ -204,7 +204,7 @@ function ShiftDetails({
             </li>
             <li>dodać komuś to stanowisko w „Pracownicy” albo zostawić zmianę pustą.</li>
           </ul>
-          <span className="text-sm text-ink-muted">Powód przy każdej osobie jest niżej, w „Nie mogą, ale możesz wpisać mimo to”.</span>
+          <span className="text-sm text-ink-muted">Powód przy każdej osobie jest niżej, w „Nie mogą wziąć tej zmiany”.</span>
         </div>
       )}
 
@@ -232,7 +232,7 @@ function ShiftDetails({
       {blocked.length > 0 && (
         <details className="grid gap-2">
           <summary className="min-h-(--touch) cursor-pointer content-center font-semibold text-accent">
-            {editable ? 'Nie mogą, ale możesz wpisać mimo to' : 'Nie mogą wziąć tej zmiany'} ({blocked.length})
+            Nie mogą wziąć tej zmiany ({blocked.length})
           </summary>
           <ul className="m-0 mt-2 grid list-none gap-2 p-0">
             {blocked.map((candidate) => (
@@ -243,7 +243,7 @@ function ShiftDetails({
                     {problem}
                   </span>
                 ))}
-                {editable && (
+                {editable && candidate.can_force && (
                   <Button
                     variant="secondary"
                     size="normal"

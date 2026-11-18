@@ -771,7 +771,7 @@ function Legend({ person }: { person: boolean }) {
             <StateIcon state="neutral" size={16} /> może
           </li>
           <li className="fit-cannot flex items-center gap-1.5 rounded-sm border px-1.5 font-semibold">
-            <StateIcon state="cannot" size={16} /> nie może, ale możesz wpisać mimo to
+            <StateIcon state="cannot" size={16} /> nie może
           </li>
         </>
       )}

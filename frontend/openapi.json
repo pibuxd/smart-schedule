@@ -8681,6 +8681,10 @@
             "title": "Possible",
             "type": "boolean"
           },
+          "can_force": {
+            "title": "Can Force",
+            "type": "boolean"
+          },
           "problems": {
             "items": {
               "type": "string"
@@ -8748,6 +8752,7 @@
           "name",
           "current",
           "possible",
+          "can_force",
           "problems",
           "notes",
           "wish",
