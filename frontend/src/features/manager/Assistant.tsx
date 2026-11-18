@@ -352,7 +352,11 @@ export function AssistantPanel({
           placeholder="Opisz zasadę…"
           footer="Zapis dopiero po zatwierdzeniu."
         />
-        <details className="mt-1 text-xs text-ink-muted">
+        <p className="mt-2 mb-0 text-xs text-ink-muted">
+          Claude (AI) czyta Twoje wiadomości. Pamięta do 6 zakończonych z tego
+          okresu z ostatnich 24 godzin.
+        </p>
+        <details className="text-xs text-ink-muted">
           <summary className="flex min-h-(--touch) cursor-pointer items-center gap-1.5">
             <Info size={16} aria-hidden="true" /> Jak działa asystent
           </summary>
@@ -362,9 +366,8 @@ export function AssistantPanel({
             przydziału.
           </p>
           <p className="mt-0 mb-2">
-            Claude (AI) czyta wiadomości oraz listy zasad, osób i zmian tego
-            lokalu. Pamięta do 6 zakończonych wiadomości z tego okresu z
-            ostatnich 24 godzin. W historii widzisz ostatnie 50.
+            Claude czyta też listy zasad, osób i zmian tego lokalu. Starszą
+            sprawę opisz ponownie. W historii widzisz ostatnie 50 wiadomości.
           </p>
         </details>
       </div>
