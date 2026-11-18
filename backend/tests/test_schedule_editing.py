@@ -12,6 +12,7 @@ from apps.availability.models import AvailabilityDay
 from apps.notifications.models import Notification
 from apps.scheduling.generation import request_generation, run_generation
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
+from apps.staffing.models import LocationClosure, StaffingException
 from tests.test_generation import FAST, MON, _ctx, shop  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.django_db
@@ -254,6 +255,8 @@ def test_read_only_company_can_look_but_not_change(api, shop, draft, subscribe):
     assert api.patch(url(draft, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id)}]}).status_code == 402
     assert api.post(url(draft, "/publish")).status_code == 402
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 402
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 402
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 402
 
 
 def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
@@ -269,6 +272,8 @@ def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 404
     assert api.post(url(draft, "/draft")).status_code == 404
     assert api.post(url(draft, "/publish")).status_code == 404
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 404
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 404
 
 
 def test_person_from_another_company_cannot_be_put_in(api, shop, draft, make_company):
@@ -301,3 +306,79 @@ def test_employee_list_counts_shifts_in_the_draft(api, shop, draft):
     }
     assert {r["id"]: r["draft_shifts"] for r in rows if r["draft_shifts"]} == expected
     assert sum(expected.values()) == 12  # switching someone off tells the manager about these shifts
+
+
+# ----------------------------------------------------------------- one place more or fewer on a day
+
+
+def seat(shop, day):
+    return {"date": str(day), "shift_type_id": str(shop["shift_type"].pk), "position_id": str(shop["position"].pk)}
+
+
+def test_adding_a_place_makes_a_hole_and_survives_arranging_again(api, shop, draft):
+    api.login(shop["manager"])
+
+    added = api.post(url(draft, "/seats"), seat(shop, MON))
+
+    assert added.status_code == 201
+    row = added.json()
+    assert row["employee_id"] is None and (row["start_time"], row["end_time"]) == ("06:00", "14:00")
+    assert row["shift_type_id"] == str(shop["shift_type"].pk)
+    body = api.get(url(draft)).json()
+    assert len([s for s in body["shifts"] if s["date"] == str(MON)]) == 3 and body["scores"]["holes"] == 1
+    assert StaffingException.objects.get(date=MON).count == 3  # Monday usually needs 2
+
+    again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    assert Shift.objects.filter(version=again, date=MON).count() == 3
+
+
+def test_removing_a_place_keeps_the_other_person_and_the_numbering(api, shop, draft):
+    api.login(shop["manager"])
+    first, second = Assignment.objects.filter(shift__version=draft, shift__date=MON).order_by("shift__slot_key")
+    Assignment.objects.filter(pk=second.pk).update(pinned=True)
+
+    assert api.client.delete(url(draft, f"/shifts/{first.shift_id}")).status_code == 204
+
+    [left] = Assignment.objects.filter(shift__version=draft, shift__date=MON).select_related("shift")
+    assert left.shift.slot_key.endswith("/1") and left.employee_id == second.employee_id and left.pinned is True
+    assert StaffingException.objects.get(date=MON).count == 1
+    assert api.get(url(draft)).json()["scores"]["slots"] == 11
+    # Back to the usual two people: the date no longer differs from other Mondays.
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 201
+    assert not StaffingException.objects.exists()
+
+
+def test_removed_place_of_a_published_schedule_is_in_the_history(api, shop, draft):
+    api.login(shop["manager"])
+    api.post(url(draft, "/publish"))
+    correction = ScheduleVersion.objects.get(pk=api.post(url(draft, "/draft")).json()["id"])
+    rows = Assignment.objects.filter(shift__version=correction, shift__date=MON).select_related("shift")
+    gone = rows.order_by("-shift__slot_key").first()
+    name = gone.employee.membership.user.full_name
+
+    assert api.client.delete(url(correction, f"/shifts/{gone.shift_id}")).status_code == 204
+    assert api.get(url(correction)).json()["changed_people"] == [name]
+    assert api.post(url(correction, "/publish")).status_code == 200
+
+    event = AssignmentEvent.objects.filter(slot_key=gone.shift.slot_key).order_by("-at").first()
+    assert (event.from_employee_id, event.to_employee_id, event.reason) == (gone.employee_id, None, "manual")
+
+
+def test_places_cannot_change_on_closed_or_past_days_or_in_a_published_schedule(api, shop, draft, monkeypatch):
+    api.login(shop["manager"])
+    LocationClosure.objects.create(location=shop["location"], date=MON + timedelta(days=5))
+    closed = api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=5)))
+    assert closed.status_code == 409 and "zamknięty" in closed.json()["detail"]
+    assert api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=30))).status_code == 400
+
+    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: MON + timedelta(days=2))
+    taken = shift_of(draft, MON)
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 409
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 409
+    assert api.get(url(draft)).json()["today"] == str(MON + timedelta(days=2))
+
+    api.post(url(draft, "/publish"))
+    later = shift_of(draft, MON + timedelta(days=4))
+    assert api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=4))).status_code == 409
+    assert api.client.delete(url(draft, f"/shifts/{later.shift_id}")).status_code == 409
+    assert not StaffingException.objects.exists()

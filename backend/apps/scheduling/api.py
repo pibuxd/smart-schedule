@@ -18,7 +18,7 @@ from apps.scheduling.editing import manual_changes
 from apps.scheduling.generation import ACTIVE, cancel_generation, request_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
-from apps.staffing.models import EmployeeProfile
+from apps.staffing.models import EmployeeProfile, Position, ShiftType
 from apps.staffing.shortage import ExperiencedShortOut, experienced_shortage
 from apps.tenancy.context import context_for
 from apps.tenancy.models import Location
@@ -484,6 +484,7 @@ class VersionShiftOut(Schema):
     start_time: str
     end_time: str
     hours: float
+    shift_type_id: UUID | None  # empty when the shift type was deleted later
     shift_type_name: str
     position_id: UUID
     position_name: str
@@ -563,6 +564,7 @@ class VersionOut(Schema):
     unmet_requests: list[UnmetRequestOut]
     notes: list[str]
     history: list[VersionSummaryOut]
+    today: date  # days before it have passed: their shifts and places cannot be changed
     # A correction of a published schedule: people whose shifts would change on publishing.
     changed_people: list[str]
 
@@ -647,6 +649,12 @@ class PinIn(Schema):
     pinned: bool
 
 
+class SeatIn(Schema):
+    date: date
+    shift_type_id: UUID
+    position_id: UUID
+
+
 def _scores_out(scores) -> ScoresOut:
     return ScoresOut(**{**scores.as_dict(), "notes": []})
 
@@ -693,6 +701,7 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
             start_time=start,
             end_time=end,
             hours=_hours(shift),
+            shift_type_id=shift.shift_type_id,
             shift_type_name=shift.shift_type.name if shift.shift_type else "",
             position_id=shift.position_id,
             position_name=shift.position.name,
@@ -832,6 +841,7 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
         unmet_requests=_unmet_requests(loaded),
         notes=notes,
         history=_history(version),
+        today=today,
         changed_people=changed_people(loaded),
     )
 
@@ -944,6 +954,39 @@ def pin_shift(request, version_id: UUID, shift_id: UUID, payload: PinIn):
     shift = ctx.get(Shift, pk=shift_id, version=version)
     set_pinned(version, str(shift.pk), payload.pinned)
     return _shift_rows(load_version(version), timezone.localdate())[shift.slot_key]
+
+
+@router.post(
+    "/versions/{version_id}/seats",
+    response={201: VersionShiftOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def add_schedule_seat(request, version_id: UUID, payload: SeatIn):
+    """One more person needed on a shift that day: an empty place in the draft, kept when arranging again
+    (the date's staffing in the location's settings gets the same number)."""
+    from apps.scheduling.editing import add_seat, load_version
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    location = version.period.location
+    shift_type = ctx.get(ShiftType, pk=payload.shift_type_id, location=location)
+    position = ctx.get(Position, pk=payload.position_id, location=location)
+    shift = add_seat(version, payload.date, shift_type, position)
+    return Status(201, _shift_rows(load_version(version), timezone.localdate())[shift.slot_key])
+
+
+@router.delete(
+    "/versions/{version_id}/shifts/{shift_id}",
+    response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def remove_schedule_seat(request, version_id: UUID, shift_id: UUID):
+    """One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the
+    date's staffing gets the same number."""
+    from apps.scheduling.editing import remove_seat
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    remove_seat(version, str(ctx.get(Shift, pk=shift_id, version=version).pk))
+    return Status(204, None)
 
 
 @router.post(

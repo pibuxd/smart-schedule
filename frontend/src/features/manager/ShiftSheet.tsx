@@ -1,9 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Pin, PinOff } from 'lucide-react'
+import { Pin, PinOff, Plus, Trash2 } from 'lucide-react'
 
 import type { CandidateOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
-import { useChangeAssignments, useExplainShift, usePinShift } from '../../api/generated/scheduling/scheduling'
+import {
+  useAddScheduleSeat,
+  useChangeAssignments,
+  useExplainShift,
+  usePinShift,
+  useRemoveScheduleSeat,
+} from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
@@ -66,6 +72,8 @@ function ShiftDetails({
   const explanation = useExplainShift(versionId, shift.id)
   const change = useChangeAssignments()
   const pin = usePinShift()
+  const addSeat = useAddScheduleSeat()
+  const removeSeat = useRemoveScheduleSeat()
   const queryClient = useQueryClient()
 
   if (explanation.isPending) return <Loading>Sprawdzam, kto może wziąć tę zmianę…</Loading>
@@ -92,6 +100,19 @@ function ShiftDetails({
           onDone()
         },
       },
+    )
+
+  const saved = {
+    onSuccess: () => {
+      refresh()
+      onDone()
+    },
+  }
+  const addPlace = () =>
+    shift.shift_type_id &&
+    addSeat.mutate(
+      { versionId, data: { date: shift.date, shift_type_id: shift.shift_type_id, position_id: shift.position_id } },
+      saved,
     )
 
   const put = (employeeId: string | null) =>
@@ -172,12 +193,7 @@ function ShiftDetails({
             kogoś mimo to złamałoby te zasady, a takiego grafiku nie da się opublikować. Możesz:
           </span>
           <ul className="m-0 grid gap-1 pl-5 text-sm">
-            <li>
-              <Link to="/kierownik/lokal/$locationId/ustawienia" params={{ locationId }} className="font-semibold text-accent">
-                zmniejszyć obsadę tego dnia
-              </Link>{' '}
-              (wyjątek w obsadzie),
-            </li>
+            <li>usunąć to miejsce (przycisk niżej),</li>
             <li>
               <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
                 zmienić zasadę
@@ -229,6 +245,31 @@ function ShiftDetails({
             ))}
           </ul>
         </details>
+      )}
+      {editable && (
+        <section className="grid gap-2 rounded-md border border-line bg-surface p-3">
+          <h3 className="m-0 text-base font-extrabold">Ile osób na tej zmianie</h3>
+          <p className="m-0 text-sm text-ink-muted">Zmieniasz obsadę tylko tego dnia. Zostanie też, gdy ułożysz grafik od nowa.</p>
+          <div className="flex flex-wrap gap-2">
+            {shift.shift_type_id && (
+              <Button variant="secondary" size="normal" disabled={addSeat.isPending || removeSeat.isPending} onClick={addPlace}>
+                <Plus aria-hidden="true" size={20} />
+                Dodaj miejsce
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              size="normal"
+              disabled={addSeat.isPending || removeSeat.isPending}
+              onClick={() => removeSeat.mutate({ versionId, shiftId: shift.id }, saved)}
+            >
+              <Trash2 aria-hidden="true" size={20} />
+              {shift.employee_id ? `Usuń miejsce (${shift.employee_name} traci zmianę)` : 'Usuń to miejsce'}
+            </Button>
+          </div>
+          {addSeat.isError && <InlineError>{errorMessage(addSeat.error, NETWORK_PROBLEM)}</InlineError>}
+          {removeSeat.isError && <InlineError>{errorMessage(removeSeat.error, NETWORK_PROBLEM)}</InlineError>}
+        </section>
       )}
       <SlotHistory events={data.history} />
     </div>

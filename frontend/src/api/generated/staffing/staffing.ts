@@ -26,6 +26,7 @@ import type {
 import type {
   ClosureIn,
   ClosureOut,
+  DayStaffingIn,
   EmployeeIn,
   EmployeeOut,
   ErrorOut,
@@ -34,8 +35,6 @@ import type {
   PositionOut,
   ShiftTypeIn,
   ShiftTypeOut,
-  StaffingExceptionIn,
-  StaffingExceptionOut,
   StaffingIn
 } from '../model';
 
@@ -1046,59 +1045,57 @@ export const useSaveStaffing = <TError = ErrorOut,
       > => {
       return useMutation(getSaveStaffingMutationOptions(options), queryClient);
     }
-    export type createStaffingExceptionResponse201 = {
-  data: StaffingExceptionOut
-  status: 201
+    export type saveDayStaffingResponse200 = {
+  data: LocationSetupOut
+  status: 200
 }
 
-export type createStaffingExceptionResponse400 = {
+export type saveDayStaffingResponse400 = {
   data: ErrorOut
   status: 400
 }
 
-export type createStaffingExceptionResponse402 = {
+export type saveDayStaffingResponse402 = {
   data: ErrorOut
   status: 402
 }
 
-export type createStaffingExceptionResponse403 = {
+export type saveDayStaffingResponse403 = {
   data: ErrorOut
   status: 403
 }
 
-export type createStaffingExceptionResponse404 = {
+export type saveDayStaffingResponse404 = {
   data: ErrorOut
   status: 404
 }
 
-export type createStaffingExceptionResponse409 = {
-  data: ErrorOut
-  status: 409
-}
-
-export type createStaffingExceptionResponseSuccess = (createStaffingExceptionResponse201) & {
+export type saveDayStaffingResponseSuccess = (saveDayStaffingResponse200) & {
   headers: Headers;
 };
-export type createStaffingExceptionResponseError = (createStaffingExceptionResponse400 | createStaffingExceptionResponse402 | createStaffingExceptionResponse403 | createStaffingExceptionResponse404 | createStaffingExceptionResponse409) & {
+export type saveDayStaffingResponseError = (saveDayStaffingResponse400 | saveDayStaffingResponse402 | saveDayStaffingResponse403 | saveDayStaffingResponse404) & {
   headers: Headers;
 };
 
-export type createStaffingExceptionResponse = (createStaffingExceptionResponseSuccess | createStaffingExceptionResponseError)
+export type saveDayStaffingResponse = (saveDayStaffingResponseSuccess | saveDayStaffingResponseError)
 
-export const getCreateStaffingExceptionUrl = (locationId: string,) => {
+export const getSaveDayStaffingUrl = (locationId: string,
+    day: string,) => {
 
 
 
 
-  return `/api/locations/${locationId}/staffing-exceptions`
+  return `/api/locations/${locationId}/staffing-days/${day}`
 }
 
 /**
- * A different staffing on one date (e.g. Christmas Eve), replacing the weekday's for that shift and position.
- * @summary Create Staffing Exception
+ * Staffing of one date (e.g. Christmas Eve), set from the calendar. It replaces the weekday's staffing for the
+ * shifts and positions that differ; everything left out, or equal to the usual, follows the weekday again.
+ * @summary Save Day Staffing
  */
-export const createStaffingException = async (locationId: string,
-    staffingExceptionIn: StaffingExceptionIn, options?: Parameters<typeof apiFetch>[1]): Promise<createStaffingExceptionResponse> => {
+export const saveDayStaffing = async (locationId: string,
+    day: string,
+    dayStaffingIn: DayStaffingIn, options?: Parameters<typeof apiFetch>[1]): Promise<saveDayStaffingResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1114,12 +1111,12 @@ export const createStaffingException = async (locationId: string,
     }
     return headers;
   };
-return apiFetch<createStaffingExceptionResponse>(getCreateStaffingExceptionUrl(locationId),
+return apiFetch<saveDayStaffingResponse>(getSaveDayStaffingUrl(locationId,day),
   {
     ...options,
-    method: 'POST',
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(staffingExceptionIn)
+    body: JSON.stringify(dayStaffingIn)
   }
 );}
 
@@ -1127,13 +1124,13 @@ return apiFetch<createStaffingExceptionResponse>(getCreateStaffingExceptionUrl(l
 
 
 
-export const getCreateStaffingExceptionMutationKey = () => ['createStaffingException'] as const;
+export const getSaveDayStaffingMutationKey = () => ['saveDayStaffing'] as const;
 
-export const getCreateStaffingExceptionMutationOptions = <TError = ErrorOut,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStaffingException>>, TError,CreateStaffingExceptionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createStaffingException>>, TError,CreateStaffingExceptionMutationVariables, TContext> => {
+export const getSaveDayStaffingMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveDayStaffing>>, TError,SaveDayStaffingMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveDayStaffing>>, TError,SaveDayStaffingMutationVariables, TContext> => {
 
-const mutationKey = getCreateStaffingExceptionMutationKey();
+const mutationKey = getSaveDayStaffingMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -1143,10 +1140,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createStaffingException>>, CreateStaffingExceptionMutationVariables> = (props) => {
-          const {locationId,data} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveDayStaffing>>, SaveDayStaffingMutationVariables> = (props) => {
+          const {locationId,day,data} = props ?? {};
 
-          return  createStaffingException(locationId,data,requestOptions)
+          return  saveDayStaffing(locationId,day,data,requestOptions)
         }
 
 
@@ -1156,124 +1153,25 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateStaffingExceptionMutationResult = NonNullable<Awaited<ReturnType<typeof createStaffingException>>>
-    export type CreateStaffingExceptionMutationBody = StaffingExceptionIn
-    export type CreateStaffingExceptionMutationError = ErrorOut
-    export type CreateStaffingExceptionMutationVariables = {locationId: string;data: StaffingExceptionIn}
+    export type SaveDayStaffingMutationResult = NonNullable<Awaited<ReturnType<typeof saveDayStaffing>>>
+    export type SaveDayStaffingMutationBody = DayStaffingIn
+    export type SaveDayStaffingMutationError = ErrorOut
+    export type SaveDayStaffingMutationVariables = {locationId: string;day: string;data: DayStaffingIn}
 
     /**
- * A different staffing on one date (e.g. Christmas Eve), replacing the weekday's for that shift and position.
- * @summary Create Staffing Exception
+ * Staffing of one date (e.g. Christmas Eve), set from the calendar. It replaces the weekday's staffing for the
+ * shifts and positions that differ; everything left out, or equal to the usual, follows the weekday again.
+ * @summary Save Day Staffing
  */
-export const useCreateStaffingException = <TError = ErrorOut,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStaffingException>>, TError,CreateStaffingExceptionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+export const useSaveDayStaffing = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveDayStaffing>>, TError,SaveDayStaffingMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createStaffingException>>,
+        Awaited<ReturnType<typeof saveDayStaffing>>,
         TError,
-        CreateStaffingExceptionMutationVariables,
+        SaveDayStaffingMutationVariables,
         TContext
       > => {
-      return useMutation(getCreateStaffingExceptionMutationOptions(options), queryClient);
-    }
-    export type deleteStaffingExceptionResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteStaffingExceptionResponse402 = {
-  data: ErrorOut
-  status: 402
-}
-
-export type deleteStaffingExceptionResponse403 = {
-  data: ErrorOut
-  status: 403
-}
-
-export type deleteStaffingExceptionResponse404 = {
-  data: ErrorOut
-  status: 404
-}
-
-export type deleteStaffingExceptionResponseSuccess = (deleteStaffingExceptionResponse204) & {
-  headers: Headers;
-};
-export type deleteStaffingExceptionResponseError = (deleteStaffingExceptionResponse402 | deleteStaffingExceptionResponse403 | deleteStaffingExceptionResponse404) & {
-  headers: Headers;
-};
-
-export type deleteStaffingExceptionResponse = (deleteStaffingExceptionResponseSuccess | deleteStaffingExceptionResponseError)
-
-export const getDeleteStaffingExceptionUrl = (exceptionId: string,) => {
-
-
-
-
-  return `/api/staffing-exceptions/${exceptionId}`
-}
-
-/**
- * @summary Delete Staffing Exception
- */
-export const deleteStaffingException = async (exceptionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deleteStaffingExceptionResponse> => {
-
-  return apiFetch<deleteStaffingExceptionResponse>(getDeleteStaffingExceptionUrl(exceptionId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-
-
-export const getDeleteStaffingExceptionMutationKey = () => ['deleteStaffingException'] as const;
-
-export const getDeleteStaffingExceptionMutationOptions = <TError = ErrorOut,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStaffingException>>, TError,DeleteStaffingExceptionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteStaffingException>>, TError,DeleteStaffingExceptionMutationVariables, TContext> => {
-
-const mutationKey = getDeleteStaffingExceptionMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStaffingException>>, DeleteStaffingExceptionMutationVariables> = (props) => {
-          const {exceptionId} = props ?? {};
-
-          return  deleteStaffingException(exceptionId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteStaffingExceptionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteStaffingException>>>
-
-    export type DeleteStaffingExceptionMutationError = ErrorOut
-    export type DeleteStaffingExceptionMutationVariables = {exceptionId: string}
-
-    /** @summary Delete Staffing Exception */
-export const useDeleteStaffingException = <TError = ErrorOut,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStaffingException>>, TError,DeleteStaffingExceptionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteStaffingException>>,
-        TError,
-        DeleteStaffingExceptionMutationVariables,
-        TContext
-      > => {
-      return useMutation(getDeleteStaffingExceptionMutationOptions(options), queryClient);
+      return useMutation(getSaveDayStaffingMutationOptions(options), queryClient);
     }
     export type createClosureResponse201 = {
   data: ClosureOut

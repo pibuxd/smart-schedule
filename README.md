@@ -16,7 +16,7 @@ Stan: prototyp, wszystkie 10 etapów planu zbudowane.
 - Pracownik (telefon): logowanie kodem SMS, zaproszenie do lokalu, „Kiedy mogę” (kalendarz z pędzlem: nie mogę /
   chętnie, godziny dnia, powtarzanie co tydzień, kopiowanie z poprzedniego miesiąca), prośby pisane słowami,
   „Mój grafik”, oddawanie i branie zmian, powiadomienia w aplikacji.
-- Kierownik (komputer): lokale i grupy, stanowiska, zmiany, obsada z wyjątkami, pracownicy i zaproszenia,
+- Kierownik (komputer): lokale i grupy, stanowiska, zmiany, obsada z kalendarzem na wybrane dni, pracownicy i zaproszenia,
   przegląd dyspozycji i próśb, zasady w kolejności ważności z podglądem skutku, układanie grafiku jednym
   przyciskiem, ocena w trzech liczbach, wyjaśnienia, ręczne poprawki z walidacją na żywo, publikacja z wersjami,
   zatwierdzanie oddanych zmian, godziny w miesiącu z eksportem CSV, kody dostępu i okres próbny.

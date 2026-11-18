@@ -11,13 +11,14 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Hand, Pin, Send, SquarePen } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Hand, Pin, Plus, Send, SquarePen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
 import { useLocationInstructions } from '../../api/generated/assistant/assistant'
 import type { CheckOut, InstructionsOut, PeriodOut, ScoresOut, VersionOut, VersionShiftOut } from '../../api/generated/model'
 import {
+  useAddScheduleSeat,
   useChangeAssignments,
   useCheckScheduleChanges,
   useLocationPeriods,
@@ -36,7 +37,7 @@ import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/da
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
 import { pickPeriod } from './periods'
-import { buildGrid, percent, swapChanges } from './schedule-grid'
+import { buildGrid, type GridColumn, percent, swapChanges } from './schedule-grid'
 import { ShiftSheet } from './ShiftSheet'
 import { verdict } from './verdict'
 import { daysUntil, PERIOD_STATUS, periodTitle, shifts as shiftsWord } from './words'
@@ -418,6 +419,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
   const checker = useCheckScheduleChanges()
   const change = useChangeAssignments()
+  const addSeat = useAddScheduleSeat()
   const queryClient = useQueryClient()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const editable = data.editable
@@ -465,6 +467,21 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
             text: to.employee_id ? `Zamienione: ${from.employee_name} i ${to.employee_name}.` : `Przeniesiono: ${from.employee_name}.`,
             bad: false,
           })
+          void queryClient.invalidateQueries()
+        },
+        onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
+      },
+    )
+  }
+
+  const addPlace = (date: string, column: GridColumn) => {
+    if (!column.shiftTypeId) return
+    setMessage(null)
+    addSeat.mutate(
+      { versionId: data.id, data: { date, shift_type_id: column.shiftTypeId, position_id: column.positionId } },
+      {
+        onSuccess: () => {
+          setMessage({ text: 'Dodano miejsce. Wybierz je, żeby wpisać osobę.', bad: false })
           void queryClient.invalidateQueries()
         },
         onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
@@ -541,6 +558,17 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
                         <span className="text-sm text-ink-muted lg:hidden">
                           {column.shiftTypeName || 'Zmiana'} · {column.positionName}
                         </span>
+                      )}
+                      {cell.length === 0 && editable && column.shiftTypeId && row.date >= data.today && (
+                        <button
+                          type="button"
+                          disabled={addSeat.isPending}
+                          onClick={() => addPlace(row.date, column)}
+                          aria-label={`Dodaj miejsce: ${column.shiftTypeName} · ${column.positionName}, ${weekdayShort(day)} ${dayAndMonth(day)}`}
+                          className="flex min-h-(--touch) w-full cursor-pointer items-center justify-center rounded-sm border-2 border-dashed border-line text-ink-muted hover:border-accent hover:text-accent disabled:opacity-50"
+                        >
+                          <Plus aria-hidden="true" size={18} />
+                        </button>
                       )}
                       {cell.map((shift) => (
                         <ShiftChip

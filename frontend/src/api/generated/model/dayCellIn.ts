@@ -5,8 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface StaffingExceptionIn {
-  date: string;
+export interface DayCellIn {
   shift_type_id: string;
   position_id: string;
   /**
@@ -21,6 +20,4 @@ export interface StaffingExceptionIn {
   experienced?: number;
   start_time?: string | null;
   end_time?: string | null;
-  /** @maxLength 200 */
-  note?: string;
 }

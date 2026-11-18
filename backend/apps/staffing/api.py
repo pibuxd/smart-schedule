@@ -17,6 +17,7 @@ from ninja.responses import Status
 from apps.core.schemas import ErrorOut
 from apps.rules.models import RuleSetting
 from apps.scheduling.models import Assignment, ScheduleVersion
+from apps.staffing import day_staffing
 from apps.staffing.models import (
     EmployeeProfile,
     LocationClosure,
@@ -92,14 +93,20 @@ class StaffingCellOut(Schema):
     end_time: time | None
 
 
-class StaffingExceptionIn(Schema):
-    date: date
+class DayCellIn(Schema):
     shift_type_id: UUID
     position_id: UUID
-    count: int = Field(ge=0, le=50)  # 0 = nobody that day (e.g. closed)
+    count: int = Field(ge=0, le=50)  # 0 = nobody on that date
     experienced: int = Field(0, ge=0, le=50)
+    # Other hours on that date only (required for a flexible shift that has none on that weekday).
     start_time: time | None = None
     end_time: time | None = None
+
+
+class DayStaffingIn(Schema):
+    """What one date needs. A shift and position left out goes back to the weekday's usual staffing."""
+
+    cells: list[DayCellIn] = Field(max_length=500)
     note: str = Field("", max_length=200)
 
 
@@ -266,13 +273,6 @@ def _unique(save, message: str):
         raise HttpError(409, message) from exc
 
 
-def _in_location(ctx: TenantContext, model, pk, location: Location, what: str):
-    obj = ctx.qs(model).filter(pk=pk, location=location).first()
-    if obj is None:
-        raise HttpError(400, f"Wybierz {what} z tego lokalu.")
-    return obj
-
-
 # --------------------------------------------------------------------------------------------- setup
 
 
@@ -432,41 +432,48 @@ def save_staffing(request, location_id: UUID, payload: StaffingIn):
     return _setup_out(ctx, location)
 
 
-@router.post(
-    "/locations/{location_id}/staffing-exceptions",
-    response={201: StaffingExceptionOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+@router.put(
+    "/locations/{location_id}/staffing-days/{day}",
+    response={200: LocationSetupOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
 )
-def create_staffing_exception(request, location_id: UUID, payload: StaffingExceptionIn):
-    """A different staffing on one date (e.g. Christmas Eve), replacing the weekday's for that shift and position."""
+def save_day_staffing(request, location_id: UUID, day: date, payload: DayStaffingIn):
+    """Staffing of one date (e.g. Christmas Eve), set from the calendar. It replaces the weekday's staffing for the
+    shifts and positions that differ; everything left out, or equal to the usual, follows the weekday again."""
     ctx, location, _ = _change(request, Location, location_id)
-    st = _in_location(ctx, ShiftType, payload.shift_type_id, location, "zmianę")
-    position = _in_location(ctx, Position, payload.position_id, location, "stanowisko")
-    _check_hours(payload.start_time, payload.end_time, False, f"Zmiana „{st.name}”")
-    if payload.experienced > payload.count:
-        raise HttpError(400, TOO_MANY_EXPERIENCED)
-    if abs((payload.date - timezone.localdate()).days) > 2 * 366:
-        raise HttpError(400, "Wyjątek może dotyczyć dnia najwyżej dwa lata od dziś. Sprawdź rok.")
-    exc = StaffingException(
-        company=ctx.company,
-        location=location,
-        date=payload.date,
-        shift_type=st,
-        position=position,
-        count=payload.count,
-        experienced=payload.experienced,
-        start_time=payload.start_time,
-        end_time=payload.end_time,
-        note=payload.note.strip(),
-    )
-    _unique(exc.save, "Ten dzień ma już wyjątek dla tej zmiany i stanowiska. Usuń go i dodaj nowy.")
-    return Status(201, _exception_out(exc))
-
-
-@router.delete("/staffing-exceptions/{exception_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut})
-def delete_staffing_exception(request, exception_id: UUID):
-    _, exc, _ = _change(request, StaffingException, exception_id)
-    exc.delete()
-    return Status(204, None)
+    if abs((day - timezone.localdate()).days) > 2 * 366:
+        raise HttpError(400, "Obsadę można ustawić na dzień najwyżej dwa lata od dziś. Sprawdź rok.")
+    shift_types = {st.pk: st for st in ctx.qs(ShiftType).filter(location=location)}
+    positions = {p.pk: p for p in ctx.qs(Position).filter(location=location)}
+    cells = {}
+    for cell in payload.cells:
+        st, position = shift_types.get(cell.shift_type_id), positions.get(cell.position_id)
+        if st is None or position is None:
+            raise HttpError(400, "Obsada może dotyczyć tylko zmian i stanowisk tego lokalu.")
+        if cell.experienced > cell.count:
+            raise HttpError(400, TOO_MANY_EXPERIENCED)
+        _check_hours(cell.start_time, cell.end_time, False, f"Zmiana „{st.name}”")
+        cells[(st.pk, position.pk)] = cell
+    note = payload.note.strip()
+    with transaction.atomic():
+        for exc in ctx.qs(StaffingException).filter(location=location, date=day):
+            if (exc.shift_type_id, exc.position_id) not in cells:
+                exc.delete()
+        for (st_id, position_id), cell in cells.items():
+            st, position = shift_types[st_id], positions[position_id]
+            day_staffing.save_day_cell(
+                location,
+                day,
+                st,
+                position,
+                count=cell.count,
+                experienced=cell.experienced,
+                start=cell.start_time,
+                end=cell.end_time,
+                note=note,
+            )
+            if cell.count and None in day_staffing.day_hours(location, day, st, position):
+                raise HttpError(400, f"Zmiana „{st.name}” ma dowolne godziny. Podaj, od której do której.")
+    return _setup_out(ctx, location)
 
 
 @router.post(

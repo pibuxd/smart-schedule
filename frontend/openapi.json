@@ -2243,6 +2243,187 @@
         ]
       }
     },
+    "/api/versions/{version_id}/seats": {
+      "post": {
+        "operationId": "add_schedule_seat",
+        "summary": "Add Schedule Seat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionShiftOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One more person needed on a shift that day: an empty place in the draft, kept when arranging again\n(the date's staffing in the location's settings gets the same number).",
+        "tags": [
+          "scheduling"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeatIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/shifts/{shift_id}": {
+      "delete": {
+        "operationId": "remove_schedule_seat",
+        "summary": "Remove Schedule Seat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the\ndate's staffing gets the same number.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/versions/{version_id}/draft": {
       "post": {
         "operationId": "start_correcting",
@@ -4198,10 +4379,10 @@
         ]
       }
     },
-    "/api/locations/{location_id}/staffing-exceptions": {
-      "post": {
-        "operationId": "create_staffing_exception",
-        "summary": "Create Staffing Exception",
+    "/api/locations/{location_id}/staffing-days/{day}": {
+      "put": {
+        "operationId": "save_day_staffing",
+        "summary": "Save Day Staffing",
         "parameters": [
           {
             "in": "path",
@@ -4212,15 +4393,25 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "path",
+            "name": "day",
+            "schema": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            },
+            "required": true
           }
         ],
         "responses": {
-          "201": {
-            "description": "Created",
+          "200": {
+            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StaffingExceptionOut"
+                  "$ref": "#/components/schemas/LocationSetupOut"
                 }
               }
             }
@@ -4264,19 +4455,9 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
           }
         },
-        "description": "A different staffing on one date (e.g. Christmas Eve), replacing the weekday's for that shift and position.",
+        "description": "Staffing of one date (e.g. Christmas Eve), set from the calendar. It replaces the weekday's staffing for the\nshifts and positions that differ; everything left out, or equal to the usual, follows the weekday again.",
         "tags": [
           "staffing"
         ],
@@ -4284,73 +4465,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StaffingExceptionIn"
+                "$ref": "#/components/schemas/DayStaffingIn"
               }
             }
           },
           "required": true
         },
-        "security": [
-          {
-            "SessionAuth": []
-          }
-        ]
-      }
-    },
-    "/api/staffing-exceptions/{exception_id}": {
-      "delete": {
-        "operationId": "delete_staffing_exception",
-        "summary": "Delete Staffing Exception",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "exception_id",
-            "schema": {
-              "format": "uuid",
-              "title": "Exception Id",
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "402": {
-            "description": "Payment Required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "staffing"
-        ],
         "security": [
           {
             "SessionAuth": []
@@ -8355,6 +8475,11 @@
             "title": "History",
             "type": "array"
           },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          },
           "changed_people": {
             "items": {
               "type": "string"
@@ -8382,6 +8507,7 @@
           "unmet_requests",
           "notes",
           "history",
+          "today",
           "changed_people"
         ],
         "title": "VersionOut",
@@ -8410,6 +8536,18 @@
           "hours": {
             "title": "Hours",
             "type": "number"
+          },
+          "shift_type_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Type Id"
           },
           "shift_type_name": {
             "title": "Shift Type Name",
@@ -8486,6 +8624,7 @@
           "start_time",
           "end_time",
           "hours",
+          "shift_type_id",
           "shift_type_name",
           "position_id",
           "position_name",
@@ -8831,6 +8970,32 @@
           "pinned"
         ],
         "title": "PinIn",
+        "type": "object"
+      },
+      "SeatIn": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "shift_type_id": {
+            "format": "uuid",
+            "title": "Shift Type Id",
+            "type": "string"
+          },
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "shift_type_id",
+          "position_id"
+        ],
+        "title": "SeatIn",
         "type": "object"
       },
       "AvailabilityDayOut": {
@@ -10198,13 +10363,8 @@
         "title": "StaffingIn",
         "type": "object"
       },
-      "StaffingExceptionIn": {
+      "DayCellIn": {
         "properties": {
-          "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
-          },
           "shift_type_id": {
             "format": "uuid",
             "title": "Shift Type Id",
@@ -10251,6 +10411,26 @@
               }
             ],
             "title": "End Time"
+          }
+        },
+        "required": [
+          "shift_type_id",
+          "position_id",
+          "count"
+        ],
+        "title": "DayCellIn",
+        "type": "object"
+      },
+      "DayStaffingIn": {
+        "description": "What one date needs. A shift and position left out goes back to the weekday's usual staffing.",
+        "properties": {
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/DayCellIn"
+            },
+            "maxItems": 500,
+            "title": "Cells",
+            "type": "array"
           },
           "note": {
             "default": "",
@@ -10260,12 +10440,9 @@
           }
         },
         "required": [
-          "date",
-          "shift_type_id",
-          "position_id",
-          "count"
+          "cells"
         ],
-        "title": "StaffingExceptionIn",
+        "title": "DayStaffingIn",
         "type": "object"
       },
       "ClosureIn": {

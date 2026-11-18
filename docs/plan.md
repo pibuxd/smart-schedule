@@ -193,7 +193,7 @@ Logowanie i konto
 
 Ustawienia (menedżer)
 - `GET/POST /groups`, `GET/POST/PATCH /locations`
-- `GET/POST/PATCH/DELETE /locations/{id}/positions`, `/shift-types`, `/staffing-rules`, `/staffing-exceptions`
+- `GET/POST/PATCH/DELETE /locations/{id}/positions`, `/shift-types`, `/staffing-rules`; obsada jednej daty: `PUT /locations/{id}/staffing-days/{data}` (sekcja 24)
 - `GET/PATCH /locations/{id}/employees`, `GET/POST /locations/{id}/invitations`, `POST /invitations/{id}/cancel`
 
 Dyspozycyjność i prośby
@@ -232,7 +232,7 @@ Pracownik (telefon)
 Menedżer (komputer)
 1. Rejestracja firmy i kod dostępu (także później w Ustawieniach → Subskrypcja).
 2. Widok zbiorczy grupy (ekran startowy): lokale w wierszach, stan okresu każdego lokalu (zbieranie dyspozycji / szkic / opublikowany), kto nie zgłosił dyspozycji, przycisk "Ułóż grafik dla wszystkich" (osobne generowanie dla każdego lokalu), przycisk "Poproś o dyspozycje" (powiadomienie do pracowników z okresem i terminem).
-3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) z wyjątkami, okres i termin dyspozycji.
+3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) i kalendarz obsady w wybrane dni (sekcja 24), okres i termin dyspozycji.
 4. Pracownicy: lista, zaproszenia po numerze, stanowiska, maksimum i cel godzin.
 5. Dyspozycje: siatka pracownicy × dni, lista próśb z interpretacją i akcjami, lista osób bez zgłoszenia.
 6. Zasady: jedna lista do przeciągania, przełącznik włącz/wyłącz, "bez wyjątków", parametry, podgląd skutku przed zapisaniem.
@@ -676,3 +676,31 @@ Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi odda
   w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
   sprawiedliwe (np. osoba blisko limitu godzin).
 
+## 24. Obsada wybranego dnia w kalendarzu i miejsca w edycji grafiku (18.11.2026)
+
+Prośba Piotra: lista wyjątków (dzień, zmiana, stanowisko, każdy wpis osobno) była mało czytelna. Zamiast niej:
+
+- Ustawienia lokalu mają kalendarz "Obsada w wybrane dni": miesiąc, w każdym dniu liczba potrzebnych osób, ikona przy
+  dniu z inną obsadą niż zwykle i przy dniu zamknięcia. Wybranie dnia otwiera jego obsadę: dla każdej zmiany
+  i stanowiska liczba osób (minus, plus), a po rozwinięciu doświadczeni i inne godziny. Tam też "Wróć do zwykłej
+  obsady" i "Zamknij lokal w ten dzień" / "Otwórz lokal w ten dzień" (te same dni zamknięcia co na liście niżej).
+- Dane zostają w `StaffingException` (bez migracji). Wiersz istnieje tylko wtedy, gdy data różni się od dnia
+  tygodnia: `apps/staffing/day_staffing.py` usuwa go, gdy liczby i godziny są takie jak zwykle.
+- `PUT /locations/{id}/staffing-days/{data}` zapisuje cały dzień naraz (`cells`, `note`); para pominięta wraca do
+  zwykłej obsady. Zastępuje `POST /locations/{id}/staffing-exceptions` i `DELETE /staffing-exceptions/{id}`.
+- Edycja grafiku (najnowszy szkic): `POST /versions/{id}/seats` dodaje puste miejsce na zmianie i stanowisku danego
+  dnia, `DELETE /versions/{id}/shifts/{shift_id}` usuwa miejsce razem z osobą. Oba zapisują tę samą liczbę jako
+  obsadę tej daty, więc "Ułóż od nowa" jej nie cofa. Przyciski są w arkuszu zmiany ("Ile osób na tej zmianie"),
+  a w pustej komórce siatki jest "+".
+
+Założenia:
+1. Numery miejsc zostają 1…n, jak przy układaniu: gdy znika miejsce o niższym numerze, osoba z ostatniego miejsca
+   (z przypięciem) przechodzi na jego numer.
+2. Dni, które minęły, dni zamknięcia i opublikowane wersje: bez zmian miejsc (409), tak jak przy ręcznej zmianie osoby.
+3. Nowe miejsce bierze godziny innych miejsc tej zmiany w tym dniu, a gdy ich nie ma: godziny z obsady daty, dnia
+   tygodnia albo typu zmiany. Zmiana "dowolne godziny" bez godzin: 409 z prośbą o ustawienie ich w kalendarzu.
+4. Miejsce usunięte z poprawki opublikowanego grafiku trafia do historii (`AssignmentEvent`, "ręcznie", do nikogo),
+   a osoba jest na liście osób, którym zmienia się grafik (`changed_people`).
+5. Kolumnę, której w grafiku jeszcze nie ma (zmiana i stanowisko bez żadnego miejsca w okresie), dodaje się
+   w kalendarzu obsady i przez "Ułóż od nowa". Na telefonie pustych komórek siatki nie pokazujemy.
+6. Zmiana obsady w kalendarzu nie rusza gotowych szkiców; działa od następnego ułożenia grafiku (jak dotąd).

@@ -12,6 +12,7 @@ export interface VersionShiftOut {
   start_time: string;
   end_time: string;
   hours: number;
+  shift_type_id: string | null;
   shift_type_name: string;
   position_id: string;
   position_name: string;

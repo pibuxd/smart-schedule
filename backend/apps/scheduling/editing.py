@@ -4,6 +4,8 @@
 - `check_changes` / `apply_changes`: a manual change (who works which slot) is validated by the same validator as
   the generator's result; a change that would add a hard problem is refused with the validator's sentences.
   Only the newest version of a period can be edited, and only while it is a draft; days that have passed cannot.
+- `add_seat` / `remove_seat`: one more or one fewer place on a shift of one day. The same number is saved as that
+  date's staffing (`apps.staffing.day_staffing`), so arranging the schedule again keeps it.
 - `start_draft`: editing a published schedule starts a new draft copy (publishing makes it the published one).
 - `publish`: the draft becomes the published version, the previous one is kept as history, the history of
   assignments (`AssignmentEvent`) gets one row for every slot whose person changed, open offers of given-away
@@ -15,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
@@ -22,10 +25,11 @@ from ninja.errors import HttpError
 
 from apps.notifications.models import Notification
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
-from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version
-from apps.staffing.models import EmployeeProfile
+from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version, slot_key
+from apps.staffing import day_staffing
+from apps.staffing.models import EmployeeProfile, LocationClosure, Position, ShiftType
 from engine.explain import new_soft_violations, without_pin
-from engine.problem import Problem
+from engine.problem import Problem, shift_bounds
 from engine.scoring import Scores, score
 from engine.validator import ValidationReport, validate
 
@@ -178,6 +182,87 @@ def set_pinned(version: ScheduleVersion, shift_id: str, pinned: bool) -> Assignm
     return assignment
 
 
+# ----------------------------------------------------------------------------------------------- places on a shift
+
+DAY_PASSED = "Ten dzień już minął, więc jego obsady nie można zmienić."
+
+
+def _seats(version: ScheduleVersion, prefix: str) -> list[Shift]:
+    """The places of one shift and position on one day, in the order of their place numbers."""
+    rows = Shift.objects.for_company(version.company_id).filter(version=version, slot_key__startswith=prefix)
+    return sorted(rows.select_related("assignment"), key=lambda s: int(s.slot_key.rsplit("/", 1)[1]))
+
+
+def add_seat(version: ScheduleVersion, day: date, shift_type: ShiftType, position: Position) -> Shift:
+    """One more place (empty) on this shift and position that day, in the draft and in the date's staffing."""
+    with transaction.atomic():
+        version = ScheduleVersion.objects.select_for_update().select_related("period__location").get(pk=version.pk)
+        if not is_editable(version):
+            raise HttpError(409, NOT_EDITABLE)
+        period, location = version.period, version.period.location
+        if not period.start <= day <= period.end:
+            raise HttpError(400, "Ten dzień jest poza okresem tego grafiku.")
+        if day < timezone.localdate():
+            raise HttpError(409, DAY_PASSED)
+        if LocationClosure.objects.for_company(version.company_id).filter(location=location, date=day).exists():
+            raise HttpError(409, "Lokal jest tego dnia zamknięty. Najpierw usuń ten dzień z dni zamknięcia.")
+        seats = _seats(version, slot_key(day, str(shift_type.pk), str(position.pk), 0)[:-1])
+        if seats:
+            start_at, end_at = seats[0].start_at, seats[0].end_at
+        else:
+            start, end = day_staffing.day_hours(location, day, shift_type, position)
+            if start is None or end is None:
+                raise HttpError(
+                    409,
+                    f"Zmiana „{shift_type.name}” ma dowolne godziny. Ustaw je na ten dzień w ustawieniach lokalu, "
+                    "w kalendarzu obsady.",
+                )
+            start_at, end_at = shift_bounds(day, start, end, ZoneInfo(location.timezone))
+        place = int(seats[-1].slot_key.rsplit("/", 1)[1]) + 1 if seats else 1
+        shift = Shift.objects.create(
+            company_id=version.company_id,
+            version=version,
+            location=location,
+            date=day,
+            shift_type=shift_type,
+            position=position,
+            start_at=start_at,
+            end_at=end_at,
+            slot_key=slot_key(day, str(shift_type.pk), str(position.pk), place),
+        )
+        Assignment.objects.create(company_id=version.company_id, shift=shift)
+        day_staffing.set_day_count(location, day, shift_type, position, len(seats) + 1)
+        save_scores(version, load_version(version).scores)
+    return shift
+
+
+def remove_seat(version: ScheduleVersion, shift_id: str) -> None:
+    """One place fewer on this shift that day; whoever had this place loses it. The other places keep their people
+    and their numbers stay 1…n, as arranging the schedule again would number them."""
+    with transaction.atomic():
+        version = ScheduleVersion.objects.select_for_update().select_related("period__location").get(pk=version.pk)
+        if not is_editable(version):
+            raise HttpError(409, NOT_EDITABLE)
+        shift = Shift.objects.for_company(version.company_id).filter(version=version, pk=shift_id).first()
+        if shift is None:
+            raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
+        if shift.date < timezone.localdate():
+            raise HttpError(409, DAY_PASSED)
+        seats = _seats(version, shift.slot_key.rsplit("/", 1)[0] + "/")
+        last = seats[-1]
+        if last.pk != shift.pk:
+            kept, removed = last.assignment, next(s for s in seats if s.pk == shift.pk).assignment
+            for name in ("employee_id", "pinned", "manual", "borrowed"):
+                setattr(removed, name, getattr(kept, name))
+            removed.save(update_fields=["employee", "pinned", "manual", "borrowed"])
+        last.delete()
+        if shift.shift_type is not None:  # a deleted shift type has no staffing to change
+            day_staffing.set_day_count(
+                version.period.location, shift.date, shift.shift_type, shift.position, len(seats) - 1
+            )
+        save_scores(version, load_version(version).scores)
+
+
 # ----------------------------------------------------------------------------------------------- drafts, publishing
 
 
@@ -290,7 +375,9 @@ def _record_history(version: ScheduleVersion, previous: ScheduleVersion | None, 
             .values_list("shift__slot_key", "employee")
         }
     events = []
-    rows = Assignment.objects.for_company(version.company_id).filter(shift__version=version).select_related("shift")
+    rows = list(
+        Assignment.objects.for_company(version.company_id).filter(shift__version=version).select_related("shift")
+    )
     for assignment in rows:
         key = assignment.shift.slot_key
         now = str(assignment.employee_id) if assignment.employee_id else None
@@ -309,6 +396,21 @@ def _record_history(version: ScheduleVersion, previous: ScheduleVersion | None, 
                 by=user,
             )
         )
+    kept = {assignment.shift.slot_key for assignment in rows}
+    for key, was in before.items():  # a place that is gone (removed by hand, or the staffing got smaller)
+        if was is not None and key not in kept:
+            events.append(
+                AssignmentEvent(
+                    company_id=version.company_id,
+                    location_id=version.period.location_id,
+                    period_id=version.period_id,
+                    slot_key=key,
+                    from_employee_id=was,
+                    to_employee_id=None,
+                    reason=AssignmentEvent.Reason.MANUAL,
+                    by=user,
+                )
+            )
     AssignmentEvent.objects.bulk_create(events)
 
 
@@ -333,8 +435,8 @@ def changed_people(loaded: LoadedVersion) -> list[str]:
         .values_list("shift__slot_key", "employee")
     }
     affected: set[str] = set()
-    for key, now in loaded.schedule.items():
-        was = before.get(key)
+    for key in before.keys() | loaded.schedule.keys():  # also places that are gone from the draft
+        now, was = loaded.schedule.get(key), before.get(key)
         if now != was:
             affected.update(e for e in (now, was) if e)
     names = {e.id: e.name for e in loaded.problem.employees}
@@ -377,6 +479,7 @@ def manual_changes(version: ScheduleVersion | None) -> int:
 __all__ = [
     "CheckResult",
     "LoadedVersion",
+    "add_seat",
     "apply_changes",
     "check_changes",
     "is_editable",
@@ -384,6 +487,7 @@ __all__ = [
     "load_version",
     "manual_changes",
     "publish",
+    "remove_seat",
     "set_pinned",
     "start_draft",
 ]

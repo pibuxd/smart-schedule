@@ -120,6 +120,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   never add jobs that generate schedules on a timer or by themselves.
 - To see "Mój grafik" on demo data: publish from "Grafik" in the manager panel, or `generate_schedule --period <id> --publish`.
 - Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable; a change that adds a hard violation is refused; publishing records `AssignmentEvent` history). Shift explanations come from `engine/explain.py` (one validator run per candidate).
+- Staffing of one date (the calendar in location settings, and "Dodaj miejsce" / "Usuń miejsce" in the schedule editor)
+  is written only through `apps/staffing/day_staffing.py`: a `StaffingException` row exists only while the date differs
+  from its weekday. Seats of a draft change in `editing.add_seat` / `remove_seat` (place numbers stay 1…n).
 - Given-away shifts: `apps/marketplace/services.py`. The only change to a published version in place is an approved
   handover (checked by the validator, pinned, `AssignmentEvent` reason `offer`). In-app notifications are written with
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
