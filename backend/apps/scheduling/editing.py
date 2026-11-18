@@ -31,7 +31,22 @@ from apps.staffing.models import EmployeeProfile, LocationClosure, Position, Shi
 from engine.explain import new_soft_violations, without_pin
 from engine.problem import Problem, shift_bounds
 from engine.scoring import Scores, score
-from engine.validator import ValidationReport, validate
+from engine.validator import Code, ValidationReport, Violation, validate
+
+# Hard rules the manager may break by hand (docs/plan.md, section 24, point 7): the generator always keeps them,
+# but a manual change, a removed place or publishing is not refused; the manager sees them as a warning.
+MANAGER_MAY_BREAK = frozenset({Code.EXPERIENCE})
+
+
+def blocking(violations) -> list[Violation]:
+    """Hard problems that stop a manual change or publishing."""
+    return [v for v in violations if v.code not in MANAGER_MAY_BREAK]
+
+
+def accepted(violations) -> list[Violation]:
+    """Hard problems the manager is allowed to keep (shown as a warning, never refused)."""
+    return [v for v in violations if v.code in MANAGER_MAY_BREAK]
+
 
 NOT_EDITABLE = "Ten grafik jest już opublikowany albo jest starszą wersją. Zacznij poprawki od najnowszej wersji."
 
@@ -123,8 +138,8 @@ def check_changes(
     after_schedule = {**loaded.schedule, **by_key}
     after = validate(problem, after_schedule)
     known = {v.message for v in before.hard}
-    problems = [v.message for v in after.hard if v.message not in known]
-    warnings = new_soft_violations(before, after)
+    problems = [v.message for v in blocking(after.hard) if v.message not in known]
+    warnings = [v.message for v in accepted(after.hard) if v.message not in known] + new_soft_violations(before, after)
     result = CheckResult(
         ok=not problems,
         problems=problems,
@@ -193,6 +208,16 @@ def _seats(version: ScheduleVersion, prefix: str) -> list[Shift]:
     return sorted(rows.select_related("assignment"), key=lambda s: int(s.slot_key.rsplit("/", 1)[1]))
 
 
+def _mark_experienced(version, location, day, shift_type, position, seats: list[Shift]) -> None:
+    """The first N places of the day need an experienced person, N = the date's staffing (as arranging numbers them)."""
+    need = day_staffing.day_experienced(location, day, shift_type, position)
+    for number, seat in enumerate(seats, start=1):
+        wanted = number <= need
+        if seat.needs_experienced != wanted:
+            seat.needs_experienced = wanted
+            seat.save(update_fields=["needs_experienced"])
+
+
 def add_seat(version: ScheduleVersion, day: date, shift_type: ShiftType, position: Position) -> Shift:
     """One more place (empty) on this shift and position that day, in the draft and in the date's staffing."""
     with transaction.atomic():
@@ -232,6 +257,7 @@ def add_seat(version: ScheduleVersion, day: date, shift_type: ShiftType, positio
         )
         Assignment.objects.create(company_id=version.company_id, shift=shift)
         day_staffing.set_day_count(location, day, shift_type, position, len(seats) + 1)
+        _mark_experienced(version, location, day, shift_type, position, [*seats, shift])
         save_scores(version, load_version(version).scores)
     return shift
 
@@ -262,8 +288,11 @@ def remove_seat(version: ScheduleVersion, shift_id: str) -> None:
             day_staffing.set_day_count(
                 version.period.location, shift.date, shift.shift_type, shift.position, len(seats) - 1
             )
+            _mark_experienced(
+                version, version.period.location, shift.date, shift.shift_type, shift.position, seats[:-1]
+            )
         loaded = load_version(version)
-        problems = [v.message for v in loaded.report.hard if v.message not in known]
+        problems = [v.message for v in blocking(loaded.report.hard) if v.message not in known]
         if problems:  # like any manual change; raising here undoes the removal
             raise HttpError(409, "Tego miejsca nie można usunąć: " + " ".join(problems))
         save_scores(version, loaded.scores)
@@ -310,6 +339,7 @@ def start_draft(version: ScheduleVersion, user) -> ScheduleVersion:
                 start_at=s.start_at,
                 end_at=s.end_at,
                 slot_key=s.slot_key,
+                needs_experienced=s.needs_experienced,
             )
             for s in shifts
         )
@@ -343,8 +373,8 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
         if not is_editable(version):
             raise HttpError(409, "Opublikować można tylko najnowszy szkic grafiku.")
         loaded = load_version(version)
-        if not loaded.report.ok:
-            reasons = " ".join(v.message for v in loaded.report.hard[:5])
+        if blocking(loaded.report.hard):
+            reasons = " ".join(v.message for v in blocking(loaded.report.hard)[:5])
             raise HttpError(409, "Grafiku nie można opublikować, bo łamie reguły: " + reasons)
         period = version.period
         previous = (
@@ -485,8 +515,10 @@ def manual_changes(version: ScheduleVersion | None) -> int:
 __all__ = [
     "CheckResult",
     "LoadedVersion",
+    "accepted",
     "add_seat",
     "apply_changes",
+    "blocking",
     "check_changes",
     "is_editable",
     "latest_version",

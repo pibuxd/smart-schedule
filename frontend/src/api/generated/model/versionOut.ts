@@ -29,6 +29,7 @@ export interface VersionOut {
   employees: VersionEmployeeOut[];
   positions: PositionNameOut[];
   hard_problems: string[];
+  accepted_problems: string[];
   rules: RuleResultOut[];
   unmet_requests: UnmetRequestOut[];
   notes: string[];

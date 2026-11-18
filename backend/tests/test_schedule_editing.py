@@ -13,7 +13,7 @@ from apps.notifications.models import Notification
 from apps.rules.models import RuleSetting
 from apps.scheduling.generation import request_generation, run_generation
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
-from apps.staffing.models import EmployeeProfile, LocationClosure, StaffingException
+from apps.staffing.models import EmployeeProfile, LocationClosure, StaffingException, StaffingRule
 from tests.test_generation import FAST, MON, _ctx, shop  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.django_db
@@ -400,3 +400,40 @@ def test_removing_a_place_is_refused_when_it_breaks_a_hard_rule(api, shop, draft
 
     assert refused.status_code == 409 and "Tego miejsca nie można usunąć" in refused.json()["detail"]
     assert Shift.objects.filter(pk=taken.shift_id).exists() and not StaffingException.objects.exists()
+
+
+def test_manager_may_keep_fewer_experienced_people_than_the_staffing_asks(api, shop):
+    location = shop["location"]
+    StaffingRule.objects.filter(location=location, weekday=MON.weekday()).update(experienced=1)
+    expert = shop["people"][0]
+    EmployeeProfile.objects.filter(pk=expert.pk).update(experience=3)
+    draft = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    on_monday = Assignment.objects.filter(shift__version=draft, shift__date=MON)
+    assert on_monday.filter(employee=expert).exists()
+    assert list(on_monday.filter(shift__needs_experienced=True).values_list("employee", flat=True)) == [expert.pk]
+    api.login(shop["manager"])
+    taken = on_monday.get(employee=expert)
+    free = free_person(shop, draft, MON)
+    change = {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
+
+    saved = api.patch(url(draft, "/assignments"), change)
+
+    assert saved.status_code == 200 and saved.json()["ok"] is True
+    assert "doświadczona osoba" in saved.json()["warnings"][0]
+    body = api.get(url(draft)).json()
+    assert body["hard_problems"] == [] and "doświadczona osoba" in body["accepted_problems"][0]
+    # Pinned, the choice survives arranging again instead of making the generator fail.
+    assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 200
+    again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST)
+    assert again.status == "succeeded", again.error
+    assert (
+        Assignment.objects.get(shift__version=again.versions.get(), shift__slot_key=taken.shift.slot_key).employee
+        == free
+    )
+    assert api.post(url(again.versions.get(), "/publish")).status_code == 200
+    # After a place is removed, the first place of the day still asks for experience.
+    version = ScheduleVersion.objects.get(pk=api.post(url(again.versions.get(), "/draft")).json()["id"])
+    first, _ = Shift.objects.filter(version=version, date=MON).order_by("slot_key")
+    assert api.client.delete(url(version, f"/shifts/{first.pk}")).status_code == 204
+    [left] = Shift.objects.filter(version=version, date=MON)
+    assert left.slot_key.endswith("/1") and left.needs_experienced is True

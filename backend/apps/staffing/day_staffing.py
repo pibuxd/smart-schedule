@@ -36,6 +36,14 @@ def day_hours(
     return shift_type.start_time, shift_type.end_time
 
 
+def day_experienced(location: Location, day: date, shift_type: ShiftType, position: Position) -> int:
+    """How many people of this shift and position must be experienced on this date."""
+    for row in (_exception(location, day, shift_type, position), _usual(location, day, shift_type, position)):
+        if row is not None:
+            return row.experienced
+    return 0
+
+
 def save_day_cell(
     location: Location,
     day: date,

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -41,6 +41,7 @@ from apps.staffing.models import (
 )
 from apps.tenancy.models import Location
 from engine.problem import (
+    EXPERIENCED,
     Availability,
     Employee,
     ExternalShift,
@@ -175,11 +176,35 @@ def check_periods(periods: Sequence[SchedulePeriod]) -> None:
         raise BuildError("Lokale w różnych strefach czasowych trzeba układać osobno.")
 
 
+def _keep_pinned_beginners(slots: list[Slot], pinned: dict, employees: dict) -> list[Slot]:
+    """The manager may keep fewer experienced people than the staffing asks (a pinned manual change). Arranging
+    again then asks for experience only on the places the pinned people leave, instead of failing."""
+    groups: dict[tuple, list[Slot]] = defaultdict(list)
+    for slot in slots:
+        if slot.needs_experienced:
+            groups[(slot.location, slot.date, slot.shift_type, slot.position)].append(slot)
+    if not groups:
+        return slots
+    released: set[str] = set()
+    for key, marked in groups.items():
+        group = [s for s in slots if (s.location, s.date, s.shift_type, s.position) == key]
+        beginners = sum(
+            1
+            for s in group
+            if (e := pinned.get(s.id)) and e in employees and employees[e].level(s.position) != EXPERIENCED
+        )
+        excess = beginners - (len(group) - len(marked))
+        released.update(s.id for s in marked[len(marked) - excess :] if excess > 0)
+    return [replace(s, needs_experienced=False) if s.id in released else s for s in slots]
+
+
 def _employee_name(profile: EmployeeProfile) -> str:
     return profile.membership.user.full_name or "Pracownik bez imienia"
 
 
 class _Reader:
+    arranging = True  # building the problem for the generator (a saved version is read as it is)
+
     def __init__(self, periods: Sequence[SchedulePeriod], today: date | None) -> None:
         check_periods(periods)
         self.periods = list(periods)
@@ -237,6 +262,7 @@ class _Reader:
                     end=shift.end_at.astimezone(self.tz),
                     shift_name=shift_type.name if shift_type else "",
                     is_closing=bool(shift_type and shift_type.is_closing),
+                    needs_experienced=shift.needs_experienced,
                 )
             )
             self.sources[key] = SlotSource(
@@ -526,6 +552,8 @@ class _Reader:
             pinned.update(self.assignments(self.latest.get(period.id), keys, pinned_only=True))
         referenced = {e for e in (*published.values(), *pinned.values()) if e}
         employees = self.employees(referenced)
+        if self.arranging:
+            slots = _keep_pinned_beginners(slots, pinned, {e.id: e for e in employees})
         employee_ids = [e.id for e in employees]
         problem = Problem(
             period_start=self.start,
@@ -548,6 +576,8 @@ class _Reader:
 
 class _VersionReader(_Reader):
     """The slots and people of one saved version, as they were (not as the settings say today)."""
+
+    arranging = False
 
     def __init__(self, version: ScheduleVersion, extra_employees: Sequence[str] = ()) -> None:
         # No frozen days: the version is read as a whole.

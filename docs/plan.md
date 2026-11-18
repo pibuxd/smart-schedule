@@ -708,3 +708,11 @@ Założenia:
 6. Zmiana obsady w kalendarzu nie rusza gotowych szkiców; działa od następnego ułożenia grafiku (jak dotąd).
    Po przeglądzie Prelinta (PR #39): arkusz dnia mówi to wprost, gdy data jest w okresie z ułożonym grafikiem
    (`LocationSetupOut.arranged`), także przy "Zamknij lokal w ten dzień".
+7. Doświadczeni (decyzja Piotra z 19.11.2026: "kierownik może to łamać, ma władzę absolutną"). Zapisana zmiana
+   pamięta, czy jej miejsce jest dla doświadczonej osoby (`Shift.needs_experienced`, migracja `scheduling.0009`
+   uzupełnia je z obsady dla szkiców i opublikowanych grafików od dziś), więc walidator sprawdza wymóg także
+   w zapisanym grafiku. Generator zawsze go spełnia. Ręczna zmiana, usunięcie miejsca i publikacja go nie blokują:
+   `editing.MANAGER_MAY_BREAK` przenosi takie naruszenia do ostrzeżeń (`CheckOut.warnings`,
+   `VersionOut.accepted_problems`, żółta ramka nad siatką), a `hard_problems` zawiera tylko to, co blokuje publikację.
+   Przypięta zmiana kierownika zmniejsza wymóg przy "Ułóż od nowa" (`_keep_pinned_beginners`), zamiast przerywać
+   układanie. Oddawanie zmian między pracownikami nadal wymaga doświadczonej osoby.

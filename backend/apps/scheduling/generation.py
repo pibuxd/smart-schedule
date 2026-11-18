@@ -245,6 +245,7 @@ def _save_versions(run: GenerationRun, built: BuiltProblem, schedule, report) ->
                 start_at=slot.start,
                 end_at=slot.end,
                 slot_key=slot.id,
+                needs_experienced=slot.needs_experienced,
             )
             for slot in slots
         )

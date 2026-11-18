@@ -559,7 +559,9 @@ class VersionOut(Schema):
     shifts: list[VersionShiftOut]
     employees: list[VersionEmployeeOut]
     positions: list[PositionNameOut]
-    hard_problems: list[str]
+    hard_problems: list[str]  # stop publishing
+    # Hard rules the manager broke by hand and may keep (e.g. fewer experienced people than the staffing asks).
+    accepted_problems: list[str]
     rules: list[RuleResultOut]
     unmet_requests: list[UnmetRequestOut]
     notes: list[str]
@@ -793,7 +795,7 @@ def _history(version: ScheduleVersion) -> list[VersionSummaryOut]:
 
 def _version_out(ctx, loaded, today: date) -> VersionOut:
     from apps.billing.services import subscription_state
-    from apps.scheduling.editing import changed_people, is_editable
+    from apps.scheduling.editing import accepted, blocking, changed_people, is_editable
 
     version, problem = loaded.version, loaded.problem
     period = version.period
@@ -836,7 +838,8 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
             (PositionNameOut(id=pk, name=name) for pk, name in problem.position_names.items() if pk in position_ids),
             key=lambda p: p.name,
         ),
-        hard_problems=[v.message for v in loaded.report.hard],
+        hard_problems=[v.message for v in blocking(loaded.report.hard)],
+        accepted_problems=[v.message for v in accepted(loaded.report.hard)],
         rules=_rule_results(loaded),
         unmet_requests=_unmet_requests(loaded),
         notes=notes,

@@ -189,6 +189,14 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
           ))}
         </div>
       )}
+      {data.accepted_problems.length > 0 && (
+        <div className="grid gap-1 rounded-md border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+          <span className="font-semibold">Ręczne zmiany są niezgodne z obsadą. Możesz tak opublikować:</span>
+          {data.accepted_problems.map((p) => (
+            <span key={p}>{p}</span>
+          ))}
+        </div>
+      )}
       {data.editable && <UnpinnedChanges data={data} />}
       <ScheduleGrid data={data} />
       <div className="grid gap-6 lg:grid-cols-2">
@@ -248,7 +256,7 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
           </SelectField>
         )}
         {data.editable && (
-          <Button size="normal" onClick={() => setPublishing(true)} disabled={data.scores.hard_violations > 0}>
+          <Button size="normal" onClick={() => setPublishing(true)} disabled={data.hard_problems.length > 0}>
             <Send aria-hidden="true" size={20} />
             Opublikuj
           </Button>

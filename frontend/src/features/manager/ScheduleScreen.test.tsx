@@ -81,6 +81,7 @@ const version = {
   ],
   positions: [{ id: 'pos1', name: 'Sprzedawca' }],
   hard_problems: [],
+  accepted_problems: [],
   rules: [
     { code: 'max_consecutive_days', label: 'Dni pracy z rzędu', hard: false, percent: 100, broken: 0, examples: [] },
     { code: 'fair_closings', label: 'Równy podział zamknięć', hard: false, percent: null, broken: 0, examples: [] },
@@ -248,6 +249,14 @@ describe('ScheduleScreen', () => {
     show()
     expect(await screen.findByText('Wersja 1')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Dodaj miejsce/ })).not.toBeInTheDocument()
+  })
+
+  it('lets the manager publish with fewer experienced people than the staffing asks', async () => {
+    const problem = 'Na zmianie 01.12 Ranna na stanowisku Sprzedawca ma być doświadczona osoba, a miejsca zajmują: Marek Zając.'
+    api({ version: { ...version, scores: { ...scores, hard_violations: 1 }, accepted_problems: [problem] } })
+    show()
+    expect(await screen.findByText(problem)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Opublikuj' })).toBeEnabled()
   })
 
   it('publishes after a warning about unfilled shifts', async () => {

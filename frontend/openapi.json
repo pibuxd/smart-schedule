@@ -8447,6 +8447,13 @@
             "title": "Hard Problems",
             "type": "array"
           },
+          "accepted_problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Problems",
+            "type": "array"
+          },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/RuleResultOut"
@@ -8503,6 +8510,7 @@
           "employees",
           "positions",
           "hard_problems",
+          "accepted_problems",
           "rules",
           "unmet_requests",
           "notes",
