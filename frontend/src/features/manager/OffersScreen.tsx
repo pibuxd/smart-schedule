@@ -1,11 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 
-import { useApproveClaim, useManagerOffers, useRejectClaim } from '../../api/generated/marketplace/marketplace'
+import { useApproveClaim, useCloseOffer, useManagerOffers, useRejectClaim } from '../../api/generated/marketplace/marketplace'
 import type { ClaimOut, ManagerOfferOut, ManagerOffersOut } from '../../api/generated/model'
 import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { shortTime } from '../../lib/dates'
+import { ChangeStaffing, ShiftChangeSheet } from './ChangeStaffing'
 import { useManager } from './ManagerContext'
 import { OFFERS_REFRESH_MS } from './waiting-claims'
 import { shortDay } from './words'
@@ -14,7 +16,7 @@ const STATUS: Record<ManagerOfferOut['status'], string> = {
   open: 'Nikt się jeszcze nie zgłosił',
   claimed: 'Czeka na Twoją decyzję',
   approved: 'Zatwierdzona',
-  rejected: 'Odrzucona',
+  rejected: 'Zakończona przez kierownika',
   cancelled: 'Wycofana przez pracownika',
   expired: 'Nieaktualna',
 }
@@ -30,6 +32,8 @@ const CLAIM_STATUS: Record<ClaimOut['status'], string> = {
  * "Oddane zmiany": shifts employees give away in my locations. For each volunteer ("Weź zmianę") the manager sees
  * whether they can still take the shift (checked again by the validator) and approves one or rejects.
  * Approving changes the published schedule right away and tells everyone involved in the app.
+ * The manager can also decide alone: pick any person for an offered shift, end the offer, or (below the list)
+ * change who works any published shift ("Zmień obsadę sam").
  */
 export function OffersScreen() {
   const { companyId, readOnly } = useManager()
@@ -40,9 +44,8 @@ export function OffersScreen() {
       <div className="grid gap-1">
         <h1 className="m-0 text-2xl font-extrabold">Oddane zmiany</h1>
         <p className="m-0 max-w-[62ch] text-ink-muted">
-          Gdy pracownik oddaje zmianę, dajemy znać osobom, które mogą ją wziąć. Gdy ktoś się zgłosi, decydujesz tutaj.
-          Po zatwierdzeniu grafik od razu się zmienia, a zmiana jest przypięta do nowej osoby. W „Zasadach” lokalu
-          możesz włączyć przejęcie bez zatwierdzania.
+          Tu decydujesz, kto bierze oddaną zmianę. Możesz też sam wpisać inną osobę albo zamienić dwie osoby. Grafik
+          zmienia się od razu.
         </p>
       </div>
       {offers.isPending ? (
@@ -60,6 +63,7 @@ export function OffersScreen() {
       ) : (
         <OfferList offers={(offers.data.data as ManagerOffersOut).offers} readOnly={readOnly} />
       )}
+      <ChangeStaffing />
     </div>
   )
 }
@@ -99,6 +103,10 @@ function OfferCard({ offer, readOnly }: { offer: ManagerOfferOut; readOnly: bool
   const pending = offer.claims.filter((c) => c.status === 'pending')
   const decided = offer.claims.filter((c) => c.status !== 'pending')
   const waiting = offer.status === 'claimed'
+  const active = offer.status === 'open' || offer.status === 'claimed'
+  const [choosing, setChoosing] = useState(false)
+  const close = useCloseOffer()
+  const queryClient = useQueryClient()
   return (
     <li className={`grid gap-3 rounded-lg border bg-surface p-4 ${waiting ? 'border-2 border-accent' : 'border-line'}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -129,6 +137,36 @@ function OfferCard({ offer, readOnly }: { offer: ManagerOfferOut; readOnly: bool
             .map((c) => `${c.name} (${offer.auto_approved && c.status === 'approved' ? 'bierze' : CLAIM_STATUS[c.status]})`)
             .join(', ')}
         </p>
+      )}
+      {active && !readOnly && (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="normal" disabled={close.isPending} onClick={() => setChoosing(true)}>
+            Wybierz osobę sam
+          </Button>
+          <Button
+            variant="quiet"
+            size="normal"
+            disabled={close.isPending}
+            onClick={() =>
+              close.mutate({ offerId: offer.id }, { onSuccess: () => void queryClient.invalidateQueries() })
+            }
+          >
+            Zakończ oddawanie
+          </Button>
+        </div>
+      )}
+      {close.error && <InlineError>{errorMessage(close.error, NETWORK_PROBLEM)}</InlineError>}
+      {choosing && (
+        <ShiftChangeSheet
+          target={{
+            id: offer.assignment_id,
+            shift,
+            employee_name: offer.offered_by_name,
+            started: false,
+            offer_id: offer.id,
+          }}
+          onClose={() => setChoosing(false)}
+        />
       )}
     </li>
   )
