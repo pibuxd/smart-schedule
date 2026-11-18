@@ -6,6 +6,7 @@ from datetime import timedelta
 
 import pytest
 
+from apps.accounts.models import User
 from apps.availability.models import AvailabilitySubmission
 from apps.scheduling.editing import publish
 from apps.scheduling.generation import request_generation, run_generation
@@ -63,20 +64,102 @@ def test_draft_of_another_location_counts_as_taken_when_arranging(two):
     assert set(people_on(market)) == {two["kasia"].pk}
 
 
-def test_editing_warns_about_another_draft_and_refuses_a_published_clash(api, two):
+def put_kasia_on_monday(api, two, bakery, **extra):
+    monday = Assignment.objects.filter(shift__version=bakery, shift__date=MON).order_by("shift__slot_key").first()
+    change = {"changes": [{"shift_id": str(monday.shift_id), "employee_id": str(two["kasia"].pk)}], **extra}
+    return monday, api.post(f"/api/versions/{bakery.pk}/check", change), change
+
+
+def market_monday(version):
+    return Assignment.objects.get(shift__version=version, shift__date=MON)
+
+
+def test_clash_with_another_draft_asks_and_takes_the_person_off_it(api, two):
     market = arrange(two, two["market_period"])
     bakery = arrange(two, two["period"])
-    monday = Assignment.objects.filter(shift__version=bakery, shift__date=MON).first()
-    change = {"changes": [{"shift_id": str(monday.shift_id), "employee_id": str(two["kasia"].pk)}]}
     api.login(two["manager"])
 
-    body = api.post(f"/api/versions/{bakery.pk}/check", change).json()
-    assert body["ok"]
-    assert any("szkicu lokalu Rynek" in w for w in body["warnings"])
+    monday, check, change = put_kasia_on_monday(api, two, bakery)
 
+    body = check.json()
+    assert body["ok"]  # a draft is not binding yet, but the manager is still asked
+    (clash,) = body["clashes"]
+    assert clash["kind"] == "draft" and clash["location_name"] == "Rynek" and clash["can_remove"]
+    assert "w szkicu grafiku lokalu Rynek: pon. 07.12, 06:00–14:00" in clash["text"]
+    assert body["ok_if_removed"]
+    response = api.patch(f"/api/versions/{bakery.pk}/assignments", {**change, "remove_clashes": True})
+    assert response.status_code == 200, response.json()
+    monday.refresh_from_db()
+    assert monday.employee_id == two["kasia"].pk
+    there = market_monday(market)
+    assert there.employee_id is None and there.manual  # a hole in the Rynek draft
+
+
+def test_clash_with_a_published_schedule_takes_the_person_off_and_tells_them(api, two):
+    from apps.marketplace.models import ShiftOffer
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notification_text
+    from apps.scheduling.models import AssignmentEvent
+    from apps.tenancy.models import Membership, Role
+    from tests.conftest import next_phone
+
+    market = arrange(two, two["market_period"])
     publish(market, two["manager"], notify=False)
-    body = api.post(f"/api/versions/{bakery.pk}/check", change).json()
-    assert not body["ok"]  # two shifts at the same time stay blocked once the other one is published
+    bakery = arrange(two, two["period"])
+    offer = ShiftOffer.objects.create(assignment=market_monday(market), offered_by=two["kasia"])
+    market_manager = Membership.objects.create(
+        company=two["company"], user=User.objects.create_user(next_phone(), first_name="Ala"), role=Role.MANAGER
+    )
+    two["market"].managers.add(market_manager)
+    api.login(two["manager"])
+
+    monday, check, change = put_kasia_on_monday(api, two, bakery)
+
+    body = check.json()
+    assert not body["ok"]  # two shifts at the same time
+    assert [c["kind"] for c in body["clashes"]] == ["published"]
+    assert "w grafiku lokalu Rynek" in body["clashes"][0]["text"] and body["ok_if_removed"]
+    assert api.patch(f"/api/versions/{bakery.pk}/assignments", change).status_code == 409  # not without asking
+    people = api.get(f"/api/versions/{bakery.pk}/shifts/{monday.shift_id}/explain").json()["candidates"]
+    kasia = next(c for c in people if c["employee_id"] == str(two["kasia"].pk))
+    assert not kasia["possible"] and kasia["clash"]  # the shift panel offers to move her
+    response = api.patch(f"/api/versions/{bakery.pk}/assignments", {**change, "remove_clashes": True})
+    assert response.status_code == 200, response.json()
+    monday.refresh_from_db()
+    assert monday.employee_id == two["kasia"].pk
+    assert market_monday(market).employee_id is None  # changed in place, like an approved handover
+    event = AssignmentEvent.objects.get(location=two["market"], from_employee=two["kasia"])
+    assert event.to_employee is None and event.reason == AssignmentEvent.Reason.MANUAL
+    offer.refresh_from_db()
+    assert offer.status == ShiftOffer.Status.EXPIRED
+    told = {(n.user_id, n.kind): n for n in Notification.objects.filter(kind__in=["shift_removed", "shift_emptied"])}
+    removed = told[(two["kasia"].membership.user_id, "shift_removed")]
+    assert "pracujesz w lokalu " + two["location"].name in notification_text(removed.kind, removed.payload)
+    emptied = told[(market_manager.user_id, "shift_emptied")]
+    assert "Kasia" in notification_text(emptied.kind, emptied.payload)
+    assert (two["manager"].pk, "shift_emptied") not in told  # the one who did it knows
+
+
+def test_manager_of_one_location_cannot_take_people_off_another(api, two):
+    from apps.tenancy.models import Membership, Role
+    from tests.conftest import next_phone
+
+    market = arrange(two, two["market_period"])
+    publish(market, two["manager"], notify=False)
+    bakery = arrange(two, two["period"])
+    user = User.objects.create_user(next_phone(), first_name="Ola")
+    shop_manager = Membership.objects.create(company=two["company"], user=user, role=Role.MANAGER)
+    two["location"].managers.add(shop_manager)
+    api.login(user)
+
+    _, check, change = put_kasia_on_monday(api, two, bakery)
+
+    (clash,) = check.json()["clashes"]
+    assert not clash["can_remove"] and "Nie prowadzisz lokalu Rynek" in clash["reason"]
+    assert not check.json()["ok_if_removed"]
+    response = api.patch(f"/api/versions/{bakery.pk}/assignments", {**change, "remove_clashes": True})
+    assert response.status_code == 409 and "Nie prowadzisz lokalu Rynek" in response.json()["detail"]
+    assert market_monday(market).employee_id == two["kasia"].pk
 
 
 def test_location_list_shows_people_from_other_locations_with_their_positions_here(api, two):

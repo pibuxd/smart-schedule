@@ -704,9 +704,20 @@ wspólna dyspozycyjność.
   `Request.location` mówi, do którego lokalu należy prośba (ocena lokalu liczy tylko jego prośby).
 - Zmiany z innych lokali (`ExternalShift`) przy generowaniu: opublikowane wersje innych okresów oraz ich najnowszy szkic,
   jeśli jest nowszy od opublikowanej, żeby dwa lokale ułożone jeden po drugim nie dały tej samej osobie tych samych
-  godzin. Edycja i publikacja sprawdzają twardo tylko opublikowane zmiany innych lokali (dwie zmiany naraz zostają
-  zablokowane, decyzja Piotra z 18.11.2026 w PR #44); zmiana ze szkicu innego lokalu w tym samym czasie to ostrzeżenie
-  przy ręcznej zmianie, które mówi, że kto opublikuje pierwszy, ten wygrywa.
+  godzin. Walidator przy edycji i publikacji liczy tylko opublikowane zmiany innych lokali (dwie zmiany naraz to twardy
+  błąd).
+- Kolizja przy ręcznej zmianie (decyzja Piotra z 18.11.2026: "jak koliduje, pytanie, czy na pewno chcesz zmienić, i wtedy
+  usuwa tamtą starą zmianę"): `editing.find_clashes` szuka innych zmian tej osoby w tym samym czasie: w tej wersji
+  ("here"), w najnowszym szkicu ("draft") i w opublikowanym grafiku ("published") innych okresów firmy.
+  `POST /versions/{id}/check` zwraca je w `clashes` (tekst, lokal, `can_remove`, `reason`) z `problems_if_removed` i
+  `ok_if_removed`; ekran pyta "Na pewno chcesz to zmienić?" (przeciąganie i panel zmiany; zablokowana osoba z samą
+  kolizją dostaje "Przenieś tutaj"). `PATCH .../assignments` z `remove_clashes: true` w jednej transakcji zdejmuje osobę
+  z tamtych zmian (zostają puste) i zapisuje zmianę. Szkic innego lokalu zmienia się zwykłą ręczną zmianą. Opublikowany
+  grafik innego lokalu zmienia się w miejscu, jak przy zatwierdzonym oddaniu (`take_off_published`): pusta zmiana także
+  w nowszym szkicu tego okresu, wpis w historii przypisań (powód "ręczna"), koniec otwartego oddania tej zmiany,
+  powiadomienia `shift_removed` (osoba) i `shift_emptied` (kierownicy tamtego lokalu poza tym, kto zmienia). Nie wolno
+  zdjąć osoby ze zmiany lokalu, którego kierownik nie prowadzi (właściciel prowadzi wszystkie), ani z opublikowanej
+  zmiany, która już się zaczęła: wtedy `can_remove = false` z powodem, a zapis jest odrzucany.
 - Między różnymi firmami nic się nie łączy: to osobni pracodawcy i ich dane są rozdzielone.
 - Założenia: lokal ułożony pierwszy "ma pierwszeństwo" do osoby (kolejność układania decyduje, jak w Kadromierzu).
   Usuwanie osoby z lokalu dodatkowego (PR #40) zdejmuje tylko ten lokal i jego stanowiska.

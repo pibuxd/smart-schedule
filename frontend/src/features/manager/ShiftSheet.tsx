@@ -1,14 +1,21 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Pin, PinOff } from 'lucide-react'
+import { useState } from 'react'
 
-import type { CandidateOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
-import { useChangeAssignments, useExplainShift, usePinShift } from '../../api/generated/scheduling/scheduling'
+import type { CandidateOut, CheckOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
+import {
+  useChangeAssignments,
+  useCheckScheduleChanges,
+  useExplainShift,
+  usePinShift,
+} from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { StateIcon } from '../availability/StateIcon'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { ClashQuestion } from './ClashQuestion'
 import { percent } from './schedule-grid'
 import { shortDay } from './words'
 
@@ -65,8 +72,11 @@ function ShiftDetails({
 }) {
   const explanation = useExplainShift(versionId, shift.id)
   const change = useChangeAssignments()
+  const checker = useCheckScheduleChanges()
   const pin = usePinShift()
   const queryClient = useQueryClient()
+  // The chosen person has another shift at the same time: the question waits for the manager's answer.
+  const [question, setQuestion] = useState<{ employeeId: string; check: CheckOut } | null>(null)
 
   if (explanation.isPending) return <Loading>Sprawdzam, kto może wziąć tę zmianę…</Loading>
   if (explanation.isError) {
@@ -94,15 +104,39 @@ function ShiftDetails({
       },
     )
 
-  const put = (employeeId: string | null) =>
+  const put = (employeeId: string | null, removeClashes = false) =>
     change.mutate(
-      { versionId, data: { changes: [{ shift_id: shift.id, employee_id: employeeId }] } },
+      { versionId, data: { changes: [{ shift_id: shift.id, employee_id: employeeId }], remove_clashes: removeClashes } },
       {
         onSuccess: () => {
           refresh()
           onDone()
         },
       },
+    )
+
+  // Check first: when the person works elsewhere at the same time, ask before taking them off that shift.
+  const choose = (employeeId: string) =>
+    checker.mutate(
+      { versionId, data: { changes: [{ shift_id: shift.id, employee_id: employeeId }] } },
+      {
+        onSuccess: (response) => {
+          const check = response.data as CheckOut
+          if (check.clashes.length > 0) setQuestion({ employeeId, check })
+          else put(employeeId)
+        },
+      },
+    )
+  const busy = change.isPending || checker.isPending
+
+  const asked = (candidate: CandidateOut) =>
+    question?.employeeId === candidate.employee_id && (
+      <ClashQuestion
+        check={question.check}
+        busy={busy}
+        onMove={() => put(candidate.employee_id, true)}
+        onCancel={() => setQuestion(null)}
+      />
     )
 
   return (
@@ -184,6 +218,9 @@ function ShiftDetails({
               </Link>{' '}
               z „bez wyjątków” na zwykłą,
             </li>
+            {editable && blocked.some((c) => c.clash) && (
+              <li>przenieść tutaj kogoś, kto ma w tym czasie inną zmianę (przycisk przy tej osobie niżej),</li>
+            )}
             <li>dodać komuś to stanowisko w „Pracownicy” albo zostawić zmianę pustą.</li>
           </ul>
           <span className="text-sm text-ink-muted">Powód przy każdej osobie jest niżej, w „Nie mogą wziąć tej zmiany”.</span>
@@ -191,6 +228,7 @@ function ShiftDetails({
       )}
 
       {change.isError && <InlineError>{errorMessage(change.error, NETWORK_PROBLEM)}</InlineError>}
+      {checker.isError && <InlineError>{errorMessage(checker.error, NETWORK_PROBLEM)}</InlineError>}
       {pin.isError && <InlineError>{errorMessage(pin.error, NETWORK_PROBLEM)}</InlineError>}
 
       {able.length > 0 && (
@@ -200,11 +238,12 @@ function ShiftDetails({
             {able.map((candidate) => (
               <li key={candidate.employee_id} className="grid gap-2 rounded-md border border-line bg-surface p-3">
                 <CandidateLine candidate={candidate} />
-                {editable && (
-                  <Button size="normal" className="w-fit" disabled={change.isPending} onClick={() => put(candidate.employee_id)}>
+                {editable && !asked(candidate) && (
+                  <Button size="normal" className="w-fit" disabled={busy} onClick={() => choose(candidate.employee_id)}>
                     Wpisz: {candidate.name}
                   </Button>
                 )}
+                {asked(candidate)}
               </li>
             ))}
           </ul>
@@ -225,6 +264,18 @@ function ShiftDetails({
                     {problem}
                   </span>
                 ))}
+                {editable && candidate.clash && !asked(candidate) && (
+                  <Button
+                    variant="secondary"
+                    size="normal"
+                    className="w-fit"
+                    disabled={busy}
+                    onClick={() => choose(candidate.employee_id)}
+                  >
+                    Przenieś tutaj: {candidate.name}
+                  </Button>
+                )}
+                {asked(candidate)}
               </li>
             ))}
           </ul>

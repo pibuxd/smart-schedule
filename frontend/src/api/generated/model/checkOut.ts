@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { ClashOut } from './clashOut';
 import type { ScoresOut } from './scoresOut';
 
 export interface CheckOut {
@@ -12,4 +13,7 @@ export interface CheckOut {
   warnings: string[];
   before: ScoresOut;
   after: ScoresOut;
+  clashes: ClashOut[];
+  problems_if_removed: string[];
+  ok_if_removed: boolean;
 }

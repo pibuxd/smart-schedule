@@ -1396,7 +1396,8 @@ export const getCheckScheduleChangesUrl = (versionId: string,) => {
 }
 
 /**
- * Validate a manual change before saving it (e.g. while dragging): new problems and the new scores.
+ * Validate a manual change before saving it (e.g. while dragging): new problems, the new scores and the other
+ * shifts of the person at the same time (the screen asks whether to take the person off them).
  * @summary Check Schedule Changes
  */
 export const checkScheduleChanges = async (versionId: string,
@@ -1464,7 +1465,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CheckScheduleChangesMutationVariables = {versionId: string;data: ChangesIn}
 
     /**
- * Validate a manual change before saving it (e.g. while dragging): new problems and the new scores.
+ * Validate a manual change before saving it (e.g. while dragging): new problems, the new scores and the other
+ * shifts of the person at the same time (the screen asks whether to take the person off them).
  * @summary Check Schedule Changes
  */
 export const useCheckScheduleChanges = <TError = ErrorOut,
@@ -1521,6 +1523,7 @@ export const getChangeAssignmentsUrl = (versionId: string,) => {
 
 /**
  * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
+ * With `remove_clashes` the person is first taken off their other shifts at the same time.
  * @summary Change Assignments
  */
 export const changeAssignments = async (versionId: string,
@@ -1589,6 +1592,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     /**
  * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
+ * With `remove_clashes` the person is first taken off their other shifts at the same time.
  * @summary Change Assignments
  */
 export const useChangeAssignments = <TError = ErrorOut,

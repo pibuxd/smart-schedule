@@ -4,6 +4,8 @@
 - `check_changes` / `apply_changes`: a manual change (who works which slot) is validated by the same validator as
   the generator's result; a change that would add a hard problem is refused with the validator's sentences.
   Only the newest version of a period can be edited, and only while it is a draft; days that have passed cannot.
+- `find_clashes`: other shifts of the person at the same time (here, or another location's draft or published
+  schedule); with `remove_clashes` the manager's confirmed change takes the person off them first.
 - `start_draft`: editing a published schedule starts a new draft copy (publishing makes it the published one).
 - `publish`: the draft becomes the published version, the previous one is kept as history, the history of
   assignments (`AssignmentEvent`) gets one row for every slot whose person changed, open offers of given-away
@@ -13,8 +15,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
@@ -85,6 +88,13 @@ class CheckResult:
     warnings: list[str]  # new broken soft rules, for information
     before: Scores
     after: Scores
+    clashes: list = field(default_factory=list)  # Clash: other shifts of the person at the same time
+    problems_if_removed: list[str] = field(default_factory=list)  # new hard problems left after taking them off
+
+    @property
+    def ok_if_removed(self) -> bool:
+        """Fine once the person is taken off the clashing shifts (and the manager may change all of them)."""
+        return all(c.can_remove for c in self.clashes) and not self.problems_if_removed
 
 
 def _resolve(loaded: LoadedVersion, changes: Mapping[str, str | None], today: date) -> dict[str, str | None]:
@@ -106,53 +116,163 @@ def _resolve(loaded: LoadedVersion, changes: Mapping[str, str | None], today: da
     return result
 
 
-def draft_clashes(loaded: LoadedVersion, by_key: Mapping[str, str | None]) -> list[str]:
-    """Warnings when a person put on a shift has a shift at the same time in a draft of another location (not
-    published yet, so not a hard problem: docs/plan.md, section 24)."""
-    slots = loaded.problem.slot_by_id
-    wanted = {key: employee for key, employee in by_key.items() if employee and key in slots}
+WEEKDAYS = ("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
+
+
+@dataclass(frozen=True)
+class Clash:
+    """Another shift the person put on a shift has at the same time: in this schedule, or in a draft or the published
+    schedule of another location. The manager may take the person off it (docs/plan.md, section 24)."""
+
+    employee: str
+    shift_id: str
+    version_id: str
+    location_id: str
+    location_name: str
+    kind: str  # "here", "draft" or "published"
+    start: datetime
+    end: datetime
+    text: str
+    can_remove: bool
+    reason: str = ""  # why the person cannot be taken off it
+    slot_key: str = ""  # "here": the slot of this schedule
+
+
+def _when(start: datetime, end: datetime, tz: str) -> str:
+    begin, finish = start.astimezone(ZoneInfo(tz)), end.astimezone(ZoneInfo(tz))
+    return f"{WEEKDAYS[begin.weekday()]} {begin:%d.%m}, {begin:%H:%M}–{finish:%H:%M}"
+
+
+def find_clashes(
+    loaded: LoadedVersion, by_key: Mapping[str, str | None], manages: set[str] | None = None
+) -> list[Clash]:
+    """Shifts at the same time as the new assignments in `by_key` (slot key -> employee). `manages`: the ids of the
+    locations the manager runs (None: all); only their schedules can be changed from here."""
+    problem, version = loaded.problem, loaded.version
+    slots = problem.slot_by_id
+    wanted = {
+        key: employee
+        for key, employee in by_key.items()
+        if employee and key in slots and loaded.schedule.get(key) != employee
+    }
     if not wanted:
         return []
-    names = {e.id: e.name for e in loaded.problem.employees}
-    version = loaded.version
-    newer_than_published = {}
-    for period_id, status in (
+    names = {e.id: e.name for e in problem.employees}
+    after = {**loaded.schedule, **by_key}
+    result: list[Clash] = []
+    # In this schedule: the person stays on another slot at the same time.
+    here_keys = {
+        other: key
+        for key, employee in wanted.items()
+        for other, someone in after.items()
+        if other != key
+        and other not in by_key  # asked for in the same change: stays a problem
+        and someone == employee
+        and other in slots
+        and slots[other].start_utc < slots[key].end_utc
+        and slots[key].start_utc < slots[other].end_utc
+    }
+    shift_ids = dict(
+        Shift.objects.for_company(version.company_id)
+        .filter(version=version, slot_key__in=list(here_keys))
+        .values_list("slot_key", "pk")
+    )
+    location = version.period.location
+    for other in here_keys:
+        slot = slots[other]
+        employee = after[other]
+        result.append(
+            Clash(
+                employee=employee,
+                shift_id=str(shift_ids[other]),
+                version_id=str(version.pk),
+                location_id=str(location.pk),
+                location_name=location.name,
+                kind="here",
+                start=slot.start_utc,
+                end=slot.end_utc,
+                text=f"{names.get(employee, 'Ta osoba')} ma w tym czasie inną zmianę: "
+                f"{_when(slot.start_utc, slot.end_utc, location.timezone)}.",
+                can_remove=True,
+                slot_key=other,
+            )
+        )
+    # Other locations: their published schedule and their newest draft (when it is newer).
+    other_versions: dict = {}
+    for version_id, period_id, status in (
         ScheduleVersion.objects.for_company(version.company_id)
         .filter(status__in=[ScheduleVersion.Status.DRAFT, ScheduleVersion.Status.PUBLISHED])
         .exclude(period_id=version.period_id)
-        .filter(period__start__lte=version.period.end, period__end__gte=version.period.start)
-        .order_by("number")
-        .values_list("period_id", "status")
-    ):
-        newer_than_published[period_id] = status == ScheduleVersion.Status.DRAFT
-    drafts = (
-        Assignment.objects.for_company(version.company_id)
         .filter(
-            employee__in=set(wanted.values()),
-            shift__version__status=ScheduleVersion.Status.DRAFT,
-            shift__version__period__in=[p for p, is_draft in newer_than_published.items() if is_draft],
+            period__start__lte=version.period.end + timedelta(days=1),
+            period__end__gte=version.period.start - timedelta(days=1),
         )
-        .select_related("shift__location")
+        .order_by("number")
+        .values_list("pk", "period_id", "status")
+    ):
+        kept = other_versions.setdefault(period_id, {})
+        if status == ScheduleVersion.Status.PUBLISHED:
+            kept.clear()  # an older draft is history once a newer version is published
+        kept[status] = version_id
+    version_ids = [v for kept in other_versions.values() for v in kept.values()]
+    rows = (
+        Assignment.objects.for_company(version.company_id)
+        .filter(employee__in=set(wanted.values()), shift__version__in=version_ids)
+        .select_related("shift__location", "shift__version")
     )
-    result = []
-    for assignment in drafts:
-        shift = assignment.shift
+    now = timezone.now()
+    elsewhere: dict[tuple, Clash] = {}  # (period, slot, person): the published shift wins over its draft copy
+    for row in sorted(rows, key=lambda r: r.shift.version.status != ScheduleVersion.Status.PUBLISHED):
+        shift = row.shift
         for key, employee in wanted.items():
             slot = slots[key]
-            if str(assignment.employee_id) == employee and shift.start_at < slot.end and slot.start < shift.end_at:
-                local = timezone.localtime(shift.start_at)
-                result.append(
-                    f"{names.get(employee, 'Ta osoba')} ma w tym czasie zmianę w szkicu lokalu {shift.location.name} "
-                    f"({local:%d.%m %H:%M}). Jeśli tamten lokal opublikuje grafik pierwszy, tej zmiany nie "
-                    "opublikujesz."
-                )
-    return list(dict.fromkeys(result))
+            overlaps = shift.start_at < slot.end_utc and slot.start_utc < shift.end_at
+            if str(row.employee_id) != employee or not overlaps:
+                continue
+            draft = shift.version.status == ScheduleVersion.Status.DRAFT
+            where = f"w {'szkicu grafiku' if draft else 'grafiku'} lokalu {shift.location.name}"
+            reason = ""
+            if manages is not None and str(shift.location_id) not in manages:
+                reason = f"Nie prowadzisz lokalu {shift.location.name}, więc poproś jego kierownika o zmianę."
+            elif not draft and shift.start_at <= now:
+                reason = "Ta zmiana już się zaczęła, więc nie można jej zmienić."
+            elsewhere.setdefault(
+                (shift.version.period_id, shift.slot_key, employee),
+                Clash(
+                    employee=employee,
+                    shift_id=str(shift.pk),
+                    version_id=str(shift.version_id),
+                    location_id=str(shift.location_id),
+                    location_name=shift.location.name,
+                    kind="draft" if draft else "published",
+                    start=shift.start_at,
+                    end=shift.end_at,
+                    text=f"{names.get(employee, 'Ta osoba')} ma w tym czasie zmianę {where}: "
+                    f"{_when(shift.start_at, shift.end_at, shift.location.timezone)}.",
+                    can_remove=not reason,
+                    reason=reason,
+                ),
+            )
+    return [*result, *elsewhere.values()]
+
+
+def _without_clashes(problem: Problem, clashes: list[Clash]) -> Problem:
+    """The problem as if the person were taken off the other locations' clashing shifts."""
+    gone = {(c.employee, c.start, c.end) for c in clashes if c.kind == "published"}
+    if not gone:
+        return problem
+    kept = tuple(e for e in problem.external_shifts if (e.employee, e.start_utc, e.end_utc) not in gone)
+    return replace(problem, external_shifts=kept)
 
 
 def check_changes(
-    loaded: LoadedVersion, changes: Mapping[str, str | None], today: date | None = None
+    loaded: LoadedVersion,
+    changes: Mapping[str, str | None],
+    today: date | None = None,
+    manages: set[str] | None = None,
 ) -> tuple[CheckResult, dict[str, str | None]]:
-    """Validate the version with `changes` (shift id -> employee id or None) applied; nothing is saved."""
+    """Validate the version with `changes` (shift id -> employee id or None) applied; nothing is saved.
+    Also lists the clashing shifts and whether the change would be fine once the person is taken off them."""
     today = today or timezone.localdate()
     by_key = _resolve(loaded, changes, today)
     problem = loaded.problem
@@ -163,27 +283,61 @@ def check_changes(
     after = validate(problem, after_schedule)
     known = {v.message for v in before.hard}
     problems = [v.message for v in after.hard if v.message not in known]
-    warnings = draft_clashes(loaded, by_key) + new_soft_violations(before, after)
+    warnings = new_soft_violations(before, after)
+    clashes = find_clashes(loaded, by_key, manages)
+    problems_if_removed = problems
+    if clashes:
+        freed = _without_clashes(problem, clashes)
+        moved = {**after_schedule, **{c.slot_key: None for c in clashes if c.kind == "here"}}
+        problems_if_removed = [v.message for v in validate(freed, moved).hard if v.message not in known]
     result = CheckResult(
         ok=not problems,
         problems=problems,
         warnings=warnings[:5],
         before=score(problem, before, location=loaded.location_id),
         after=score(problem, after, location=loaded.location_id),
+        clashes=clashes,
+        problems_if_removed=problems_if_removed,
     )
     return result, by_key
 
 
-def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], user) -> CheckResult:
-    """Save a manual change of people. Refused (409) when it adds a hard problem or the version is not editable."""
+def apply_changes(
+    version: ScheduleVersion,
+    changes: Mapping[str, str | None],
+    user,
+    *,
+    remove_clashes: bool = False,
+    manages: set[str] | None = None,
+) -> CheckResult:
+    """Save a manual change of people. Refused (409) when it adds a hard problem or the version is not editable.
+    `remove_clashes`: first take the person off their other shifts at the same time (the manager confirmed it),
+    here and in other locations the manager runs."""
     with transaction.atomic():
         version = ScheduleVersion.objects.select_for_update().get(pk=version.pk)
         if not is_editable(version):
             raise HttpError(409, NOT_EDITABLE)
         loaded = load_version(version)
-        result, by_key = check_changes(loaded, changes)
-        if not result.ok:
+        result, by_key = check_changes(loaded, changes, manages=manages)
+        clashes = result.clashes if remove_clashes else []
+        if clashes:
+            blocked = next((c for c in clashes if not c.can_remove), None)
+            if blocked is not None:
+                raise HttpError(409, f"{blocked.text} {blocked.reason}")
+            if result.problems_if_removed:
+                raise HttpError(409, "Tej zmiany nie można zapisać: " + " ".join(result.problems_if_removed))
+            by_key = {**by_key, **{c.slot_key: None for c in clashes if c.kind == "here"}}
+        elif not result.ok:
             raise HttpError(409, "Tej zmiany nie można zapisać: " + " ".join(result.problems))
+        for clash in clashes:  # other locations first, so this schedule is checked against what is left
+            if clash.kind == "draft":
+                other = ScheduleVersion.objects.for_company(version.company_id).get(pk=clash.version_id)
+                try:
+                    apply_changes(other, {clash.shift_id: None}, user)
+                except HttpError as error:
+                    raise HttpError(409, f"W szkicu grafiku lokalu {clash.location_name}: {error.message}") from error
+            elif clash.kind == "published":
+                take_off_published(clash, user, moved_to=version.period.location)
         people = loaded.problem.employee_by_id
         rows = Assignment.objects.for_company(version.company_id).filter(
             shift__version=version, shift__slot_key__in=list(by_key)
@@ -200,8 +354,76 @@ def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], u
             # A new person (or a hole) is not pinned until the manager pins it, as check_changes assumed.
             assignment.pinned = False
             assignment.save(update_fields=["employee", "manual", "borrowed", "pinned"])
-        save_scores(version, result.after)
+        if clashes:
+            # Scores of the saved state (people taken off other shifts, the change applied).
+            fresh = load_version(version)
+            save_scores(version, fresh.scores)
+        else:
+            save_scores(version, result.after)
     return result
+
+
+def take_off_published(clash: Clash, user, *, moved_to) -> None:
+    """Take a person off a published shift of another location in place (the manager confirmed a clash): the slot
+    becomes a hole there and in that period's newest draft, with a history row; the person and the other managers
+    are told. Open offers of that shift end."""
+    from apps.marketplace.services import ACTIVE, expire_offer, offer_query
+    from apps.notifications.services import location_manager_ids, notify
+
+    row = (
+        Assignment.objects.select_for_update(of=("self",))
+        .select_related("shift__location", "shift__position", "shift__version", "employee__membership__user")
+        .get(shift_id=clash.shift_id)
+    )
+    shift = row.shift
+    company_id = shift.company_id
+    employee = row.employee
+    if employee is None or str(employee.pk) != clash.employee:
+        return  # someone changed it meanwhile; nothing to take off
+    for offer in offer_query(company_id).filter(assignment=row, status__in=ACTIVE):
+        expire_offer(offer)
+    for assignment in [row, *_newest_draft_rows(shift, employee)]:
+        assignment.employee = None
+        assignment.manual = True
+        assignment.borrowed = False
+        assignment.pinned = False
+        assignment.save(update_fields=["employee", "manual", "borrowed", "pinned"])
+    AssignmentEvent.objects.create(
+        company_id=company_id,
+        location_id=shift.location_id,
+        period_id=shift.version.period_id,
+        slot_key=shift.slot_key,
+        from_employee=employee,
+        to_employee=None,
+        reason=AssignmentEvent.Reason.MANUAL,
+        by=user,
+    )
+    save_scores(shift.version, load_version(shift.version).scores)
+    tz = ZoneInfo(shift.location.timezone)
+    begin, finish = shift.start_at.astimezone(tz), shift.end_at.astimezone(tz)
+    payload = {
+        "date": shift.date.isoformat(),
+        "start_time": f"{begin:%H:%M}",
+        "end_time": f"{finish:%H:%M}",
+        "position_name": shift.position.name,
+        "location_name": shift.location.name,
+        "moved_to": moved_to.name,
+        "employee_name": employee.membership.user.full_name or "Pracownik bez imienia",
+    }
+    notify(company_id, [employee.membership.user_id], "shift_removed", payload)
+    others = set(location_manager_ids(shift.location)) - {getattr(user, "pk", None)}
+    notify(company_id, others, "shift_emptied", payload)
+
+
+def _newest_draft_rows(shift: Shift, employee) -> list[Assignment]:
+    newest = latest_version(shift.version.period)
+    if newest is None or newest.status != ScheduleVersion.Status.DRAFT or newest.pk == shift.version_id:
+        return []
+    return list(
+        Assignment.objects.for_company(shift.company_id).filter(
+            shift__version=newest, shift__slot_key=shift.slot_key, employee=employee
+        )
+    )
 
 
 def set_pinned(version: ScheduleVersion, shift_id: str, pinned: bool) -> Assignment:

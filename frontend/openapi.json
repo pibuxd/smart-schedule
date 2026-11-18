@@ -2024,7 +2024,7 @@
             }
           }
         },
-        "description": "Validate a manual change before saving it (e.g. while dragging): new problems and the new scores.",
+        "description": "Validate a manual change before saving it (e.g. while dragging): new problems, the new scores and the other\nshifts of the person at the same time (the screen asks whether to take the person off them).",
         "tags": [
           "scheduling"
         ],
@@ -2113,7 +2113,7 @@
             }
           }
         },
-        "description": "Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.",
+        "description": "Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.\nWith `remove_clashes` the person is first taken off their other shifts at the same time.",
         "tags": [
           "scheduling"
         ],
@@ -8601,6 +8601,10 @@
             "title": "Problems",
             "type": "array"
           },
+          "clash": {
+            "title": "Clash",
+            "type": "boolean"
+          },
           "notes": {
             "items": {
               "type": "string"
@@ -8662,6 +8666,7 @@
           "current",
           "possible",
           "problems",
+          "clash",
           "notes",
           "wish",
           "hours",
@@ -8780,6 +8785,24 @@
           },
           "after": {
             "$ref": "#/components/schemas/ScoresOut"
+          },
+          "clashes": {
+            "items": {
+              "$ref": "#/components/schemas/ClashOut"
+            },
+            "title": "Clashes",
+            "type": "array"
+          },
+          "problems_if_removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems If Removed",
+            "type": "array"
+          },
+          "ok_if_removed": {
+            "title": "Ok If Removed",
+            "type": "boolean"
           }
         },
         "required": [
@@ -8787,9 +8810,57 @@
           "problems",
           "warnings",
           "before",
-          "after"
+          "after",
+          "clashes",
+          "problems_if_removed",
+          "ok_if_removed"
         ],
         "title": "CheckOut",
+        "type": "object"
+      },
+      "ClashOut": {
+        "properties": {
+          "shift_id": {
+            "format": "uuid",
+            "title": "Shift Id",
+            "type": "string"
+          },
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "can_remove": {
+            "title": "Can Remove",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "employee_id",
+          "kind",
+          "location_name",
+          "text",
+          "can_remove",
+          "reason"
+        ],
+        "title": "ClashOut",
         "type": "object"
       },
       "ChangeIn": {
@@ -8828,6 +8899,11 @@
             "minItems": 1,
             "title": "Changes",
             "type": "array"
+          },
+          "remove_clashes": {
+            "default": false,
+            "title": "Remove Clashes",
+            "type": "boolean"
           }
         },
         "required": [

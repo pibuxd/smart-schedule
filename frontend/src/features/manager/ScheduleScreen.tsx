@@ -36,6 +36,7 @@ import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/da
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
 import { pickPeriod } from './periods'
+import { ClashQuestion } from './ClashQuestion'
 import { buildGrid, percent, swapChanges } from './schedule-grid'
 import { ShiftSheet } from './ShiftSheet'
 import { verdict } from './verdict'
@@ -416,6 +417,8 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   const [dragging, setDragging] = useState<VersionShiftOut | null>(null)
   const [check, setCheck] = useState<DragCheck | null>(null)
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
+  // Dropped on a shift while the person works elsewhere at the same time: the question waits for the manager.
+  const [question, setQuestion] = useState<{ from: VersionShiftOut; to: VersionShiftOut; check: CheckOut } | null>(null)
   const checker = useCheckScheduleChanges()
   const change = useChangeAssignments()
   const queryClient = useQueryClient()
@@ -445,28 +448,51 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
 
   const onDragStart = (event: DragStartEvent) => {
     setMessage(null)
+    setQuestion(null)
     setDragging(byId.get(String(event.active.id)) ?? null)
   }
   const onDragOver = (event: DragOverEvent) => {
     const id = event.over ? String(event.over.id) : null
     setCheck(id ? { overId: id, result: null, failed: false } : null)
   }
+  const save = (from: VersionShiftOut, to: VersionShiftOut, removeClashes = false) =>
+    change.mutate(
+      { versionId: data.id, data: { changes: swapChanges(from, to), remove_clashes: removeClashes } },
+      {
+        onSuccess: () => {
+          setQuestion(null)
+          const done = to.employee_id
+            ? `Zamienione: ${from.employee_name} i ${to.employee_name}.`
+            : `Przeniesiono: ${from.employee_name}.`
+          setMessage({ text: removeClashes ? `${done} Tamta zmiana jest teraz pusta.` : done, bad: false })
+          void queryClient.invalidateQueries()
+        },
+        onError: (error) => {
+          setQuestion(null)
+          setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true })
+        },
+      },
+    )
+  // Another shift at the same time: ask first. Otherwise save at once (the server refuses what breaks a rule).
+  const decide = (from: VersionShiftOut, to: VersionShiftOut, result: CheckOut) => {
+    if (result.clashes.length > 0) setQuestion({ from, to, check: result })
+    else save(from, to)
+  }
   const onDragEnd = (event: DragEndEvent) => {
     const from = byId.get(String(event.active.id))
     const to = event.over ? byId.get(String(event.over.id)) : undefined
+    const known = check?.overId === to?.id ? check?.result : null
     setDragging(null)
     setCheck(null)
     if (!from || !to || from.id === to.id || from.employee_id === to.employee_id) return
-    change.mutate(
+    if (known) {
+      decide(from, to, known)
+      return
+    }
+    checker.mutate(
       { versionId: data.id, data: { changes: swapChanges(from, to) } },
       {
-        onSuccess: () => {
-          setMessage({
-            text: to.employee_id ? `Zamienione: ${from.employee_name} i ${to.employee_name}.` : `Przeniesiono: ${from.employee_name}.`,
-            bad: false,
-          })
-          void queryClient.invalidateQueries()
-        },
+        onSuccess: (response) => decide(from, to, response.data as CheckOut),
         onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
       },
     )
@@ -487,6 +513,14 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
         <p role="status" className={cn('m-0 rounded-sm px-3 py-2', message.bad ? 'bg-cannot-soft text-cannot' : 'bg-accent-soft')}>
           {message.text}
         </p>
+      )}
+      {question && (
+        <ClashQuestion
+          check={question.check}
+          busy={change.isPending}
+          onMove={() => save(question.from, question.to, true)}
+          onCancel={() => setQuestion(null)}
+        />
       )}
       <DndContext
         sensors={sensors}
@@ -580,6 +614,12 @@ function dropWords(check: DragCheck | null): { text: string; bad: boolean } {
   if (!check) return { text: 'Upuść na innej zmianie, żeby zamienić osoby.', bad: false }
   if (check.failed) return { text: 'Nie udało się sprawdzić tej zamiany.', bad: true }
   if (!check.result) return { text: 'Sprawdzam…', bad: false }
+  const clash = check.result.clashes.find((c) => !c.can_remove) ?? check.result.clashes[0]
+  if (clash) {
+    if (!clash.can_remove) return { text: `${clash.text} ${clash.reason}`, bad: true }
+    if (!check.result.ok_if_removed) return { text: check.result.problems_if_removed[0] ?? clash.text, bad: true }
+    return { text: `${clash.text} Upuść, a zapytamy, czy ją stamtąd zdjąć.`, bad: false }
+  }
   if (!check.result.ok) return { text: check.result.problems[0], bad: true }
   const after = check.result.after
   return { text: `Można. Zasady ${percent(after.manager_rules)}, prośby ${percent(after.employee_requests)}.`, bad: false }

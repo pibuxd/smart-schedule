@@ -122,9 +122,12 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - Schedules are arranged only when the manager asks (after the availability deadline or once everyone has answered);
   never add jobs that generate schedules on a timer or by themselves.
 - To see "Mój grafik" on demo data: publish from "Grafik" in the manager panel, or `generate_schedule --period <id> --publish`.
-- Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable; a change that adds a hard violation is refused; publishing records `AssignmentEvent` history). Shift explanations come from `engine/explain.py` (one validator run per candidate).
-- Given-away shifts: `apps/marketplace/services.py`. The only change to a published version in place is an approved
-  handover (checked by the validator, pinned, `AssignmentEvent` reason `offer`). In-app notifications are written with
+- Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable; a change that adds a hard violation is refused; publishing records `AssignmentEvent` history).
+  A person put on a shift while they have another one at the same time (here, or another location's draft or published
+  schedule) is a clash: `check` lists `clashes`, the screen asks, and `remove_clashes: true` takes them off the other one. Shift explanations come from `engine/explain.py` (one validator run per candidate).
+- Given-away shifts: `apps/marketplace/services.py`. The only changes to a published version in place are an approved
+  handover (checked by the validator, pinned, `AssignmentEvent` reason `offer`) and taking a person off a published
+  shift of another location after the manager confirmed a clash (`editing.take_off_published`, reason `manual`). In-app notifications are written with
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
 - Assistant (Claude): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   Its action plan is a proposal: `apps/assistant/services.py` checks names against the location's data and builds

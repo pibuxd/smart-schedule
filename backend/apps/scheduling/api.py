@@ -577,6 +577,8 @@ class CandidateOut(Schema):
     current: bool
     possible: bool
     problems: list[str]
+    # Blocked (also) because they have another shift at the same time: the manager may move them here.
+    clash: bool
     notes: list[str]
     wish: Wish
     hours: float
@@ -637,6 +639,18 @@ class ChangeIn(Schema):
 
 class ChangesIn(Schema):
     changes: list[ChangeIn] = Field(min_length=1, max_length=20)
+    # The manager confirmed: take the person off their other shifts at the same time (they become holes).
+    remove_clashes: bool = False
+
+
+class ClashOut(Schema):
+    shift_id: UUID
+    employee_id: UUID
+    kind: str  # "here" (this schedule), "draft" or "published" (another location's schedule)
+    location_name: str
+    text: str
+    can_remove: bool
+    reason: str
 
 
 class CheckOut(Schema):
@@ -645,6 +659,11 @@ class CheckOut(Schema):
     warnings: list[str]
     before: ScoresOut
     after: ScoresOut
+    # Other shifts of the person at the same time. `problems_if_removed`: what would still be broken once the person
+    # is taken off them; `ok_if_removed`: the manager may take them off and the change is then fine.
+    clashes: list[ClashOut]
+    problems_if_removed: list[str]
+    ok_if_removed: bool
 
 
 class PinIn(Schema):
@@ -881,6 +900,7 @@ def explain_shift(request, version_id: UUID, shift_id: UUID):
                 current=c.current,
                 possible=c.possible,
                 problems=list(c.blocked),
+                clash=c.clash,
                 notes=list(c.notes),
                 wish=c.wish.value,
                 hours=c.hours,
@@ -912,7 +932,25 @@ def _check_out(result) -> CheckOut:
         warnings=result.warnings,
         before=_scores_out(result.before),
         after=_scores_out(result.after),
+        clashes=[
+            ClashOut(
+                shift_id=c.shift_id,
+                employee_id=c.employee,
+                kind=c.kind,
+                location_name=c.location_name,
+                text=c.text,
+                can_remove=c.can_remove,
+                reason=c.reason,
+            )
+            for c in result.clashes
+        ],
+        problems_if_removed=result.problems_if_removed,
+        ok_if_removed=result.ok_if_removed,
     )
+
+
+def _managed_ids(ctx) -> set[str]:
+    return {str(pk) for pk in ctx.managed_locations().values_list("pk", flat=True)}
 
 
 @router.post(
@@ -920,11 +958,12 @@ def _check_out(result) -> CheckOut:
     response={200: CheckOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
-    """Validate a manual change before saving it (e.g. while dragging): new problems and the new scores."""
+    """Validate a manual change before saving it (e.g. while dragging): new problems, the new scores and the other
+    shifts of the person at the same time (the screen asks whether to take the person off them)."""
     from apps.scheduling.editing import check_changes, load_version
 
     ctx, version = _version_context(request, version_id)
-    result, _ = check_changes(load_version(version), _changes(ctx, payload))
+    result, _ = check_changes(load_version(version), _changes(ctx, payload), manages=_managed_ids(ctx))
     return _check_out(result)
 
 
@@ -933,12 +972,16 @@ def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
     response={200: CheckOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def change_assignments(request, version_id: UUID, payload: ChangesIn):
-    """Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule."""
+    """Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
+    With `remove_clashes` the person is first taken off their other shifts at the same time."""
     from apps.scheduling.editing import apply_changes
 
     ctx, version = _version_context(request, version_id)
     ctx.require_writable()
-    return _check_out(apply_changes(version, _changes(ctx, payload), ctx.user))
+    result = apply_changes(
+        version, _changes(ctx, payload), ctx.user, remove_clashes=payload.remove_clashes, manages=_managed_ids(ctx)
+    )
+    return _check_out(result)
 
 
 @router.post(

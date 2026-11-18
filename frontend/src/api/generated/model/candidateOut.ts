@@ -12,6 +12,7 @@ export interface CandidateOut {
   current: boolean;
   possible: boolean;
   problems: string[];
+  clash: boolean;
   notes: string[];
   wish: CandidateOutWish;
   hours: number;

@@ -407,14 +407,19 @@ def refresh_after_publish(version: ScheduleVersion, previous: ScheduleVersion | 
             offer.assignment = row
             offer.save(update_fields=["assignment"])
             continue
-        payload = offer_payload(offer)
-        pending = offer.claims.filter(status=ShiftClaim.Status.PENDING)
-        users = [offer.offered_by.membership.user_id, *pending.values_list("employee__membership__user_id", flat=True)]
-        pending.update(status=ShiftClaim.Status.WITHDRAWN, decided_at=timezone.now())
-        offer.status = ShiftOffer.Status.EXPIRED
-        offer.decided_at = timezone.now()
-        offer.save(update_fields=["status", "decided_at"])
-        notify(version.company_id, users, "offer_expired", payload)
+        expire_offer(offer)
+
+
+def expire_offer(offer: ShiftOffer) -> None:
+    """End an open offer because its shift changed; the giver and the volunteers are told."""
+    payload = offer_payload(offer)
+    pending = offer.claims.filter(status=ShiftClaim.Status.PENDING)
+    users = [offer.offered_by.membership.user_id, *pending.values_list("employee__membership__user_id", flat=True)]
+    pending.update(status=ShiftClaim.Status.WITHDRAWN, decided_at=timezone.now())
+    offer.status = ShiftOffer.Status.EXPIRED
+    offer.decided_at = timezone.now()
+    offer.save(update_fields=["status", "decided_at"])
+    notify(offer.company_id, users, "offer_expired", payload)
 
 
 def visible_offers_for(profile: EmployeeProfile):

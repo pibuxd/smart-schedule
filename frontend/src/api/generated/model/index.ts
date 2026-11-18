@@ -26,6 +26,7 @@ export * from './changesIn';
 export * from './checkOut';
 export * from './claimOut';
 export * from './claimOutStatus';
+export * from './clashOut';
 export * from './closureIn';
 export * from './closureOut';
 export * from './commandIn';
