@@ -51,6 +51,11 @@ class Code(StrEnum):
     RULE = "rule"  # a catalog rule; see Violation.rule_code
 
 
+# What the manager may overrule by putting a person on a slot anyway (`Problem.forced`). The position and pins
+# stay hard: a person without the position is fixed in "Pracownicy", a pin is the manager's own earlier decision.
+WAIVABLE = frozenset({Code.CANNOT, Code.ONE_SHIFT, Code.OVERLAP, Code.EXPERIENCE, Code.RULE})
+
+
 @dataclass(frozen=True)
 class Violation:
     code: Code
@@ -101,6 +106,8 @@ class ValidationReport:
     hours: Mapping[str, float] = field(default_factory=dict)  # employee id -> hours in this schedule
     # Text requests the schedule cannot keep or break (type "other", missing details): left to the manager.
     unscored_requests: tuple[str, ...] = ()
+    # Hard problems the manager overruled on purpose (`Problem.forced`): shown as warnings, never blocking.
+    waived: tuple[Violation, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -247,7 +254,24 @@ class _Checker:
 
     def is_frozen(self, slot: Slot) -> bool:
         before = self.p.frozen_before
-        return before is not None and slot.date < before and slot.id in self.p.published
+        # A pin on a day that has passed is the manager's correction of what really happened: it wins.
+        return (
+            before is not None and slot.date < before and slot.id in self.p.published and slot.id not in self.p.pinned
+        )
+
+    def is_waived(self, violation: Violation) -> bool:
+        """The manager forced a person onto one of the violation's slots (or, for a problem about a person or a
+        whole location without slots, onto any slot of that person / location)."""
+        if violation.code not in WAIVABLE:
+            return False
+        forced = {s: e for s, e in self.p.forced.items() if self.assignment.get(s) == e}
+        if not forced:
+            return False
+        if violation.slots:
+            return any(s in forced for s in violation.slots)
+        if violation.employee is not None:
+            return violation.employee in forced.values()
+        return violation.location is None or any(self.p.slot_by_id[s].location == violation.location for s in forced)
 
     # ----------------------------------------------------------------- basic hard rules
 
@@ -781,8 +805,10 @@ class _Checker:
             s.id for s in self.p.slots if s.id in published and self.assignment.get(s.id) != published[s.id]
         )
         hours = {e.id: round(sum(s.hours for s in self.slots_of.get(e.id, ())), 4) for e in self.p.employees}
+        waived = [v for v in self.hard if self.is_waived(v)] if self.p.forced else []
         return ValidationReport(
-            hard=tuple(self.hard),
+            hard=tuple(v for v in self.hard if v not in waived) if waived else tuple(self.hard),
+            waived=tuple(waived),
             holes=holes,
             rules=tuple(rules),
             requests=tuple(requests),

@@ -117,6 +117,37 @@ def test_days_that_passed_are_frozen():
     assert codes(validate(p, {"old": None, "new": "anna"})) == [Code.FROZEN]
 
 
+def test_a_pin_on_a_day_that_passed_is_the_managers_correction():
+    yesterday, today = DAY, DAY + date.resolution
+    p = problem(
+        [employee("anna"), employee("ola")],
+        [slot("old", yesterday), slot("new", today)],
+        published={"old": "anna", "new": "anna"},
+        pinned={"old": "ola"},
+        frozen_before=today,
+    )
+    assert validate(p, {"old": "ola", "new": "anna"}).ok
+
+
+def test_forced_person_turns_hard_problems_into_waived_ones():
+    slots = [slot("s1", DAY), slot("s2", DAY, "10:00", "18:00")]
+    p = problem(
+        [employee("anna"), employee("ola")],
+        slots,
+        availability=(Availability("anna", DAY, "cannot"),),
+        forced={"s1": "anna", "s2": "anna"},
+    )
+    report = validate(p, {"s1": "anna", "s2": "anna"})
+    assert report.ok
+    assert sorted(v.code for v in report.waived) == [Code.CANNOT, Code.CANNOT, Code.OVERLAP]
+    # The override is about that person only: someone else on the slot is checked as usual.
+    other = replace(p, availability=(Availability("ola", DAY, "cannot"),))
+    assert codes(validate(other, {"s1": "ola"})) == [Code.CANNOT]
+    # The position cannot be overruled.
+    baker = replace(p, slots=(slot("s1", DAY, position=BAKER), slots[1]), availability=(), forced={"s1": "anna"})
+    assert codes(validate(baker, {"s1": "anna"})) == [Code.POSITION]
+
+
 def test_changes_against_published_schedule_are_counted():
     p = problem(
         [employee("anna"), employee("ola")],

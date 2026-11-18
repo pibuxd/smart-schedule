@@ -38,6 +38,7 @@ from engine.problem import (
     EXPERIENCED,
     AvailabilityState,
     Employee,
+    ExternalShift,
     Problem,
     RequestType,
     RuleConfig,
@@ -173,13 +174,7 @@ class _Builder:
 
     def _fixed_assignments(self) -> dict[str, str | None]:
         """Slots whose person is decided before solving: frozen past days (published value) and pins."""
-        p, fixed = self.p, {}
-        if p.frozen_before is not None:
-            for slot in p.slots:
-                if slot.date < p.frozen_before and slot.id in p.published:
-                    fixed[slot.id] = p.published[slot.id]
-        fixed.update(p.pinned)
-        return fixed
+        return _fixed(self.p)
 
     def _eligible(self, employee: Employee, slot: Slot) -> bool:
         if not employee.available or employee.home_location != slot.location or slot.position not in employee.positions:
@@ -829,6 +824,42 @@ class _Search:
             watcher.join()
 
 
+def _fixed(problem: Problem) -> dict[str, str | None]:
+    """Slots whose person is decided before solving: frozen past days (published value) and pins."""
+    fixed: dict[str, str | None] = {}
+    if problem.frozen_before is not None:
+        for slot in problem.slots:
+            if slot.date < problem.frozen_before and slot.id in problem.published:
+                fixed[slot.id] = problem.published[slot.id]
+    fixed.update(problem.pinned)
+    return fixed
+
+
+def _kept_forced(problem: Problem) -> dict[str, str]:
+    """Forced assignments that stay: the slot is pinned to that person, or the day has passed."""
+    if not problem.forced:
+        return {}
+    fixed = _fixed(problem)
+    return {s: e for s, e in problem.forced.items() if fixed.get(s) == e}
+
+
+def _without_slots(problem: Problem, kept: Mapping[str, str]) -> Problem:
+    """`problem` without the `kept` slots; their people have them as shifts outside the problem."""
+    outside = tuple(
+        ExternalShift(employee, slot.date, slot.start, slot.end)
+        for slot_id, employee in kept.items()
+        for slot in (problem.slot_by_id[slot_id],)
+    )
+    return replace(
+        problem,
+        slots=tuple(s for s in problem.slots if s.id not in kept),
+        pinned={k: v for k, v in problem.pinned.items() if k not in kept},
+        published={k: v for k, v in problem.published.items() if k not in kept},
+        forced={},
+        external_shifts=(*problem.external_shifts, *outside),
+    )
+
+
 def _fixed_conflicts(problem: Problem, fixed: Mapping[str, str | None]) -> list[str]:
     """Hard violations that pins and past days already have on their own (no other shift can fix them)."""
     report = validate(problem, fixed)
@@ -893,6 +924,22 @@ def solve(
     started = clock.monotonic()
     if weights is not None:
         problem = replace(problem, weights=weights)
+    kept = _kept_forced(problem)
+    if kept:
+        # The manager's forced assignments break hard rules on purpose, so they cannot be part of the model.
+        # They leave it as shifts the person already has (no overlap, rest counted) and return in the result.
+        result = solve(
+            _without_slots(problem, kept),
+            time_limit_s=time_limit_s,
+            workers=workers,
+            seed=seed,
+            diversity_from=[{k: v for k, v in s.items() if k not in kept} for s in diversity_from],
+            min_difference=min_difference,
+            should_stop=should_stop,
+        )
+        if result.schedule is None:
+            return result
+        return replace(result, schedule={**result.schedule, **kept})
 
     def elapsed_ms() -> int:
         return round((clock.monotonic() - started) * 1000)

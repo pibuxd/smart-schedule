@@ -12,4 +12,5 @@ export interface ChangesIn {
      * @maxItems 20
      */
   changes: ChangeIn[];
+  force?: boolean;
 }

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Pin, PinOff } from 'lucide-react'
+import { Pin, PinOff, ShieldAlert } from 'lucide-react'
 
 import type { CandidateOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
 import { useChangeAssignments, useExplainShift, usePinShift } from '../../api/generated/scheduling/scheduling'
@@ -44,7 +44,7 @@ export function ShiftSheet({
       description={shift ? `${shortDay(shift.date)}, ${shift.position_name}` : undefined}
     >
       {shift && (
-        <ShiftDetails versionId={versionId} locationId={locationId} shift={shift} editable={editable && !shift.past} onDone={onClose} />
+        <ShiftDetails versionId={versionId} locationId={locationId} shift={shift} editable={editable} onDone={onClose} />
       )}
     </Sheet>
   )
@@ -94,9 +94,9 @@ function ShiftDetails({
       },
     )
 
-  const put = (employeeId: string | null) =>
+  const put = (employeeId: string | null, force = false) =>
     change.mutate(
-      { versionId, data: { changes: [{ shift_id: shift.id, employee_id: employeeId }] } },
+      { versionId, data: { changes: [{ shift_id: shift.id, employee_id: employeeId }], force } },
       {
         onSuccess: () => {
           refresh()
@@ -107,7 +107,13 @@ function ShiftDetails({
 
   return (
     <div className="grid gap-5">
-      {shift.past && <p className="m-0 text-ink-muted">Ten dzień już minął, więc tej zmiany nie zmienisz.</p>}
+      {shift.past && (
+        <p className="m-0 text-ink-muted">
+          {editable
+            ? 'Ten dzień już minął. Popraw, jeśli pracował ktoś inny, żeby godziny się zgadzały.'
+            : 'Ten dzień już minął. Żeby go poprawić, naciśnij „Popraw grafik”.'}
+        </p>
+      )}
       <section className="grid gap-2" aria-label="Wyjaśnienie przydziału">
         <h3 className="m-0 text-lg font-extrabold">{shift.employee_id ? 'Co uzasadnia ten przydział w obecnym grafiku?' : 'Dlaczego zmiana jest bez obsady?'}</h3>
         {shift.manual && shift.employee_id && <p className="m-0">Ten przydział zmieniono ręcznie.</p>}
@@ -125,6 +131,18 @@ function ShiftDetails({
       {data.shift.problems.map((problem) => (
         <InlineError key={problem}>{problem}</InlineError>
       ))}
+      {data.shift.forced && (
+        <div className="grid gap-1 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+          <span className="flex items-center gap-1.5 font-semibold">
+            <ShieldAlert aria-hidden="true" size={18} /> Wpisane mimo przeszkód
+          </span>
+          {data.shift.overridden.map((problem) => (
+            <span key={problem} className="text-sm">
+              {problem}
+            </span>
+          ))}
+        </div>
+      )}
 
       {current && (
         <div className="grid gap-2 rounded-md border-2 border-ink bg-surface p-3">
@@ -168,8 +186,8 @@ function ShiftDetails({
         <div className="grid gap-1 rounded-md border border-line bg-surface p-3">
           <span className="font-semibold">Nikt nie może wziąć tej zmiany.</span>
           <span className="text-sm">
-            Każda osoba ma powód, np. dzień „nie mogę”, inną zmianę o tej porze albo zasadę bez wyjątków. Wpisanie
-            kogoś mimo to złamałoby te zasady, a takiego grafiku nie da się opublikować. Możesz:
+            Każda osoba ma powód, np. dzień „nie mogę”, inną zmianę o tej porze albo zasadę bez wyjątków. Możesz
+            wpisać kogoś mimo to (lista niżej) albo:
           </span>
           <ul className="m-0 grid gap-1 pl-5 text-sm">
             <li>
@@ -186,7 +204,7 @@ function ShiftDetails({
             </li>
             <li>dodać komuś to stanowisko w „Pracownicy” albo zostawić zmianę pustą.</li>
           </ul>
-          <span className="text-sm text-ink-muted">Powód przy każdej osobie jest niżej, w „Nie mogą wziąć tej zmiany”.</span>
+          <span className="text-sm text-ink-muted">Powód przy każdej osobie jest niżej, w „Nie mogą, ale możesz wpisać mimo to”.</span>
         </div>
       )}
 
@@ -214,7 +232,7 @@ function ShiftDetails({
       {blocked.length > 0 && (
         <details className="grid gap-2">
           <summary className="min-h-(--touch) cursor-pointer content-center font-semibold text-accent">
-            Nie mogą wziąć tej zmiany ({blocked.length})
+            {editable ? 'Nie mogą, ale możesz wpisać mimo to' : 'Nie mogą wziąć tej zmiany'} ({blocked.length})
           </summary>
           <ul className="m-0 mt-2 grid list-none gap-2 p-0">
             {blocked.map((candidate) => (
@@ -225,6 +243,18 @@ function ShiftDetails({
                     {problem}
                   </span>
                 ))}
+                {editable && (
+                  <Button
+                    variant="secondary"
+                    size="normal"
+                    className="w-fit"
+                    disabled={change.isPending}
+                    onClick={() => put(candidate.employee_id, true)}
+                  >
+                    <ShieldAlert aria-hidden="true" size={20} />
+                    Wpisz mimo to: {candidate.name}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

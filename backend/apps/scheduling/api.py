@@ -497,6 +497,9 @@ class VersionShiftOut(Schema):
     # Hard problems on this shift (Polish sentences); a valid schedule has none.
     problems: list[str]
     past: bool
+    # The manager put this person here against a hard rule; `overridden` are the problems they accepted.
+    forced: bool
+    overridden: list[str]
 
 
 class VersionEmployeeOut(Schema):
@@ -633,14 +636,25 @@ class ChangeIn(Schema):
 
 class ChangesIn(Schema):
     changes: list[ChangeIn] = Field(min_length=1, max_length=20)
+    # Save even when the change breaks a hard rule ("nie mogę", another shift, a "no exceptions" rule).
+    force: bool = False
 
 
 class CheckOut(Schema):
     ok: bool
+    # Not ok, but the manager can save it anyway with `force`.
+    can_force: bool
     problems: list[str]
     warnings: list[str]
     before: ScoresOut
     after: ScoresOut
+
+
+class ShiftFitOut(Schema):
+    shift_id: UUID
+    # prefer: marked "chętnie"; can: marked "mogę"; cannot: "nie mogę" or another shift at that time.
+    fit: Literal["prefer", "can", "cannot"]
+    reason: str
 
 
 class PinIn(Schema):
@@ -672,6 +686,12 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
     for violation in loaded.report.hard:
         for slot_id in violation.slots:
             problems_by_slot[slot_id].append(violation.message)
+    overridden_by_slot: dict[str, list[str]] = defaultdict(list)
+    for violation in loaded.report.waived:
+        about = violation.slots or [s for s, e in problem.forced.items() if e == violation.employee]
+        for slot_id in about:
+            if slot_id in problem.forced:
+                overridden_by_slot[slot_id].append(violation.message)
     rows = {}
     shifts = (
         Shift.objects.for_company(loaded.version.company_id)
@@ -704,6 +724,8 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
             wish=wish,
             problems=problems_by_slot.get(shift.slot_key, []),
             past=shift.date < today,
+            forced=assignment.forced and employee_id is not None,
+            overridden=overridden_by_slot.get(shift.slot_key, []),
         )
     return rows
 
@@ -898,6 +920,7 @@ def _changes(ctx, payload: ChangesIn) -> dict[str, str | None]:
 def _check_out(result) -> CheckOut:
     return CheckOut(
         ok=result.ok,
+        can_force=result.can_force,
         problems=result.problems,
         warnings=result.warnings,
         before=_scores_out(result.before),
@@ -923,12 +946,55 @@ def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
     response={200: CheckOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def change_assignments(request, version_id: UUID, payload: ChangesIn):
-    """Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule."""
+    """Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks
+    a hard rule is refused with the reasons, unless `force` is set: the manager has the last word."""
     from apps.scheduling.editing import apply_changes
 
     ctx, version = _version_context(request, version_id)
     ctx.require_writable()
-    return _check_out(apply_changes(version, _changes(ctx, payload), ctx.user))
+    return _check_out(apply_changes(version, _changes(ctx, payload), ctx.user, force=payload.force))
+
+
+@router.get(
+    "/versions/{version_id}/employees/{employee_id}/fit",
+    response={200: list[ShiftFitOut], 403: ErrorOut, 404: ErrorOut},
+)
+def employee_fit(request, version_id: UUID, employee_id: UUID, moving_shift_id: UUID | None = None):
+    """Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+    shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+    the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+    dragged away from, so it does not count as "another shift at that time"."""
+    from apps.scheduling.editing import load_version
+    from engine.problem import AvailabilityState
+
+    ctx, version = _version_context(request, version_id)
+    profile = ctx.get(EmployeeProfile, pk=employee_id)
+    loaded = load_version(version)
+    problem = loaded.problem
+    employee = problem.employee_by_id.get(str(profile.pk))
+    if employee is None:
+        return []
+    ids = dict(ctx.qs(Shift).filter(version=version).values_list("slot_key", "pk"))
+    busy = [
+        (s.start_utc, s.end_utc)
+        for s in problem.slots
+        if loaded.schedule.get(s.id) == employee.id and ids[s.id] != moving_shift_id
+    ] + [(e.start_utc, e.end_utc) for e in problem.external_shifts if e.employee == employee.id]
+    result = []
+    for slot in problem.slots:
+        if slot.position not in employee.positions or loaded.schedule.get(slot.id) == employee.id:
+            continue
+        wish = problem.availability_for(employee.id, slot)
+        if wish == AvailabilityState.CANNOT:
+            fit, reason = "cannot", "ma zaznaczone „nie mogę”"
+        elif any(start < slot.end_utc and slot.start_utc < end for start, end in busy):
+            fit, reason = "cannot", "ma inną zmianę w tym czasie"
+        elif wish == AvailabilityState.PREFER:
+            fit, reason = "prefer", "chętnie"
+        else:
+            fit, reason = "can", "może"
+        result.append(ShiftFitOut(shift_id=ids[slot.id], fit=fit, reason=reason))
+    return result
 
 
 @router.post(

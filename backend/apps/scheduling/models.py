@@ -178,6 +178,9 @@ class Assignment(CompanyOwnedModel):
     borrowed = models.BooleanField("z innego lokalu", default=False)
     # Set by the manager by hand (not by the generator). Arranging again drops such changes unless pinned.
     manual = models.BooleanField("ręczna zmiana", default=False)
+    # The manager put this person here knowingly against a hard rule ("nie mogę", another shift, a "no
+    # exceptions" rule). The validator reports those problems as waived while this person holds the slot.
+    forced = models.BooleanField("wpisane mimo przeszkód", default=False)
 
     class Meta:
         verbose_name = "przypisanie"

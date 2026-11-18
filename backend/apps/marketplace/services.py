@@ -270,7 +270,8 @@ def _move(assignment: Assignment, to: EmployeeProfile) -> None:
     assignment.manual = True
     # The new person was agreed on: arranging the period again keeps them there.
     assignment.pinned = True
-    assignment.save(update_fields=["employee", "borrowed", "manual", "pinned"])
+    assignment.forced = False  # the taker was checked by the validator; an earlier override was about the giver
+    assignment.save(update_fields=["employee", "borrowed", "manual", "pinned", "forced"])
 
 
 def _hand_over(offer: ShiftOffer, claim: ShiftClaim, taker: EmployeeProfile, by, auto: bool) -> None:

@@ -54,6 +54,8 @@ function shift(id: string, date: string, employee: [string, string] | null, extr
     wish: employee ? 'neutral' : null,
     problems: [],
     past: false,
+    forced: false,
+    overridden: [],
     ...extra,
   }
 }
@@ -140,7 +142,16 @@ function api(overrides: Record<string, unknown> = {}) {
     if (method === 'GET' && path === '/api/locations/l1/periods') return [200, [overrides.period ?? period]]
     if (method === 'GET' && path === '/api/versions/v1') return [200, overrides.version ?? version]
     if (method === 'GET' && path.endsWith('/explain')) return [200, explanation]
-    if (method === 'PATCH') return [200, { ok: true, problems: [], warnings: [], before: scores, after: scores }]
+    if (method === 'GET' && path === '/api/versions/v1/employees/e2/fit') {
+      return [
+        200,
+        [
+          { shift_id: 's1', fit: 'cannot', reason: 'ma inną zmianę w tym czasie' },
+          { shift_id: 's3', fit: 'prefer', reason: 'chętnie' },
+        ],
+      ]
+    }
+    if (method === 'PATCH') return [200, { ok: true, can_force: false, problems: [], warnings: [], before: scores, after: scores }]
     if (method === 'POST' && path.endsWith('/publish')) return [200, version.history[0]]
     if (method === 'POST' && path.endsWith('/pin')) return [200, { ok: true }]
     return [404, { detail: 'Nie ma.' }]
@@ -202,6 +213,53 @@ describe('ScheduleScreen', () => {
       url: '/api/versions/v1/assignments',
       body: { changes: [{ shift_id: 's3', employee_id: 'e1' }] },
     })
+  })
+
+  it('lets the manager put in a person who cannot work, as an override', async () => {
+    const calls = api()
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /^Bez obsady/ }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(await within(sheet).findByRole('button', { name: 'Wpisz mimo to: Marek Zając' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({
+      changes: [{ shift_id: 's3', employee_id: 'e2' }],
+      force: true,
+    })
+  })
+
+  it('lets the manager correct a day that has passed and marks an override', async () => {
+    const past = shift('s3', '2026-12-02', ['e2', 'Marek Zając'], {
+      past: true,
+      forced: true,
+      overridden: ['Marek Zając ma zaznaczone „nie mogę” (02.12 Ranna 06:00–14:00).'],
+    })
+    const calls = mockApi((method, path) => {
+      if (method === 'GET' && path === '/api/locations/l1/periods') return [200, [period]]
+      if (method === 'GET' && path === '/api/versions/v1') return [200, { ...version, shifts: [past] }]
+      if (method === 'GET' && path.endsWith('/explain')) {
+        const current = { ...explanation.candidates[1], current: true }
+        return [200, { ...explanation, shift: past, candidates: [current, explanation.candidates[0]] }]
+      }
+      if (method === 'PATCH') return [200, { ok: true, can_force: false, problems: [], warnings: [], before: scores, after: scores }]
+      return [404, { detail: 'Nie ma.' }]
+    })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /Marek Zając.*wpisana mimo przeszkód/ }))
+    const sheet = await screen.findByRole('dialog')
+    expect(await within(sheet).findByText(/Ten dzień już minął. Popraw, jeśli pracował ktoś inny/)).toBeInTheDocument()
+    expect(within(sheet).getByText('Wpisane mimo przeszkód')).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Wpisz: Anna Wróbel' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+  })
+
+  it('colours the grid for the picked person: where they want to, can and cannot work', async () => {
+    api()
+    show()
+    fireEvent.change(await screen.findByLabelText('Pokaż, kiedy ta osoba chce i może pracować'), { target: { value: 'e2' } })
+    expect(await screen.findByRole('button', { name: /^Bez obsady.*wybrana osoba chętnie/ })).toHaveClass('avail-prefer')
+    expect(screen.getByRole('button', { name: /^Anna Wróbel.*wybrana osoba nie może/ })).toHaveClass('fit-cannot')
+    expect(screen.getByText('nie może, ale możesz wpisać mimo to')).toBeInTheDocument()
   })
 
   it('keeps an empty shift empty on purpose and shows what to do when nobody can take it', async () => {

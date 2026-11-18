@@ -119,7 +119,7 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - Schedules are arranged only when the manager asks (after the availability deadline or once everyone has answered);
   never add jobs that generate schedules on a timer or by themselves.
 - To see "Mój grafik" on demo data: publish from "Grafik" in the manager panel, or `generate_schedule --period <id> --publish`.
-- Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable; a change that adds a hard violation is refused; publishing records `AssignmentEvent` history). Shift explanations come from `engine/explain.py` (one validator run per candidate).
+- Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable, past days included; a change that adds a hard violation is refused unless the manager sends `force`, which saves it as `Assignment.forced` + pinned and the validator reports those problems as `waived`, never blocking; publishing records `AssignmentEvent` history). Hard rules bind the generator, not the manager. Shift explanations come from `engine/explain.py` (one validator run per candidate).
 - Given-away shifts: `apps/marketplace/services.py`. The only change to a published version in place is an approved
   handover (checked by the validator, pinned, `AssignmentEvent` reason `offer`). In-app notifications are written with
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
