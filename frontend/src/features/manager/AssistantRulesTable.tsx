@@ -66,7 +66,7 @@ export function AssistantRulesTable({
       </div>
       <p className="m-0 text-sm text-ink-muted">
         {data.closed
-          ? "Te ustalenia pozostają przy tym okresie i obowiązują także przy jego korektach. Nie przejdą na następny okres."
+          ? "Te ustalenia pozostają przy tym okresie i obowiązują także przy jego korektach. Na następny okres nie przejdą same. Możesz je tam skopiować."
           : data.period_requested
             ? "Dotyczą tylko tego okresu. Nowy okres zaczyna bez ustaleń."
             : "Jeszcze bez okresu. Przypiszesz je przyciskiem „Poproś o dyspozycje”."}
