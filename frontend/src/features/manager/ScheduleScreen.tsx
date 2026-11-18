@@ -138,7 +138,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           )}
           {period.latest_version_id && !period.active_run_id && (
             <span className="max-w-[40ch] text-sm text-ink-muted sm:text-right">
-              „Ułóż od nowa” zostawia przypięte zmiany i dni, które minęły. Resztę układa od początku.
+              „Ułóż od nowa” zostawia przypięte zmiany i minione dni.
             </span>
           )}
         </div>
@@ -154,8 +154,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
         !period.active_run_id && (
           <EmptyState title="Grafik nie jest jeszcze ułożony">
             <p className="m-0">
-              Gdy minie termin dyspozycji albo wszyscy je wyślą, naciśnij „Ułóż grafik”. Dostaniesz szkic, który
-              możesz poprawić, zanim pokażesz go pracownikom.
+              Naciśnij „Ułóż grafik”, gdy minie termin dyspozycji albo wszyscy je wyślą.
             </p>
           </EmptyState>
         )
@@ -230,9 +229,9 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
         </div>
         <span className="text-sm text-ink-muted">
           {data.status === 'draft'
-            ? 'Pracownicy jeszcze tego nie widzą. Wybierz zmianę, żeby sprawdzić powód przydziału i możliwe zastępstwa. Przeciągnij osobę na inną zmianę, żeby zamienić dwie osoby.'
+            ? 'Pracownicy jeszcze tego nie widzą. Kliknij zmianę albo przeciągnij osobę na inną zmianę.'
             : data.status === 'published'
-              ? 'Ten grafik widzą pracownicy w „Mój grafik”. Wybierz zmianę, żeby sprawdzić powód przydziału.'
+              ? 'Ten grafik widzą pracownicy w „Mój grafik”.'
               : 'Starsza wersja, tylko do podglądu.'}
         </span>
       </div>
@@ -331,8 +330,7 @@ function PublishSheet({ data, open, onOpenChange }: { data: VersionOut; open: bo
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Pracownicy dostaną powiadomienie w aplikacji. Nie wysyłamy SMS-ów ani e-maili, więc komuś, kto rzadko
-          zagląda do Grafikomatu, powiedz o grafiku sam.
+          Pracownicy dostaną powiadomienie tylko w aplikacji, bez SMS-ów i e-maili.
         </p>
         {holes > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2">
@@ -369,12 +367,12 @@ function Scores({ scores }: { scores: ScoresOut }) {
     <section aria-label="Ocena grafiku" className="grid gap-3 sm:grid-cols-3">
       <div
         className={cn(
-          'grid content-start gap-1 rounded-md border-2 p-4',
+          'grid content-start gap-0.5 rounded-md border-2 px-3 py-2',
           incomplete ? 'border-cannot bg-cannot-soft text-cannot' : 'border-line bg-surface',
         )}
       >
         <span className="text-sm font-semibold">Zmiany bez obsady</span>
-        <span className="text-2xl font-extrabold">
+        <span className="text-xl font-extrabold">
           {scores.holes} <span className="text-base font-semibold">z {scores.slots}</span>
         </span>
         <span className="text-sm">{incomplete ? 'Nie wszystkie zmiany są obsadzone.' : 'Wszystkie zmiany obsadzone.'}</span>
@@ -397,9 +395,9 @@ function Scores({ scores }: { scores: ScoresOut }) {
 
 function ScoreBox({ label, value, muted, note }: { label: string; value: number; muted: boolean; note?: string }) {
   return (
-    <div className="grid content-start gap-1 rounded-md border-2 border-line bg-surface p-4">
+    <div className="grid content-start gap-0.5 rounded-md border-2 border-line bg-surface px-3 py-2">
       <span className="text-sm font-semibold text-ink-muted">{label}</span>
-      <span className={cn('text-2xl font-extrabold', muted ? 'text-ink-muted' : 'text-ink')}>{percent(value)}</span>
+      <span className={cn('text-xl font-extrabold', muted ? 'text-ink-muted' : 'text-ink')}>{percent(value)}</span>
       {note && <span className="text-sm text-ink-muted">{note}</span>}
     </div>
   )

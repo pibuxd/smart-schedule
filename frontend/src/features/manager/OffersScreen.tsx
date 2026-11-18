@@ -40,9 +40,7 @@ export function OffersScreen() {
       <div className="grid gap-1">
         <h1 className="m-0 text-2xl font-extrabold">Oddane zmiany</h1>
         <p className="m-0 max-w-[62ch] text-ink-muted">
-          Gdy pracownik oddaje zmianę, dajemy znać osobom, które mogą ją wziąć. Gdy ktoś się zgłosi, decydujesz tutaj.
-          Po zatwierdzeniu grafik od razu się zmienia, a zmiana jest przypięta do nowej osoby. W „Zasadach” lokalu
-          możesz włączyć przejęcie bez zatwierdzania.
+          Gdy ktoś zgłosi się po oddaną zmianę, decydujesz tutaj.
         </p>
       </div>
       {offers.isPending ? (

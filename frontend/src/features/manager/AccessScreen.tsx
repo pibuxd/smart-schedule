@@ -34,8 +34,7 @@ export function AccessScreen() {
         </span>
         <p className="m-0">{explanation(data)}</p>
         <p className="m-0 text-ink-muted">
-          Ułożenia grafiku w tym miesiącu: {data.generations_used} z {data.generations_limit}. Każde naciśnięcie
-          „Ułóż grafik” albo „Ułóż od nowa” to jedno ułożenie. Limit wraca na początku miesiąca.
+          Ułożenia grafiku w tym miesiącu: {data.generations_used} z {data.generations_limit}. Limit wraca na początku miesiąca.
         </p>
       </section>
       <RedeemForm companyId={companyId} />
@@ -93,7 +92,7 @@ function RedeemForm({ companyId }: { companyId: string }) {
         maxLength={40}
         autoComplete="off"
         spellCheck={false}
-        hint="Spacje i myślniki możesz pominąć. Kod działa dla całej firmy. Pracownicy niczego nie wpisują."
+        hint="Kod działa dla całej firmy."
       />
       {redeem.isError && <InlineError>{errorMessage(redeem.error, NETWORK_PROBLEM)}</InlineError>}
       {done && (

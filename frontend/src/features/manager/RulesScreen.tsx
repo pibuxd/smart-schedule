@@ -127,9 +127,7 @@ export function HandoverRule({ locationId }: { locationId: string }) {
           label="Przejęcie oddanej zmiany bez zatwierdzania"
           hint={
             <>
-              Gdy pracownik odda zmianę, pierwsza osoba, która ją weźmie, dostaje ją od razu. Najpierw sprawdzamy, czy ta
-              osoba może wtedy pracować: dyspozycje, inne zmiany, stanowisko i zasady „bez wyjątków”. Ty dostaniesz
-              powiadomienie. Gdy to wyłączysz, każde wzięcie zatwierdzasz w „Oddane zmiany”.
+              Pierwsza osoba, która może wtedy pracować, dostaje zmianę od razu. Dostaniesz powiadomienie.
             </>
           }
           checked={data.handover_without_approval}
@@ -231,26 +229,21 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
           {scope === 'group' ? `Zasady wspólne: ${data.name}` : 'Zasady lokalu'}
         </h2>
         <p className="m-0 max-w-[75ch] text-ink-muted">
-          Im wyżej na liście, tym ważniejsza zasada. Gdy dwóch zasad nie da się spełnić naraz, wygrywa ta wyżej.
-          „Bez wyjątków” zaznacz tylko tam, gdzie lepiej zostawić zmianę bez obsady, niż złamać zasadę.
+          Im wyżej, tym ważniejsza zasada. „Bez wyjątków” zaznacz tam, gdzie wolisz zmianę bez obsady niż złamaną zasadę.
         </p>
         {scope === 'location' && data.group && (
           <p className="m-0 max-w-[75ch] text-ink-muted">
-            Zasady z grupy „{data.group.name}” obowiązują też tutaj. Zmiana w tym lokalu dotyczy tylko jego. Gdy przesuniesz
-            zasadę albo zmienisz jej ustawienie, ta zasada przestaje iść za grupą (etykieta „zmienione w tym lokalu”).
-            Zasady ustawione dokładnie jak w grupie dalej zmieniają się razem z grupą.
+            Zasady z grupy „{data.group.name}” obowiązują też tutaj. Zasada zmieniona w tym lokalu przestaje iść za grupą.
           </p>
         )}
         {scope === 'group' && (
           <p className="m-0 max-w-[75ch] text-ink-muted">
-            Te zasady obowiązują we wszystkich lokalach grupy. Każdy lokal może je u siebie zmienić albo wyłączyć.
+            Każdy lokal może je u siebie zmienić albo wyłączyć.
           </p>
         )}
         <p className="m-0 max-w-[75ch] text-sm text-ink-muted">
-          Grafikomat nie sprawdza Kodeksu pracy i za zgodność grafiku z prawem odpowiadasz Ty. Czasu pracy pilnują
-          zasady „Odpoczynek między zmianami”, „Godziny pracy w ciągu dnia” i „Wolne w tygodniu”: są włączone, ale
-          można je złamać, gdy brakuje ludzi. Zaznacz „Bez wyjątków”, żeby nigdy ich nie łamać. Dotyczą wszystkich osób
-          w lokalu.
+          Grafikomat nie sprawdza Kodeksu pracy. Za zgodność grafiku z prawem odpowiadasz Ty. Zasady o odpoczynku i
+          czasie pracy można złamać, gdy brakuje ludzi, chyba że zaznaczysz „Bez wyjątków”.
         </p>
       </div>
 
@@ -317,8 +310,7 @@ function PreviewText({ result }: { result: PreviewOut }) {
   if (!result.period) {
     return (
       <p className="m-0">
-        Nie ma jeszcze żadnego grafiku, więc nie pokażemy, co ta zmiana da. Zasady zadziałają, gdy ułożysz
-        następny grafik.
+        Nie ma jeszcze grafiku. Zasady zadziałają przy następnym układaniu.
       </p>
     )
   }

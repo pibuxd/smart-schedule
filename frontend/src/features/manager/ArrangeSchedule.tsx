@@ -95,11 +95,7 @@ function ArrangeSheet({
       open={open}
       onOpenChange={onOpenChange}
       title={one ? `Ułożyć grafik dla lokalu ${targets[0].locationName}?` : `Ułożyć grafik dla ${targets.length} lokali?`}
-      description={
-        one
-          ? 'Ułożymy grafik według dyspozycji, obsady i zasad lokalu. To trwa do pół minuty.'
-          : 'Każdy lokal układamy osobno, według jego zasad. Każdy trwa do pół minuty.'
-      }
+      description={one ? 'Trwa do pół minuty.' : 'Każdy lokal trwa do pół minuty.'}
     >
       <div className="grid gap-4">
         {early.length > 0 && (
