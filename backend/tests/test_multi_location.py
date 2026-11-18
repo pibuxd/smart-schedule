@@ -105,10 +105,17 @@ def test_positions_change_only_in_the_edited_location(api, two):
     assert response.status_code == 200, response.json()
     assert response.json()["position_ids"] == [str(baker.pk)]
     assert set(kasia.positions.all()) == {two["position"], baker}  # the shop's position stays
-    # Switching the person off belongs to the manager of the main location.
-    off = api.patch(f"/api/employees/{kasia.pk}", {"location_id": str(two["market"].id), "is_active": False})
-    assert off.status_code == 409
-    assert EmployeeProfile.objects.get(pk=kasia.pk).is_active
+    # Experience, hours and switching off are shared: they belong to the manager of the main location.
+    market = str(two["market"].id)
+    for change in ({"is_active": False}, {"experience": 3}, {"max_hours_month": 40}):
+        response = api.patch(f"/api/employees/{kasia.pk}", {"location_id": market, **change})
+        assert response.status_code == 409
+        assert "lokalu głównego" in response.json()["detail"]
+    profile = EmployeeProfile.objects.get(pk=kasia.pk)
+    assert profile.is_active and profile.experience == 2 and profile.max_hours_month is None
+    # Sending the unchanged values (as the form does) is fine.
+    assert api.patch(f"/api/employees/{kasia.pk}", {"location_id": market, "experience": 2}).status_code == 200
+    assert api.patch(f"/api/employees/{kasia.pk}", {"max_hours_month": 40}).status_code == 200  # main location
 
 
 def test_add_myself_in_a_second_location_makes_it_an_extra_location(api, two):

@@ -247,6 +247,8 @@ function EmployeeForm({
     )
   }
   const toggle = (id: string) => setChosen((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]))
+  // Experience, hours and switching off are shared by all the person's locations: the main location sets them.
+  const shared = employee.is_home !== false
 
   return (
     <form onSubmit={submit} className="grid gap-5">
@@ -266,28 +268,30 @@ function EmployeeForm({
           <CheckField key={p.id} label={p.name} checked={chosen.includes(p.id)} onChange={() => toggle(p.id)} />
         ))}
       </fieldset>
-      <fieldset className="m-0 grid gap-1 border-0 p-0">
-        <legend className="mb-1 font-semibold">Doświadczenie</legend>
-        <p className="m-0 text-sm text-ink-muted">
-          Widzisz to tylko Ty. Na każdej zmianie ma być co najmniej tylu doświadczonych, ilu początkujących (zasada
-          „Początkujący z doświadczonymi”).
-        </p>
-        {([1, 2, 3] as const).map((value) => (
-          <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
-            <input
-              type="radio"
-              name="experience"
-              className="size-6 accent-accent"
-              checked={experience === value}
-              onChange={() => setExperience(value)}
-            />
-            <span className="grid">
-              <span>{EXPERIENCE[value].label}</span>
-              <span className="text-sm text-ink-muted">{EXPERIENCE[value].hint}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      {shared && (
+        <fieldset className="m-0 grid gap-1 border-0 p-0">
+          <legend className="mb-1 font-semibold">Doświadczenie</legend>
+          <p className="m-0 text-sm text-ink-muted">
+            Widzisz to tylko Ty. Na każdej zmianie ma być co najmniej tylu doświadczonych, ilu początkujących (zasada
+            „Początkujący z doświadczonymi”).
+          </p>
+          {([1, 2, 3] as const).map((value) => (
+            <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
+              <input
+                type="radio"
+                name="experience"
+                className="size-6 accent-accent"
+                checked={experience === value}
+                onChange={() => setExperience(value)}
+              />
+              <span className="grid">
+                <span>{EXPERIENCE[value].label}</span>
+                <span className="text-sm text-ink-muted">{EXPERIENCE[value].hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       {chosen.length >= 2 && (
         <fieldset className="m-0 grid gap-2 border-0 p-0">
           <legend className="mb-1 font-semibold">Inny stopień na którymś stanowisku</legend>
@@ -326,31 +330,33 @@ function EmployeeForm({
             ))}
         </fieldset>
       )}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Cel godzin w miesiącu"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={400}
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          hint="Puste = bez celu."
-        />
-        <TextField
-          label="Najwyżej godzin w miesiącu"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={400}
-          value={max}
-          onChange={(e) => setMax(e.target.value)}
-          hint="Puste = bez limitu."
-        />
-      </div>
-      {employee.is_home === false ? (
+      {shared && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Cel godzin w miesiącu"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={400}
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            hint="Puste = bez celu."
+          />
+          <TextField
+            label="Najwyżej godzin w miesiącu"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={400}
+            value={max}
+            onChange={(e) => setMax(e.target.value)}
+            hint="Puste = bez limitu."
+          />
+        </div>
+      )}
+      {!shared ? (
         <p className="m-0 text-sm text-ink-muted">
-          {`Lokal główny tej osoby to ${employee.home_location_name}. Godziny i doświadczenie są wspólne dla wszystkich jej lokali. Wyłączyć ją z grafiku może kierownik lokalu głównego.`}
+          {`Lokal główny tej osoby to ${employee.home_location_name}. Tu ustawiasz jej stanowiska w swoim lokalu. Doświadczenie, godziny i wyłączenie z grafiku ustawia kierownik lokalu głównego.`}
         </p>
       ) : (
         <CheckField

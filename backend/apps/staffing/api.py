@@ -707,19 +707,23 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
         if current.revision != payload.revision:
             raise HttpError(409, "Ktoś zmienił dane tej osoby. Zamknij formularz i otwórz go ponownie.")
     sent = payload.model_fields_set
-    if "experience" in sent and payload.experience is not None:
-        profile.experience = payload.experience
-    if "max_hours_month" in sent:
-        profile.max_hours_month = payload.max_hours_month
-    if "target_hours_month" in sent:
-        profile.target_hours_month = payload.target_hours_month
-    if "is_active" in sent and payload.is_active is not None and payload.is_active != profile.is_active:
-        if location.pk != profile.home_location_id:
-            raise HttpError(
-                409,
-                f"Wyłączyć lub włączyć tę osobę może kierownik jej lokalu głównego ({profile.home_location.name}).",
-            )
-        profile.is_active = payload.is_active
+    # Experience, monthly hours and switching off are shared by all the person's locations: only the manager of
+    # the main location changes them (the other locations' schedules depend on them too).
+    shared = {
+        "experience": payload.experience if payload.experience is not None else profile.experience,
+        "max_hours_month": payload.max_hours_month,
+        "target_hours_month": payload.target_hours_month,
+        "is_active": payload.is_active if payload.is_active is not None else profile.is_active,
+    }
+    changed = {f for f, value in shared.items() if f in sent and value != getattr(profile, f)}
+    if changed and location.pk != profile.home_location_id:
+        raise HttpError(
+            409,
+            "Doświadczenie, godziny i wyłączenie z grafiku ustawia kierownik lokalu głównego tej osoby "
+            f"({profile.home_location.name}).",
+        )
+    for field_name in changed:
+        setattr(profile, field_name, shared[field_name])
     if (
         profile.max_hours_month is not None
         and profile.target_hours_month is not None

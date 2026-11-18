@@ -143,7 +143,8 @@ def draft_clashes(loaded: LoadedVersion, by_key: Mapping[str, str | None]) -> li
                 local = timezone.localtime(shift.start_at)
                 result.append(
                     f"{names.get(employee, 'Ta osoba')} ma w tym czasie zmianę w szkicu lokalu {shift.location.name} "
-                    f"({local:%d.%m %H:%M}). Ten lokal musi ją przesunąć przed publikacją."
+                    f"({local:%d.%m %H:%M}). Jeśli tamten lokal opublikuje grafik pierwszy, tej zmiany nie "
+                    "opublikujesz."
                 )
     return list(dict.fromkeys(result))
 

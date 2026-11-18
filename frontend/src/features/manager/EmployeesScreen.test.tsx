@@ -163,12 +163,13 @@ describe('EmployeesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zmień: Kasia Nowak' }))
     const sheet = await screen.findByRole('dialog')
     expect(within(sheet).queryByRole('checkbox', { name: /W grafiku/ })).not.toBeInTheDocument()
-    expect(within(sheet).getByText(/Wyłączyć ją z grafiku może kierownik lokalu głównego/)).toBeInTheDocument()
-    fireEvent.click(within(sheet).getByRole('radio', { name: /Doświadczony/ }))
+    expect(within(sheet).getByText(/ustawia kierownik lokalu głównego/)).toBeInTheDocument()
+    expect(within(sheet).queryByRole('radio', { name: /Doświadczony/ })).not.toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: 'Kelner' }))
     fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
 
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
-    expect(body.location_id).toBe('l1')
+    expect(body).toEqual({ revision: undefined, location_id: 'l1', position_ids: [] })
   })
 })

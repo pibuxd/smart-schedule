@@ -692,8 +692,9 @@ wspólna dyspozycyjność.
   stanowiska tego lokalu.
 - Lista pracowników lokalu pokazuje też osoby z lokalem dodatkowym (`home_location_name`, `is_home = false`), z
   ich stanowiskami tylko z tego lokalu. `PATCH /employees/{id}` z `location_id` zmienia stanowiska i stopnie tylko w tym
-  lokalu; imię, stopień domyślny i godziny może zmienić kierownik każdego lokalu osoby, a wyłączyć ją tylko kierownik
-  lokalu głównego.
+  lokalu. Stopień domyślny, godziny (cel, maksimum) i wyłączenie z grafiku są wspólne, więc zmienia je tylko kierownik
+  lokalu głównego (uwaga Prelinta do #45: zmiana w lokalu dodatkowym zmieniałaby grafik lokalu głównego bez wiedzy jego
+  kierownika); formularz w lokalu dodatkowym ich nie pokazuje.
 - Dyspozycje są zapisane na osobę i dzień, więc są wspólne. Pracownik widzi okresy i prośby o dyspozycje ze wszystkich
   swoich lokali; "Gotowe" zaznacza dany okres.
 - Silnik: `Employee.extra_locations`, `Employee.works_in(location)`. Solver daje osobie tylko zmiany jej lokali; zasady
@@ -705,8 +706,13 @@ wspólna dyspozycyjność.
   jeśli jest nowszy od opublikowanej, żeby dwa lokale ułożone jeden po drugim nie dały tej samej osobie tych samych
   godzin. Edycja i publikacja sprawdzają twardo tylko opublikowane zmiany innych lokali (dwie zmiany naraz zostają
   zablokowane, decyzja Piotra z 18.11.2026 w PR #44); zmiana ze szkicu innego lokalu w tym samym czasie to ostrzeżenie
-  przy ręcznej zmianie.
+  przy ręcznej zmianie, które mówi, że kto opublikuje pierwszy, ten wygrywa.
 - Między różnymi firmami nic się nie łączy: to osobni pracodawcy i ich dane są rozdzielone.
 - Założenia: lokal ułożony pierwszy "ma pierwszeństwo" do osoby (kolejność układania decyduje, jak w Kadromierzu).
   Usuwanie osoby z lokalu dodatkowego (PR #40) zdejmuje tylko ten lokal i jego stanowiska.
+- Do sprawdzenia w pilotażu (uwagi Prelinta do #45): czy kierownicy akceptują, że szkic jednego lokalu zabiera osobę
+  z puli drugiego (czy lokal główny ma mieć pierwszeństwo); czy pracownik rozumie, że jeden kalendarz i jedno „Gotowe”
+  służą wszystkim jego lokalom (dziś „Gotowe” obejmuje okresy innych lokali mieszczące się w tych samych dniach, nie
+  odwrotnie); czy kierownicy potrzebują jednodniowego pożyczenia osoby spoza listy bez zaproszenia; czy lista
+  niespełnionych próśb ma pokazywać, z którego lokalu jest prośba miesięczna.
 
