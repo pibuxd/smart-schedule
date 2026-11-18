@@ -261,7 +261,9 @@ class _Checker:
 
     def is_waived(self, violation: Violation) -> bool:
         """The manager forced a person onto one of the violation's slots (or, for a problem about a person or a
-        whole location without slots, onto any slot of that person / location)."""
+        whole location without slots, onto any slot of that person / location). A waiver only keeps the saved
+        schedule publishable: a later manual change that adds to such a problem is asked about again
+        (`engine.explain.new_waived_violations`)."""
         if violation.code not in WAIVABLE:
             return False
         forced = {s: e for s, e in self.p.forced.items() if self.assignment.get(s) == e}

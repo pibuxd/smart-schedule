@@ -28,7 +28,7 @@ from apps.notifications.models import Notification
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version
 from apps.staffing.models import EmployeeProfile
-from engine.explain import new_soft_violations, without_pin
+from engine.explain import new_soft_violations, new_waived_violations, returned_violations, without_pin
 from engine.problem import Problem
 from engine.scoring import Scores, score
 from engine.validator import ValidationReport, validate
@@ -127,7 +127,11 @@ def check_changes(
     problem = replace(problem, forced=standing)
     after = validate(problem, after_schedule)
     known = {v.message for v in before.hard}
+    receivers = {e for k, e in by_key.items() if e is not None and loaded.schedule.get(k) != e}
+    known |= returned_violations(before, after, receivers)
     new = [v for v in after.hard if v.message not in known]
+    # An earlier override does not cover this change: what it would newly waive needs the manager's word too.
+    new += new_waived_violations(before, after, receivers)
     warnings = new_soft_violations(before, after)
 
     forced: frozenset[str] = frozenset()

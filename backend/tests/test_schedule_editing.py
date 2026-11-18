@@ -308,6 +308,34 @@ def test_manager_can_force_two_shifts_at_the_same_time(api, shop, draft):
     assert api.get(url(draft)).json()["hard_problems"] == []
 
 
+def test_an_override_does_not_cover_a_later_change_silently(api, shop, draft):
+    """One "Wpisz mimo to" must not switch off a "no exceptions" rule for that person's next shifts."""
+    from apps.rules.models import RuleSetting
+
+    api.login(shop["manager"])
+    person = shop["people"][0]
+    person.max_hours_month = 8
+    person.save(update_fields=["max_hours_month"])
+    RuleSetting.objects.update_or_create(
+        location=shop["location"],
+        rule_code="personal_max_hours",
+        defaults={"enabled": True, "is_hard": True, "position": 1},
+    )
+    others = Assignment.objects.filter(shift__version=draft).exclude(employee=person).order_by("shift__date")
+    first, second = others[0], others.exclude(shift__date=others[0].shift.date)[0]
+    put = lambda a: {"changes": [{"shift_id": str(a.shift_id), "employee_id": str(person.pk)}]}  # noqa: E731
+
+    # The draft already has the person over the maximum; one more shift is forced.
+    assert api.patch(url(draft, "/assignments"), {**put(first), "force": True}).status_code == 200
+
+    check = api.post(url(draft, "/check"), put(second)).json()
+    assert check["ok"] is False and check["can_force"] is True and "maksimum" in " ".join(check["problems"])
+    assert api.patch(url(draft, "/assignments"), put(second)).status_code == 409
+    # Taking the person off a shift is never held up by the override.
+    off = {"changes": [{"shift_id": str(first.shift_id), "employee_id": None}]}
+    assert api.post(url(draft, "/check"), off).json()["ok"] is True
+
+
 def test_override_ends_when_someone_else_takes_the_shift(api, shop, draft):
     api.login(shop["manager"])
     taken = shift_of(draft, MON)
