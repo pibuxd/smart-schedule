@@ -104,9 +104,9 @@ function RequestStatus({
           {request.summary}
         </p>
         <p className="m-0 text-sm">
-          To preferencja, którą generator spróbuje spełnić. Nie zmienia
-          kalendarza dyspozycji. Jeśli nie możesz pracować, zaznacz „nie mogę” w
-          kalendarzu.
+          To preferencja: grafik ułożony automatycznie spróbuje ją spełnić. Nie
+          zmienia kalendarza dyspozycji. Jeśli nie możesz pracować, zaznacz „nie
+          mogę” w kalendarzu.
         </p>
         {editable && (
           <div>
@@ -363,7 +363,7 @@ function RequestsChat({
                           Asystent zrozumiał: <span>{request.summary}</span>
                         </>
                       ) : request.status === "interpreted" ? (
-                        "Generator spróbuje ją spełnić."
+                        "Zostanie uwzględniona przy układaniu grafiku."
                       ) : (
                         "Kierownik przeczyta ją sam."
                       )}
