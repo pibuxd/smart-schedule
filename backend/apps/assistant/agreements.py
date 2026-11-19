@@ -112,6 +112,15 @@ def save_items(rule_set, items, changed_codes):
     rule_set.save(update_fields=["rules", "changed_codes"])
 
 
+def revert_rule(rule_set, code):
+    """Put one rule agreed in the chat back to the location's own setting. Caller holds the location lock."""
+    default = next((i for i in base_items(rule_set.location) if i["code"] == code), None)
+    rules = [default if i["code"] == code else i for i in rule_set.rules or []]
+    rule_set.rules = [i for i in rules if i is not None]
+    rule_set.changed_codes = sorted(set(rule_set.changed_codes) - {code})
+    rule_set.save(update_fields=["rules", "changed_codes"])
+
+
 def merge_rules(target, source, codes):
     """Put the chosen settings of `source` into `target`, on top of the target's (or the location's) list."""
     baseline = rule_rows(target)

@@ -133,6 +133,10 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   are not sent to the model. Both structured outputs require a rules/out-of-scope classification. A correction may supersede one earlier request in the
   same employee/scope, atomically and only against an unchanged snapshot. `answered` and `superseded` requests
   never reach the solver. An invalid part blocks the entire manager plan; informational replies are not misses.
+  The chat UI slides in from the right (`components/ui/drawer.tsx`): managers open it with
+  `useAssistantDrawer().openChat()` (`features/manager/AssistantDrawer.tsx`, one per location), employees from
+  "Twoje prośby". Approved results live in a separate editable window: `AssistantRulesTable` ("Ustalenia") for
+  managers, the saved list in `RequestsSection` for employees. Never show a chat inline in a page.
   Agreements belong to one availability period (`apps/assistant/agreements.py`): a new period starts empty and the
   manager copies chosen ones from the previous period (`copy_from_previous`); nothing carries over by itself. An
   employee may forward a rejected message to the manager (`unread_reason="rejected"`); it is never scored.

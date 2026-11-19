@@ -32,7 +32,8 @@ import type {
   InstructionsOut,
   LocationInstructionsParams,
   PreviousAgreementsOut,
-  PreviousAgreementsParams
+  PreviousAgreementsParams,
+  RevertAgreedRuleParams
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -835,7 +836,127 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
 
 
 
-export type previousAgreementsResponse200 = {
+export type revertAgreedRuleResponse200 = {
+  data: InstructionsOut
+  status: 200
+}
+
+export type revertAgreedRuleResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type revertAgreedRuleResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type revertAgreedRuleResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type revertAgreedRuleResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type revertAgreedRuleResponseSuccess = (revertAgreedRuleResponse200) & {
+  headers: Headers;
+};
+export type revertAgreedRuleResponseError = (revertAgreedRuleResponse402 | revertAgreedRuleResponse403 | revertAgreedRuleResponse404 | revertAgreedRuleResponse409) & {
+  headers: Headers;
+};
+
+export type revertAgreedRuleResponse = (revertAgreedRuleResponseSuccess | revertAgreedRuleResponseError)
+
+export const getRevertAgreedRuleUrl = (locationId: string,
+    code: string,
+    params?: RevertAgreedRuleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locations/${locationId}/agreed-rules/${code}?${stringifiedParams}` : `/api/locations/${locationId}/agreed-rules/${code}`
+}
+
+/**
+ * Undo one rule agreed in the chat: the period uses the location's own setting for it again.
+ * @summary Revert Agreed Rule
+ */
+export const revertAgreedRule = async (locationId: string,
+    code: string,
+    params?: RevertAgreedRuleParams, options?: Parameters<typeof apiFetch>[1]): Promise<revertAgreedRuleResponse> => {
+
+  return apiFetch<revertAgreedRuleResponse>(getRevertAgreedRuleUrl(locationId,code,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevertAgreedRuleMutationKey = () => ['revertAgreedRule'] as const;
+
+export const getRevertAgreedRuleMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertAgreedRule>>, TError,RevertAgreedRuleMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revertAgreedRule>>, TError,RevertAgreedRuleMutationVariables, TContext> => {
+
+const mutationKey = getRevertAgreedRuleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revertAgreedRule>>, RevertAgreedRuleMutationVariables> = (props) => {
+          const {locationId,code,params} = props ?? {};
+
+          return  revertAgreedRule(locationId,code,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevertAgreedRuleMutationResult = NonNullable<Awaited<ReturnType<typeof revertAgreedRule>>>
+
+    export type RevertAgreedRuleMutationError = ErrorOut
+    export type RevertAgreedRuleMutationVariables = {locationId: string;code: string;params?: RevertAgreedRuleParams}
+
+    /**
+ * Undo one rule agreed in the chat: the period uses the location's own setting for it again.
+ * @summary Revert Agreed Rule
+ */
+export const useRevertAgreedRule = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertAgreedRule>>, TError,RevertAgreedRuleMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof revertAgreedRule>>,
+        TError,
+        RevertAgreedRuleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevertAgreedRuleMutationOptions(options), queryClient);
+    }
+    export type previousAgreementsResponse200 = {
   data: PreviousAgreementsOut
   status: 200
 }

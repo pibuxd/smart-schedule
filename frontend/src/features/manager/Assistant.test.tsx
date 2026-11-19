@@ -96,7 +96,7 @@ describe("Assistant chat", () => {
     expect(await screen.findByText(command.lines[0])).toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith("/apply"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Zatwierdź zmiany" }));
-    expect(await screen.findByText(/Ustawienia zapisane/)).toBeInTheDocument();
+    expect(await screen.findByText(/Zapisane w ustaleniach/)).toBeInTheDocument();
     expect(screen.getByText(command.text)).toBeInTheDocument();
     expect(screen.getByText(command.lines[0])).toBeInTheDocument();
     expect(
@@ -242,36 +242,6 @@ describe("Assistant chat", () => {
       expect(
         calls.filter((c) => c.url.endsWith("/assistant-commands")).length,
       ).toBeGreaterThan(1),
-    );
-  });
-
-  it("reorders and removes accepted instructions", async () => {
-    const items = [
-      { id: "i1", text: "Ania i Kasia: osobno", active: true },
-      { id: "i2", text: "Marek: rano", active: true },
-    ];
-    const calls = mockApi((method, path) =>
-      path.endsWith("/assistant-commands")
-        ? [200, []]
-        : method === "DELETE"
-          ? [204, null]
-          : [200, instructions(items)],
-    );
-    panel();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Wyżej: Marek: rano" }),
-    );
-    await waitFor(() =>
-      expect(calls.some((c) => c.method === "PUT")).toBe(true),
-    );
-    expect(calls.find((c) => c.method === "PUT")!.body).toEqual({
-      ids: ["i2", "i1"],
-    });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Usuń: Ania i Kasia: osobno" }),
-    );
-    await waitFor(() =>
-      expect(calls.some((c) => c.method === "DELETE")).toBe(true),
     );
   });
 });

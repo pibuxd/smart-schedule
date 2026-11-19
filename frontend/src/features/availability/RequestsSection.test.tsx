@@ -4,6 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockApi, renderScreen } from "../../test/render";
 import { RequestsSection } from "./RequestsSection";
 
+const openChat = async () =>
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: /Napisz do asystenta|Napisz prośbę|Pokaż rozmowę/,
+    }),
+  );
+
 const request = (over = {}) => ({
   id: "r1",
   text: "Wolałabym nie pracować w piątki.",
@@ -30,6 +37,7 @@ describe("RequestsSection", () => {
       await screen.findByText("Wolne w piątki, jeśli się da."),
     ).toBeInTheDocument();
 
+    await openChat();
     fireEvent.click(
       screen.getByRole("button", { name: "Nie o to mi chodziło" }),
     );
@@ -46,6 +54,7 @@ describe("RequestsSection", () => {
     renderScreen(
       <RequestsSection companyId="c1" periodId="p1" editable={false} />,
     );
+    await openChat();
     expect(
       await screen.findByText("Kierownik przeczyta tę prośbę sam."),
     ).toBeInTheDocument();
@@ -57,6 +66,7 @@ describe("RequestsSection", () => {
     const { unmount } = renderScreen(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
+    await openChat();
     expect(
       await screen.findByText(
         /Twoje wcześniejsze prośby oraz nazwy osób i zmian/,
@@ -68,6 +78,7 @@ describe("RequestsSection", () => {
     unmount();
 
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    await openChat();
     expect(
       await screen.findByText(/Przeczyta to tylko kierownik/),
     ).toBeInTheDocument();
@@ -76,6 +87,7 @@ describe("RequestsSection", () => {
   it("keeps superseded requests visible without an edit action", async () => {
     mockApi(() => [200, [request({ status: "superseded", summary: null })]]);
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    await openChat();
     expect(
       await screen.findByText(/Ta prośba została zastąpiona/),
     ).toBeInTheDocument();
@@ -98,6 +110,7 @@ describe("RequestsSection", () => {
       ],
     ]);
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    await openChat();
     expect(
       await screen.findByText("W publikacji masz 120 godzin."),
     ).toBeInTheDocument();
@@ -106,7 +119,9 @@ describe("RequestsSection", () => {
         /Przekaż wiadomość, aby dodać ją do listy próśb kierownika/,
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Wysłane do kierownika")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Zapisane w Twoich prośbach"),
+    ).not.toBeInTheDocument();
   });
 
   it("lets the employee forward a misclassified question to the manager", async () => {
@@ -119,6 +134,7 @@ describe("RequestsSection", () => {
       return [200, [row]];
     });
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    await openChat();
     fireEvent.click(
       await screen.findByRole("button", { name: "Przekaż kierownikowi" }),
     );
@@ -136,6 +152,7 @@ it("does not send an employee request on Enter", async () => {
   renderScreen(
     <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
   );
+  await openChat();
   const field = await screen.findByLabelText("Twoja prośba");
   await waitFor(() => expect(field).toBeEnabled());
   fireEvent.change(field, { target: { value: "Wolę piątki rano" } });
@@ -164,10 +181,14 @@ it("lets the employee forward a rejected request to the manager without claiming
   renderScreen(
     <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
   );
+  await openChat();
   expect(
     await screen.findByText("Pomagam tylko ustalać preferencje."),
   ).toBeInTheDocument();
   expect(screen.getByText("Odrzucona")).toBeInTheDocument();
+  expect(
+    screen.queryByText("Zapisane w Twoich prośbach"),
+  ).not.toBeInTheDocument();
   expect(screen.queryByText("Wysłane do kierownika")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Przekaż kierownikowi" }));
   await waitFor(() =>
@@ -175,5 +196,122 @@ it("lets the employee forward a rejected request to the manager without claiming
   );
   expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
     understood: false,
+  });
+});
+
+describe("Twoje prośby window", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("lists only understood and forwarded requests, outside the chat", async () => {
+    mockApi(() => [
+      200,
+      [
+        request(),
+        request({
+          id: "r2",
+          text: "Ile mam godzin?",
+          status: "answered",
+          summary: "Masz 120 godzin.",
+        }),
+        request({
+          id: "r3",
+          text: "Kup mi kawę",
+          status: "rejected",
+          summary: "Pomagam tylko z grafikiem.",
+        }),
+        request({
+          id: "r4",
+          text: "Potrzebuję wolnej soboty.",
+          status: "needs_manager",
+          summary: null,
+        }),
+      ],
+    ]);
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    const saved = await screen.findByRole("list", { name: "Zapisane prośby" });
+    expect(saved).toHaveTextContent("Wolne w piątki, jeśli się da.");
+    expect(saved).toHaveTextContent("Potrzebuję wolnej soboty.");
+    expect(saved).not.toHaveTextContent("Masz 120 godzin.");
+    expect(saved).not.toHaveTextContent("Kup mi kawę");
+    expect(screen.queryByRole("log")).not.toBeInTheDocument();
+    expect(screen.queryByText(/nie jest prośbą/)).not.toBeInTheDocument();
+  });
+
+  it("leaves a trace in the window when the newest message was rejected", async () => {
+    mockApi(() => [
+      200,
+      [
+        request(),
+        request({
+          id: "r3",
+          text: "Kup mi kawę",
+          status: "rejected",
+          summary: "Pomagam tylko z grafikiem.",
+        }),
+      ],
+    ]);
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    expect(
+      await screen.findByText(/została odrzucona i nie jest prośbą/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pokaż odpowiedź" }));
+    expect(
+      await screen.findByText("Pomagam tylko z grafikiem."),
+    ).toBeInTheDocument();
+  });
+
+  it("edits a saved request in the window", async () => {
+    const calls = mockApi((method) =>
+      method === "PATCH" ? [200, request()] : [200, [request()]],
+    );
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Edytuj prośbę" }),
+    );
+    fireEvent.change(screen.getByLabelText("Treść prośby"), {
+      target: { value: "Wolę piątki rano." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz prośbę" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "PATCH")).toBe(true),
+    );
+    expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
+      text: "Wolę piątki rano.",
+    });
+  });
+
+  it("removes a saved request after a confirmation", async () => {
+    const calls = mockApi((method) =>
+      method === "DELETE" ? [204, null] : [200, [request()]],
+    );
+    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    fireEvent.click(await screen.findByRole("button", { name: "Usuń prośbę" }));
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Tak, usuń" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "DELETE")).toBe(true),
+    );
+  });
+
+  it("offers no edits once the period is closed", async () => {
+    mockApi(() => [200, [request()]]);
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable={false} />,
+    );
+    expect(
+      await screen.findByText("Wolne w piątki, jeśli się da."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edytuj prośbę" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Usuń prośbę" }),
+    ).not.toBeInTheDocument();
   });
 });

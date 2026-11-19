@@ -269,6 +269,38 @@ def test_published_period_refuses_new_commands_and_stays_closed_during_correctio
     assert len(build_problem([saved.rule_set.period]).problem.requests) == 1
 
 
+def test_manager_reverts_one_agreed_rule_to_the_location_setting(api, shop, make_company, with_key, monkeypatch):
+    accept(api, shop, monkeypatch, plan(rule_changes=[rule_change("max_shifts_per_week", enabled=True, number=4)]))
+    url = f"/api/locations/{shop['location'].pk}/agreed-rules/max_shifts_per_week"
+    assert build_problem([shop["period"]]).problem.rules[0].params["shifts"] == 4
+
+    other = make_company()
+    api.login(other["manager"])
+    assert api.client.delete(url).status_code == 404
+    api.login(shop["worker"])
+    assert api.client.delete(url).status_code == 403
+
+    api.login(shop["manager"])
+    assert api.client.delete(f"/api/locations/{shop['location'].pk}/agreed-rules/min_rest").status_code == 404
+    response = api.client.delete(url)
+    assert response.status_code == 200, response.json()
+    assert not any(rule["changed"] for rule in response.json()["rules"])
+    assert not build_problem([shop["period"]]).problem.rules
+    assert api.client.delete(url).status_code == 404
+
+
+def test_published_agreements_cannot_be_reverted(api, shop, with_key, monkeypatch):
+    saved = accept(
+        api, shop, monkeypatch, plan(rule_changes=[rule_change("max_shifts_per_week", enabled=True, number=4)])
+    )
+    draft = ScheduleVersion.objects.create(period=shop["period"], number=1)
+    assert api.post(f"/api/versions/{draft.pk}/publish").status_code == 200
+    url = f"/api/locations/{shop['location'].pk}/agreed-rules/max_shifts_per_week?period_id={shop['period'].pk}"
+    assert api.client.delete(url).status_code == 409
+    saved.rule_set.refresh_from_db()
+    assert saved.rule_set.changed_codes == ["max_shifts_per_week"]
+
+
 def agreed_then_published(api, shop, monkeypatch):
     """A published first period with one rule and two instructions, and a requested next period."""
     accept(
