@@ -23,7 +23,7 @@ from apps.assistant.models import AssistantCommand, ManagerInstruction
 from apps.availability.models import AvailabilityDay, AvailabilityState, TextRequest
 from apps.rules.services import NUMBER_PARAMS
 from apps.scheduling.models import SchedulePeriod
-from apps.staffing.models import EmployeeProfile, Position, ShiftType
+from apps.staffing.models import EmployeeProfile, Position, ShiftType, works_in_q
 from apps.tenancy.context import TenantContext
 from apps.tenancy.models import Location
 from engine.rules_catalog import RULES_BY_CODE
@@ -51,7 +51,7 @@ def _people(location: Location, exclude_id=None) -> dict[str, str]:
     """label -> employee id for the active people of a location (first names; see `readings.labels`)."""
     profiles = (
         EmployeeProfile.objects.for_company(location.company_id)
-        .filter(home_location=location, is_active=True)
+        .filter(works_in_q(location), is_active=True)
         .select_related("membership__user")
     )
     return readings.labels(
@@ -781,7 +781,7 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
         ).delete()
         rows = _instructions(location, locked.rule_set)
         for new in plan.get("new_instructions") or []:
-            employee = ctx.qs(EmployeeProfile).filter(pk=new["employee"], home_location=location).first()
+            employee = ctx.qs(EmployeeProfile).filter(works_in_q(location), pk=new["employee"]).first()
             if employee is None:
                 raise HttpError(409, "Osoba z tego planu nie pracuje już w tym lokalu. Napisz polecenie jeszcze raz.")
             row = ManagerInstruction(

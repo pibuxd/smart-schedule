@@ -17,16 +17,22 @@ const period = {
 
 const TODAY = new Date(2026, 10, 13)
 
-type Server = { period?: typeof period | null; submitted_at?: string | null; locked?: string[]; days?: MyCalendarOut['days'] }
+type Server = {
+  period?: typeof period | null
+  submitted_at?: string | null
+  locked?: string[]
+  days?: MyCalendarOut['days']
+  location_names?: string[]
+}
 
 /** The two reads of the screen (the open request, then one month of the calendar) and every write. */
-function api({ period: asked = period, submitted_at = null, locked = [], days }: Server = {}) {
+function api({ period: asked = period, submitted_at = null, locked = [], days, location_names = ['Rynek'] }: Server = {}) {
   const marked = days ?? [{ date: '2026-12-04', state: 'prefer' as const, from_time: '22:00:00', to_time: '06:00:00' }]
   return mockApi((method, path) => {
     if (path === '/api/me/requests') return [200, []]
     if (path === '/api/me/calendar' && method === 'GET') {
       // The test server answers for December whatever month is asked; enough for one screen.
-      return [200, { start: '2026-12-01', end: '2026-12-31', days: marked, locked, period: asked, submitted_at }]
+      return [200, { start: '2026-12-01', end: '2026-12-31', days: marked, locked, period: asked, submitted_at, location_names }]
     }
     if (path === '/api/me/calendar') return [204, null]
     return [200, { period: asked, days: [], submitted_at }]
@@ -82,6 +88,12 @@ describe('AvailabilityScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę, nie da się zmienić' }), { detail: 0 })
     expect(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę, nie da się zmienić' })).toBeInTheDocument()
     expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0)
+  })
+
+  it('says that availability is shared when the person works in several locations', async () => {
+    api({ location_names: ['Rynek', 'Dworcowa'] })
+    show()
+    expect(await screen.findByText(/Pracujesz w kilku lokalach \(Rynek, Dworcowa\)\. Dyspozycje są wspólne/)).toBeInTheDocument()
   })
 
   it('shows states with words for screen readers, including night hours', async () => {

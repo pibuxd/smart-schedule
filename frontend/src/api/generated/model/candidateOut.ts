@@ -13,6 +13,7 @@ export interface CandidateOut {
   possible: boolean;
   can_force: boolean;
   problems: string[];
+  clash: boolean;
   notes: string[];
   wish: CandidateOutWish;
   hours: number;

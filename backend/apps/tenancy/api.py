@@ -326,7 +326,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
     from apps.scheduling.editing import latest_version, manual_changes
     from apps.scheduling.generation import ACTIVE
     from apps.scheduling.models import GenerationRun, SchedulePeriod
-    from apps.staffing.models import EmployeeProfile
+    from apps.staffing.models import EmployeeProfile, works_in_q
 
     periods = ctx.qs(SchedulePeriod).filter(location=location).select_related("location")
     period = periods.filter(end__gte=today).order_by("start").first() or periods.order_by("-start").first()
@@ -334,7 +334,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
         return None
     people = list(
         ctx.qs(EmployeeProfile)
-        .filter(home_location=location, is_active=True)
+        .filter(works_in_q(location), is_active=True)
         .select_related("membership__user")
         .order_by("membership__user__last_name", "membership__user__first_name")
     )
@@ -368,7 +368,7 @@ def _period_summary(ctx, location: Location, today: date) -> PeriodSummaryOut | 
 
 
 def _setup_missing(ctx, location: Location) -> list[SetupStep]:
-    from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule
+    from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule, works_in_q
 
     checks: list[tuple[SetupStep, object]] = [
         ("positions", Position),
@@ -382,7 +382,7 @@ def _setup_missing(ctx, location: Location) -> list[SetupStep]:
             rows = rows.filter(removed_at__isnull=True)
         if not rows.exists():
             missing.append(step)
-    if not ctx.qs(EmployeeProfile).filter(home_location=location, is_active=True).exists():
+    if not ctx.qs(EmployeeProfile).filter(works_in_q(location), is_active=True).exists():
         missing.append("employees")
     return missing
 
@@ -393,7 +393,7 @@ def manager_overview(request, company_id: UUID):
     from django.utils import timezone
 
     from apps.billing.services import subscription_state
-    from apps.staffing.models import EmployeeProfile
+    from apps.staffing.models import EmployeeProfile, works_in_q
 
     ctx = tenant_context(request, company_id)
     ctx.require_manager()
@@ -406,7 +406,7 @@ def manager_overview(request, company_id: UUID):
         summaries.append(
             LocationSummaryOut(
                 **_location_out(location).dict(),
-                employees=ctx.qs(EmployeeProfile).filter(home_location=location, is_active=True).count(),
+                employees=ctx.qs(EmployeeProfile).filter(works_in_q(location), is_active=True).count(),
                 pending_invitations=ctx.qs(Invitation)
                 .filter(location=location, status=InvitationStatus.PENDING)
                 .count(),
@@ -603,14 +603,14 @@ def delete_location(request, location_id: UUID):
     """Delete a location added by mistake (owner only): one without employees and without any schedule period.
     A location that has worked is archived instead, so its schedules and hours stay."""
     from apps.scheduling.models import SchedulePeriod
-    from apps.staffing.models import EmployeeProfile
+    from apps.staffing.models import EmployeeProfile, works_in_q
 
     ctx, location = context_for(request, Location, location_id)
     _require_owner(ctx)
     ctx.require_writable()
     if ctx.qs(SchedulePeriod).filter(location=location).exists():
         raise HttpError(409, "Ten lokal ma już grafiki, więc nie można go usunąć. Przenieś go do archiwum.")
-    if ctx.qs(EmployeeProfile).filter(home_location=location, removed_at__isnull=True).exists():
+    if ctx.qs(EmployeeProfile).filter(works_in_q(location), removed_at__isnull=True).exists():
         raise HttpError(409, "Najpierw usuń pracowników tego lokalu (zakładka „Pracownicy”).")
     try:
         with transaction.atomic():

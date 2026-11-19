@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { ClashOut } from './clashOut';
 import type { ScoresOut } from './scoresOut';
 
 export interface DropCheckOut {
@@ -13,5 +14,9 @@ export interface DropCheckOut {
   warnings: string[];
   before: ScoresOut;
   after: ScoresOut;
+  clashes: ClashOut[];
+  problems_if_removed: string[];
+  ok_if_removed: boolean;
+  can_force_if_removed: boolean;
   shift_id: string;
 }

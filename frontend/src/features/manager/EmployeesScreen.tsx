@@ -78,7 +78,13 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
         title={editing ? `${editing.first_name} ${editing.last_name}`.trim() || 'Pracownik' : ''}
       >
         {editing && (
-          <EmployeeForm key={editing.id} employee={editing} positions={positions} onDone={() => setEditing(null)} />
+          <EmployeeForm
+            key={editing.id}
+            employee={editing}
+            positions={positions}
+            locationId={locationId}
+            onDone={() => setEditing(null)}
+          />
         )}
       </Sheet>
     </div>
@@ -155,6 +161,7 @@ function EmployeeList({
               <Tag tone="warn">Bez stanowiska</Tag>
             )}
             {e.is_manager && <Tag tone="accent">Kierownik</Tag>}
+            {e.is_home === false && <Tag>{`Lokal główny: ${e.home_location_name}`}</Tag>}
           </span>
           <span className="flex flex-wrap gap-1">
             <Tag tone={EXPERIENCE[e.experience].tone}>{EXPERIENCE[e.experience].label}</Tag>
@@ -181,7 +188,17 @@ type Level = 1 | 2 | 3
 
 const toNumber = (value: string) => (value.trim() === '' ? null : Number(value))
 
-function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; positions: PositionOut[]; onDone: () => void }) {
+function EmployeeForm({
+  employee,
+  positions,
+  locationId,
+  onDone,
+}: {
+  employee: EmployeeOut
+  positions: PositionOut[]
+  locationId: string
+  onDone: () => void
+}) {
   const update = useUpdateEmployee()
   const queryClient = useQueryClient()
   const [chosen, setChosen] = useState<string[]>(employee.position_ids)
@@ -202,7 +219,8 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    const data: EmployeeIn = { revision: employee.revision }
+    // Positions and their levels change only in this location (a person can work in several).
+    const data: EmployeeIn = { revision: employee.revision, location_id: locationId }
     if (first !== employee.first_name) data.first_name = first
     if (last !== employee.last_name) data.last_name = last
     if (experience !== employee.experience) data.experience = experience
@@ -230,6 +248,8 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
     )
   }
   const toggle = (id: string) => setChosen((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]))
+  // Experience, hours and switching off are shared by all the person's locations: the main location sets them.
+  const shared = employee.is_home !== false
 
   return (
     <form onSubmit={submit} className="grid gap-5">
@@ -249,27 +269,29 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
           <CheckField key={p.id} label={p.name} checked={chosen.includes(p.id)} onChange={() => toggle(p.id)} />
         ))}
       </fieldset>
-      <fieldset className="m-0 grid gap-1 border-0 p-0">
-        <legend className="mb-1 font-semibold">Doświadczenie</legend>
-        <p className="m-0 text-sm text-ink-muted">
-          Widzisz to tylko Ty. Liczy się w zasadzie „Początkujący z doświadczonymi”.
-        </p>
-        {([1, 2, 3] as const).map((value) => (
-          <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
-            <input
-              type="radio"
-              name="experience"
-              className="size-6 accent-accent"
-              checked={experience === value}
-              onChange={() => setExperience(value)}
-            />
-            <span className="grid">
-              <span>{EXPERIENCE[value].label}</span>
-              <span className="text-sm text-ink-muted">{EXPERIENCE[value].hint}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      {shared && (
+        <fieldset className="m-0 grid gap-1 border-0 p-0">
+          <legend className="mb-1 font-semibold">Doświadczenie</legend>
+          <p className="m-0 text-sm text-ink-muted">
+            Widzisz to tylko Ty. Liczy się w zasadzie „Początkujący z doświadczonymi”.
+          </p>
+          {([1, 2, 3] as const).map((value) => (
+            <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
+              <input
+                type="radio"
+                name="experience"
+                className="size-6 accent-accent"
+                checked={experience === value}
+                onChange={() => setExperience(value)}
+              />
+              <span className="grid">
+                <span>{EXPERIENCE[value].label}</span>
+                <span className="text-sm text-ink-muted">{EXPERIENCE[value].hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       {chosen.length >= 2 && (
         <fieldset className="m-0 grid gap-2 border-0 p-0">
           <legend className="mb-1 font-semibold">Inny stopień na którymś stanowisku</legend>
@@ -308,34 +330,42 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
             ))}
         </fieldset>
       )}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Cel godzin w miesiącu"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={400}
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          hint="Puste = bez celu."
+      {shared && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Cel godzin w miesiącu"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={400}
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            hint="Puste = bez celu."
+          />
+          <TextField
+            label="Najwyżej godzin w miesiącu"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={400}
+            value={max}
+            onChange={(e) => setMax(e.target.value)}
+            hint="Puste = bez limitu."
+          />
+        </div>
+      )}
+      {!shared ? (
+        <p className="m-0 text-sm text-ink-muted">
+          {`Lokal główny tej osoby to ${employee.home_location_name}. Tu ustawiasz jej stanowiska w swoim lokalu. Doświadczenie, godziny i wyłączenie z grafiku ustawia kierownik lokalu głównego.`}
+        </p>
+      ) : (
+        <CheckField
+          label="W grafiku"
+          hint="Dawne zmiany tej osoby zostaną."
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
         />
-        <TextField
-          label="Najwyżej godzin w miesiącu"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={400}
-          value={max}
-          onChange={(e) => setMax(e.target.value)}
-          hint="Puste = bez limitu."
-        />
-      </div>
-      <CheckField
-        label="W grafiku"
-        hint="Dawne zmiany tej osoby zostaną."
-        checked={active}
-        onChange={(e) => setActive(e.target.checked)}
-      />
+      )}
       {!active && employee.is_active && (employee.draft_shifts ?? 0) > 0 && (
         <p role="alert" className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
           {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Po zapisaniu ułóż grafik od nowa albo przenieś je ręcznie.`}
@@ -345,17 +375,27 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
       <Button type="submit" wide disabled={update.isPending}>
         Zapisz
       </Button>
-      <RemoveEmployee employee={employee} onDone={onDone} />
+      <RemoveEmployee employee={employee} locationId={locationId} onDone={onDone} />
     </form>
   )
 }
 
-/** "Usuń z lokalu": for good, unlike switching off. Asks once more, because it cannot be undone from here. */
-function RemoveEmployee({ employee, onDone }: { employee: EmployeeOut; onDone: () => void }) {
+/** "Usuń z lokalu": for good, unlike switching off. Asks once more, because it cannot be undone from here.
+ * A person who also works in other locations leaves only this one. */
+function RemoveEmployee({
+  employee,
+  locationId,
+  onDone,
+}: {
+  employee: EmployeeOut
+  locationId: string
+  onDone: () => void
+}) {
   const remove = useRemoveEmployee()
   const queryClient = useQueryClient()
   const [asking, setAsking] = useState(false)
   const name = `${employee.first_name} ${employee.last_name}`.trim() || 'Ta osoba'
+  const others = employee.other_location_names ?? []
   if (!asking) {
     return (
       <Button variant="danger" size="normal" wide onClick={() => setAsking(true)}>
@@ -366,19 +406,26 @@ function RemoveEmployee({ employee, onDone }: { employee: EmployeeOut; onDone: (
   }
   return (
     <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
-      <p className="m-0">
-        <b>{`Usunąć z lokalu: ${name}?`}</b>{' '}
-        {employee.is_manager
-          ? 'Zniknie z listy pracowników i nie dostanie nowych zmian. Dalej będzie kierownikiem.'
-          : 'Zniknie z listy i straci dostęp do firmy w Grafikomacie. Wróci tylko przez nowe zaproszenie.'}{' '}
-        Zmiany w dawnych grafikach i godziny zostają.
-      </p>
-      {(employee.published_shifts ?? 0) > 0 && (
+      {others.length > 0 ? (
+        <p className="m-0">
+          <b>{`Usunąć z lokalu: ${name}?`}</b>{' '}
+          {`Przestanie pracować w tym lokalu i zostanie w: ${others.join(', ')}. Zmiany, na które jest już wpisana, zostaną w grafikach.`}
+        </p>
+      ) : (
+        <p className="m-0">
+          <b>{`Usunąć z lokalu: ${name}?`}</b>{' '}
+          {employee.is_manager
+            ? 'Zniknie z listy pracowników i nie dostanie nowych zmian. Dalej będzie kierownikiem.'
+            : 'Zniknie z listy i straci dostęp do firmy w Grafikomacie. Wróci tylko przez nowe zaproszenie.'}{' '}
+          Zmiany w dawnych grafikach i godziny zostają.
+        </p>
+      )}
+      {others.length === 0 && (employee.published_shifts ?? 0) > 0 && (
         <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
           {`Ta osoba ma jeszcze ${shifts(employee.published_shifts ?? 0)} w opublikowanym grafiku. Zostanie na nich wpisana, ale nie zobaczy już grafiku. Najpierw przenieś te zmiany na kogoś innego.`}
         </p>
       )}
-      {(employee.draft_shifts ?? 0) > 0 && (
+      {others.length === 0 && (employee.draft_shifts ?? 0) > 0 && (
         <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
           {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Potem ułóż grafik od nowa albo przenieś je ręcznie.`}
         </p>
@@ -390,7 +437,7 @@ function RemoveEmployee({ employee, onDone }: { employee: EmployeeOut; onDone: (
         disabled={remove.isPending}
         onClick={() =>
           remove.mutate(
-            { employeeId: employee.id },
+            { employeeId: employee.id, params: { location_id: locationId } },
             {
               onSuccess: () => {
                 void queryClient.invalidateQueries()

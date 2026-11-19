@@ -167,4 +167,14 @@ def notification_text(kind: str, payload: dict) -> str:
             )
         case "offer_expired":
             return f"Oddanie zmiany {shift} jest nieaktualne, bo grafik się zmienił. Sprawdź „Mój grafik”."
+        case "shift_removed":
+            return (
+                f"Kierownik zdjął Cię ze zmiany {shift}, bo w tym czasie pracujesz w lokalu {p.get('moved_to', '')}. "
+                "Sprawdź „Mój grafik”."
+            )
+        case "shift_emptied":
+            return (
+                f"{p.get('employee_name') or 'Ktoś'} pracuje w tym czasie w lokalu {p.get('moved_to', '')}, "
+                f"więc zmiana {shift} jest pusta. Znajdź kogoś na nią w „Grafik”."
+            )
     return "Masz nowe powiadomienie."

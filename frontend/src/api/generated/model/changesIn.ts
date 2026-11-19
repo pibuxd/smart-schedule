@@ -13,4 +13,5 @@ export interface ChangesIn {
      */
   changes: ChangeIn[];
   force?: boolean;
+  remove_clashes?: boolean;
 }

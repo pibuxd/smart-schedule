@@ -34,7 +34,7 @@ from apps.notifications.services import location_manager_ids, notify
 from apps.scheduling.editing import save_scores
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import build_problem_for_version
-from apps.staffing.models import EmployeeProfile, Position
+from apps.staffing.models import EmployeeProfile, Position, works_in_q
 from engine.explain import without_pin
 from engine.scoring import score
 from engine.validator import validate
@@ -103,7 +103,7 @@ def _people_with_position(assignment: Assignment, among=None, also_location: boo
     names = Position.objects.for_company(assignment.company_id).filter(name__iexact=shift.position.name)
     wanted = Q(positions__in=names)
     if also_location:
-        wanted |= Q(home_location_id=shift.location_id)
+        wanted |= works_in_q(shift.location_id)
     people = (
         EmployeeProfile.objects.for_company(assignment.company_id)
         .filter(wanted, is_active=True)
@@ -181,7 +181,7 @@ def offer_shift(assignment: Assignment, profile: EmployeeProfile, by_manager=Non
         able = [v.employee for v in check_people(offer) if v.possible]
         payload = offer_payload(offer)
         told = notify(offer.company_id, [p.membership.user_id for p in able], "shift_offered", payload)
-        told_here = len({p.membership.user_id for p in able if p.home_location_id == assignment.shift.location_id})
+        told_here = len({p.membership.user_id for p in able if p.works_in(assignment.shift.location_id)})
         # The managers know early, especially when nobody can take it (the giver still has to come).
         acting = by_manager.pk if by_manager is not None else profile.membership.user_id
         managers = set(location_manager_ids(assignment.shift.location)) - {acting}
@@ -288,7 +288,7 @@ def withdraw_claim(claim: ShiftClaim, profile: EmployeeProfile) -> ShiftClaim:
 
 def _move(assignment: Assignment, to: EmployeeProfile, pinned: bool = True) -> None:
     assignment.employee = to
-    assignment.borrowed = to.home_location_id != assignment.shift.location_id
+    assignment.borrowed = not to.works_in(assignment.shift.location_id)
     assignment.manual = True
     # The new person was agreed on: arranging the period again keeps them there.
     assignment.pinned = pinned
@@ -338,7 +338,7 @@ def _rescore(version: ScheduleVersion) -> None:
 
 def _tell_home_managers(taker: EmployeeProfile, shift: Shift, payload: dict, auto: bool) -> None:
     """The taker's own manager learns that they work elsewhere that day."""
-    if taker.home_location_id != shift.location_id:
+    if not taker.works_in(shift.location_id):
         home = set(location_manager_ids(taker.home_location)) - set(location_manager_ids(shift.location))
         notify(taker.company_id, home, "borrowed", {**payload, "auto": auto})
 
@@ -607,14 +607,19 @@ def refresh_after_publish(version: ScheduleVersion, previous: ScheduleVersion | 
             offer.assignment = row
             offer.save(update_fields=["assignment"])
             continue
-        payload = offer_payload(offer)
-        pending = offer.claims.filter(status=ShiftClaim.Status.PENDING)
-        users = [offer.offered_by.membership.user_id, *pending.values_list("employee__membership__user_id", flat=True)]
-        pending.update(status=ShiftClaim.Status.WITHDRAWN, decided_at=timezone.now())
-        offer.status = ShiftOffer.Status.EXPIRED
-        offer.decided_at = timezone.now()
-        offer.save(update_fields=["status", "decided_at"])
-        notify(version.company_id, users, "offer_expired", payload)
+        expire_offer(offer)
+
+
+def expire_offer(offer: ShiftOffer) -> None:
+    """End an open offer because its shift changed; the giver and the volunteers are told."""
+    payload = offer_payload(offer)
+    pending = offer.claims.filter(status=ShiftClaim.Status.PENDING)
+    users = [offer.offered_by.membership.user_id, *pending.values_list("employee__membership__user_id", flat=True)]
+    pending.update(status=ShiftClaim.Status.WITHDRAWN, decided_at=timezone.now())
+    offer.status = ShiftOffer.Status.EXPIRED
+    offer.decided_at = timezone.now()
+    offer.save(update_fields=["status", "decided_at"])
+    notify(offer.company_id, users, "offer_expired", payload)
 
 
 def visible_offers_for(profile: EmployeeProfile):

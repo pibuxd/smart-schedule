@@ -33,6 +33,7 @@ import type {
   LocationSetupOut,
   PositionIn,
   PositionOut,
+  RemoveEmployeeParams,
   ShiftTypeIn,
   ShiftTypeOut,
   StaffingIn
@@ -1437,7 +1438,8 @@ export const getLocationEmployeesUrl = (locationId: string,) => {
 }
 
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export const locationEmployees = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<locationEmployeesResponse> => {
@@ -1485,7 +1487,8 @@ export type LocationEmployeesQueryError = ErrorOut
 
 
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(
@@ -1499,7 +1502,8 @@ export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationE
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(
@@ -1513,7 +1517,8 @@ export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(
@@ -1521,7 +1526,8 @@ export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * People whose home location this is: active first, then switched off; by surname.
+ * People who work in this location (as their main location or an extra one): active first, then switched
+ * off; by surname.
  * @summary Location Employees
  */
 export function useLocationEmployees<TData = Awaited<ReturnType<typeof locationEmployees>>, TError = ErrorOut>(
@@ -1817,22 +1823,33 @@ export type removeEmployeeResponseError = (removeEmployeeResponse402 | removeEmp
 
 export type removeEmployeeResponse = (removeEmployeeResponseSuccess | removeEmployeeResponseError)
 
-export const getRemoveEmployeeUrl = (employeeId: string,) => {
+export const getRemoveEmployeeUrl = (employeeId: string,
+    params?: RemoveEmployeeParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/employees/${employeeId}`
+  return stringifiedParams.length > 0 ? `/api/employees/${employeeId}?${stringifiedParams}` : `/api/employees/${employeeId}`
 }
 
 /**
- * Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain
- * employee loses access to the company and can come back only through a new invitation.
+ * Remove the person from a location (`location_id`, by default their main one). From their only location
+ * it is for good: shifts in saved schedules and their hours stay; a plain employee loses access to the company
+ * and can come back only through a new invitation. From one of several locations only that location goes; the
+ * person keeps working in the others (docs/plan.md, section 27).
  * @summary Remove Employee
  */
-export const removeEmployee = async (employeeId: string, options?: Parameters<typeof apiFetch>[1]): Promise<removeEmployeeResponse> => {
+export const removeEmployee = async (employeeId: string,
+    params?: RemoveEmployeeParams, options?: Parameters<typeof apiFetch>[1]): Promise<removeEmployeeResponse> => {
 
-  return apiFetch<removeEmployeeResponse>(getRemoveEmployeeUrl(employeeId),
+  return apiFetch<removeEmployeeResponse>(getRemoveEmployeeUrl(employeeId,params),
   {
     ...options,
     method: 'DELETE'
@@ -1862,9 +1879,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeEmployee>>, RemoveEmployeeMutationVariables> = (props) => {
-          const {employeeId} = props ?? {};
+          const {employeeId,params} = props ?? {};
 
-          return  removeEmployee(employeeId,requestOptions)
+          return  removeEmployee(employeeId,params,requestOptions)
         }
 
 
@@ -1877,11 +1894,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RemoveEmployeeMutationResult = NonNullable<Awaited<ReturnType<typeof removeEmployee>>>
 
     export type RemoveEmployeeMutationError = ErrorOut
-    export type RemoveEmployeeMutationVariables = {employeeId: string}
+    export type RemoveEmployeeMutationVariables = {employeeId: string;params?: RemoveEmployeeParams}
 
     /**
- * Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain
- * employee loses access to the company and can come back only through a new invitation.
+ * Remove the person from a location (`location_id`, by default their main one). From their only location
+ * it is for good: shifts in saved schedules and their hours stay; a plain employee loses access to the company
+ * and can come back only through a new invitation. From one of several locations only that location goes; the
+ * person keeps working in the others (docs/plan.md, section 27).
  * @summary Remove Employee
  */
 export const useRemoveEmployee = <TError = ErrorOut,

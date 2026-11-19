@@ -141,8 +141,33 @@ describe('EmployeesScreen', () => {
     expect(question).toHaveTextContent('Ta osoba ma jeszcze 2 zmiany w opublikowanym grafiku.')
     fireEvent.click(within(sheet).getByRole('button', { name: 'Tak, usuń z lokalu' }))
 
-    await vi.waitFor(() => expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/employees/e1'))
+    await vi.waitFor(() => expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/employees/e1?location_id=l1'))
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('says where a person who works in several locations stays after removal from this one', async () => {
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) {
+        return [200, [{ ...person('e1', 'Ala', 2), draft_shifts: 3, other_location_names: ['Rynek'] }]]
+      }
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      if (method === 'DELETE') return [204, null]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Usuń z lokalu' }))
+    const question = within(sheet).getByRole('alert')
+    expect(question).toHaveTextContent('Przestanie pracować w tym lokalu i zostanie w: Rynek.')
+    expect(question).not.toHaveTextContent('w szkicu grafiku')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Tak, usuń z lokalu' }))
+    await vi.waitFor(() => expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/employees/e1?location_id=l1'))
   })
 
   it('corrects the name, and warns about shifts in the draft before switching someone off', async () => {
@@ -167,7 +192,36 @@ describe('EmployeesScreen', () => {
 
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
-    expect(body).toEqual({ first_name: 'Alicja', is_active: false, revision: 'initial' })
+    expect(body).toEqual({ first_name: 'Alicja', is_active: false, revision: 'initial', location_id: 'l1' })
     expect(body).not.toHaveProperty('phone') // the login number is changed only by the superadmin
+  })
+
+  it('shows the main location of someone from another location and does not offer switching them off', async () => {
+    const guest = { ...person('e3', 'Kasia', 2), is_home: false, home_location_name: 'Rynek' }
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) return [200, [guest]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      if (method === 'PATCH') return [200, guest]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    expect(await screen.findByText('Lokal główny: Rynek')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zmień: Kasia Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).queryByRole('checkbox', { name: /W grafiku/ })).not.toBeInTheDocument()
+    expect(within(sheet).getByText(/ustawia kierownik lokalu głównego/)).toBeInTheDocument()
+    expect(within(sheet).queryByRole('radio', { name: /Doświadczony/ })).not.toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: 'Kelner' }))
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
+    expect(body).toEqual({ revision: undefined, location_id: 'l1', position_ids: [] })
   })
 })

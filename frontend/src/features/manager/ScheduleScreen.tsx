@@ -49,6 +49,7 @@ import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/da
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
 import { pickPeriod } from './periods'
+import { ClashQuestion } from './ClashQuestion'
 import { type DropCheck, dropWords, isDropTarget } from './drop-preview'
 import { buildGrid, type GridColumn, percent, swapChanges } from './schedule-grid'
 import { ShiftSheet } from './ShiftSheet'
@@ -445,6 +446,8 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
   const [picked, setPicked] = useState('')
   const [override, setOverride] = useState<Override | null>(null)
+  // Dropped on a shift while the person works elsewhere at the same time: the question waits for the manager.
+  const [question, setQuestion] = useState<{ changes: Change[]; done: string; check: CheckOut } | null>(null)
   const checker = useCheckScheduleChanges()
   const change = useChangeAssignments()
   const addSeat = useAddScheduleSeat()
@@ -488,22 +491,25 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
 
   const onDragStart = (event: DragStartEvent) => {
     setMessage(null)
+    setQuestion(null)
     setSingles({})
     setOverId(null)
     setDragging(byId.get(String(event.active.id)) ?? null)
   }
   const onDragOver = (event: DragOverEvent) => setOverId(event.over ? String(event.over.id) : null)
-  const save = (changes: Change[], done: string, force = false) =>
+  const save = (changes: Change[], done: string, { force = false, removeClashes = false } = {}) =>
     change.mutate(
-      { versionId: data.id, data: { changes, force } },
+      { versionId: data.id, data: { changes, force, remove_clashes: removeClashes } },
       {
         onSuccess: () => {
           setMessage({ text: done, bad: false })
           setOverride(null)
+          setQuestion(null)
           void queryClient.invalidateQueries()
         },
         onError: (error) => {
           setOverride(null)
+          setQuestion(null)
           setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true })
         },
       },
@@ -517,9 +523,11 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
     if (!from || !to || from.id === to.id || from.employee_id === to.employee_id) return
     const changes = swapChanges(from, to)
     const done = to.employee_id ? `Zamienione: ${from.employee_name} i ${to.employee_name}.` : `Przeniesiono: ${from.employee_name}.`
-    // A swap that breaks a hard rule is the manager's call: ask once, then save it as an override.
+    // Another shift at the same time: ask whether to take the person off it. A swap that breaks a hard rule is the
+    // manager's call: ask once, then save it as an override.
     const decide = (result: CheckOut) => {
-      if (result.ok) save(changes, done)
+      if (result.clashes.length > 0) setQuestion({ changes, done, check: result })
+      else if (result.ok) save(changes, done)
       else if (result.can_force) setOverride({ changes, problems: result.problems, done })
       else setMessage({ text: result.problems[0] ?? 'Tej zmiany nie można zapisać.', bad: true })
     }
@@ -578,6 +586,20 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
         <p role="status" className={cn('m-0 rounded-sm px-3 py-2', message.bad ? 'bg-cannot-soft text-cannot' : 'bg-accent-soft')}>
           {message.text}
         </p>
+      )}
+      {question && (
+        <ClashQuestion
+          check={question.check}
+          busy={change.isPending}
+          onMove={(force) =>
+            save(
+              question.changes,
+              `${question.done} ${question.check.clashes.length > 1 ? 'Tamte zmiany są teraz puste.' : 'Tamta zmiana jest teraz pusta.'}`,
+              { force, removeClashes: true },
+            )
+          }
+          onCancel={() => setQuestion(null)}
+        />
       )}
       <DndContext
         sensors={sensors}
@@ -676,7 +698,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
             <p className="m-0 text-sm text-ink-muted">
               Decyzja należy do Ciebie. Zmiana zostanie oznaczona i przypięta, więc ponowne układanie jej nie cofnie.
             </p>
-            <Button wide disabled={change.isPending} onClick={() => save(override.changes, override.done, true)}>
+            <Button wide disabled={change.isPending} onClick={() => save(override.changes, override.done, { force: true })}>
               {change.isPending ? 'Zapisuję…' : 'Zapisz mimo to'}
             </Button>
             <Button wide variant="secondary" onClick={() => setOverride(null)}>
@@ -844,16 +866,25 @@ function PeopleHours({ data }: { data: VersionOut }) {
           </thead>
           <tbody>
             {data.employees.map((e) => {
-              const over = e.max_hours !== null && e.hours > e.max_hours
+              const elsewhere = e.hours_elsewhere ?? 0
+              const over = e.max_hours !== null && e.hours + elsewhere > e.max_hours
               return (
                 <tr key={e.id} className="border-b border-grid">
                   <td className="px-3 py-2">
                     {e.name}
+                    {e.home_location_name && (
+                      <span className="block text-sm text-ink-muted">lokal główny: {e.home_location_name}</span>
+                    )}
                     {!e.active && <span className="block text-sm text-ink-muted">wyłączony z grafiku</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{e.shifts}</td>
                   <td className={cn('px-3 py-2 text-right tabular-nums', over && 'font-semibold text-cannot')}>
                     {String(e.hours).replace('.', ',')}
+                    {elsewhere > 0 && (
+                      <span className="block text-sm font-normal text-ink-muted">
+                        +{String(elsewhere).replace('.', ',')} w innych lokalach
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right text-ink-muted tabular-nums">
                     {e.target_hours ?? '–'} / {e.max_hours ?? '–'}

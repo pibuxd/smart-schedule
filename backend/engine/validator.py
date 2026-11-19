@@ -224,7 +224,8 @@ class _Checker:
         return self.p.employee_by_id[employee_id].name
 
     def employees_of(self, location: str) -> list[Employee]:
-        return [e for e in self.p.employees if e.home_location == location]
+        """Everyone who works in the location: as their main location or an extra one."""
+        return [e for e in self.p.employees if e.works_in(location)]
 
     def hours_by_month(self, employee_id: str) -> dict[tuple[int, int], float]:
         result: dict[tuple[int, int], float] = defaultdict(float)
@@ -468,17 +469,29 @@ class _Checker:
     def _monthly_hours(self, rule: RuleConfig, attr: str) -> _Measured:
         shares = self.month_shares()
         instances, degree_sum, found = 0, 0.0, []
-        for employee in self.employees_of(rule.location):
+        people = self.employees_of(rule.location)
+        if attr == "target_hours_month":
+            # The target is pursued only in the main location: an extra location arranged first would take it all.
+            people = [e for e in people if e.home_location == rule.location]
+        for employee in people:
             monthly = getattr(employee, attr)
             if monthly is None:
                 continue
             instances += 1
             hours = self.hours_by_month(employee.id)
+            # Hours in other locations (and periods) on the days of this period use up part of the limit here.
+            elsewhere = {
+                m: minutes / 60
+                for m, minutes in self.p.minutes_elsewhere(employee.id, self.p.period_start, self.p.period_end).items()
+            }
             expected = sum(monthly * share for share in shares.values())
-            total = sum(hours.values())
+            total = sum(hours.values()) + sum(elsewhere.get(m, 0.0) for m in shares)
             if attr == "max_hours_month":
                 allowed = monthly * (1 + max_hours_tolerance(rule))
-                excess = sum(max(0.0, hours.get(m, 0.0) - allowed * share - _EPS) for m, share in shares.items())
+                excess = sum(
+                    max(0.0, hours.get(m, 0.0) - max(0.0, allowed * share - elsewhere.get(m, 0.0)) - _EPS)
+                    for m, share in shares.items()
+                )
                 degree = min(1.0, excess / expected) if expected else (1.0 if excess > _EPS else 0.0)
                 if excess > _EPS:
                     found.append(
@@ -490,7 +503,10 @@ class _Checker:
                         )
                     )
             else:
-                deviation = sum(abs(hours.get(m, 0.0) - monthly * share) for m, share in shares.items())
+                deviation = sum(
+                    abs(hours.get(m, 0.0) - max(0.0, monthly * share - elsewhere.get(m, 0.0)))
+                    for m, share in shares.items()
+                )
                 degree = min(1.0, deviation / expected) if expected else (1.0 if deviation > _EPS else 0.0)
                 if degree > TARGET_HOURS_HARD_TOLERANCE + _EPS:
                     found.append(
@@ -702,7 +718,7 @@ class _Checker:
             possible = min(count, len(worked_days))
             result.append(
                 RequestMeasure(
-                    location=p.employee_by_id[employee_id].home_location,
+                    location=p.main_location(employee_id),
                     employee=employee_id,
                     kind=RequestKind.PREFER,
                     weight=weights.request_weight(RequestLevel.NICE_TO_HAVE),
@@ -728,7 +744,7 @@ class _Checker:
                 weight = weights.request_weight(request.level, request.manager_priority) * scales[request.employee]
             result.append(
                 RequestMeasure(
-                    location=p.employee_by_id[request.employee].home_location,
+                    location=p.request_location(request),
                     employee=request.employee,
                     kind=RequestKind.TEXT,
                     weight=weight,

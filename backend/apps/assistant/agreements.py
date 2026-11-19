@@ -154,7 +154,7 @@ def copyable(location, source, target):
     if source is None:
         return [], []
     from apps.assistant import readings
-    from apps.staffing.models import EmployeeProfile, ShiftType
+    from apps.staffing.models import EmployeeProfile, ShiftType, works_in_q
 
     mine = {i["code"]: i for i in (target.rules or [])} if target else {}
     changed = set(target.changed_codes) if target else set()
@@ -168,7 +168,7 @@ def copyable(location, source, target):
     people = {
         str(pk)
         for pk in EmployeeProfile.objects.for_company(location.company_id)
-        .filter(home_location=location, is_active=True)
+        .filter(works_in_q(location), is_active=True)
         .values_list("pk", flat=True)
     }
     shifts = {

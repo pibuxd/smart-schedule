@@ -184,13 +184,15 @@ class TextRequest(CompanyOwnedModel):
 
     @staticmethod
     def for_periods(periods) -> models.Q:
-        """Requests that count in these periods: written for them, or for a month they cover, by people of their
-        location."""
+        """Requests that count in these periods: written for them, or for a month they cover, by people who work in
+        their location (as their main location or an extra one: a request for a month is about the person)."""
+        from apps.staffing.models import works_in_q
+
         q = models.Q(period__in=[p.pk for p in periods])
         for p in periods:
             q |= models.Q(
+                works_in_q(p.location_id, prefix="employee__"),
                 period__isnull=True,
-                employee__home_location_id=p.location_id,
                 month__gte=p.start.replace(day=1),
                 month__lte=p.end,
             )

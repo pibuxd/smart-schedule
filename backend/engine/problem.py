@@ -11,6 +11,7 @@ date it starts on, also when it ends after midnight.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
@@ -107,10 +108,17 @@ class Employee:
     # False for someone switched off (or borrowed from another location) who only keeps the shifts they already
     # have in this problem (pins, past days): the generator gives them nothing new. The validator ignores it.
     available: bool = True
+    # Other locations where the person also works (the generator may put them there too); `home_location` is the
+    # main one.
+    extra_locations: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "positions", frozenset(self.positions))
         object.__setattr__(self, "experience_by_position", _freeze(self.experience_by_position))
+        object.__setattr__(self, "extra_locations", frozenset(self.extra_locations))
+
+    def works_in(self, location: str) -> bool:
+        return location == self.home_location or location in self.extra_locations
 
     def level(self, position: str) -> int:
         """The experience level that counts when this person works `position`."""
@@ -255,22 +263,29 @@ class Request:
     by_manager: bool = False
     rank: int = 1
     weekly_hours: bool = False
+    # The location the request belongs to (its period's, or the instruction's). None: a request for a month, about
+    # the person wherever they work; it counts in their main location in this problem.
+    location: str | None = None
 
     def hour_windows(self, problem: Problem) -> list[tuple[date, date, int]]:
-        """Inclusive bounds and already published minutes counted toward this limit."""
+        """Inclusive bounds and minutes already worked elsewhere (other locations, other periods) counted toward
+        this limit."""
+
+        def elsewhere(first: date, last: date) -> int:
+            return sum(
+                round((shift.end_utc - shift.start_utc).total_seconds() / 60)
+                for shift in problem.external_shifts
+                if shift.employee == self.employee and first <= shift.date <= last and self.covers(shift.date)
+            )
+
         if not self.weekly_hours:
-            return [(problem.period_start, problem.period_end, 0)]
+            return [(problem.period_start, problem.period_end, elsewhere(problem.period_start, problem.period_end))]
         monday = problem.period_start - timedelta(days=problem.period_start.weekday())
         result = []
         while monday <= problem.period_end:
             sunday = monday + timedelta(days=6)
             if not self.dates or any(monday <= day <= sunday for day in self.dates):
-                minutes = sum(
-                    round((shift.end_utc - shift.start_utc).total_seconds() / 60)
-                    for shift in problem.external_shifts
-                    if shift.employee == self.employee and monday <= shift.date <= sunday and self.covers(shift.date)
-                )
-                result.append((monday, sunday, minutes))
+                result.append((monday, sunday, elsewhere(monday, sunday)))
             monday += timedelta(days=7)
         return result
 
@@ -444,6 +459,33 @@ class Problem:
     @cached_property
     def availability_by_key(self) -> Mapping[tuple[str, date], Availability]:
         return _freeze({(a.employee, a.date): a for a in self.availability})
+
+    @cached_property
+    def slot_locations(self) -> frozenset[str]:
+        return frozenset(s.location for s in self.slots)
+
+    def main_location(self, employee_id: str) -> str:
+        """Where a person's calendar marks and month requests count in this problem: their main location if it is
+        here, else the first of their extra locations that is here, else their main location."""
+        employee = self.employee_by_id[employee_id]
+        here = self.slot_locations
+        if employee.home_location in here:
+            return employee.home_location
+        return next((loc for loc in sorted(employee.extra_locations) if loc in here), employee.home_location)
+
+    def request_location(self, request: Request) -> str:
+        return request.location or self.main_location(request.employee)
+
+    def minutes_elsewhere(self, employee_id: str, first: date, last: date) -> dict[tuple[int, int], int]:
+        """Minutes of the person's shifts in other locations and periods (`external_shifts`), per calendar month,
+        for shifts starting between `first` and `last`."""
+        result: dict[tuple[int, int], int] = defaultdict(int)
+        for shift in self.external_shifts:
+            if shift.employee == employee_id and first <= shift.date <= last:
+                result[(shift.date.year, shift.date.month)] += round(
+                    (shift.end_utc - shift.start_utc).total_seconds() / 60
+                )
+        return result
 
     @cached_property
     def locations(self) -> tuple[str, ...]:

@@ -217,7 +217,7 @@ def run_generation(
 
 def _save_versions(run: GenerationRun, built: BuiltProblem, schedule, report) -> list[ScheduleVersion]:
     problem = built.problem
-    home = {e.id: e.home_location for e in problem.employees}
+    people = problem.employee_by_id
     versions = []
     for period in built.periods:
         SchedulePeriod.objects.select_for_update().filter(pk=period.pk).first()  # numbers versions one at a time
@@ -257,7 +257,8 @@ def _save_versions(run: GenerationRun, built: BuiltProblem, schedule, report) ->
                 pinned=shift.slot_key in problem.pinned,
                 forced=shift.slot_key in problem.forced
                 and schedule.get(shift.slot_key) == problem.forced[shift.slot_key],
-                borrowed=schedule.get(shift.slot_key) is not None and home[schedule[shift.slot_key]] != location_id,
+                borrowed=schedule.get(shift.slot_key) is not None
+                and not people[schedule[shift.slot_key]].works_in(location_id),
             )
             for shift in shifts
         )

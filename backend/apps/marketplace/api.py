@@ -398,7 +398,7 @@ def handover_candidates(request, assignment_id: UUID):
             employee_id=v.employee.pk,
             name=services.person_name(v.employee),
             home_location_name=v.employee.home_location.name,
-            here=v.employee.home_location_id == location_id,
+            here=v.employee.works_in(location_id),
             wants=v.employee.pk in wants,
             problems=list(v.problems),
         )

@@ -57,6 +57,7 @@ class Candidate:
     target_hours: float | None
     max_hours: float | None
     scores: Scores  # the location's scores if they take the slot
+    clash: bool = False  # one of the hard problems: another shift at the same time
 
     @property
     def possible(self) -> bool:
@@ -130,6 +131,7 @@ def explain_slot(
                 current=is_current,
                 blocked=tuple(v.message for v in hard),
                 block_code=hard[0].code if hard else None,
+                clash=any(v.code == Code.OVERLAP for v in hard),
                 can_force=bool(hard) and not is_current and all(v.code in WAIVABLE for v in hard),
                 notes=notes[:MAX_NOTES],
                 wish=problem.availability_for(employee.id, slot),

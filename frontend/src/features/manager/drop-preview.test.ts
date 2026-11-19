@@ -11,7 +11,7 @@ const marek = shift('s2', ['e2', 'Marek Zając'])
 const hole = shift('s3', null)
 const scores = { manager_rules: 91.25, employee_requests: 88 }
 const check = (extra: Partial<CheckOut>) =>
-  ({ ok: true, problems: [], warnings: [], before: scores, after: scores, ...extra }) as CheckOut
+  ({ ok: true, problems: [], warnings: [], before: scores, after: scores, clashes: [], ...extra }) as CheckOut
 
 describe('dropWords', () => {
   it('asks for another shift when there is nothing to drop on', () => {
@@ -33,5 +33,29 @@ describe('dropWords', () => {
     const refused = check({ ok: false, problems: ['Anna Wróbel ma dwie zmiany tego dnia.'] })
     expect(dropWords(anna, marek, refused)).toMatchObject({ verdict: 'Anna Wróbel ma dwie zmiany tego dnia.', bad: true })
     expect(dropWords(anna, marek, 'failed')).toMatchObject({ verdict: 'Nie udało się sprawdzić tej zamiany.', bad: true })
+  })
+
+  it('says a drop on a clashing shift asks first, or why it cannot be done', () => {
+    const clash = {
+      shift_id: 'x',
+      employee_id: 'e1',
+      kind: 'draft',
+      location_name: 'Rynek',
+      text: 'Anna Wróbel ma w tym czasie inną zmianę: pon. 6:00–14:00.',
+      can_remove: true,
+      reason: '',
+    }
+    const overlap = { ok: false, problems: ['Anna Wróbel ma dwie zmiany w tym samym czasie.'], clashes: [clash] }
+    expect(dropWords(anna, marek, check({ ...overlap, ok_if_removed: true }))).toMatchObject({
+      verdict: `${clash.text} Upuść, a zapytamy, czy ją stamtąd zdjąć.`,
+      bad: false,
+    })
+    const forced = check({ ...overlap, ok_if_removed: false, problems_if_removed: ['Anna Wróbel nie może.'], can_force_if_removed: true })
+    expect(dropWords(anna, marek, forced).verdict).toBe('Anna Wróbel nie może. Upuść, jeśli chcesz zapisać mimo to.')
+    const other = { ...clash, can_remove: false, reason: 'Nie prowadzisz lokalu Rynek.' }
+    expect(dropWords(anna, marek, check({ ...overlap, clashes: [other] }))).toMatchObject({
+      verdict: `${clash.text} Nie prowadzisz lokalu Rynek.`,
+      bad: true,
+    })
   })
 })

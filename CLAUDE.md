@@ -92,6 +92,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   the `sms_outbox` fixture). Rate limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`.
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
+- A person can work in several locations of a company: `EmployeeProfile.home_location` (main) plus
+  `extra_locations`. "People of a location" is `works_in_q(location)` / `profile.works_in(location)`, never
+  `home_location=` alone; in the engine `Employee.works_in`. Availability and monthly hours are per person.
 - Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.
   Each catalog rule needs a `rule_<code>` method in `engine/validator.py` and a `_rule_<code>` method in
   `engine/solver.py` (hard: a constraint; soft: a penalty matching the validator's degree), checked by a test.
@@ -121,19 +124,25 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   Manager screens live in `src/features/manager/` under `/kierownik` and get the company from `useManager()`
   (tests wrap them in `AsManager` from `features/manager/test-utils.tsx`).
 - Removing keeps schedule history: where the database blocks a delete (`RESTRICT`), hide instead. `EmployeeProfile.removed_at`
-  (always with `is_active=False`; set by `apps/staffing/removal.py`, a removed plain employee gets 404 from `tenant_context`)
+  (always with `is_active=False`; set by `apps/staffing/removal.py`, a removed plain employee gets 404 from `tenant_context`;
+  a person with several locations only leaves the one they are removed from, `removal.leave_location`)
   and `Position.removed_at` (read live positions with `removed_at__isnull=True`). Locations with history are archived.
 - Schedules are arranged only when the manager asks (after the availability deadline or once everyone has answered);
   never add jobs that generate schedules on a timer or by themselves.
 - To see "Mój grafik" on demo data: publish from "Grafik" in the manager panel, or `generate_schedule --period <id> --publish`.
-- Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable, past days included; a change that adds a hard violation is refused unless the manager sends `force`, which saves it as `Assignment.forced` + pinned and the validator reports those problems as `waived`, never blocking; codes in `MANAGER_MAY_BREAK` only become warnings; publishing records `AssignmentEvent` history). Hard rules bind the generator, not the manager; only the position, pins and two shifts at the same time cannot be forced. Shift explanations come from `engine/explain.py` (one validator run per candidate).
+- Schedule edits go through `apps/scheduling/editing.py` (only the newest draft is editable, past days included; a change that adds a hard violation is refused unless the manager sends `force`, which saves it as `Assignment.forced` + pinned and the validator reports those problems as `waived`, never blocking; codes in `MANAGER_MAY_BREAK` only become warnings; publishing records `AssignmentEvent` history). Hard rules bind the generator, not the manager; only the position and pins cannot be forced.
+  A person put on a shift while they have another one at the same time (here, or another location's draft or published
+  schedule) is a clash: it cannot be forced, but `check` lists `clashes`, the screen asks, and `remove_clashes: true`
+  takes them off the other one (with `force` too when `can_force_if_removed`). Shift explanations come from `engine/explain.py` (one validator run per candidate).
 - Staffing of one date (the calendar in location settings, and "Dodaj miejsce" / "Usuń miejsce" in the schedule editor)
   is written only through `apps/staffing/day_staffing.py`: a `StaffingException` row exists only while the date differs
   from its weekday. Seats of a draft change in `editing.add_seat` / `remove_seat` (place numbers stay 1…n).
-- Given-away shifts: `apps/marketplace/services.py`. The only change to a published version in place is an approved
-  handover (checked by the validator, pinned, `AssignmentEvent` reason `offer`) or the manager's own change there
+- Given-away shifts: `apps/marketplace/services.py`. The only changes to a published version in place are an approved
+  handover (checked by the validator, pinned, `AssignmentEvent` reason `offer`), the manager's own change there
   (`manager_reassign` / `manager_swap`: the validator's objections are shown but the manager may overrule them with
-  `force`; a forced change is not pinned; shifts that have started can be corrected too). In-app notifications are written with
+  `force`; a forced change is not pinned; shifts that have started can be corrected too) and taking a person off a
+  published shift of another location after the manager confirmed a clash (`editing.take_off_published`, reason
+  `manual`). In-app notifications are written with
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
 - Assistant (Claude): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   Its action plan is a proposal: `apps/assistant/services.py` checks names against the location's data and builds

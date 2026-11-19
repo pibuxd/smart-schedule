@@ -111,6 +111,7 @@ const explanation = {
       possible: true,
       can_force: false,
       problems: [],
+      clash: false,
       notes: [],
       wish: 'prefer',
       hours: 16,
@@ -127,6 +128,7 @@ const explanation = {
       possible: false,
       can_force: true,
       problems: ['Marek Zając ma zaznaczone „nie mogę” (02.12 Ranna 06:00–14:00).'],
+      clash: false,
       notes: [],
       wish: 'cannot',
       hours: 16,
@@ -142,11 +144,40 @@ const explanation = {
   ],
 }
 
+const fine = { ok: true, problems: [], warnings: [], before: scores, after: scores, clashes: [], problems_if_removed: [], ok_if_removed: true }
+
+// Marek works at Rynek at the same time; the explanation offers to move him here.
+const busyElsewhere = {
+  ...explanation,
+  candidates: [
+    {
+      ...explanation.candidates[1],
+      problems: ['Marek Zając ma dwie zmiany w tym samym czasie: wt. 02.12 Ranna i Rynek 06:00–14:00.'],
+      clash: true,
+      wish: 'neutral',
+    },
+  ],
+}
+
+function clashCheck(clash: Record<string, unknown> = {}) {
+  const item = {
+    shift_id: 'r1',
+    employee_id: 'e2',
+    kind: 'published',
+    location_name: 'Rynek',
+    text: 'Marek Zając ma w tym czasie zmianę w grafiku lokalu Rynek: wt. 02.12, 06:00–14:00.',
+    can_remove: true,
+    reason: '',
+    ...clash,
+  }
+  return { ...fine, ok: false, problems: ['Marek Zając ma dwie zmiany w tym samym czasie.'], clashes: [item], ok_if_removed: item.can_remove }
+}
+
 function api(overrides: Record<string, unknown> = {}) {
   return mockApi((method, path) => {
     if (method === 'GET' && path === '/api/locations/l1/periods') return [200, [overrides.period ?? period]]
     if (method === 'GET' && path === '/api/versions/v1') return [200, overrides.version ?? version]
-    if (method === 'GET' && path.endsWith('/explain')) return [200, explanation]
+    if (method === 'GET' && path.endsWith('/explain')) return [200, overrides.explanation ?? explanation]
     if (method === 'GET' && path === '/api/versions/v1/employees/e2/fit') {
       return [
         200,
@@ -156,7 +187,8 @@ function api(overrides: Record<string, unknown> = {}) {
         ],
       ]
     }
-    if (method === 'PATCH') return [200, { ok: true, can_force: false, problems: [], warnings: [], before: scores, after: scores }]
+    if (method === 'POST' && path.endsWith('/check')) return [200, overrides.check ?? fine]
+    if (method === 'PATCH') return [200, fine]
     if (method === 'POST' && path.endsWith('/publish')) return [200, version.history[0]]
     if (method === 'POST' && path.endsWith('/pin')) return [200, { ok: true }]
     if (method === 'POST' && path.endsWith('/seats')) return [201, shift('s4', '2026-12-02', null)]
@@ -218,8 +250,62 @@ describe('ScheduleScreen', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     expect(calls.find((c) => c.method === 'PATCH')!).toMatchObject({
       url: '/api/versions/v1/assignments',
-      body: { changes: [{ shift_id: 's3', employee_id: 'e1' }] },
+      body: { changes: [{ shift_id: 's3', employee_id: 'e1' }], remove_clashes: false },
     })
+  })
+
+  it('asks before taking a person off their shift in another location', async () => {
+    const calls = api({ explanation: busyElsewhere, check: clashCheck() })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /^Bez obsady/ }))
+    const sheet = await screen.findByRole('dialog')
+    expect(await within(sheet).findByText(/przenieść tutaj kogoś, kto ma w tym czasie inną zmianę/)).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Przenieś tutaj: Marek Zając' }))
+    const question = await within(sheet).findByRole('alertdialog', { name: 'Ta osoba ma w tym czasie inną zmianę' })
+    expect(within(question).getByText(/w grafiku lokalu Rynek: wt. 02.12/)).toBeInTheDocument()
+    expect(within(question).getByText(/Damy znać tej osobie i kierownikowi tamtego lokalu/)).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
+    fireEvent.click(within(question).getByRole('button', { name: 'Tak, przenieś tutaj' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({
+      changes: [{ shift_id: 's3', employee_id: 'e2' }],
+      force: false,
+      remove_clashes: true,
+    })
+  })
+
+  it('takes a person off their other shift and saves anyway with one answer', async () => {
+    const left = 'Marek Zając ma zaznaczone „nie mogę” (02.12 Ranna 06:00–14:00).'
+    const check = { ...clashCheck(), ok_if_removed: false, problems_if_removed: [left], can_force_if_removed: true }
+    const calls = api({ explanation: busyElsewhere, check })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /^Bez obsady/ }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(await within(sheet).findByRole('button', { name: 'Przenieś tutaj: Marek Zając' }))
+    const question = await within(sheet).findByRole('alertdialog')
+    expect(within(question).getByText(left)).toBeInTheDocument()
+    fireEvent.click(within(question).getByRole('button', { name: 'Tak, przenieś mimo to' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({
+      changes: [{ shift_id: 's3', employee_id: 'e2' }],
+      force: true,
+      remove_clashes: true,
+    })
+  })
+
+  it('says why a person cannot be taken off a shift in a location the manager does not run', async () => {
+    const reason = 'Nie prowadzisz lokalu Rynek, więc poproś jego kierownika o zmianę.'
+    const calls = api({ explanation: busyElsewhere, check: clashCheck({ can_remove: false, reason }) })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /^Bez obsady/ }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(await within(sheet).findByRole('button', { name: 'Przenieś tutaj: Marek Zając' }))
+    const question = await within(sheet).findByRole('alertdialog')
+    expect(within(question).getByText(reason)).toBeInTheDocument()
+    expect(within(question).queryByRole('button', { name: 'Tak, przenieś tutaj' })).not.toBeInTheDocument()
+    fireEvent.click(within(question).getByRole('button', { name: 'Zamknij' }))
+    expect(within(sheet).queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
   })
 
   it('lets the manager put in a person who cannot work, as an override', async () => {
@@ -232,6 +318,7 @@ describe('ScheduleScreen', () => {
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({
       changes: [{ shift_id: 's3', employee_id: 'e2' }],
       force: true,
+      remove_clashes: false,
     })
   })
 
@@ -248,7 +335,8 @@ describe('ScheduleScreen', () => {
         const current = { ...explanation.candidates[1], current: true }
         return [200, { ...explanation, shift: past, candidates: [current, explanation.candidates[0]] }]
       }
-      if (method === 'PATCH') return [200, { ok: true, can_force: false, problems: [], warnings: [], before: scores, after: scores }]
+      if (method === 'POST' && path.endsWith('/check')) return [200, fine]
+      if (method === 'PATCH') return [200, fine]
       return [404, { detail: 'Nie ma.' }]
     })
     show()

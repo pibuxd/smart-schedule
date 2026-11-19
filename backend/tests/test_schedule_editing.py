@@ -111,6 +111,24 @@ def test_change_that_breaks_a_hard_rule_is_refused_with_the_reason(api, shop, dr
     assert a.employee_id != b.employee_id and a.manual is False
 
 
+def test_moving_a_person_from_a_shift_at_the_same_time_asks_first(api, shop, draft):
+    api.login(shop["manager"])
+    a, b = Assignment.objects.filter(shift__version=draft, shift__date=MON).order_by("shift__slot_key")
+    person = b.employee_id
+    change = {"changes": [{"shift_id": str(a.shift_id), "employee_id": str(person)}]}
+
+    check = api.post(url(draft, "/check"), change).json()
+
+    assert [(c["shift_id"], c["kind"], c["can_remove"]) for c in check["clashes"]] == [(str(b.shift_id), "here", True)]
+    assert "ma w tym czasie inną zmianę: pon. 07.12, 06:00–14:00" in check["clashes"][0]["text"]
+    assert check["ok_if_removed"] and check["problems_if_removed"] == []
+    moved = api.patch(url(draft, "/assignments"), {**change, "remove_clashes": True})
+    assert moved.status_code == 200, moved.json()
+    a.refresh_from_db()
+    b.refresh_from_db()
+    assert a.employee_id == person and b.employee_id is None and b.manual
+
+
 def test_cannot_day_blocks_a_manual_change(api, shop, draft):
     api.login(shop["manager"])
     taken = shift_of(draft, MON)

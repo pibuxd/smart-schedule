@@ -24,9 +24,11 @@ def create_invitation(
         .first()
     )
     if membership is not None:
+        # Someone working in another location of the company can work here too (an extra location); a removed
+        # person can be invited back.
         profile = getattr(membership, "employee_profile", None)
-        if role == Role.EMPLOYEE and profile is not None and profile.removed_at is None:
-            raise HttpError(409, "Ta osoba jest już pracownikiem tej firmy.")
+        if role == Role.EMPLOYEE and profile is not None and profile.removed_at is None and profile.works_in(location):
+            raise HttpError(409, "Ta osoba już pracuje w tym lokalu.")
         if role == Role.MANAGER and (
             membership.role == Role.OWNER
             or (membership.role == Role.MANAGER and membership.locations.filter(pk=location.pk).exists())
@@ -86,8 +88,10 @@ def accept_invitation(invitation_id, user) -> Invitation:
             EmployeeProfile.objects.create(membership=membership, home_location=location)
         elif profile.removed_at is not None:
             restore_employee(profile, location)
-        # Otherwise the person already works in another location of this company and keeps their home location;
-        # work elsewhere stays an exception arranged by the manager.
+        elif not profile.works_in(location):
+            # A person who already works in another location of this company keeps their main location and gets
+            # this one as an extra location (docs/plan.md, section 27).
+            profile.extra_locations.add(location)
 
     changed = []
     if not user.first_name and invitation.first_name:

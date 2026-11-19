@@ -18,7 +18,7 @@ from apps.scheduling.editing import manual_changes
 from apps.scheduling.generation import ACTIVE, cancel_generation, request_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
-from apps.staffing.models import EmployeeProfile, Position, ShiftType
+from apps.staffing.models import EmployeeProfile, Position, ShiftType, works_in_q
 from apps.staffing.shortage import ExperiencedShortOut, experienced_shortage
 from apps.tenancy.context import context_for
 from apps.tenancy.models import Location
@@ -147,7 +147,7 @@ def _missing_availability(period: SchedulePeriod) -> int:
 
     done = AvailabilitySubmission.objects.for_company(period.company_id).filter(period=period).values("employee")
     people = EmployeeProfile.objects.for_company(period.company_id).filter(
-        home_location=period.location_id, is_active=True
+        works_in_q(period.location_id), is_active=True
     )
     return people.exclude(pk__in=done).count()
 
@@ -291,7 +291,7 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
     ctx.require_writable()
     if period.status != SchedulePeriod.Status.COLLECTING:
         raise HttpError(409, "Grafik na ten okres jest już ułożony, więc nie zbieramy dyspozycji.")
-    people = ctx.qs(EmployeeProfile).filter(home_location=period.location, is_active=True)
+    people = ctx.qs(EmployeeProfile).filter(works_in_q(period.location), is_active=True)
     if payload.only_missing:
         done = ctx.qs(AvailabilitySubmission).filter(period=period).values_list("employee_id", flat=True)
         people = people.exclude(pk__in=list(done))
@@ -483,7 +483,7 @@ def my_schedule(request, company_id: UUID):
     published_until = (
         ctx.qs(SchedulePeriod)
         .filter(
-            location_id=profile.home_location_id,
+            location_id__in=profile.location_ids(),
             versions__status=ScheduleVersion.Status.PUBLISHED,
             end__gte=today,
             start__lte=today + timedelta(days=MY_SCHEDULE_DAYS),
@@ -540,6 +540,10 @@ class VersionEmployeeOut(Schema):
     target_hours: float | None
     max_hours: float | None
     active: bool
+    # Hours in published schedules of the person's other locations on the days of this period.
+    hours_elsewhere: float = 0
+    # The person's main location is another one (they work here as an extra location).
+    home_location_name: str | None = None
 
 
 class RuleResultOut(Schema):
@@ -610,6 +614,8 @@ class CandidateOut(Schema):
     # Not possible, but the manager may put the person in anyway ("Wpisz mimo to").
     can_force: bool
     problems: list[str]
+    # Blocked (also) because they have another shift at the same time: the manager may move them here.
+    clash: bool
     notes: list[str]
     wish: Wish
     hours: float
@@ -670,8 +676,20 @@ class ChangeIn(Schema):
 
 class ChangesIn(Schema):
     changes: list[ChangeIn] = Field(min_length=1, max_length=20)
-    # Save even when the change breaks a hard rule ("nie mogę", another shift, a "no exceptions" rule).
+    # Save even when the change breaks a hard rule ("nie mogę", a "no exceptions" rule).
     force: bool = False
+    # The manager confirmed: take the person off their other shifts at the same time (they become holes).
+    remove_clashes: bool = False
+
+
+class ClashOut(Schema):
+    shift_id: UUID
+    employee_id: UUID
+    kind: str  # "here" (this schedule), "draft" or "published" (another location's schedule)
+    location_name: str
+    text: str
+    can_remove: bool
+    reason: str
 
 
 class CheckOut(Schema):
@@ -682,6 +700,14 @@ class CheckOut(Schema):
     warnings: list[str]
     before: ScoresOut
     after: ScoresOut
+    # Other shifts of the person at the same time. `problems_if_removed`: what would still be broken once the person
+    # is taken off them; `ok_if_removed`: the manager may take them off and the change is then fine.
+    clashes: list[ClashOut]
+    problems_if_removed: list[str]
+    ok_if_removed: bool
+    # Not fine once the person is taken off, but only because of problems the manager may overrule: one
+    # confirmation saves it with `remove_clashes` and `force`.
+    can_force_if_removed: bool
 
 
 class ShiftFitOut(Schema):
@@ -819,7 +845,7 @@ def _unmet_requests(loaded) -> list[UnmetRequestOut]:
         result.append(UnmetRequestOut(employee_name=names[measure.employee], text=text, kind=kind, percent_kept=kept))
     for request_id in loaded.report.unscored_requests:
         request = requests[request_id]
-        if problem.employee_by_id[request.employee].home_location != loaded.location_id:
+        if problem.request_location(request) != loaded.location_id:
             continue
         result.append(
             UnmetRequestOut(
@@ -862,6 +888,8 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
         if employee_id:
             shift_count[employee_id] += 1
     location_id = loaded.location_id
+    homes = {e.home_location for e in problem.employees}
+    location_names = {str(pk): name for pk, name in ctx.qs(Location).filter(pk__in=homes).values_list("pk", "name")}
     employees = [
         VersionEmployeeOut(
             id=e.id,
@@ -872,9 +900,13 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
             target_hours=e.target_hours_month,
             max_hours=e.max_hours_month,
             active=e.available,
+            hours_elsewhere=round(
+                sum(problem.minutes_elsewhere(e.id, problem.period_start, problem.period_end).values()) / 60, 2
+            ),
+            home_location_name=None if e.home_location == location_id else location_names.get(e.home_location),
         )
         for e in sorted(problem.employees, key=lambda e: e.name)
-        if e.home_location == location_id or shift_count[e.id]
+        if e.works_in(location_id) or shift_count[e.id]
     ]
     notes = list((version.scores or {}).get("notes", []))
     position_ids = {str(s.position) for s in problem.slots}
@@ -942,6 +974,7 @@ def explain_shift(request, version_id: UUID, shift_id: UUID):
                 possible=c.possible,
                 can_force=c.can_force,
                 problems=list(c.blocked),
+                clash=c.clash,
                 notes=list(c.notes),
                 wish=c.wish.value,
                 hours=c.hours,
@@ -974,7 +1007,26 @@ def _check_out(result) -> CheckOut:
         warnings=result.warnings,
         before=_scores_out(result.before),
         after=_scores_out(result.after),
+        clashes=[
+            ClashOut(
+                shift_id=c.shift_id,
+                employee_id=c.employee,
+                kind=c.kind,
+                location_name=c.location_name,
+                text=c.text,
+                can_remove=c.can_remove,
+                reason=c.reason,
+            )
+            for c in result.clashes
+        ],
+        problems_if_removed=result.problems_if_removed,
+        ok_if_removed=result.ok_if_removed,
+        can_force_if_removed=result.can_force_if_removed,
     )
+
+
+def _managed_ids(ctx) -> set[str]:
+    return {str(pk) for pk in ctx.managed_locations().values_list("pk", flat=True)}
 
 
 @router.post(
@@ -982,11 +1034,12 @@ def _check_out(result) -> CheckOut:
     response={200: CheckOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
-    """Validate a manual change before saving it (e.g. while dragging): new problems and the new scores."""
+    """Validate a manual change before saving it (e.g. while dragging): new problems, the new scores and the other
+    shifts of the person at the same time (the screen asks whether to take the person off them)."""
     from apps.scheduling.editing import check_changes, load_version
 
     ctx, version = _version_context(request, version_id)
-    result, _ = check_changes(load_version(version), _changes(ctx, payload))
+    result, _ = check_changes(load_version(version), _changes(ctx, payload), manages=_managed_ids(ctx))
     return _check_out(result)
 
 
@@ -1001,7 +1054,7 @@ def shift_drop_checks(request, version_id: UUID, shift_id: UUID):
 
     ctx, version = _version_context(request, version_id)
     shift = ctx.get(Shift, pk=shift_id, version=version)
-    results = check_drops(load_version(version), str(shift.pk))
+    results = check_drops(load_version(version), str(shift.pk), manages=_managed_ids(ctx))
     return [DropCheckOut(shift_id=target, **_check_out(result).dict()) for target, result in results.items()]
 
 
@@ -1011,12 +1064,21 @@ def shift_drop_checks(request, version_id: UUID, shift_id: UUID):
 )
 def change_assignments(request, version_id: UUID, payload: ChangesIn):
     """Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks
-    a hard rule is refused with the reasons, unless `force` is set: the manager has the last word."""
+    a hard rule is refused with the reasons, unless `force` is set: the manager has the last word. With
+    `remove_clashes` the person is first taken off their other shifts at the same time."""
     from apps.scheduling.editing import apply_changes
 
     ctx, version = _version_context(request, version_id)
     ctx.require_writable()
-    return _check_out(apply_changes(version, _changes(ctx, payload), ctx.user, force=payload.force))
+    result = apply_changes(
+        version,
+        _changes(ctx, payload),
+        ctx.user,
+        force=payload.force,
+        remove_clashes=payload.remove_clashes,
+        manages=_managed_ids(ctx),
+    )
+    return _check_out(result)
 
 
 @router.get(

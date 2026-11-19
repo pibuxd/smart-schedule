@@ -2226,7 +2226,7 @@
             }
           }
         },
-        "description": "Validate a manual change before saving it (e.g. while dragging): new problems and the new scores.",
+        "description": "Validate a manual change before saving it (e.g. while dragging): new problems, the new scores and the other\nshifts of the person at the same time (the screen asks whether to take the person off them).",
         "tags": [
           "scheduling"
         ],
@@ -2388,7 +2388,7 @@
             }
           }
         },
-        "description": "Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks\na hard rule is refused with the reasons, unless `force` is set: the manager has the last word.",
+        "description": "Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks\na hard rule is refused with the reasons, unless `force` is set: the manager has the last word. With\n`remove_clashes` the person is first taken off their other shifts at the same time.",
         "tags": [
           "scheduling"
         ],
@@ -5055,7 +5055,7 @@
             }
           }
         },
-        "description": "People whose home location this is: active first, then switched off; by surname.",
+        "description": "People who work in this location (as their main location or an extra one): active first, then switched\noff; by surname.",
         "tags": [
           "staffing"
         ],
@@ -5256,6 +5256,23 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -5303,7 +5320,7 @@
             }
           }
         },
-        "description": "Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain\nemployee loses access to the company and can come back only through a new invitation.",
+        "description": "Remove the person from a location (`location_id`, by default their main one). From their only location\nit is for good: shifts in saved schedules and their hours stay; a plain employee loses access to the company\nand can come back only through a new invitation. From one of several locations only that location goes; the\nperson keeps working in the others (docs/plan.md, section 27).",
         "tags": [
           "staffing"
         ],
@@ -9805,6 +9822,22 @@
           "active": {
             "title": "Active",
             "type": "boolean"
+          },
+          "hours_elsewhere": {
+            "default": 0,
+            "title": "Hours Elsewhere",
+            "type": "number"
+          },
+          "home_location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Location Name"
           }
         },
         "required": [
@@ -10206,6 +10239,10 @@
             "title": "Problems",
             "type": "array"
           },
+          "clash": {
+            "title": "Clash",
+            "type": "boolean"
+          },
           "notes": {
             "items": {
               "type": "string"
@@ -10268,6 +10305,7 @@
           "possible",
           "can_force",
           "problems",
+          "clash",
           "notes",
           "wish",
           "hours",
@@ -10390,6 +10428,28 @@
           },
           "after": {
             "$ref": "#/components/schemas/ScoresOut"
+          },
+          "clashes": {
+            "items": {
+              "$ref": "#/components/schemas/ClashOut"
+            },
+            "title": "Clashes",
+            "type": "array"
+          },
+          "problems_if_removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems If Removed",
+            "type": "array"
+          },
+          "ok_if_removed": {
+            "title": "Ok If Removed",
+            "type": "boolean"
+          },
+          "can_force_if_removed": {
+            "title": "Can Force If Removed",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10398,9 +10458,58 @@
           "problems",
           "warnings",
           "before",
-          "after"
+          "after",
+          "clashes",
+          "problems_if_removed",
+          "ok_if_removed",
+          "can_force_if_removed"
         ],
         "title": "CheckOut",
+        "type": "object"
+      },
+      "ClashOut": {
+        "properties": {
+          "shift_id": {
+            "format": "uuid",
+            "title": "Shift Id",
+            "type": "string"
+          },
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "can_remove": {
+            "title": "Can Remove",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "employee_id",
+          "kind",
+          "location_name",
+          "text",
+          "can_remove",
+          "reason"
+        ],
+        "title": "ClashOut",
         "type": "object"
       },
       "ChangeIn": {
@@ -10444,6 +10553,11 @@
             "default": false,
             "title": "Force",
             "type": "boolean"
+          },
+          "remove_clashes": {
+            "default": false,
+            "title": "Remove Clashes",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10482,6 +10596,28 @@
           "after": {
             "$ref": "#/components/schemas/ScoresOut"
           },
+          "clashes": {
+            "items": {
+              "$ref": "#/components/schemas/ClashOut"
+            },
+            "title": "Clashes",
+            "type": "array"
+          },
+          "problems_if_removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems If Removed",
+            "type": "array"
+          },
+          "ok_if_removed": {
+            "title": "Ok If Removed",
+            "type": "boolean"
+          },
+          "can_force_if_removed": {
+            "title": "Can Force If Removed",
+            "type": "boolean"
+          },
           "shift_id": {
             "title": "Shift Id",
             "type": "string"
@@ -10494,6 +10630,10 @@
           "warnings",
           "before",
           "after",
+          "clashes",
+          "problems_if_removed",
+          "ok_if_removed",
+          "can_force_if_removed",
           "shift_id"
         ],
         "title": "DropCheckOut",
@@ -10901,6 +11041,13 @@
               }
             ],
             "title": "Submitted At"
+          },
+          "location_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Location Names",
+            "type": "array"
           }
         },
         "required": [
@@ -10909,7 +11056,8 @@
           "days",
           "locked",
           "period",
-          "submitted_at"
+          "submitted_at",
+          "location_names"
         ],
         "title": "MyCalendarOut",
         "type": "object"
@@ -12145,10 +12293,39 @@
             "title": "Draft Shifts",
             "type": "integer"
           },
+          "home_location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Location Id"
+          },
+          "home_location_name": {
+            "default": "",
+            "title": "Home Location Name",
+            "type": "string"
+          },
+          "is_home": {
+            "default": true,
+            "title": "Is Home",
+            "type": "boolean"
+          },
           "published_shifts": {
             "default": 0,
             "title": "Published Shifts",
             "type": "integer"
+          },
+          "other_location_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Other Location Names",
+            "type": "array"
           }
         },
         "required": [
@@ -12311,6 +12488,18 @@
               }
             ],
             "title": "Is Active"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
           }
         },
         "title": "EmployeeIn",

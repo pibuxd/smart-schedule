@@ -20,6 +20,14 @@ export function dropWords(dragged: VersionShiftOut, target: VersionShiftOut | un
   const what = target.employee_id ? `Zamiana z: ${target.employee_name}` : 'Przeniesienie na zmianę bez obsady'
   if (check === undefined) return { what, verdict: null, bad: false }
   if (check === 'failed') return { what, verdict: 'Nie udało się sprawdzić tej zamiany.', bad: true }
+  // Another shift at the same time: dropping asks whether to take the person off it.
+  const clash = check.clashes.find((c) => !c.can_remove) ?? check.clashes[0]
+  if (clash) {
+    if (!clash.can_remove) return { what, verdict: `${clash.text} ${clash.reason}`, bad: true }
+    if (check.ok_if_removed) return { what, verdict: `${clash.text} Upuść, a zapytamy, czy ją stamtąd zdjąć.`, bad: false }
+    const problem = check.problems_if_removed[0] ?? clash.text
+    return { what, verdict: check.can_force_if_removed ? `${problem} Upuść, jeśli chcesz zapisać mimo to.` : problem, bad: true }
+  }
   if (!check.ok) {
     const problem = check.problems[0] ?? 'Ta zamiana łamie zasady.'
     return { what, verdict: check.can_force ? `${problem} Upuść, jeśli chcesz zapisać mimo to.` : problem, bad: true }
