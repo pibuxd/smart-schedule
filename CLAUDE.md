@@ -105,11 +105,15 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - Do not edit generated files: `frontend/src/api/generated/**`, `frontend/src/routeTree.gen.ts`.
 - Frontend calls the API only through the generated hooks; `src/api/http.ts` adds the session cookie and CSRF token.
 - Every screen has an empty, loading and error state with plain-language Polish text.
+- Keep screens light on text: one short sentence at most under a heading. Longer explanations go in `Section`'s
+  `description` (hidden behind the "i" button; add `alwaysExplain` when the text states a consequence); rarely needed
+  lists use `<Section collapsible>`.
 - UI copy follows the plain-language rules in `docs/plan.md` 15a point 10: short sentences, "ty" form, active verbs, buttons as
   commands that say what happens ("Wyślij kierownikowi"), one word per concept (keep "dyspozycje", "kierownik", "lokal").
 - Visual tokens live in `frontend/src/styles/tokens.css` (Tailwind `@theme`; default colours, font sizes, radii and
   shadows are switched off, so only token classes exist: `bg-paper`, `text-ink`, `text-accent`, `rounded-md`, `text-lg`…).
-  Touch sizes: `min-h-(--touch)` (48 px) and `min-h-(--touch-main)` (56 px). No purple gradients, glass, emoji icons.
+  Control sizes: `min-h-(--touch)` (44 px, 36 px with a mouse) and `min-h-(--touch-main)` (48 px / 40 px). Body text is 16 px;
+  spacing is in `rem`, so it follows the body size. No purple gradients, glass, emoji icons.
   Availability states always use colour + icon + pattern (`.avail-<state>` + `StateIcon`).
 - Frontend layout: screens in `src/features/<area>/`, shadcn/ui-style building blocks in `src/components/ui/`
   (`Button`, `Sheet`, `Loading`/`ErrorState`/`EmptyState`), route files in `src/routes/` only wire them up.
@@ -125,12 +129,19 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
 - Assistant (Claude): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   Its action plan is a proposal: `apps/assistant/services.py` checks names against the location's data and builds
-  action descriptions itself. Informational answers are model-generated from scoped facts, labelled in the UI,
-  and can be forwarded to the manager by the employee. Without `ANTHROPIC_API_KEY` requests go uninterpreted. Tests replace
+  action descriptions itself. The assistant handles only scheduling rules and person preferences. Off-topic or mixed requests are
+  rejected as a whole with application-owned copy; only explanations of rules are allowed. Without `ANTHROPIC_API_KEY` requests go uninterpreted. Tests replace
   `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
-  `apps/assistant/context.py` supplies bounded read-only facts: manager data for that location, employee data only
-  from their own published shifts/availability/requests. A correction may supersede one earlier request in the
+  `apps/assistant/context.py` supplies bounded history for corrections. Current schedules, hours and availability
+  are not sent to the model. Both structured outputs require a rules/out-of-scope classification. A correction may supersede one earlier request in the
   same employee/scope, atomically and only against an unchanged snapshot. `answered` and `superseded` requests
   never reach the solver. An invalid part blocks the entire manager plan; informational replies are not misses.
+  The chat UI slides in from the right (`components/ui/drawer.tsx`): managers open it with
+  `useAssistantDrawer().openChat()` (`features/manager/AssistantDrawer.tsx`, one per location), employees from
+  "Twoje prośby". Approved results live in a separate editable window: `AssistantRulesTable` ("Ustalenia") for
+  managers, the saved list in `RequestsSection` for employees. Never show a chat inline in a page.
+  Agreements belong to one availability period (`apps/assistant/agreements.py`): a new period starts empty and the
+  manager copies chosen ones from the previous period (`copy_from_previous`); nothing carries over by itself. An
+  employee may forward a rejected message to the manager (`unread_reason="rejected"`); it is never scored.
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

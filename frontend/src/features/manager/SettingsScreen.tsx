@@ -138,7 +138,7 @@ function LocationForm({ location }: { location: LocationOut }) {
           max={60}
           value={days}
           onChange={(e) => setDays(e.target.value)}
-          hint="Tak podpowiemy termin przy nowym grafiku. Dokładny dzień ustawisz za każdym razem."
+          hint="Podpowiedź terminu przy nowym grafiku."
         />
         <div className="flex flex-wrap items-center gap-3 md:col-span-2 lg:col-span-4">
           <Button type="submit" size="normal" disabled={update.isPending || readOnly}>
@@ -162,7 +162,8 @@ function ArchiveSection({ location }: { location: LocationOut }) {
   return (
     <Section
       title="Archiwum"
-      description="Lokal, który już nie działa, przenieś do archiwum. Dawne grafiki i godziny zostaną."
+      alwaysExplain
+      description="Dawne grafiki i godziny zostaną. Dla lokalu w archiwum nie ułożysz nowego grafiku."
     >
       <div>
         <Button variant="danger" size="normal" onClick={() => setOpen(true)} disabled={readOnly}>
@@ -499,7 +500,7 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
   }
 
   return (
-    <Section title="Obsada" description="Wpisz, ile osób potrzeba każdego dnia i ile z nich musi mieć doświadczenie na tym stanowisku. Puste pole oznacza zero osób.">
+    <Section title="Obsada" alwaysExplain description="Ile osób potrzeba i ile z nich z doświadczeniem. Puste pole = zero.">
       <form onSubmit={submit} className="grid min-w-0 gap-4">
         {setup.shift_types.flatMap((st) => setup.positions.map((pos) => (
           <fieldset key={cellKey(st.id, pos.id, 0)} disabled={readOnly || save.isPending} className="min-w-0 rounded-md border border-line bg-surface p-3">
@@ -573,7 +574,8 @@ function ClosuresSection({ locationId, setup }: { locationId: string; setup: Loc
   return (
     <Section
       title="Dni zamknięcia"
-      description="Dni, w które lokal jest zamknięty, np. święta albo remont. Tego dnia nikt nie dostanie zmiany w tym lokalu."
+      alwaysExplain
+      description="Np. święta albo remont. Tego dnia nikt nie dostanie tu zmiany."
     >
       {setup.closures.length > 0 ? (
         <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">

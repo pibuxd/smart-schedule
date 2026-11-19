@@ -26,9 +26,14 @@ import type {
 import type {
   AssistantCommandOut,
   CommandIn,
+  CopyAgreementsIn,
   ErrorOut,
   InstructionOrderIn,
-  InstructionsOut
+  InstructionsOut,
+  LocationInstructionsParams,
+  PreviousAgreementsOut,
+  PreviousAgreementsParams,
+  RevertAgreedRuleParams
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -52,6 +57,143 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export type assistantHistoryResponse200 = {
+  data: AssistantCommandOut[]
+  status: 200
+}
+
+export type assistantHistoryResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type assistantHistoryResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type assistantHistoryResponseSuccess = (assistantHistoryResponse200) & {
+  headers: Headers;
+};
+export type assistantHistoryResponseError = (assistantHistoryResponse403 | assistantHistoryResponse404) & {
+  headers: Headers;
+};
+
+export type assistantHistoryResponse = (assistantHistoryResponseSuccess | assistantHistoryResponseError)
+
+export const getAssistantHistoryUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/assistant-commands`
+}
+
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export const assistantHistory = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<assistantHistoryResponse> => {
+
+  return apiFetch<assistantHistoryResponse>(getAssistantHistoryUrl(locationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAssistantHistoryQueryKey = (locationId: string,) => {
+    return [
+    `/api/locations/${locationId}/assistant-commands`
+    ] as const;
+    }
+
+
+export const getAssistantHistoryQueryOptions = <TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAssistantHistoryQueryKey(locationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof assistantHistory>>> = ({ signal }) => assistantHistory(locationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: locationId !== null && locationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AssistantHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof assistantHistory>>>
+export type AssistantHistoryQueryError = ErrorOut
+
+
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof assistantHistory>>,
+          TError,
+          Awaited<ReturnType<typeof assistantHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof assistantHistory>>,
+          TError,
+          Awaited<ReturnType<typeof assistantHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * The current manager's latest 50 messages in this location, oldest first.
+ * @summary Assistant History
+ */
+export function useAssistantHistory<TData = Awaited<ReturnType<typeof assistantHistory>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof assistantHistory>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getAssistantHistoryQueryOptions(locationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
 
 export type sendAssistantCommandResponse201 = {
   data: AssistantCommandOut
@@ -78,6 +220,11 @@ export type sendAssistantCommandResponse404 = {
   status: 404
 }
 
+export type sendAssistantCommandResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type sendAssistantCommandResponse429 = {
   data: ErrorOut
   status: 429
@@ -86,7 +233,7 @@ export type sendAssistantCommandResponse429 = {
 export type sendAssistantCommandResponseSuccess = (sendAssistantCommandResponse201) & {
   headers: Headers;
 };
-export type sendAssistantCommandResponseError = (sendAssistantCommandResponse400 | sendAssistantCommandResponse402 | sendAssistantCommandResponse403 | sendAssistantCommandResponse404 | sendAssistantCommandResponse429) & {
+export type sendAssistantCommandResponseError = (sendAssistantCommandResponse400 | sendAssistantCommandResponse402 | sendAssistantCommandResponse403 | sendAssistantCommandResponse404 | sendAssistantCommandResponse409 | sendAssistantCommandResponse429) & {
   headers: Headers;
 };
 
@@ -561,21 +708,30 @@ export type locationInstructionsResponseError = (locationInstructionsResponse403
 
 export type locationInstructionsResponse = (locationInstructionsResponseSuccess | locationInstructionsResponseError)
 
-export const getLocationInstructionsUrl = (locationId: string,) => {
+export const getLocationInstructionsUrl = (locationId: string,
+    params?: LocationInstructionsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/locations/${locationId}/instructions`
+  return stringifiedParams.length > 0 ? `/api/locations/${locationId}/instructions?${stringifiedParams}` : `/api/locations/${locationId}/instructions`
 }
 
 /**
  * The manager's instructions about people, most important first.
  * @summary Location Instructions
  */
-export const locationInstructions = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<locationInstructionsResponse> => {
+export const locationInstructions = async (locationId: string,
+    params?: LocationInstructionsParams, options?: Parameters<typeof apiFetch>[1]): Promise<locationInstructionsResponse> => {
 
-  return apiFetch<locationInstructionsResponse>(getLocationInstructionsUrl(locationId),
+  return apiFetch<locationInstructionsResponse>(getLocationInstructionsUrl(locationId,params),
   {
     ...options,
     method: 'GET'
@@ -588,23 +744,25 @@ export const locationInstructions = async (locationId: string, options?: Paramet
 
 
 
-export const getLocationInstructionsQueryKey = (locationId: string,) => {
+export const getLocationInstructionsQueryKey = (locationId: string,
+    params?: LocationInstructionsParams,) => {
     return [
-    `/api/locations/${locationId}/instructions`
+    `/api/locations/${locationId}/instructions`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getLocationInstructionsQueryOptions = <TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getLocationInstructionsQueryOptions = <TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getLocationInstructionsQueryKey(locationId);
+  const queryKey =  queryOptions?.queryKey ?? getLocationInstructionsQueryKey(locationId,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof locationInstructions>>> = ({ signal }) => locationInstructions(locationId, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof locationInstructions>>> = ({ signal }) => locationInstructions(locationId,params, { signal, ...requestOptions });
 
 
 
@@ -622,7 +780,8 @@ export type LocationInstructionsQueryError = ErrorOut
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
+ locationId: string,
+    params: undefined |  LocationInstructionsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof locationInstructions>>,
           TError,
@@ -636,7 +795,8 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
+ locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof locationInstructions>>,
           TError,
@@ -650,7 +810,8 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -658,11 +819,12 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
  * @summary Location Instructions
  */
 export function useLocationInstructions<TData = Awaited<ReturnType<typeof locationInstructions>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ locationId: string,
+    params?: LocationInstructionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof locationInstructions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getLocationInstructionsQueryOptions(locationId,options)
+  const queryOptions = getLocationInstructionsQueryOptions(locationId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -674,7 +836,403 @@ export function useLocationInstructions<TData = Awaited<ReturnType<typeof locati
 
 
 
-export type orderLocationInstructionsResponse200 = {
+export type revertAgreedRuleResponse200 = {
+  data: InstructionsOut
+  status: 200
+}
+
+export type revertAgreedRuleResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type revertAgreedRuleResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type revertAgreedRuleResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type revertAgreedRuleResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type revertAgreedRuleResponseSuccess = (revertAgreedRuleResponse200) & {
+  headers: Headers;
+};
+export type revertAgreedRuleResponseError = (revertAgreedRuleResponse402 | revertAgreedRuleResponse403 | revertAgreedRuleResponse404 | revertAgreedRuleResponse409) & {
+  headers: Headers;
+};
+
+export type revertAgreedRuleResponse = (revertAgreedRuleResponseSuccess | revertAgreedRuleResponseError)
+
+export const getRevertAgreedRuleUrl = (locationId: string,
+    code: string,
+    params?: RevertAgreedRuleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locations/${locationId}/agreed-rules/${code}?${stringifiedParams}` : `/api/locations/${locationId}/agreed-rules/${code}`
+}
+
+/**
+ * Undo one rule agreed in the chat: the period uses the location's own setting for it again.
+ * @summary Revert Agreed Rule
+ */
+export const revertAgreedRule = async (locationId: string,
+    code: string,
+    params?: RevertAgreedRuleParams, options?: Parameters<typeof apiFetch>[1]): Promise<revertAgreedRuleResponse> => {
+
+  return apiFetch<revertAgreedRuleResponse>(getRevertAgreedRuleUrl(locationId,code,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevertAgreedRuleMutationKey = () => ['revertAgreedRule'] as const;
+
+export const getRevertAgreedRuleMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertAgreedRule>>, TError,RevertAgreedRuleMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revertAgreedRule>>, TError,RevertAgreedRuleMutationVariables, TContext> => {
+
+const mutationKey = getRevertAgreedRuleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revertAgreedRule>>, RevertAgreedRuleMutationVariables> = (props) => {
+          const {locationId,code,params} = props ?? {};
+
+          return  revertAgreedRule(locationId,code,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevertAgreedRuleMutationResult = NonNullable<Awaited<ReturnType<typeof revertAgreedRule>>>
+
+    export type RevertAgreedRuleMutationError = ErrorOut
+    export type RevertAgreedRuleMutationVariables = {locationId: string;code: string;params?: RevertAgreedRuleParams}
+
+    /**
+ * Undo one rule agreed in the chat: the period uses the location's own setting for it again.
+ * @summary Revert Agreed Rule
+ */
+export const useRevertAgreedRule = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertAgreedRule>>, TError,RevertAgreedRuleMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof revertAgreedRule>>,
+        TError,
+        RevertAgreedRuleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevertAgreedRuleMutationOptions(options), queryClient);
+    }
+    export type previousAgreementsResponse200 = {
+  data: PreviousAgreementsOut
+  status: 200
+}
+
+export type previousAgreementsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type previousAgreementsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type previousAgreementsResponseSuccess = (previousAgreementsResponse200) & {
+  headers: Headers;
+};
+export type previousAgreementsResponseError = (previousAgreementsResponse403 | previousAgreementsResponse404) & {
+  headers: Headers;
+};
+
+export type previousAgreementsResponse = (previousAgreementsResponseSuccess | previousAgreementsResponseError)
+
+export const getPreviousAgreementsUrl = (locationId: string,
+    params?: PreviousAgreementsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locations/${locationId}/agreements/previous?${stringifiedParams}` : `/api/locations/${locationId}/agreements/previous`
+}
+
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export const previousAgreements = async (locationId: string,
+    params?: PreviousAgreementsParams, options?: Parameters<typeof apiFetch>[1]): Promise<previousAgreementsResponse> => {
+
+  return apiFetch<previousAgreementsResponse>(getPreviousAgreementsUrl(locationId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getPreviousAgreementsQueryKey = (locationId: string,
+    params?: PreviousAgreementsParams,) => {
+    return [
+    `/api/locations/${locationId}/agreements/previous`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getPreviousAgreementsQueryOptions = <TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPreviousAgreementsQueryKey(locationId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof previousAgreements>>> = ({ signal }) => previousAgreements(locationId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: locationId !== null && locationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PreviousAgreementsQueryResult = NonNullable<Awaited<ReturnType<typeof previousAgreements>>>
+export type PreviousAgreementsQueryError = ErrorOut
+
+
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params: undefined |  PreviousAgreementsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof previousAgreements>>,
+          TError,
+          Awaited<ReturnType<typeof previousAgreements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof previousAgreements>>,
+          TError,
+          Awaited<ReturnType<typeof previousAgreements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPreviousAgreementsQueryOptions(locationId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type copyPreviousAgreementsResponse200 = {
+  data: InstructionsOut
+  status: 200
+}
+
+export type copyPreviousAgreementsResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type copyPreviousAgreementsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type copyPreviousAgreementsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type copyPreviousAgreementsResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type copyPreviousAgreementsResponseSuccess = (copyPreviousAgreementsResponse200) & {
+  headers: Headers;
+};
+export type copyPreviousAgreementsResponseError = (copyPreviousAgreementsResponse402 | copyPreviousAgreementsResponse403 | copyPreviousAgreementsResponse404 | copyPreviousAgreementsResponse409) & {
+  headers: Headers;
+};
+
+export type copyPreviousAgreementsResponse = (copyPreviousAgreementsResponseSuccess | copyPreviousAgreementsResponseError)
+
+export const getCopyPreviousAgreementsUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/agreements/copy`
+}
+
+/**
+ * Copy the ticked agreements of the previous period into this one (or into the waiting list).
+ * @summary Copy Previous Agreements
+ */
+export const copyPreviousAgreements = async (locationId: string,
+    copyAgreementsIn: CopyAgreementsIn, options?: Parameters<typeof apiFetch>[1]): Promise<copyPreviousAgreementsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<copyPreviousAgreementsResponse>(getCopyPreviousAgreementsUrl(locationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(copyAgreementsIn)
+  }
+);}
+
+
+
+
+
+export const getCopyPreviousAgreementsMutationKey = () => ['copyPreviousAgreements'] as const;
+
+export const getCopyPreviousAgreementsMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyPreviousAgreements>>, TError,CopyPreviousAgreementsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof copyPreviousAgreements>>, TError,CopyPreviousAgreementsMutationVariables, TContext> => {
+
+const mutationKey = getCopyPreviousAgreementsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof copyPreviousAgreements>>, CopyPreviousAgreementsMutationVariables> = (props) => {
+          const {locationId,data} = props ?? {};
+
+          return  copyPreviousAgreements(locationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CopyPreviousAgreementsMutationResult = NonNullable<Awaited<ReturnType<typeof copyPreviousAgreements>>>
+    export type CopyPreviousAgreementsMutationBody = CopyAgreementsIn
+    export type CopyPreviousAgreementsMutationError = ErrorOut
+    export type CopyPreviousAgreementsMutationVariables = {locationId: string;data: CopyAgreementsIn}
+
+    /**
+ * Copy the ticked agreements of the previous period into this one (or into the waiting list).
+ * @summary Copy Previous Agreements
+ */
+export const useCopyPreviousAgreements = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyPreviousAgreements>>, TError,CopyPreviousAgreementsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof copyPreviousAgreements>>,
+        TError,
+        CopyPreviousAgreementsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCopyPreviousAgreementsMutationOptions(options), queryClient);
+    }
+    export type orderLocationInstructionsResponse200 = {
   data: InstructionsOut
   status: 200
 }
@@ -699,10 +1257,15 @@ export type orderLocationInstructionsResponse404 = {
   status: 404
 }
 
+export type orderLocationInstructionsResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type orderLocationInstructionsResponseSuccess = (orderLocationInstructionsResponse200) & {
   headers: Headers;
 };
-export type orderLocationInstructionsResponseError = (orderLocationInstructionsResponse400 | orderLocationInstructionsResponse402 | orderLocationInstructionsResponse403 | orderLocationInstructionsResponse404) & {
+export type orderLocationInstructionsResponseError = (orderLocationInstructionsResponse400 | orderLocationInstructionsResponse402 | orderLocationInstructionsResponse403 | orderLocationInstructionsResponse404 | orderLocationInstructionsResponse409) & {
   headers: Headers;
 };
 
@@ -818,10 +1381,15 @@ export type deleteInstructionResponse404 = {
   status: 404
 }
 
+export type deleteInstructionResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
 export type deleteInstructionResponseSuccess = (deleteInstructionResponse204) & {
   headers: Headers;
 };
-export type deleteInstructionResponseError = (deleteInstructionResponse402 | deleteInstructionResponse403 | deleteInstructionResponse404) & {
+export type deleteInstructionResponseError = (deleteInstructionResponse402 | deleteInstructionResponse403 | deleteInstructionResponse404 | deleteInstructionResponse409) & {
   headers: Headers;
 };
 
