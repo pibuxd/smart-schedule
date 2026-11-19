@@ -145,6 +145,8 @@ class TextRequest(CompanyOwnedModel):
         OFF = "off", "asystent wyłączony"
         UNSURE = "unsure", "asystent nie był pewny"
         FAILED = "failed", "błąd asystenta"
+        # The assistant refused the message as off-topic and the person handed its text to the manager.
+        REJECTED = "rejected", "odrzucona przez asystenta, przekazana"
 
     # Why a request is left to the manager without an interpretation (empty when it was understood or is new).
     unread_reason = models.CharField(

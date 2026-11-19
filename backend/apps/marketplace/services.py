@@ -14,7 +14,9 @@
 - `refresh_after_publish`: a newly published version keeps open offers whose giver still has the shift and
   ends the others.
 
-Full swaps (two people exchange shifts) can be added later on the same history (`AssignmentEvent.Reason.SWAP`).
+- The manager can also act alone ("the manager's own changes" below): `manager_reassign` puts another person on a
+  published shift, `manager_swap` exchanges two people (`AssignmentEvent.Reason.SWAP`), `offer_shift(by_manager=)`
+  looks for someone on an employee's behalf, `manager_close_offer` ends an offer.
 """
 
 from __future__ import annotations
@@ -23,13 +25,14 @@ from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from ninja.errors import HttpError
 
 from apps.marketplace.models import ShiftClaim, ShiftOffer
 from apps.notifications.services import location_manager_ids, notify
 from apps.scheduling.editing import save_scores
-from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion
+from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import build_problem_for_version
 from apps.staffing.models import EmployeeProfile, Position
 from engine.explain import without_pin
@@ -44,16 +47,21 @@ def person_name(profile: EmployeeProfile) -> str:
     return profile.membership.user.full_name or "Pracownik bez imienia"
 
 
-def offer_payload(offer: ShiftOffer) -> dict:
-    shift = offer.assignment.shift
+def shift_payload(shift: Shift) -> dict:
     tz = ZoneInfo(shift.location.timezone)
     return {
-        "offer_id": str(offer.pk),
         "date": shift.date.isoformat(),
         "start_time": f"{shift.start_at.astimezone(tz):%H:%M}",
         "end_time": f"{shift.end_at.astimezone(tz):%H:%M}",
         "position_name": shift.position.name,
         "location_name": shift.location.name,
+    }
+
+
+def offer_payload(offer: ShiftOffer) -> dict:
+    return {
+        "offer_id": str(offer.pk),
+        **shift_payload(offer.assignment.shift),
         "offered_by_name": person_name(offer.offered_by),
     }
 
@@ -88,31 +96,36 @@ class Verdict:
         return not self.problems
 
 
-def _people_with_position(offer: ShiftOffer, among=None):
-    """Active people of the company (but the giver) who have the shift's position, here or by name elsewhere."""
-    shift = offer.assignment.shift
-    names = Position.objects.for_company(offer.company_id).filter(name__iexact=shift.position.name)
+def _people_with_position(assignment: Assignment, among=None, also_location: bool = False):
+    """Active people of the company (but the one who has the shift) with the shift's position, here or by name
+    elsewhere. `also_location`: plus everyone of the shift's own location (for the manager, who may overrule)."""
+    shift = assignment.shift
+    names = Position.objects.for_company(assignment.company_id).filter(name__iexact=shift.position.name)
+    wanted = Q(positions__in=names)
+    if also_location:
+        wanted |= Q(home_location_id=shift.location_id)
     people = (
-        EmployeeProfile.objects.for_company(offer.company_id)
-        .filter(is_active=True, positions__in=names)
-        .exclude(pk=offer.offered_by_id)
+        EmployeeProfile.objects.for_company(assignment.company_id)
+        .filter(wanted, is_active=True)
         .select_related("membership__user", "home_location")
         .distinct()
     )
+    if assignment.employee_id:
+        people = people.exclude(pk=assignment.employee_id)
     if among is not None:
         people = people.filter(pk__in=[p.pk for p in among])
     return list(people)
 
 
-def check_people(offer: ShiftOffer, people=None) -> list[Verdict]:
-    """For each person (default: everyone with the position), the hard problems if they took the offered shift
-    instead of the giver, in the published schedule as it is now. Problems the schedule already had do not count."""
-    candidates = _people_with_position(offer, people)
+def check_assignment(assignment: Assignment, people=None, also_location: bool = False) -> list[Verdict]:
+    """For each person (default: everyone with the position), the hard problems if they took this shift instead
+    of the person who has it, in its schedule as it is now. Problems the schedule already had do not count."""
+    candidates = _people_with_position(assignment, people, also_location)
     if not candidates:
         return []
-    version = offer.assignment.shift.version
+    version = assignment.shift.version
     built, schedule = build_problem_for_version(version, extra_employees=[str(p.pk) for p in candidates])
-    key = offer.assignment.shift.slot_key
+    key = assignment.shift.slot_key
     problem = without_pin(built.problem, key)
     known = {v.message for v in validate(problem, schedule).hard}
     verdicts = []
@@ -121,6 +134,11 @@ def check_people(offer: ShiftOffer, people=None) -> list[Verdict]:
         problems = tuple(v.message for v in report.hard if v.message not in known)
         verdicts.append(Verdict(person, problems))
     return verdicts
+
+
+def check_people(offer: ShiftOffer, people=None) -> list[Verdict]:
+    """Who can take the offered shift instead of the giver (see `check_assignment`)."""
+    return check_assignment(offer.assignment, people)
 
 
 def _require_current(offer: ShiftOffer) -> None:
@@ -139,13 +157,14 @@ def _require_current(offer: ShiftOffer) -> None:
 # ----------------------------------------------------------------------------------------------- the giver
 
 
-def offer_shift(assignment: Assignment, profile: EmployeeProfile) -> tuple[ShiftOffer, int, int]:
+def offer_shift(assignment: Assignment, profile: EmployeeProfile, by_manager=None) -> tuple[ShiftOffer, int, int]:
     """'Oddaj zmianę': returns the offer, how many people were told about it, and how many of them work
-    in the shift's own location (the giver wants to know whether colleagues or people from elsewhere can come)."""
+    in the shift's own location (the giver wants to know whether colleagues or people from elsewhere can come).
+    `by_manager`: the manager's user who looks for someone on the employee's behalf (the employee is told)."""
     with transaction.atomic():
         assignment = (
             Assignment.objects.for_company(profile.company_id)
-            .select_for_update()
+            .select_for_update(of=("self",))
             .select_related("shift__version", "shift__location", "shift__position")
             .get(pk=assignment.pk)
         )
@@ -164,8 +183,11 @@ def offer_shift(assignment: Assignment, profile: EmployeeProfile) -> tuple[Shift
         told = notify(offer.company_id, [p.membership.user_id for p in able], "shift_offered", payload)
         told_here = len({p.membership.user_id for p in able if p.home_location_id == assignment.shift.location_id})
         # The managers know early, especially when nobody can take it (the giver still has to come).
-        managers = set(location_manager_ids(assignment.shift.location)) - {profile.membership.user_id}
+        acting = by_manager.pk if by_manager is not None else profile.membership.user_id
+        managers = set(location_manager_ids(assignment.shift.location)) - {acting}
         notify(offer.company_id, managers, "offer_made", {**payload, "able": told})
+        if by_manager is not None and profile.membership.user_id != by_manager.pk:
+            notify(offer.company_id, [profile.membership.user_id], "offer_opened_for_you", {**payload, "able": told})
     return offer, told, told_here
 
 
@@ -264,14 +286,61 @@ def withdraw_claim(claim: ShiftClaim, profile: EmployeeProfile) -> ShiftClaim:
 # ----------------------------------------------------------------------------------------------- the manager
 
 
-def _move(assignment: Assignment, to: EmployeeProfile) -> None:
+def _move(assignment: Assignment, to: EmployeeProfile, pinned: bool = True) -> None:
     assignment.employee = to
     assignment.borrowed = to.home_location_id != assignment.shift.location_id
     assignment.manual = True
     # The new person was agreed on: arranging the period again keeps them there.
-    assignment.pinned = True
-    assignment.forced = False  # the taker was checked by the validator; an earlier override was about the giver
+    assignment.pinned = pinned
+    assignment.forced = False  # an earlier override was about the person who had the shift
     assignment.save(update_fields=["employee", "borrowed", "manual", "pinned", "forced"])
+
+
+def _transfer(published: Assignment, taker: EmployeeProfile, reason: str, by, now, pinned: bool = True) -> None:
+    """Move a published shift (and the newest draft's copy, when it still has the same person) to `taker`, with
+    a history row. The caller holds the locks and saves the scores afterwards (`_rescore`)."""
+    shift = published.shift
+    before = published.employee_id
+    _move(published, taker, pinned)
+    newest = (
+        ScheduleVersion.objects.for_company(published.company_id)
+        .filter(period_id=shift.version.period_id)
+        .order_by("-number")
+        .first()
+    )
+    if newest is not None and newest.status == ScheduleVersion.Status.DRAFT:
+        draft_row = (
+            Assignment.objects.for_company(published.company_id)
+            .filter(shift__version=newest, shift__slot_key=shift.slot_key, employee_id=before)
+            .select_related("shift")
+            .first()
+        )
+        if draft_row is not None:
+            _move(draft_row, taker, pinned)
+    AssignmentEvent.objects.create(
+        company_id=published.company_id,
+        location_id=shift.location_id,
+        period_id=shift.version.period_id,
+        slot_key=shift.slot_key,
+        from_employee_id=before,
+        to_employee=taker,
+        reason=reason,
+        by=by,
+        at=now,
+    )
+
+
+def _rescore(version: ScheduleVersion) -> None:
+    built, schedule = build_problem_for_version(version)
+    report = validate(built.problem, schedule)
+    save_scores(version, score(built.problem, report, location=str(version.period.location_id)))
+
+
+def _tell_home_managers(taker: EmployeeProfile, shift: Shift, payload: dict, auto: bool) -> None:
+    """The taker's own manager learns that they work elsewhere that day."""
+    if taker.home_location_id != shift.location_id:
+        home = set(location_manager_ids(taker.home_location)) - set(location_manager_ids(shift.location))
+        notify(taker.company_id, home, "borrowed", {**payload, "auto": auto})
 
 
 def _hand_over(offer: ShiftOffer, claim: ShiftClaim, taker: EmployeeProfile, by, auto: bool) -> None:
@@ -279,38 +348,9 @@ def _hand_over(offer: ShiftOffer, claim: ShiftClaim, taker: EmployeeProfile, by,
     offer and tell everyone. The caller holds the locks and has checked the taker with the validator.
     `auto`: the location's rule approved it ("bez zatwierdzania"); `by` is then the taker's own user."""
     now = timezone.now()
-    published = offer.assignment
-    shift = published.shift
-    _move(published, taker)
-    newest = (
-        ScheduleVersion.objects.for_company(offer.company_id)
-        .filter(period_id=shift.version.period_id)
-        .order_by("-number")
-        .first()
-    )
-    if newest is not None and newest.status == ScheduleVersion.Status.DRAFT:
-        draft_row = (
-            Assignment.objects.for_company(offer.company_id)
-            .filter(shift__version=newest, shift__slot_key=shift.slot_key, employee_id=offer.offered_by_id)
-            .select_related("shift")
-            .first()
-        )
-        if draft_row is not None:
-            _move(draft_row, taker)
-    AssignmentEvent.objects.create(
-        company_id=offer.company_id,
-        location_id=shift.location_id,
-        period_id=shift.version.period_id,
-        slot_key=shift.slot_key,
-        from_employee_id=offer.offered_by_id,
-        to_employee=taker,
-        reason=AssignmentEvent.Reason.OFFER,
-        by=by,
-        at=now,
-    )
-    built, schedule = build_problem_for_version(shift.version)
-    report = validate(built.problem, schedule)
-    save_scores(shift.version, score(built.problem, report, location=str(shift.location_id)))
+    shift = offer.assignment.shift
+    _transfer(offer.assignment, taker, AssignmentEvent.Reason.OFFER, by, now)
+    _rescore(shift.version)
 
     claim.status = ShiftClaim.Status.APPROVED
     claim.auto_approved = auto
@@ -334,10 +374,7 @@ def _hand_over(offer: ShiftOffer, claim: ShiftClaim, taker: EmployeeProfile, by,
         notify(offer.company_id, [taker.membership.user_id], "claim_approved", payload)
         notify(offer.company_id, [offer.offered_by.membership.user_id], "offer_taken", payload)
     notify(offer.company_id, other_users, "claim_rejected", payload)
-    if taker.home_location_id != shift.location_id:
-        # The taker's own manager learns that they work elsewhere that day.
-        home = set(location_manager_ids(taker.home_location)) - managers
-        notify(offer.company_id, home, "borrowed", {**payload, "auto": auto})
+    _tell_home_managers(taker, shift, payload, auto)
 
 
 def approve_claim(claim: ShiftClaim, user) -> ShiftOffer:
@@ -383,6 +420,168 @@ def reject_claim(claim: ShiftClaim, user) -> ShiftClaim:
         )
         notify(claim.company_id, [user_id], "claim_rejected", offer_payload(offer))
     return claim
+
+
+# ----------------------------------------------------------------------------------- the manager's own changes
+#
+# The manager decides alone, without anyone's "Biorę": puts another person on a published shift, swaps two
+# people, looks for someone on an employee's behalf, or ends an offer. The validator still checks every change,
+# but the manager may overrule it (`force`): the change is then saved unpinned, because a pinned shift that
+# breaks a hard rule would make arranging the period again impossible. Shifts that have already started can be
+# changed too, so that the schedule (and the hours counted from it) says who really worked.
+
+NOT_PUBLISHED = "Tak można zmieniać tylko opublikowany grafik. Szkic popraw w „Grafik”."
+
+
+def _locked_published(company_id, assignment_ids) -> list[Assignment]:
+    """Published assignments locked for a change, in the order given, with their period locked like an edit."""
+    rows = {
+        a.pk: a
+        for a in Assignment.objects.for_company(company_id)
+        .select_for_update(of=("self",))
+        .select_related("shift__version__period", "shift__location", "shift__position", "shift__shift_type")
+        .filter(pk__in=assignment_ids)
+        .order_by("pk")
+    }
+    found = [rows[pk] for pk in assignment_ids if pk in rows]
+    if len(found) != len(assignment_ids):
+        raise HttpError(404, "Nie znaleziono.")
+    for period_id in sorted({a.shift.version.period_id for a in found}):
+        SchedulePeriod.objects.select_for_update().filter(pk=period_id).first()
+    if any(a.shift.version.status != ScheduleVersion.Status.PUBLISHED for a in found):
+        raise HttpError(409, NOT_PUBLISHED)
+    return found
+
+
+def _started(shift: Shift) -> bool:
+    return shift.start_at <= timezone.now()
+
+
+def _end_offer_after_change(assignment: Assignment, taker: EmployeeProfile | None, by, now) -> None:
+    """The manager changed who has an offered shift: the offer is over. When the new person had said "Biorę"
+    (or the manager picked them for an offered shift) it ends as approved, otherwise as out of date."""
+    offer = offer_query(assignment.company_id).filter(assignment=assignment, status__in=ACTIVE).first()
+    if offer is None:
+        return
+    pending = offer.claims.filter(status=ShiftClaim.Status.PENDING)
+    if taker is not None:
+        claim = offer.claims.filter(employee=taker).first() or ShiftClaim(offer=offer, employee=taker)
+        claim.status = ShiftClaim.Status.APPROVED
+        claim.decided_by = by
+        claim.decided_at = now
+        claim.save()
+        pending = pending.exclude(pk=claim.pk)
+        offer.status = ShiftOffer.Status.APPROVED
+    else:
+        offer.status = ShiftOffer.Status.EXPIRED
+    users = list(pending.values_list("employee__membership__user_id", flat=True))
+    pending.update(status=ShiftClaim.Status.REJECTED, decided_by=by, decided_at=now)
+    offer.decided_at = now
+    offer.save(update_fields=["status", "decided_at"])
+    notify(offer.company_id, users, "claim_rejected", offer_payload(offer))
+
+
+def manager_candidates(assignment: Assignment) -> list[Verdict]:
+    """Everyone the manager can put on this shift: people with the position anywhere in the company and everyone
+    of the shift's location, each with the hard problems the change would add (the manager may overrule them)."""
+    return check_assignment(assignment, also_location=True)
+
+
+def manager_reassign(assignment: Assignment, taker: EmployeeProfile, user, force: bool = False) -> Assignment:
+    """The manager puts `taker` on a published shift instead of the person who has it (or on an empty one)."""
+    with transaction.atomic():
+        (assignment,) = _locked_published(assignment.company_id, [assignment.pk])
+        taker = (
+            EmployeeProfile.objects.for_company(assignment.company_id)
+            .select_for_update(of=("self",))
+            .select_related("membership__user", "home_location")
+            .filter(pk=taker.pk, is_active=True)
+            .first()
+        )
+        if taker is None:
+            raise HttpError(409, "Ta osoba nie pracuje już w firmie.")
+        if assignment.employee_id == taker.pk:
+            raise HttpError(409, "Ta osoba już ma tę zmianę.")
+        verdicts = check_assignment(assignment, [taker], also_location=True)
+        problems = verdicts[0].problems if verdicts else ("Ta osoba nie pracuje na tym stanowisku.",)
+        if problems and not force:
+            raise HttpError(409, "Tej osoby nie można wpisać na tę zmianę: " + " ".join(problems))
+        now = timezone.now()
+        shift = assignment.shift
+        before = assignment.employee
+        _transfer(assignment, taker, AssignmentEvent.Reason.MANUAL, user, now, pinned=not problems)
+        _rescore(shift.version)
+        _end_offer_after_change(assignment, taker, user, now)
+
+        payload = {**shift_payload(shift), "claimed_by_name": person_name(taker), "past": _started(shift)}
+        notify(assignment.company_id, {taker.membership.user_id} - {user.pk}, "shift_assigned", payload)
+        if before is not None:
+            notify(assignment.company_id, {before.membership.user_id} - {user.pk}, "shift_unassigned", payload)
+        _tell_home_managers(taker, shift, payload, auto=False)
+    return assignment
+
+
+def swap_problems(first: Assignment, second: Assignment) -> tuple[str, ...]:
+    """Hard problems that swapping the two people would add to their published schedule (empty: fine)."""
+    if first.pk == second.pk:
+        raise HttpError(409, "Wybierz dwie różne zmiany.")
+    if first.shift.version_id != second.shift.version_id:
+        raise HttpError(409, "Zamienić można dwie zmiany z tego samego grafiku (ten sam lokal i okres).")
+    if first.employee_id is None or second.employee_id is None:
+        raise HttpError(409, "Zamienić można tylko zmiany, na których ktoś jest.")
+    if first.employee_id == second.employee_id:
+        raise HttpError(409, "Obie zmiany ma ta sama osoba.")
+    built, schedule = build_problem_for_version(first.shift.version)
+    keys = (first.shift.slot_key, second.shift.slot_key)
+    problem = without_pin(without_pin(built.problem, keys[0]), keys[1])
+    known = {v.message for v in validate(problem, schedule).hard}
+    swapped = {**schedule, keys[0]: str(second.employee_id), keys[1]: str(first.employee_id)}
+    return tuple(v.message for v in validate(problem, swapped).hard if v.message not in known)
+
+
+def manager_swap(first: Assignment, second: Assignment, user, force: bool = False) -> None:
+    """Two people exchange their published shifts (history reason "swap"); both are told."""
+    with transaction.atomic():
+        first, second = _locked_published(first.company_id, [first.pk, second.pk])
+        problems = swap_problems(first, second)
+        if problems and not force:
+            raise HttpError(409, "Tej zamiany nie można zrobić: " + " ".join(problems))
+        now = timezone.now()
+        people = {
+            p.pk: p
+            for p in EmployeeProfile.objects.for_company(first.company_id)
+            .select_related("membership__user", "home_location")
+            .filter(pk__in=[first.employee_id, second.employee_id])
+        }
+        one, two = people[first.employee_id], people[second.employee_id]
+        _transfer(first, two, AssignmentEvent.Reason.SWAP, user, now, pinned=not problems)
+        _transfer(second, one, AssignmentEvent.Reason.SWAP, user, now, pinned=not problems)
+        _rescore(first.shift.version)
+        for row in (first, second):
+            _end_offer_after_change(row, None, user, now)
+        for person, gave, got, other in ((one, first, second, two), (two, second, first, one)):
+            payload = {**shift_payload(got.shift), "given": shift_payload(gave.shift), "with_name": person_name(other)}
+            notify(first.company_id, {person.membership.user_id} - {user.pk}, "shift_swapped", payload)
+
+
+def manager_close_offer(offer: ShiftOffer, user) -> ShiftOffer:
+    """The manager ends an offer: the shift stays with the giver, the volunteers are turned down."""
+    with transaction.atomic():
+        offer = offer_query(offer.company_id).select_for_update(of=("self",)).get(pk=offer.pk)
+        if offer.status not in ACTIVE:
+            raise HttpError(409, "To oddanie jest już zakończone.")
+        now = timezone.now()
+        pending = offer.claims.filter(status=ShiftClaim.Status.PENDING)
+        users = list(pending.values_list("employee__membership__user_id", flat=True))
+        pending.update(status=ShiftClaim.Status.REJECTED, decided_by=user, decided_at=now)
+        offer.status = ShiftOffer.Status.REJECTED
+        offer.decided_at = now
+        offer.save(update_fields=["status", "decided_at"])
+        payload = offer_payload(offer)
+        # Not a refusal of the volunteer: nobody takes the shift, the giver stays on it.
+        notify(offer.company_id, users, "offer_cancelled", payload)
+        notify(offer.company_id, {offer.offered_by.membership.user_id} - {user.pk}, "offer_closed", payload)
+    return offer
 
 
 # ----------------------------------------------------------------------------------------------- publishing

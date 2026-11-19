@@ -8,6 +8,8 @@
   Only the newest version of a period can be edited, and only while it is a draft. Days that have passed can be
   corrected too (someone swapped outside the app), so hours are counted as they were worked; such a
   correction is pinned, because arranging again must not undo what really happened.
+- `add_seat` / `remove_seat`: one more or one fewer place on a shift of one day. The same number is saved as that
+  date's staffing (`apps.staffing.day_staffing`), so arranging the schedule again keeps it.
 - `start_draft`: editing a published schedule starts a new draft copy (publishing makes it the published one).
 - `publish`: the draft becomes the published version, the previous one is kept as history, the history of
   assignments (`AssignmentEvent`) gets one row for every slot whose person changed, open offers of given-away
@@ -19,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
@@ -26,12 +29,28 @@ from ninja.errors import HttpError
 
 from apps.notifications.models import Notification
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
-from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version
-from apps.staffing.models import EmployeeProfile
+from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version, slot_key
+from apps.staffing import day_staffing
+from apps.staffing.models import EmployeeProfile, LocationClosure, Position, ShiftType
 from engine.explain import new_soft_violations, new_waived_violations, returned_violations, without_pin
-from engine.problem import Problem
+from engine.problem import Problem, shift_bounds
 from engine.scoring import Scores, score
-from engine.validator import ValidationReport, validate
+from engine.validator import Code, ValidationReport, Violation, validate
+
+# Hard rules the manager may break by hand (docs/plan.md, section 24, point 7): the generator always keeps them,
+# but a manual change, a removed place or publishing is not refused; the manager sees them as a warning.
+MANAGER_MAY_BREAK = frozenset({Code.EXPERIENCE})
+
+
+def blocking(violations) -> list[Violation]:
+    """Hard problems that stop a manual change or publishing."""
+    return [v for v in violations if v.code not in MANAGER_MAY_BREAK]
+
+
+def accepted(violations) -> list[Violation]:
+    """Hard problems the manager is allowed to keep (shown as a warning, never refused)."""
+    return [v for v in violations if v.code in MANAGER_MAY_BREAK]
+
 
 NOT_EDITABLE = "Ten grafik jest już opublikowany albo jest starszą wersją. Zacznij poprawki od najnowszej wersji."
 
@@ -112,15 +131,12 @@ def _resolve(loaded: LoadedVersion, changes: Mapping[str, str | None]) -> dict[s
     return result
 
 
-def check_changes(
-    loaded: LoadedVersion, changes: Mapping[str, str | None]
-) -> tuple[CheckResult, dict[str, str | None]]:
-    """Validate the version with `changes` (shift id -> employee id or None) applied; nothing is saved."""
-    by_key = _resolve(loaded, changes)
+def _check(loaded: LoadedVersion, by_key: Mapping[str, str | None], before: ValidationReport | None = None):
+    """The result of putting `by_key` (slot key -> employee id or None) into the schedule of `loaded`."""
     problem = loaded.problem
     for key in by_key:  # a manual change moves the pin to the new person
         problem = without_pin(problem, key)
-    before = validate(problem, loaded.schedule)
+    before = before or validate(problem, loaded.schedule)
     after_schedule = {**loaded.schedule, **by_key}
     # An earlier override was about the person who held the slot; the new one needs the manager's word again.
     standing = {k: v for k, v in problem.forced.items() if by_key.get(k, v) == v}
@@ -129,10 +145,10 @@ def check_changes(
     known = {v.message for v in before.hard}
     receivers = {e for k, e in by_key.items() if e is not None and loaded.schedule.get(k) != e}
     known |= returned_violations(before, after, receivers)
-    new = [v for v in after.hard if v.message not in known]
+    new = [v for v in blocking(after.hard) if v.message not in known]
     # An earlier override does not cover this change: what it would newly waive needs the manager's word too.
-    new += new_waived_violations(before, after, receivers)
-    warnings = new_soft_violations(before, after)
+    new += blocking(new_waived_violations(before, after, receivers))
+    warnings = [v.message for v in accepted(after.hard) if v.message not in known] + new_soft_violations(before, after)
 
     forced: frozenset[str] = frozenset()
     after_forced = None
@@ -145,11 +161,11 @@ def check_changes(
                 continue
             trial = replace(problem, forced={**standing, **{k: by_key[k] for k in keys}})
             report = validate(trial, after_schedule)
-            if all(v.message in known for v in report.hard):
+            if all(v.message in known for v in blocking(report.hard)):
                 forced = frozenset(keys)
                 after_forced = score(trial, report, location=loaded.location_id)
                 break
-    result = CheckResult(
+    return CheckResult(
         ok=not new,
         problems=[v.message for v in new],
         warnings=warnings[:5],
@@ -159,7 +175,46 @@ def check_changes(
         forced=forced,
         after_forced=after_forced,
     )
-    return result, by_key
+
+
+def check_changes(
+    loaded: LoadedVersion, changes: Mapping[str, str | None]
+) -> tuple[CheckResult, dict[str, str | None]]:
+    """Validate the version with `changes` (shift id -> employee id or None) applied; nothing is saved."""
+    by_key = _resolve(loaded, changes)
+    return _check(loaded, by_key), by_key
+
+
+def check_drops(loaded: LoadedVersion, shift_id: str) -> dict[str, CheckResult]:
+    """What dropping the person of `shift_id` on every other shift would do (a swap, or a move onto an empty
+    shift), by the id of the shift dropped on. One answer for the whole drag, so the screen has the result of
+    each drop before the manager gets there. Shifts of the same person are left out; days that have passed are
+    in, because a draft can correct them. One validator run per shift (about 5 ms each on a month of one
+    location); nothing is saved."""
+    shifts = {
+        str(pk): (key, day)
+        for pk, key, day in Shift.objects.for_company(loaded.version.company_id)
+        .filter(version=loaded.version)
+        .values_list("pk", "slot_key", "date")
+    }
+    if shift_id not in shifts:
+        raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
+    source, _ = shifts[shift_id]
+    person = loaded.schedule.get(source)
+    if person is None:
+        return {}
+    # Before the drop only pins differ between targets, and a pin never breaks the schedule it was read from,
+    # so one "before" serves every target that is not pinned itself.
+    pinned = loaded.problem.pinned
+    before = validate(without_pin(loaded.problem, source), loaded.schedule)
+    results = {}
+    for target_id, (target, _) in shifts.items():
+        other = loaded.schedule.get(target)
+        if other == person:
+            continue
+        by_key = {target: person, source: other}
+        results[target_id] = _check(loaded, by_key, None if target in pinned else before)
+    return results
 
 
 def apply_changes(
@@ -221,6 +276,107 @@ def set_pinned(version: ScheduleVersion, shift_id: str, pinned: bool) -> Assignm
     return assignment
 
 
+# ----------------------------------------------------------------------------------------------- places on a shift
+
+DAY_PASSED = "Ten dzień już minął, więc jego obsady nie można zmienić."
+
+
+def _seats(version: ScheduleVersion, prefix: str) -> list[Shift]:
+    """The places of one shift and position on one day, in the order of their place numbers."""
+    rows = Shift.objects.for_company(version.company_id).filter(version=version, slot_key__startswith=prefix)
+    return sorted(rows.select_related("assignment"), key=lambda s: int(s.slot_key.rsplit("/", 1)[1]))
+
+
+def _mark_experienced(version, location, day, shift_type, position, seats: list[Shift]) -> None:
+    """The first N places of the day need an experienced person, N = the date's staffing (as arranging numbers them)."""
+    need = day_staffing.day_experienced(location, day, shift_type, position)
+    for number, seat in enumerate(seats, start=1):
+        wanted = number <= need
+        if seat.needs_experienced != wanted:
+            seat.needs_experienced = wanted
+            seat.save(update_fields=["needs_experienced"])
+
+
+def add_seat(version: ScheduleVersion, day: date, shift_type: ShiftType, position: Position) -> Shift:
+    """One more place (empty) on this shift and position that day, in the draft and in the date's staffing."""
+    with transaction.atomic():
+        version = ScheduleVersion.objects.select_for_update().select_related("period__location").get(pk=version.pk)
+        if not is_editable(version):
+            raise HttpError(409, NOT_EDITABLE)
+        period, location = version.period, version.period.location
+        if not period.start <= day <= period.end:
+            raise HttpError(400, "Ten dzień jest poza okresem tego grafiku.")
+        if day < timezone.localdate():
+            raise HttpError(409, DAY_PASSED)
+        if LocationClosure.objects.for_company(version.company_id).filter(location=location, date=day).exists():
+            raise HttpError(409, "Lokal jest tego dnia zamknięty. Najpierw usuń ten dzień z dni zamknięcia.")
+        seats = _seats(version, slot_key(day, str(shift_type.pk), str(position.pk), 0)[:-1])
+        if seats:
+            start_at, end_at = seats[0].start_at, seats[0].end_at
+        else:
+            start, end = day_staffing.day_hours(location, day, shift_type, position)
+            if start is None or end is None:
+                raise HttpError(
+                    409,
+                    f"Zmiana „{shift_type.name}” ma dowolne godziny. Ustaw je na ten dzień w ustawieniach lokalu, "
+                    "w kalendarzu obsady.",
+                )
+            start_at, end_at = shift_bounds(day, start, end, ZoneInfo(location.timezone))
+        place = int(seats[-1].slot_key.rsplit("/", 1)[1]) + 1 if seats else 1
+        shift = Shift.objects.create(
+            company_id=version.company_id,
+            version=version,
+            location=location,
+            date=day,
+            shift_type=shift_type,
+            position=position,
+            start_at=start_at,
+            end_at=end_at,
+            slot_key=slot_key(day, str(shift_type.pk), str(position.pk), place),
+        )
+        Assignment.objects.create(company_id=version.company_id, shift=shift)
+        day_staffing.set_day_count(location, day, shift_type, position, len(seats) + 1)
+        _mark_experienced(version, location, day, shift_type, position, [*seats, shift])
+        save_scores(version, load_version(version).scores)
+    return shift
+
+
+def remove_seat(version: ScheduleVersion, shift_id: str) -> None:
+    """One place fewer on this shift that day; whoever had this place loses it. The other places keep their people
+    and their numbers stay 1…n, as arranging the schedule again would number them. Refused (409) when the
+    schedule would break a hard rule it kept before (e.g. a beginner left without an experienced person)."""
+    with transaction.atomic():
+        version = ScheduleVersion.objects.select_for_update().select_related("period__location").get(pk=version.pk)
+        if not is_editable(version):
+            raise HttpError(409, NOT_EDITABLE)
+        shift = Shift.objects.for_company(version.company_id).filter(version=version, pk=shift_id).first()
+        if shift is None:
+            raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
+        if shift.date < timezone.localdate():
+            raise HttpError(409, DAY_PASSED)
+        known = {v.message for v in load_version(version).report.hard}
+        seats = _seats(version, shift.slot_key.rsplit("/", 1)[0] + "/")
+        last = seats[-1]
+        if last.pk != shift.pk:
+            kept, removed = last.assignment, next(s for s in seats if s.pk == shift.pk).assignment
+            for name in ("employee_id", "pinned", "manual", "borrowed"):
+                setattr(removed, name, getattr(kept, name))
+            removed.save(update_fields=["employee", "pinned", "manual", "borrowed"])
+        last.delete()
+        if shift.shift_type is not None:  # a deleted shift type has no staffing to change
+            day_staffing.set_day_count(
+                version.period.location, shift.date, shift.shift_type, shift.position, len(seats) - 1
+            )
+            _mark_experienced(
+                version, version.period.location, shift.date, shift.shift_type, shift.position, seats[:-1]
+            )
+        loaded = load_version(version)
+        problems = [v.message for v in blocking(loaded.report.hard) if v.message not in known]
+        if problems:  # like any manual change; raising here undoes the removal
+            raise HttpError(409, "Tego miejsca nie można usunąć: " + " ".join(problems))
+        save_scores(version, loaded.scores)
+
+
 # ----------------------------------------------------------------------------------------------- drafts, publishing
 
 
@@ -262,6 +418,7 @@ def start_draft(version: ScheduleVersion, user) -> ScheduleVersion:
                 start_at=s.start_at,
                 end_at=s.end_at,
                 slot_key=s.slot_key,
+                needs_experienced=s.needs_experienced,
             )
             for s in shifts
         )
@@ -296,8 +453,8 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
         if not is_editable(version):
             raise HttpError(409, "Opublikować można tylko najnowszy szkic grafiku.")
         loaded = load_version(version)
-        if not loaded.report.ok:
-            reasons = " ".join(v.message for v in loaded.report.hard[:5])
+        if blocking(loaded.report.hard):
+            reasons = " ".join(v.message for v in blocking(loaded.report.hard)[:5])
             raise HttpError(409, "Grafiku nie można opublikować, bo łamie reguły: " + reasons)
         period = version.period
         previous = (
@@ -314,6 +471,9 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
         version.published_at = timezone.now()
         save_scores(version, loaded.scores)
         version.save(update_fields=["status", "published_at"])
+        from apps.assistant.agreements import consume
+
+        consume(version.period, version.published_at)
         period.status = SchedulePeriod.Status.PUBLISHED
         period.save(update_fields=["status"])
         from apps.marketplace.services import refresh_after_publish
@@ -334,7 +494,9 @@ def _record_history(version: ScheduleVersion, previous: ScheduleVersion | None, 
             .values_list("shift__slot_key", "employee")
         }
     events = []
-    rows = Assignment.objects.for_company(version.company_id).filter(shift__version=version).select_related("shift")
+    rows = list(
+        Assignment.objects.for_company(version.company_id).filter(shift__version=version).select_related("shift")
+    )
     for assignment in rows:
         key = assignment.shift.slot_key
         now = str(assignment.employee_id) if assignment.employee_id else None
@@ -353,6 +515,21 @@ def _record_history(version: ScheduleVersion, previous: ScheduleVersion | None, 
                 by=user,
             )
         )
+    kept = {assignment.shift.slot_key for assignment in rows}
+    for key, was in before.items():  # a place that is gone (removed by hand, or the staffing got smaller)
+        if was is not None and key not in kept:
+            events.append(
+                AssignmentEvent(
+                    company_id=version.company_id,
+                    location_id=version.period.location_id,
+                    period_id=version.period_id,
+                    slot_key=key,
+                    from_employee_id=was,
+                    to_employee_id=None,
+                    reason=AssignmentEvent.Reason.MANUAL,
+                    by=user,
+                )
+            )
     AssignmentEvent.objects.bulk_create(events)
 
 
@@ -377,8 +554,8 @@ def changed_people(loaded: LoadedVersion) -> list[str]:
         .values_list("shift__slot_key", "employee")
     }
     affected: set[str] = set()
-    for key, now in loaded.schedule.items():
-        was = before.get(key)
+    for key in before.keys() | loaded.schedule.keys():  # also places that are gone from the draft
+        now, was = loaded.schedule.get(key), before.get(key)
         if now != was:
             affected.update(e for e in (now, was) if e)
     names = {e.id: e.name for e in loaded.problem.employees}
@@ -421,13 +598,18 @@ def manual_changes(version: ScheduleVersion | None) -> int:
 __all__ = [
     "CheckResult",
     "LoadedVersion",
+    "accepted",
+    "add_seat",
     "apply_changes",
+    "blocking",
     "check_changes",
+    "check_drops",
     "is_editable",
     "latest_version",
     "load_version",
     "manual_changes",
     "publish",
+    "remove_seat",
     "set_pinned",
     "start_draft",
 ]

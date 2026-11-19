@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { CalendarPlus } from 'lucide-react'
+import { CalendarPlus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import {
@@ -15,13 +15,21 @@ import type {
   ManagerRequestOutManagerPriority,
   PeriodOut,
 } from '../../api/generated/model'
-import { useCreatePeriod, useLocationPeriods, useUpdatePeriod } from '../../api/generated/scheduling/scheduling'
+import {
+  getLocationPeriodsQueryKey,
+  useCreatePeriod,
+  useDeletePeriod,
+  useLocationPeriods,
+  useUpdatePeriod,
+} from '../../api/generated/scheduling/scheduling'
 import { useLocationDetail } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
+import { ConfirmSheet } from '../../components/ui/confirm'
 import { Section, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { AssistantRulesTable } from './AssistantRulesTable'
 import { AskAvailabilityButton } from './AskAvailabilityButton'
 import { AvailabilityGrid, GridLegend } from './AvailabilityGrid'
 import { useManager } from './ManagerContext'
@@ -77,8 +85,7 @@ export function AvailabilityOverviewScreen({ locationId, today = new Date() }: {
       ) : (
         <EmptyState title="Nie ma jeszcze okresu grafiku">
           <p className="m-0">
-            Ustal, na jakie dni układasz grafik i do kiedy pracownicy wpisują dyspozycje. Potem poproś ich o to jednym
-            przyciskiem.
+            Ustal daty grafiku i termin dyspozycji.
           </p>
           <Button onClick={() => setAdding(true)}>Ustal daty grafiku</Button>
         </EmptyState>
@@ -115,6 +122,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
             <Tag tone={collecting ? 'accent' : 'muted'}>{PERIOD_STATUS[period.status]}</Tag>
           </span>
           <DeadlineEditor period={period} today={today} disabled={readOnly || !collecting} />
+          {period.status !== 'published' && <DeletePeriod period={period} disabled={readOnly} />}
         </div>
         <div className="grid content-start gap-2">
           <Progress done={total - missing.length} total={total} />
@@ -123,7 +131,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
           )}
           {collecting && passed && missing.length > 0 && (
             <p className="m-0 font-semibold text-accent">
-              Termin minął. Możesz układać grafik. Kto nie wysłał dyspozycji, może dostać zmianę w każdy dzień.
+              Termin minął. Możesz układać grafik. Kto nie wysłał, może dostać zmianę w każdy dzień.
             </p>
           )}
           {period.availability_requested_at && (
@@ -145,7 +153,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
       {missing.length > 0 && (
         <Section
           title={`Jeszcze nie wysłali (${missing.length})`}
-          description="Te osoby nie nacisnęły jeszcze „Wyślij kierownikowi”. Mogły już zaznaczyć część dni."
+          description="Nie nacisnęli jeszcze „Wyślij kierownikowi”."
         >
           <p className="m-0">{namesList(missing.map((e) => e.name), 12)}</p>
         </Section>
@@ -153,8 +161,9 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
 
       {late.length > 0 && (
         <Section
-          title="Zmienione po terminie"
-          description="Pracownicy mogą zmieniać dyspozycje, dopóki nie ułożysz grafiku. Dni zmienione po terminie mają w tabeli znak zegara."
+          title={`Zmienione po terminie (${late.length})`}
+          collapsible
+          description="Te dni mają w tabeli znak zegara."
         >
           <ul className="m-0 grid list-none gap-1 p-0">
             {late.map((e) => (
@@ -177,7 +186,48 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
         )}
       </Section>
 
+      <AssistantRulesTable locationId={period.location_id} periodId={period.id} />
       <RequestsSection periodId={period.id} />
+    </div>
+  )
+}
+
+/** For a period added by mistake (e.g. wrong dates). A period whose schedule was published stays. */
+function DeletePeriod({ period, disabled }: { period: PeriodOut; disabled: boolean }) {
+  const remove = useDeletePeriod()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <Button variant="quiet" size="normal" disabled={disabled} onClick={() => setOpen(true)}>
+        <Trash2 aria-hidden="true" size={18} />
+        Usuń ten okres
+      </Button>
+      <ConfirmSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Usunąć ten okres grafiku?"
+        confirmLabel="Tak, usuń okres"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(
+            { periodId: period.id },
+            {
+              onSuccess: async () => {
+                // The list first, so this period's view is gone before its own data is asked for again.
+                await queryClient.invalidateQueries({ queryKey: getLocationPeriodsQueryKey(period.location_id) })
+                void queryClient.invalidateQueries()
+              },
+            },
+          )
+        }
+      >
+        <p className="m-0">
+          {`Okres ${periodTitle(period.start, period.end)} zniknie razem ze szkicem grafiku, Twoimi ręcznymi poprawkami i prośbami pracowników na ten okres. `}
+          Zaznaczone w kalendarzu dyspozycje zostają.
+        </p>
+      </ConfirmSheet>
     </div>
   )
 }
@@ -260,7 +310,6 @@ function NewPeriodSheet({
       open={open}
       onOpenChange={onOpenChange}
       title="Nowy okres grafiku"
-      description="Wpisz, na jakie dni układasz grafik i do kiedy pracownicy wpisują dyspozycje."
     >
       {data && (
         <NewPeriodForm
@@ -316,7 +365,7 @@ function NewPeriodForm({
         max={start}
         onChange={(e) => setDeadline(e.target.value)}
         required
-        hint="Ostatni dzień na wpisanie dyspozycji. Potem układasz grafik."
+        hint="Ostatni dzień na wpisanie dyspozycji."
       />
       {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
       <Button type="submit" wide disabled={create.isPending}>
@@ -354,7 +403,7 @@ function RequestsSection({ periodId }: { periodId: string }) {
   return (
     <Section
       title={`Prośby pracowników (${list.length})`}
-      description="To, czego pracownicy nie mogli zaznaczyć w kalendarzu. Widzisz je tylko Ty. Każdą prośbę możesz odrzucić albo oznaczyć jako ważniejszą lub mniej ważną."
+      description="Czego nie dało się zaznaczyć w kalendarzu. Widzisz je tylko Ty."
     >
       {list.length === 0 ? (
         <EmptyState title="Nikt nie napisał prośby">
@@ -383,6 +432,9 @@ function requestNote(request: ManagerRequestOut): string {
   }
   if (request.unread_reason === 'failed') {
     return `Asystent nie zdołał przeczytać tej prośby (błąd połączenia). Spróbuj jeszcze raz albo ${yourself}`
+  }
+  if (request.unread_reason === 'rejected') {
+    return `Asystent odrzucił tę wiadomość jako niezwiązaną z grafikiem. Pracownik przekazał ją Tobie do oceny. Generator jej nie bierze pod uwagę. Możesz ${yourself}`
   }
   if (request.employee_corrected) return `Pracownik napisał, że asystent źle to zrozumiał. Możesz ${yourself}`
   return `Asystent przeczytał tę prośbę, ale nie umiał zamienić jej na coś, co generator sprawdzi sam. Możesz ${yourself}`

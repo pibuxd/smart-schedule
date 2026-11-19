@@ -1065,6 +1065,138 @@
             "SessionAuth": []
           }
         ]
+      },
+      "delete": {
+        "operationId": "delete_location",
+        "summary": "Delete Location",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a location added by mistake (owner only): one without employees and without any schedule period.\nA location that has worked is archived instead, so its schedules and hours stay.",
+        "tags": [
+          "tenancy"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/groups/{group_id}": {
+      "delete": {
+        "operationId": "delete_group",
+        "summary": "Delete Group",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Group Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a location group (owner only). Its locations stay, without a group, and keep working as before:\neach one gets the group's rules and weights it was using as its own.",
+        "tags": [
+          "tenancy"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
       }
     },
     "/api/companies/{company_id}/subscription": {
@@ -1464,6 +1596,76 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "delete_period",
+        "summary": "Delete Period",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "period_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Period Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever\npublished stays: employees saw it and hours are counted from it.",
+        "tags": [
+          "scheduling"
+        ],
         "security": [
           {
             "SessionAuth": []
@@ -2045,6 +2247,79 @@
         ]
       }
     },
+    "/api/versions/{version_id}/shifts/{shift_id}/drops": {
+      "get": {
+        "operationId": "shift_drop_checks",
+        "summary": "Shift Drop Checks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DropCheckOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "What dropping this shift's person on each other shift would do (swap or move): new problems and scores.\nAsked once when a drag starts, so the answer for every shift is there before the manager hovers over it.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/versions/{version_id}/assignments": {
       "patch": {
         "operationId": "change_assignments",
@@ -2326,6 +2601,187 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/seats": {
+      "post": {
+        "operationId": "add_schedule_seat",
+        "summary": "Add Schedule Seat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionShiftOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One more person needed on a shift that day: an empty place in the draft, kept when arranging again\n(the date's staffing in the location's settings gets the same number).",
+        "tags": [
+          "scheduling"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeatIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/shifts/{shift_id}": {
+      "delete": {
+        "operationId": "remove_schedule_seat",
+        "summary": "Remove Schedule Seat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the\ndate's staffing gets the same number.",
+        "tags": [
+          "scheduling"
+        ],
         "security": [
           {
             "SessionAuth": []
@@ -3236,7 +3692,7 @@
             }
           }
         },
-        "description": "Correct how my request was understood: write it again, or say \"that is not what I meant\" (then the\nmanager reads it as written).",
+        "description": "Correct how my request was understood: write it again, or say \"that is not what I meant\" (then the\nmanager reads it as written). The same hands a request the assistant refused over to the manager.",
         "tags": [
           "availability"
         ],
@@ -3921,7 +4377,7 @@
             }
           }
         },
-        "description": "Also removes its staffing; refused when a schedule already uses it (history stays intact).",
+        "description": "Also removes its staffing and takes it from people. A position that a saved schedule uses is kept hidden\n(old schedules still show its name), so the manager can always get rid of it.",
         "tags": [
           "staffing"
         ],
@@ -4288,10 +4744,10 @@
         ]
       }
     },
-    "/api/locations/{location_id}/staffing-exceptions": {
-      "post": {
-        "operationId": "create_staffing_exception",
-        "summary": "Create Staffing Exception",
+    "/api/locations/{location_id}/staffing-days/{day}": {
+      "put": {
+        "operationId": "save_day_staffing",
+        "summary": "Save Day Staffing",
         "parameters": [
           {
             "in": "path",
@@ -4302,15 +4758,25 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "path",
+            "name": "day",
+            "schema": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            },
+            "required": true
           }
         ],
         "responses": {
-          "201": {
-            "description": "Created",
+          "200": {
+            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StaffingExceptionOut"
+                  "$ref": "#/components/schemas/LocationSetupOut"
                 }
               }
             }
@@ -4354,19 +4820,9 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
           }
         },
-        "description": "A different staffing on one date (e.g. Christmas Eve), replacing the weekday's for that shift and position.",
+        "description": "Staffing of one date (e.g. Christmas Eve), set from the calendar. It replaces the weekday's staffing for the\nshifts and positions that differ; everything left out, or equal to the usual, follows the weekday again.",
         "tags": [
           "staffing"
         ],
@@ -4374,73 +4830,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StaffingExceptionIn"
+                "$ref": "#/components/schemas/DayStaffingIn"
               }
             }
           },
           "required": true
         },
-        "security": [
-          {
-            "SessionAuth": []
-          }
-        ]
-      }
-    },
-    "/api/staffing-exceptions/{exception_id}": {
-      "delete": {
-        "operationId": "delete_staffing_exception",
-        "summary": "Delete Staffing Exception",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "exception_id",
-            "schema": {
-              "format": "uuid",
-              "title": "Exception Id",
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "402": {
-            "description": "Payment Required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "staffing"
-        ],
         "security": [
           {
             "SessionAuth": []
@@ -4842,6 +5237,76 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "remove_employee",
+        "summary": "Remove Employee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Employee Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain\nemployee loses access to the company and can come back only through a new invitation.",
+        "tags": [
+          "staffing"
+        ],
         "security": [
           {
             "SessionAuth": []
@@ -5799,6 +6264,568 @@
         ]
       }
     },
+    "/api/locations/{location_id}/handover-shifts": {
+      "get": {
+        "operationId": "handover_shifts",
+        "summary": "Handover Shifts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ManagerShiftOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Published shifts of the location (two weeks back, two months ahead) for \"Zmień obsadę\".",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assignments/{assignment_id}/handover-candidates": {
+      "get": {
+        "operationId": "handover_candidates",
+        "summary": "Handover Candidates",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HandoverCandidateOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Who the manager can put on this published shift: people who can come first, then those with problems.",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assignments/{assignment_id}/reassign": {
+      "post": {
+        "operationId": "reassign_shift",
+        "summary": "Reassign Shift",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerShiftOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The manager puts another person on a published shift, without anyone's \"Weź zmianę\".",
+        "tags": [
+          "marketplace"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/shift-swaps/check": {
+      "post": {
+        "operationId": "check_shift_swap",
+        "summary": "Check Shift Swap",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwapCheckOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "What the validator says about two people exchanging their published shifts (nothing is saved).",
+        "tags": [
+          "marketplace"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwapIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/shift-swaps": {
+      "post": {
+        "operationId": "swap_shifts",
+        "summary": "Swap Shifts",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Two people exchange their published shifts; both are told in the app.",
+        "tags": [
+          "marketplace"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwapIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assignments/{assignment_id}/offer": {
+      "post": {
+        "operationId": "offer_shift_for_employee",
+        "summary": "Offer Shift For Employee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferMadeOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The manager looks for someone to take an employee's shift: the same offer as the employee's \"Oddaj zmianę\".",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/offers/{offer_id}/close": {
+      "post": {
+        "operationId": "close_offer",
+        "summary": "Close Offer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Offer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferMadeOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The manager ends an offer: the shift stays with the person who gave it away.",
+        "tags": [
+          "marketplace"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/me/notifications": {
       "get": {
         "operationId": "my_notifications",
@@ -5838,6 +6865,46 @@
           }
         },
         "description": "My newest notifications, newest first, and how many I have not seen. Works in read-only mode.",
+        "tags": [
+          "notifications"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "dismiss_all_notifications",
+        "summary": "Dismiss All Notifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove all of my notifications in this company.",
         "tags": [
           "notifications"
         ],
@@ -5889,7 +6956,110 @@
         ]
       }
     },
+    "/api/me/notifications/{notification_id}": {
+      "delete": {
+        "operationId": "dismiss_notification",
+        "summary": "Dismiss Notification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Notification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove one of my notifications for good (the \"X\" on it). Allowed in read-only mode, like marking as seen.",
+        "tags": [
+          "notifications"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/locations/{location_id}/assistant-commands": {
+      "get": {
+        "operationId": "assistant_history",
+        "summary": "Assistant History",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssistantCommandOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The current manager's latest 50 messages in this location, oldest first.",
+        "tags": [
+          "assistant"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
       "post": {
         "operationId": "send_assistant_command",
         "summary": "Send Assistant Command",
@@ -5948,6 +7118,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -6219,6 +7399,23 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -6257,6 +7454,276 @@
         "tags": [
           "assistant"
         ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/agreed-rules/{code}": {
+      "delete": {
+        "operationId": "revert_agreed_rule",
+        "summary": "Revert Agreed Rule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "code",
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstructionsOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Undo one rule agreed in the chat: the period uses the location's own setting for it again.",
+        "tags": [
+          "assistant"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/agreements/previous": {
+      "get": {
+        "operationId": "previous_agreements",
+        "summary": "Previous Agreements",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviousAgreementsOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "What the manager may copy from the previous period into this one. Nothing is copied by itself.",
+        "tags": [
+          "assistant"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/agreements/copy": {
+      "post": {
+        "operationId": "copy_previous_agreements",
+        "summary": "Copy Previous Agreements",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstructionsOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Copy the ticked agreements of the previous period into this one (or into the waiting list).",
+        "tags": [
+          "assistant"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyAgreementsIn"
+              }
+            }
+          },
+          "required": true
+        },
         "security": [
           {
             "SessionAuth": []
@@ -6330,6 +7797,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         },
         "description": "Change the order (importance) of the instructions; the list must name each of them once.",
@@ -6395,6 +7872,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -8417,6 +9904,13 @@
             "title": "Hard Problems",
             "type": "array"
           },
+          "accepted_problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Problems",
+            "type": "array"
+          },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/RuleResultOut"
@@ -8445,6 +9939,11 @@
             "title": "History",
             "type": "array"
           },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          },
           "changed_people": {
             "items": {
               "type": "string"
@@ -8468,10 +9967,12 @@
           "employees",
           "positions",
           "hard_problems",
+          "accepted_problems",
           "rules",
           "unmet_requests",
           "notes",
           "history",
+          "today",
           "changed_people"
         ],
         "title": "VersionOut",
@@ -8500,6 +10001,18 @@
           "hours": {
             "title": "Hours",
             "type": "number"
+          },
+          "shift_type_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Type Id"
           },
           "shift_type_name": {
             "title": "Shift Type Name",
@@ -8587,6 +10100,7 @@
           "start_time",
           "end_time",
           "hours",
+          "shift_type_id",
           "shift_type_name",
           "position_id",
           "position_name",
@@ -8938,6 +10452,53 @@
         "title": "ChangesIn",
         "type": "object"
       },
+      "DropCheckOut": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "can_force": {
+            "title": "Can Force",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ScoresOut"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ScoresOut"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "can_force",
+          "problems",
+          "warnings",
+          "before",
+          "after",
+          "shift_id"
+        ],
+        "title": "DropCheckOut",
+        "type": "object"
+      },
       "ShiftFitOut": {
         "properties": {
           "shift_id": {
@@ -8978,6 +10539,32 @@
           "pinned"
         ],
         "title": "PinIn",
+        "type": "object"
+      },
+      "SeatIn": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "shift_type_id": {
+            "format": "uuid",
+            "title": "Shift Type Id",
+            "type": "string"
+          },
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "shift_type_id",
+          "position_id"
+        ],
+        "title": "SeatIn",
         "type": "object"
       },
       "AvailabilityDayOut": {
@@ -9815,7 +11402,8 @@
               "",
               "off",
               "unsure",
-              "failed"
+              "failed",
+              "rejected"
             ],
             "title": "Unread Reason",
             "type": "string"
@@ -9893,6 +11481,26 @@
         "title": "RequestDecisionIn",
         "type": "object"
       },
+      "ArrangedOut": {
+        "properties": {
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ArrangedOut",
+        "type": "object"
+      },
       "ClosureOut": {
         "properties": {
           "id": {
@@ -9966,6 +11574,13 @@
             },
             "title": "Closures",
             "type": "array"
+          },
+          "arranged": {
+            "items": {
+              "$ref": "#/components/schemas/ArrangedOut"
+            },
+            "title": "Arranged",
+            "type": "array"
           }
         },
         "required": [
@@ -9973,7 +11588,8 @@
           "shift_types",
           "staffing",
           "exceptions",
-          "closures"
+          "closures",
+          "arranged"
         ],
         "title": "LocationSetupOut",
         "type": "object"
@@ -10345,13 +11961,8 @@
         "title": "StaffingIn",
         "type": "object"
       },
-      "StaffingExceptionIn": {
+      "DayCellIn": {
         "properties": {
-          "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
-          },
           "shift_type_id": {
             "format": "uuid",
             "title": "Shift Type Id",
@@ -10398,6 +12009,26 @@
               }
             ],
             "title": "End Time"
+          }
+        },
+        "required": [
+          "shift_type_id",
+          "position_id",
+          "count"
+        ],
+        "title": "DayCellIn",
+        "type": "object"
+      },
+      "DayStaffingIn": {
+        "description": "What one date needs. A shift and position left out goes back to the weekday's usual staffing.",
+        "properties": {
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/DayCellIn"
+            },
+            "maxItems": 500,
+            "title": "Cells",
+            "type": "array"
           },
           "note": {
             "default": "",
@@ -10407,12 +12038,9 @@
           }
         },
         "required": [
-          "date",
-          "shift_type_id",
-          "position_id",
-          "count"
+          "cells"
         ],
-        "title": "StaffingExceptionIn",
+        "title": "DayStaffingIn",
         "type": "object"
       },
       "ClosureIn": {
@@ -10515,6 +12143,11 @@
           "draft_shifts": {
             "default": 0,
             "title": "Draft Shifts",
+            "type": "integer"
+          },
+          "published_shifts": {
+            "default": 0,
+            "title": "Published Shifts",
             "type": "integer"
           }
         },
@@ -11335,6 +12968,11 @@
             "title": "Id",
             "type": "string"
           },
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
           "status": {
             "enum": [
               "open",
@@ -11386,6 +13024,7 @@
         },
         "required": [
           "id",
+          "assignment_id",
           "status",
           "shift",
           "offered_by_name",
@@ -11415,6 +13054,167 @@
           "waiting"
         ],
         "title": "ManagerOffersOut",
+        "type": "object"
+      },
+      "ManagerShiftOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "shift": {
+            "$ref": "#/components/schemas/OfferShiftOut"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "started": {
+            "title": "Started",
+            "type": "boolean"
+          },
+          "offer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Id"
+          }
+        },
+        "required": [
+          "id",
+          "version_id",
+          "shift",
+          "employee_id",
+          "employee_name",
+          "started"
+        ],
+        "title": "ManagerShiftOut",
+        "type": "object"
+      },
+      "HandoverCandidateOut": {
+        "properties": {
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "home_location_name": {
+            "title": "Home Location Name",
+            "type": "string"
+          },
+          "here": {
+            "title": "Here",
+            "type": "boolean"
+          },
+          "wants": {
+            "title": "Wants",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "employee_id",
+          "name",
+          "home_location_name",
+          "here",
+          "wants",
+          "problems"
+        ],
+        "title": "HandoverCandidateOut",
+        "type": "object"
+      },
+      "ReassignIn": {
+        "properties": {
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "employee_id"
+        ],
+        "title": "ReassignIn",
+        "type": "object"
+      },
+      "SwapCheckOut": {
+        "properties": {
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "problems"
+        ],
+        "title": "SwapCheckOut",
+        "type": "object"
+      },
+      "SwapIn": {
+        "properties": {
+          "first_id": {
+            "format": "uuid",
+            "title": "First Id",
+            "type": "string"
+          },
+          "second_id": {
+            "format": "uuid",
+            "title": "Second Id",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "first_id",
+          "second_id"
+        ],
+        "title": "SwapIn",
         "type": "object"
       },
       "NotificationOut": {
@@ -11588,6 +13388,39 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "rule_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Set Id"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "consumed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed At"
           }
         },
         "required": [
@@ -11600,7 +13433,11 @@
           "effects",
           "notes",
           "can_apply",
-          "created_at"
+          "created_at",
+          "expires_at",
+          "rule_set_id",
+          "period_label",
+          "consumed_at"
         ],
         "title": "AssistantCommandOut",
         "type": "object"
@@ -11612,12 +13449,62 @@
             "minLength": 1,
             "title": "Text",
             "type": "string"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
           }
         },
         "required": [
           "text"
         ],
         "title": "CommandIn",
+        "type": "object"
+      },
+      "AgreedRuleOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "is_hard": {
+            "title": "Is Hard",
+            "type": "boolean"
+          },
+          "details": {
+            "title": "Details",
+            "type": "string"
+          },
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "enabled",
+          "is_hard",
+          "details",
+          "changed"
+        ],
+        "title": "AgreedRuleOut",
         "type": "object"
       },
       "InstructionOut": {
@@ -11656,13 +13543,146 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "rule_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Set Id"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "period_requested": {
+            "title": "Period Requested",
+            "type": "boolean"
+          },
+          "consumed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed At"
+          },
+          "closed": {
+            "title": "Closed",
+            "type": "boolean"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/AgreedRuleOut"
+            },
+            "title": "Rules",
+            "type": "array"
           }
         },
         "required": [
           "assistant_enabled",
-          "items"
+          "items",
+          "rule_set_id",
+          "period_id",
+          "period_label",
+          "period_requested",
+          "consumed_at",
+          "closed",
+          "rules"
         ],
         "title": "InstructionsOut",
+        "type": "object"
+      },
+      "PreviousAgreementsOut": {
+        "properties": {
+          "period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/AgreedRuleOut"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InstructionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "period_label",
+          "rules",
+          "items"
+        ],
+        "title": "PreviousAgreementsOut",
+        "type": "object"
+      },
+      "CopyAgreementsIn": {
+        "properties": {
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
+          },
+          "rule_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Rule Codes",
+            "type": "array"
+          },
+          "instruction_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Instruction Ids",
+            "type": "array"
+          }
+        },
+        "title": "CopyAgreementsIn",
         "type": "object"
       },
       "InstructionOrderIn": {
@@ -11675,6 +13695,18 @@
             "maxItems": 200,
             "title": "Ids",
             "type": "array"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
           }
         },
         "required": [

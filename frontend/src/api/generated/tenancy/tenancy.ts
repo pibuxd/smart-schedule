@@ -1510,3 +1510,220 @@ export const useUpdateLocation = <TError = ErrorOut,
       > => {
       return useMutation(getUpdateLocationMutationOptions(options), queryClient);
     }
+    export type deleteLocationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteLocationResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type deleteLocationResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type deleteLocationResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type deleteLocationResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type deleteLocationResponseSuccess = (deleteLocationResponse204) & {
+  headers: Headers;
+};
+export type deleteLocationResponseError = (deleteLocationResponse402 | deleteLocationResponse403 | deleteLocationResponse404 | deleteLocationResponse409) & {
+  headers: Headers;
+};
+
+export type deleteLocationResponse = (deleteLocationResponseSuccess | deleteLocationResponseError)
+
+export const getDeleteLocationUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}`
+}
+
+/**
+ * Delete a location added by mistake (owner only): one without employees and without any schedule period.
+ * A location that has worked is archived instead, so its schedules and hours stay.
+ * @summary Delete Location
+ */
+export const deleteLocation = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deleteLocationResponse> => {
+
+  return apiFetch<deleteLocationResponse>(getDeleteLocationUrl(locationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteLocationMutationKey = () => ['deleteLocation'] as const;
+
+export const getDeleteLocationMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLocation>>, TError,DeleteLocationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLocation>>, TError,DeleteLocationMutationVariables, TContext> => {
+
+const mutationKey = getDeleteLocationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLocation>>, DeleteLocationMutationVariables> = (props) => {
+          const {locationId} = props ?? {};
+
+          return  deleteLocation(locationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLocationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLocation>>>
+
+    export type DeleteLocationMutationError = ErrorOut
+    export type DeleteLocationMutationVariables = {locationId: string}
+
+    /**
+ * Delete a location added by mistake (owner only): one without employees and without any schedule period.
+ * A location that has worked is archived instead, so its schedules and hours stay.
+ * @summary Delete Location
+ */
+export const useDeleteLocation = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLocation>>, TError,DeleteLocationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLocation>>,
+        TError,
+        DeleteLocationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteLocationMutationOptions(options), queryClient);
+    }
+    export type deleteGroupResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteGroupResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type deleteGroupResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type deleteGroupResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type deleteGroupResponseSuccess = (deleteGroupResponse204) & {
+  headers: Headers;
+};
+export type deleteGroupResponseError = (deleteGroupResponse402 | deleteGroupResponse403 | deleteGroupResponse404) & {
+  headers: Headers;
+};
+
+export type deleteGroupResponse = (deleteGroupResponseSuccess | deleteGroupResponseError)
+
+export const getDeleteGroupUrl = (groupId: string,) => {
+
+
+
+
+  return `/api/groups/${groupId}`
+}
+
+/**
+ * Delete a location group (owner only). Its locations stay, without a group, and keep working as before:
+ * each one gets the group's rules and weights it was using as its own.
+ * @summary Delete Group
+ */
+export const deleteGroup = async (groupId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deleteGroupResponse> => {
+
+  return apiFetch<deleteGroupResponse>(getDeleteGroupUrl(groupId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteGroupMutationKey = () => ['deleteGroup'] as const;
+
+export const getDeleteGroupMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGroup>>, TError,DeleteGroupMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGroup>>, TError,DeleteGroupMutationVariables, TContext> => {
+
+const mutationKey = getDeleteGroupMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGroup>>, DeleteGroupMutationVariables> = (props) => {
+          const {groupId} = props ?? {};
+
+          return  deleteGroup(groupId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGroupMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGroup>>>
+
+    export type DeleteGroupMutationError = ErrorOut
+    export type DeleteGroupMutationVariables = {groupId: string}
+
+    /**
+ * Delete a location group (owner only). Its locations stay, without a group, and keep working as before:
+ * each one gets the group's rules and weights it was using as its own.
+ * @summary Delete Group
+ */
+export const useDeleteGroup = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGroup>>, TError,DeleteGroupMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGroup>>,
+        TError,
+        DeleteGroupMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteGroupMutationOptions(options), queryClient);
+    }

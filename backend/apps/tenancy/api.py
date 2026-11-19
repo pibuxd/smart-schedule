@@ -5,6 +5,7 @@ from typing import Literal
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
+from django.db.models import RestrictedError
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
@@ -374,7 +375,13 @@ def _setup_missing(ctx, location: Location) -> list[SetupStep]:
         ("shift_types", ShiftType),
         ("staffing", StaffingRule),
     ]
-    missing: list[SetupStep] = [step for step, model in checks if not ctx.qs(model).filter(location=location).exists()]
+    missing: list[SetupStep] = []
+    for step, model in checks:
+        rows = ctx.qs(model).filter(location=location)
+        if model is Position:
+            rows = rows.filter(removed_at__isnull=True)
+        if not rows.exists():
+            missing.append(step)
     if not ctx.qs(EmployeeProfile).filter(home_location=location, is_active=True).exists():
         missing.append("employees")
     return missing
@@ -546,3 +553,70 @@ def update_location(request, location_id: UUID, payload: LocationUpdateIn):
             location.archived_at = None
     _save_unique(location, "Lokal o tej nazwie już jest w firmie.")
     return _location_out(location)
+
+
+@router.delete("/groups/{group_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut})
+def delete_group(request, group_id: UUID):
+    """Delete a location group (owner only). Its locations stay, without a group, and keep working as before:
+    each one gets the group's rules and weights it was using as its own."""
+    from apps.rules.models import RuleSetting, WeightProfile
+
+    ctx, group = context_for(request, LocationGroup, group_id)
+    _require_owner(ctx)
+    ctx.require_writable()
+    with transaction.atomic():
+        locations = list(ctx.qs(Location).select_for_update().filter(group=group))
+        shared = list(ctx.qs(RuleSetting).filter(group=group))
+        weights = ctx.qs(WeightProfile).filter(group=group).first()
+        for location in locations:
+            own = set(ctx.qs(RuleSetting).filter(location=location).values_list("rule_code", flat=True))
+            for rule in shared:
+                if rule.rule_code not in own:
+                    RuleSetting(
+                        company=ctx.company,
+                        location=location,
+                        rule_code=rule.rule_code,
+                        enabled=rule.enabled,
+                        is_hard=rule.is_hard,
+                        position=rule.position,
+                        # An inherited rule came after the location's own rules on the same place; keep that order.
+                        position_tiebreak=1000,
+                        params=rule.params,
+                    ).save()
+            if weights is not None and not ctx.qs(WeightProfile).filter(location=location).exists():
+                WeightProfile(
+                    company=ctx.company,
+                    location=location,
+                    manager_share=weights.manager_share,
+                    level_weights=weights.level_weights,
+                    rank_decay=weights.rank_decay,
+                    stability_penalty=weights.stability_penalty,
+                ).save()
+        group.delete()  # locations: group -> NULL; the group's own rules and weights go with it
+    return Status(204, None)
+
+
+@router.delete(
+    "/locations/{location_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
+)
+def delete_location(request, location_id: UUID):
+    """Delete a location added by mistake (owner only): one without employees and without any schedule period.
+    A location that has worked is archived instead, so its schedules and hours stay."""
+    from apps.scheduling.models import SchedulePeriod
+    from apps.staffing.models import EmployeeProfile
+
+    ctx, location = context_for(request, Location, location_id)
+    _require_owner(ctx)
+    ctx.require_writable()
+    if ctx.qs(SchedulePeriod).filter(location=location).exists():
+        raise HttpError(409, "Ten lokal ma już grafiki, więc nie można go usunąć. Przenieś go do archiwum.")
+    if ctx.qs(EmployeeProfile).filter(home_location=location, removed_at__isnull=True).exists():
+        raise HttpError(409, "Najpierw usuń pracowników tego lokalu (zakładka „Pracownicy”).")
+    try:
+        with transaction.atomic():
+            location.delete()
+    except RestrictedError as exc:
+        raise HttpError(
+            409, "Ludzie z tego lokalu mają zmiany w dawnych grafikach. Przenieś lokal do archiwum."
+        ) from exc
+    return Status(204, None)

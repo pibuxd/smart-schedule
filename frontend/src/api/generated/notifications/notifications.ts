@@ -24,6 +24,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  DismissAllNotificationsParams,
   ErrorOut,
   MarkReadIn,
   MyNotificationsParams,
@@ -191,7 +192,108 @@ export function useMyNotifications<TData = Awaited<ReturnType<typeof myNotificat
 
 
 
-export type markNotificationsReadResponse204 = {
+export type dismissAllNotificationsResponse204 = {
+  data: void
+  status: 204
+}
+
+export type dismissAllNotificationsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type dismissAllNotificationsResponseSuccess = (dismissAllNotificationsResponse204) & {
+  headers: Headers;
+};
+export type dismissAllNotificationsResponseError = (dismissAllNotificationsResponse404) & {
+  headers: Headers;
+};
+
+export type dismissAllNotificationsResponse = (dismissAllNotificationsResponseSuccess | dismissAllNotificationsResponseError)
+
+export const getDismissAllNotificationsUrl = (params: DismissAllNotificationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/me/notifications?${stringifiedParams}` : `/api/me/notifications`
+}
+
+/**
+ * Remove all of my notifications in this company.
+ * @summary Dismiss All Notifications
+ */
+export const dismissAllNotifications = async (params: DismissAllNotificationsParams, options?: Parameters<typeof apiFetch>[1]): Promise<dismissAllNotificationsResponse> => {
+
+  return apiFetch<dismissAllNotificationsResponse>(getDismissAllNotificationsUrl(params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDismissAllNotificationsMutationKey = () => ['dismissAllNotifications'] as const;
+
+export const getDismissAllNotificationsMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissAllNotifications>>, TError,DismissAllNotificationsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissAllNotifications>>, TError,DismissAllNotificationsMutationVariables, TContext> => {
+
+const mutationKey = getDismissAllNotificationsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissAllNotifications>>, DismissAllNotificationsMutationVariables> = (props) => {
+          const {params} = props ?? {};
+
+          return  dismissAllNotifications(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissAllNotificationsMutationResult = NonNullable<Awaited<ReturnType<typeof dismissAllNotifications>>>
+
+    export type DismissAllNotificationsMutationError = ErrorOut
+    export type DismissAllNotificationsMutationVariables = {params: DismissAllNotificationsParams}
+
+    /**
+ * Remove all of my notifications in this company.
+ * @summary Dismiss All Notifications
+ */
+export const useDismissAllNotifications = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissAllNotifications>>, TError,DismissAllNotificationsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof dismissAllNotifications>>,
+        TError,
+        DismissAllNotificationsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDismissAllNotificationsMutationOptions(options), queryClient);
+    }
+    export type markNotificationsReadResponse204 = {
   data: void
   status: 204
 }
@@ -298,4 +400,98 @@ export const useMarkNotificationsRead = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getMarkNotificationsReadMutationOptions(options), queryClient);
+    }
+    export type dismissNotificationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type dismissNotificationResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type dismissNotificationResponseSuccess = (dismissNotificationResponse204) & {
+  headers: Headers;
+};
+export type dismissNotificationResponseError = (dismissNotificationResponse404) & {
+  headers: Headers;
+};
+
+export type dismissNotificationResponse = (dismissNotificationResponseSuccess | dismissNotificationResponseError)
+
+export const getDismissNotificationUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/me/notifications/${notificationId}`
+}
+
+/**
+ * Remove one of my notifications for good (the "X" on it). Allowed in read-only mode, like marking as seen.
+ * @summary Dismiss Notification
+ */
+export const dismissNotification = async (notificationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<dismissNotificationResponse> => {
+
+  return apiFetch<dismissNotificationResponse>(getDismissNotificationUrl(notificationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDismissNotificationMutationKey = () => ['dismissNotification'] as const;
+
+export const getDismissNotificationMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissNotification>>, TError,DismissNotificationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissNotification>>, TError,DismissNotificationMutationVariables, TContext> => {
+
+const mutationKey = getDismissNotificationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissNotification>>, DismissNotificationMutationVariables> = (props) => {
+          const {notificationId} = props ?? {};
+
+          return  dismissNotification(notificationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof dismissNotification>>>
+
+    export type DismissNotificationMutationError = ErrorOut
+    export type DismissNotificationMutationVariables = {notificationId: string}
+
+    /**
+ * Remove one of my notifications for good (the "X" on it). Allowed in read-only mode, like marking as seen.
+ * @summary Dismiss Notification
+ */
+export const useDismissNotification = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissNotification>>, TError,DismissNotificationMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof dismissNotification>>,
+        TError,
+        DismissNotificationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDismissNotificationMutationOptions(options), queryClient);
     }

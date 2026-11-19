@@ -7,6 +7,7 @@ const base = {
   scores: { holes: 0, hard_violations: 0, unscored_requests: 0 },
   rules: [],
   unmet_requests: [],
+  hard_problems: [],
 } as unknown as VersionOut
 
 const make = (patch: Record<string, unknown>) => ({ ...base, ...patch, scores: { ...base.scores, ...(patch.scores ?? {}) } }) as VersionOut
@@ -18,7 +19,10 @@ describe('verdict', () => {
 
   it('puts holes and hard problems first', () => {
     expect(verdict(make({ scores: { holes: 2 } }))).toContain('2 zmiany bez obsady')
-    expect(verdict(make({ scores: { holes: 2, hard_violations: 1 } }))).toContain('łamie zasady bez wyjątków')
+    expect(verdict(make({ scores: { holes: 2 }, hard_problems: ['Ewa ma dwie zmiany.'] }))).toContain('łamie zasady bez wyjątków')
+    // Kept by the manager on purpose (fewer experienced people): not a reason to hold the schedule back.
+    expect(verdict(make({ scores: { hard_violations: 1 }, accepted_problems: ['Ma być doświadczona osoba.'] })))
+      .toBe('Wszystkie zmiany obsadzone, zasady i prośby spełnione.')
   })
 
   it('counts what is left to look at', () => {

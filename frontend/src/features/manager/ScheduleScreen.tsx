@@ -11,13 +11,14 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Hand, Pin, Send, ShieldAlert, SquarePen } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Hand, Pin, Plus, Send, ShieldAlert, SquarePen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
 import { useLocationInstructions } from '../../api/generated/assistant/assistant'
 import type {
   CheckOut,
+  DropCheckOut,
   InstructionsOut,
   PeriodOut,
   ScoresOut,
@@ -26,6 +27,7 @@ import type {
   VersionShiftOut,
 } from '../../api/generated/model'
 import {
+  useAddScheduleSeat,
   useChangeAssignments,
   useCheckScheduleChanges,
   useEmployeeFit,
@@ -33,6 +35,7 @@ import {
   usePinShift,
   usePublishSchedule,
   useScheduleVersion,
+  useShiftDropChecks,
   useStartCorrecting,
 } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
@@ -46,7 +49,8 @@ import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/da
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
 import { pickPeriod } from './periods'
-import { buildGrid, percent, swapChanges } from './schedule-grid'
+import { type DropCheck, dropWords, isDropTarget } from './drop-preview'
+import { buildGrid, type GridColumn, percent, swapChanges } from './schedule-grid'
 import { ShiftSheet } from './ShiftSheet'
 import { verdict } from './verdict'
 import { daysUntil, PERIOD_STATUS, periodTitle, shifts as shiftsWord } from './words'
@@ -148,7 +152,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           )}
           {period.latest_version_id && !period.active_run_id && (
             <span className="max-w-[40ch] text-sm text-ink-muted sm:text-right">
-              „Ułóż od nowa” zostawia przypięte zmiany, osoby wpisane mimo przeszkód i dni, które minęły.
+              „Ułóż od nowa” zostawia przypięte zmiany, osoby wpisane mimo przeszkód i minione dni.
             </span>
           )}
         </div>
@@ -164,8 +168,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
         !period.active_run_id && (
           <EmptyState title="Grafik nie jest jeszcze ułożony">
             <p className="m-0">
-              Gdy minie termin dyspozycji albo wszyscy je wyślą, naciśnij „Ułóż grafik”. Dostaniesz szkic, który
-              możesz poprawić, zanim pokażesz go pracownikom.
+              Naciśnij „Ułóż grafik”, gdy minie termin dyspozycji albo wszyscy je wyślą.
             </p>
           </EmptyState>
         )
@@ -194,6 +197,14 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
         <div role="alert" className="grid gap-1 rounded-md border border-cannot bg-cannot-soft p-3 text-cannot">
           <span className="font-semibold">Tego grafiku nie można opublikować, bo łamie zasady:</span>
           {data.hard_problems.map((p) => (
+            <span key={p}>{p}</span>
+          ))}
+        </div>
+      )}
+      {data.accepted_problems.length > 0 && (
+        <div className="grid gap-1 rounded-md border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+          <span className="font-semibold">Ręczne zmiany są niezgodne z obsadą. Możesz tak opublikować:</span>
+          {data.accepted_problems.map((p) => (
             <span key={p}>{p}</span>
           ))}
         </div>
@@ -240,9 +251,9 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
         </div>
         <span className="text-sm text-ink-muted">
           {data.status === 'draft'
-            ? 'Pracownicy jeszcze tego nie widzą. Wybierz zmianę, żeby sprawdzić powód przydziału i możliwe zastępstwa. Przeciągnij osobę na inną zmianę, żeby zamienić dwie osoby.'
+            ? 'Pracownicy jeszcze tego nie widzą. Kliknij zmianę albo przeciągnij osobę na inną zmianę.'
             : data.status === 'published'
-              ? 'Ten grafik widzą pracownicy w „Mój grafik”. Wybierz zmianę, żeby sprawdzić powód przydziału.'
+              ? 'Ten grafik widzą pracownicy w „Mój grafik”.'
               : 'Starsza wersja, tylko do podglądu.'}
         </span>
       </div>
@@ -257,7 +268,7 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
           </SelectField>
         )}
         {data.editable && (
-          <Button size="normal" onClick={() => setPublishing(true)} disabled={data.scores.hard_violations > 0}>
+          <Button size="normal" onClick={() => setPublishing(true)} disabled={data.hard_problems.length > 0}>
             <Send aria-hidden="true" size={20} />
             Opublikuj
           </Button>
@@ -341,8 +352,7 @@ function PublishSheet({ data, open, onOpenChange }: { data: VersionOut; open: bo
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Pracownicy dostaną powiadomienie w aplikacji. Nie wysyłamy SMS-ów ani e-maili, więc komuś, kto rzadko
-          zagląda do Grafikomatu, powiedz o grafiku sam.
+          Pracownicy dostaną powiadomienie tylko w aplikacji. Komuś, kto rzadko do niej zagląda, powiedz sam.
         </p>
         {holes > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2">
@@ -379,12 +389,12 @@ function Scores({ scores }: { scores: ScoresOut }) {
     <section aria-label="Ocena grafiku" className="grid gap-3 sm:grid-cols-3">
       <div
         className={cn(
-          'grid content-start gap-1 rounded-md border-2 p-4',
+          'grid content-start gap-0.5 rounded-md border-2 px-3 py-2',
           incomplete ? 'border-cannot bg-cannot-soft text-cannot' : 'border-line bg-surface',
         )}
       >
         <span className="text-sm font-semibold">Zmiany bez obsady</span>
-        <span className="text-2xl font-extrabold">
+        <span className="text-xl font-extrabold">
           {scores.holes} <span className="text-base font-semibold">z {scores.slots}</span>
         </span>
         <span className="text-sm">{incomplete ? 'Nie wszystkie zmiany są obsadzone.' : 'Wszystkie zmiany obsadzone.'}</span>
@@ -407,9 +417,9 @@ function Scores({ scores }: { scores: ScoresOut }) {
 
 function ScoreBox({ label, value, muted, note }: { label: string; value: number; muted: boolean; note?: string }) {
   return (
-    <div className="grid content-start gap-1 rounded-md border-2 border-line bg-surface p-4">
+    <div className="grid content-start gap-0.5 rounded-md border-2 border-line bg-surface px-3 py-2">
       <span className="text-sm font-semibold text-ink-muted">{label}</span>
-      <span className={cn('text-2xl font-extrabold', muted ? 'text-ink-muted' : 'text-ink')}>{percent(value)}</span>
+      <span className={cn('text-xl font-extrabold', muted ? 'text-ink-muted' : 'text-ink')}>{percent(value)}</span>
       {note && <span className="text-sm text-ink-muted">{note}</span>}
     </div>
   )
@@ -417,22 +427,27 @@ function ScoreBox({ label, value, muted, note }: { label: string; value: number;
 
 // ----------------------------------------------------------------------------------------------- the grid
 
-type DragCheck = { overId: string; result: CheckOut | null; failed: boolean }
 type Change = { shift_id: string; employee_id: string | null }
 /** A change that breaks a hard rule, waiting for the manager's "save anyway". */
 type Override = { changes: Change[]; problems: string[]; done: string }
+
+/** How long the answers for one dragged person are reused; every saved change marks them stale anyway. */
+const DROPS_FRESH_MS = 30_000
 
 function ScheduleGrid({ data }: { data: VersionOut }) {
   const { columns, rows } = useMemo(() => buildGrid(data.shifts, data.period.start, data.period.end), [data])
   const byId = useMemo(() => new Map(data.shifts.map((s) => [s.id, s])), [data])
   const [open, setOpen] = useState<VersionShiftOut | null>(null)
   const [dragging, setDragging] = useState<VersionShiftOut | null>(null)
-  const [check, setCheck] = useState<DragCheck | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  // Answers for single drops of this drag, used until the answer for all shifts arrives.
+  const [singles, setSingles] = useState<Record<string, DropCheck>>({})
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
   const [picked, setPicked] = useState('')
   const [override, setOverride] = useState<Override | null>(null)
   const checker = useCheckScheduleChanges()
   const change = useChangeAssignments()
+  const addSeat = useAddScheduleSeat()
   const queryClient = useQueryClient()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const editable = data.editable
@@ -448,34 +463,36 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   )
   const template = `120px repeat(${columns.length}, minmax(0, 1fr))`
 
-  // Live check while dragging: what the swap would break, before it is dropped.
-  const overId = check?.overId
+  // When a drag starts, one request works out every possible drop, so hovering over a shift needs no request.
+  const drops = useShiftDropChecks(data.id, dragging?.id ?? '', {
+    query: { enabled: !!dragging, staleTime: DROPS_FRESH_MS, retry: false },
+  })
+  const allDrops = useMemo(
+    () => (drops.data ? new Map((drops.data.data as DropCheckOut[]).map((d) => [d.shift_id, d])) : null),
+    [drops.data],
+  )
+  const target = overId ? byId.get(overId) : undefined
+  const check: DropCheck = !dragging || !overId ? undefined : (allDrops?.get(overId) ?? singles[`${dragging.id}:${overId}`])
+
+  // Until that answer is here, the shift under the pointer is checked on its own, right away.
+  const known = check !== undefined
   useEffect(() => {
-    if (!dragging || !overId || overId === dragging.id) return
-    const target = byId.get(overId)
-    if (!target) return
-    const timer = window.setTimeout(() => {
-      checker.mutate(
-        { versionId: data.id, data: { changes: swapChanges(dragging, target) } },
-        {
-          onSuccess: (response) =>
-            setCheck((c) => (c?.overId === overId ? { overId, result: response.data as CheckOut, failed: false } : c)),
-          onError: () => setCheck((c) => (c?.overId === overId ? { overId, result: null, failed: true } : c)),
-        },
-      )
-    }, 150)
-    return () => window.clearTimeout(timer)
+    if (!dragging || known || !isDropTarget(dragging, target)) return
+    const key = `${dragging.id}:${target.id}`
+    checker
+      .mutateAsync({ versionId: data.id, data: { changes: swapChanges(dragging, target) } })
+      .then((response) => setSingles((s) => ({ ...s, [key]: response.data as CheckOut })))
+      .catch(() => setSingles((s) => ({ ...s, [key]: 'failed' })))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragging, overId])
+  }, [dragging, target, known])
 
   const onDragStart = (event: DragStartEvent) => {
     setMessage(null)
+    setSingles({})
+    setOverId(null)
     setDragging(byId.get(String(event.active.id)) ?? null)
   }
-  const onDragOver = (event: DragOverEvent) => {
-    const id = event.over ? String(event.over.id) : null
-    setCheck(id ? { overId: id, result: null, failed: false } : null)
-  }
+  const onDragOver = (event: DragOverEvent) => setOverId(event.over ? String(event.over.id) : null)
   const save = (changes: Change[], done: string, force = false) =>
     change.mutate(
       { versionId: data.id, data: { changes, force } },
@@ -494,9 +511,9 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   const onDragEnd = (event: DragEndEvent) => {
     const from = byId.get(String(event.active.id))
     const to = event.over ? byId.get(String(event.over.id)) : undefined
-    const known = to && check?.overId === to.id ? check.result : null
+    const known = to && overId === to.id && check && check !== 'failed' ? check : null
     setDragging(null)
-    setCheck(null)
+    setOverId(null)
     if (!from || !to || from.id === to.id || from.employee_id === to.employee_id) return
     const changes = swapChanges(from, to)
     const done = to.employee_id ? `Zamienione: ${from.employee_name} i ${to.employee_name}.` : `Przeniesiono: ${from.employee_name}.`
@@ -511,6 +528,21 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
       { versionId: data.id, data: { changes } },
       {
         onSuccess: (response) => decide(response.data as CheckOut),
+        onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
+      },
+    )
+  }
+
+  const addPlace = (date: string, column: GridColumn) => {
+    if (!column.shiftTypeId) return
+    setMessage(null)
+    addSeat.mutate(
+      { versionId: data.id, data: { date, shift_type_id: column.shiftTypeId, position_id: column.positionId } },
+      {
+        onSuccess: () => {
+          setMessage({ text: 'Dodano miejsce. Wybierz je, żeby wpisać osobę.', bad: false })
+          void queryClient.invalidateQueries()
+        },
         onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
       },
     )
@@ -554,7 +586,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
         onDragEnd={onDragEnd}
         onDragCancel={() => {
           setDragging(null)
-          setCheck(null)
+          setOverId(null)
         }}
       >
         <div className="rounded-md border border-line bg-surface">
@@ -601,6 +633,17 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
                           {column.shiftTypeName || 'Zmiana'} · {column.positionName}
                         </span>
                       )}
+                      {cell.length === 0 && editable && column.shiftTypeId && row.date >= data.today && (
+                        <button
+                          type="button"
+                          disabled={addSeat.isPending}
+                          onClick={() => addPlace(row.date, column)}
+                          aria-label={`Dodaj miejsce: ${column.shiftTypeName} · ${column.positionName}, ${weekdayShort(day)} ${dayAndMonth(day)}`}
+                          className="flex min-h-(--touch) w-full cursor-pointer items-center justify-center rounded-sm border-2 border-dashed border-line text-ink-muted hover:border-accent hover:text-accent disabled:opacity-50"
+                        >
+                          <Plus aria-hidden="true" size={18} />
+                        </button>
+                      )}
                       {cell.map((shift) => (
                         <ShiftChip
                           key={shift.id}
@@ -619,16 +662,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
             )
           })}
         </div>
-        <DragOverlay dropAnimation={null}>
-          {dragging && (
-            <div className="grid w-72 gap-1 rounded-sm border-2 border-accent bg-surface px-3 py-2 shadow-sheet">
-              <span className="font-semibold">{dragging.employee_name}</span>
-              <span role="status" className={cn('text-sm', dropWords(check).bad ? 'text-cannot' : 'text-ink-muted')}>
-                {dropWords(check).text}
-              </span>
-            </div>
-          )}
-        </DragOverlay>
+        <DragOverlay dropAnimation={null}>{dragging && <DragCard dragging={dragging} target={target} check={check} />}</DragOverlay>
       </DndContext>
       <ShiftSheet versionId={data.id} locationId={data.location_id} shift={open} editable={editable} onClose={() => setOpen(null)} />
       <Sheet open={override !== null} onOpenChange={(o) => !o && setOverride(null)} title="Zapisać mimo to?">
@@ -655,17 +689,18 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   )
 }
 
-/** What dropping here would do, while the person is being dragged. */
-function dropWords(check: DragCheck | null): { text: string; bad: boolean } {
-  if (!check) return { text: 'Upuść na innej zmianie, żeby zamienić osoby.', bad: false }
-  if (check.failed) return { text: 'Nie udało się sprawdzić tej zamiany.', bad: true }
-  if (!check.result) return { text: 'Sprawdzam…', bad: false }
-  if (!check.result.ok) {
-    const problem = check.result.problems[0] ?? 'Ta zmiana łamie zasady.'
-    return { text: check.result.can_force ? `${problem} Upuść, jeśli chcesz zapisać mimo to.` : problem, bad: true }
-  }
-  const after = check.result.after
-  return { text: `Można. Zasady ${percent(after.manager_rules)}, prośby ${percent(after.employee_requests)}.`, bad: false }
+/** The card under the pointer: who is dragged, what dropping here does and, as soon as it is known, the result. */
+function DragCard({ dragging, target, check }: { dragging: VersionShiftOut; target?: VersionShiftOut; check: DropCheck }) {
+  const words = dropWords(dragging, target, check)
+  return (
+    <div className="grid w-72 gap-1 rounded-sm border-2 border-accent bg-surface px-3 py-2 shadow-sheet">
+      <span className="font-semibold">{dragging.employee_name}</span>
+      <span className="text-sm text-ink-muted">{words.what}</span>
+      <span role="status" className={cn('min-h-[1lh] text-sm', words.bad ? 'text-cannot' : 'text-ink-muted')}>
+        {words.verdict}
+      </span>
+    </div>
+  )
 }
 
 function ShiftChip({

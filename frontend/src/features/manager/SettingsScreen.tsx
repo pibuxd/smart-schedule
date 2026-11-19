@@ -10,30 +10,34 @@ import type {
   ShiftTypeIn,
   ShiftTypeOut,
   StaffingCellIn,
-  StaffingExceptionOut,
 } from '../../api/generated/model'
 import {
   useCreateClosure,
   useCreatePosition,
   useCreateShiftType,
-  useCreateStaffingException,
   useDeleteClosure,
   useDeletePosition,
   useDeleteShiftType,
-  useDeleteStaffingException,
   useLocationSetup,
   useSaveStaffing,
   useUpdatePosition,
   useUpdateShiftType,
 } from '../../api/generated/staffing/staffing'
-import { useManagerOverview, useLocationDetail, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
+import {
+  useDeleteLocation,
+  useLocationDetail,
+  useManagerOverview,
+  useUpdateLocation,
+} from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
+import { ConfirmSheet } from '../../components/ui/confirm'
 import { CheckField, Section, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { dayTitle, parseDate, shortTime, spanHours, WEEKDAY_HEADERS } from '../../lib/dates'
 import { useManager } from './ManagerContext'
+import { StaffingCalendar } from './StaffingCalendar'
 
 const hhmm = (value: string | null | undefined) => (value ? value.slice(0, 5) : '')
 
@@ -71,8 +75,8 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
         <ShiftTypesSection locationId={locationId} setup={data} />
       </div>
       <StaffingSection key={JSON.stringify(data.staffing)} locationId={locationId} setup={data} />
+      <StaffingCalendar locationId={locationId} setup={data} />
       <ClosuresSection locationId={locationId} setup={data} />
-      <ExceptionsSection locationId={locationId} setup={data} />
       <ArchiveSection location={info} />
     </div>
   )
@@ -138,7 +142,7 @@ function LocationForm({ location }: { location: LocationOut }) {
           max={60}
           value={days}
           onChange={(e) => setDays(e.target.value)}
-          hint="Tak podpowiemy termin przy nowym grafiku. Dokładny dzień ustawisz za każdym razem."
+          hint="Podpowiedź terminu przy nowym grafiku."
         />
         <div className="flex flex-wrap items-center gap-3 md:col-span-2 lg:col-span-4">
           <Button type="submit" size="normal" disabled={update.isPending || readOnly}>
@@ -157,18 +161,50 @@ function ArchiveSection({ location }: { location: LocationOut }) {
   const update = useUpdateLocation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const remove = useDeleteLocation()
   const [open, setOpen] = useState(false)
-  if (role !== 'owner' || location.archived) return null
+  const [removing, setRemoving] = useState(false)
+  if (role !== 'owner') return null
   return (
     <Section
-      title="Archiwum"
-      description="Lokal, który już nie działa, przenieś do archiwum. Dawne grafiki i godziny zostaną."
+      title="Archiwum i usuwanie"
+      alwaysExplain
+      description="Dawne grafiki i godziny zostaną. Usunąć możesz tylko lokal bez pracowników i bez grafików."
     >
-      <div>
-        <Button variant="danger" size="normal" onClick={() => setOpen(true)} disabled={readOnly}>
-          Przenieś lokal do archiwum
+      <div className="flex flex-wrap gap-2">
+        {!location.archived && (
+          <Button variant="danger" size="normal" onClick={() => setOpen(true)} disabled={readOnly}>
+            Przenieś lokal do archiwum
+          </Button>
+        )}
+        <Button variant="quiet" size="normal" onClick={() => setRemoving(true)} disabled={readOnly}>
+          <Trash2 aria-hidden="true" size={18} />
+          Usuń lokal
         </Button>
       </div>
+      <ConfirmSheet
+        open={removing}
+        onOpenChange={setRemoving}
+        title="Usunąć lokal na dobre?"
+        confirmLabel="Tak, usuń lokal"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(
+            { locationId: location.id },
+            {
+              onSuccess: async () => {
+                await navigate({ to: '/kierownik' })
+                void queryClient.invalidateQueries()
+              },
+            },
+          )
+        }
+      >
+        <p className="m-0">
+          {location.name} zniknie razem ze stanowiskami, zmianami, obsadą i zaproszeniami. Tego nie da się cofnąć.
+        </p>
+      </ConfirmSheet>
       <Sheet open={open} onOpenChange={setOpen} title="Przenieść do archiwum?">
         <div className="grid gap-4">
           <p className="m-0">
@@ -213,8 +249,9 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
+  const [removing, setRemoving] = useState<{ id: string; name: string; employees: number } | null>(null)
   const refresh = () => void queryClient.invalidateQueries()
-  const error = create.error ?? rename.error ?? remove.error
+  const error = create.error ?? rename.error
 
   return (
     <Section title="Stanowiska" description="Np. Sprzedawca, Kelner, Kucharz, Kierownik zmiany.">
@@ -252,7 +289,10 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
                     size="normal"
                     aria-label={`Usuń stanowisko ${p.name}`}
                     disabled={readOnly || remove.isPending}
-                    onClick={() => remove.mutate({ positionId: p.id }, { onSuccess: refresh })}
+                    onClick={() => {
+                      remove.reset()
+                      setRemoving(p)
+                    }}
                   >
                     <Trash2 aria-hidden="true" size={18} />
                     Usuń
@@ -277,6 +317,24 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
         </Button>
       </form>
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
+      <ConfirmSheet
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Usunąć stanowisko „${removing?.name ?? ''}”?`}
+        confirmLabel="Tak, usuń stanowisko"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          removing &&
+          remove.mutate({ positionId: removing.id }, { onSuccess: () => { setRemoving(null); refresh() } })
+        }
+      >
+        <p className="m-0">
+          Zniknie z obsady i z wyjątków.
+          {removing && removing.employees > 0 ? ` Stracą je też osoby, które je mają (${removing.employees}).` : ''} W
+          ułożonych już grafikach zostaje.
+        </p>
+      </ConfirmSheet>
     </Section>
   )
 }
@@ -354,6 +412,7 @@ function ShiftTypeForm({
   const [start, setStart] = useState(hhmm(shiftType?.start_time))
   const [end, setEnd] = useState(hhmm(shiftType?.end_time))
   const [closing, setClosing] = useState(shiftType?.is_closing ?? false)
+  const [removing, setRemoving] = useState(false)
   const done = () => {
     void queryClient.invalidateQueries()
     onDone()
@@ -419,16 +478,30 @@ function ShiftTypeForm({
       <Button type="submit" wide disabled={create.isPending || update.isPending || tooLong}>
         Zapisz zmianę
       </Button>
-      {shiftType && (
-        <Button
-          variant="danger"
-          wide
-          disabled={remove.isPending}
-          onClick={() => remove.mutate({ shiftTypeId: shiftType.id }, { onSuccess: done })}
-        >
+      {shiftType && !removing && (
+        <Button variant="danger" wide onClick={() => setRemoving(true)}>
           <Trash2 aria-hidden="true" size={18} />
-          Usuń tę zmianę (razem z jej obsadą)
+          Usuń tę zmianę
         </Button>
+      )}
+      {shiftType && removing && (
+        <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
+          <p className="m-0">
+            <b>{`Usunąć zmianę „${shiftType.name}”?`}</b> Zniknie razem z obsadą na każdy dzień tygodnia i z wyjątkami.
+            W ułożonych już grafikach zostaje.
+          </p>
+          <Button
+            variant="danger"
+            wide
+            disabled={remove.isPending}
+            onClick={() => remove.mutate({ shiftTypeId: shiftType.id }, { onSuccess: done })}
+          >
+            Tak, usuń zmianę
+          </Button>
+          <Button variant="secondary" wide onClick={() => setRemoving(false)}>
+            Zostaw
+          </Button>
+        </div>
       )}
     </form>
   )
@@ -499,7 +572,7 @@ function StaffingSection({ locationId, setup }: { locationId: string; setup: Loc
   }
 
   return (
-    <Section title="Obsada" description="Wpisz, ile osób potrzeba każdego dnia i ile z nich musi mieć doświadczenie na tym stanowisku. Puste pole oznacza zero osób.">
+    <Section title="Obsada" alwaysExplain description="Ile osób potrzeba i ile z nich z doświadczeniem. Puste pole = zero.">
       <form onSubmit={submit} className="grid min-w-0 gap-4">
         {setup.shift_types.flatMap((st) => setup.positions.map((pos) => (
           <fieldset key={cellKey(st.id, pos.id, 0)} disabled={readOnly || save.isPending} className="min-w-0 rounded-md border border-line bg-surface p-3">
@@ -573,7 +646,8 @@ function ClosuresSection({ locationId, setup }: { locationId: string; setup: Loc
   return (
     <Section
       title="Dni zamknięcia"
-      description="Dni, w które lokal jest zamknięty, np. święta albo remont. Tego dnia nikt nie dostanie zmiany w tym lokalu."
+      alwaysExplain
+      description="Np. święta albo remont. Tego dnia nikt nie dostanie tu zmiany."
     >
       {setup.closures.length > 0 ? (
         <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
@@ -609,123 +683,6 @@ function ClosuresSection({ locationId, setup }: { locationId: string; setup: Loc
             <Button type="submit" variant="secondary" size="normal" disabled={create.isPending || readOnly}>
               <Plus aria-hidden="true" size={20} />
               Dodaj dzień zamknięcia
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Section>
-  )
-}
-
-// --------------------------------------------------------------------------------------------- exceptions
-
-function ExceptionsSection({ locationId, setup }: { locationId: string; setup: LocationSetupOut }) {
-  const { readOnly } = useManager()
-  const create = useCreateStaffingException()
-  const remove = useDeleteStaffingException()
-  const queryClient = useQueryClient()
-  const [date, setDate] = useState('')
-  const [shift, setShift] = useState(setup.shift_types[0]?.id ?? '')
-  const [position, setPosition] = useState(setup.positions[0]?.id ?? '')
-  const [count, setCount] = useState('0')
-  const [experiencedCount, setExperiencedCount] = useState('')
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
-  const [note, setNote] = useState('')
-  const shiftName = new Map(setup.shift_types.map((s) => [s.id, s.name]))
-  const positionName = new Map(setup.positions.map((p) => [p.id, p.name]))
-  const refresh = () => void queryClient.invalidateQueries()
-
-  if (setup.shift_types.length === 0 || setup.positions.length === 0) return null
-
-  // Left empty, the exception keeps what the weekday usually asks for, so the requirement does not vanish
-  // on the very day the manager adds more people.
-  const weekday = date ? (parseDate(date).getDay() + 6) % 7 : null
-  const usual =
-    setup.staffing.find((c) => c.weekday === weekday && c.shift_type_id === shift && c.position_id === position)
-      ?.experienced ?? 0
-  const experiencedNow = experiencedCount === '' ? Math.min(Number(count), usual) : Number(experiencedCount)
-
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault()
-    create.mutate(
-      {
-        locationId,
-        data: {
-          date,
-          shift_type_id: shift,
-          position_id: position,
-          count: Number(count),
-          experienced: experiencedNow,
-          start_time: start || null,
-          end_time: end || null,
-          note,
-        },
-      },
-      {
-        onSuccess: () => {
-          setNote('')
-          setStart('')
-          setEnd('')
-          refresh()
-        },
-      },
-    )
-  }
-  const describe = (e: StaffingExceptionOut) => {
-    const who = `${shiftName.get(e.shift_type_id) ?? 'Zmiana'}, ${positionName.get(e.position_id) ?? 'stanowisko'}`
-    const what = e.count === 0 ? 'nikt' : `${e.count} os.${e.experienced ? `, w tym ${e.experienced} dośw.` : ''}`
-    const hours = e.start_time && e.end_time ? `, ${shortTime(hhmm(e.start_time))}–${shortTime(hhmm(e.end_time))}` : ''
-    return `${who}: ${what}${hours}`
-  }
-
-  return (
-    <Section
-      title="Wyjątki w obsadzie"
-      description="Inna obsada w wybrany dzień, np. w Wigilię. Zastępuje zwykłą obsadę tego dnia. Gdy lokal jest zamknięty cały dzień, dodaj go wyżej, w dniach zamknięcia."
-    >
-      {setup.exceptions.length > 0 && (
-        <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
-          {setup.exceptions.map((e) => (
-            <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-1.5 last:border-b-0">
-              <span>
-                <b>{dayTitle(parseDate(e.date))}</b> · {describe(e)}
-                {e.note && <span className="text-ink-muted"> ({e.note})</span>}
-              </span>
-              <Button variant="quiet" size="normal" disabled={readOnly || remove.isPending} onClick={() => remove.mutate({ exceptionId: e.id }, { onSuccess: refresh })}>
-                Usuń
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-start">
-        <TextField label="Dzień" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-        <SelectField label="Zmiana" value={shift} onChange={(e) => setShift(e.target.value)}>
-          {setup.shift_types.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField label="Stanowisko" value={position} onChange={(e) => setPosition(e.target.value)}>
-          {setup.positions.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </SelectField>
-        <TextField label="Liczba osób" type="number" inputMode="numeric" min={0} max={50} value={count} onChange={(e) => setCount(e.target.value)} required />
-        <TextField label="W tym doświadczonych" type="number" inputMode="numeric" min={0} max={50} placeholder={String(experiencedNow)} value={experiencedCount} onChange={(e) => setExperiencedCount(e.target.value)} hint={usual > 0 ? `Puste = jak zwykle w ten dzień (${experiencedNow}).` : undefined} />
-        <TextField label="Inne godziny: od (nieobowiązkowo)" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
-        <TextField label="do" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
-        <TextField label="Powód (nieobowiązkowo)" className="sm:col-span-2" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="np. Wigilia" />
-        <div className="grid gap-2 sm:col-span-2 lg:col-span-4">
-          {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
-          <div>
-            <Button type="submit" variant="secondary" size="normal" disabled={create.isPending || readOnly}>
-              <Plus aria-hidden="true" size={20} />
-              Dodaj wyjątek
             </Button>
           </div>
         </div>

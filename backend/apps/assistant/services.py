@@ -17,8 +17,8 @@ from django.db import transaction
 from django.utils import timezone
 from ninja.errors import HttpError
 
+from apps.assistant import agreements, llm, readings
 from apps.assistant import context as facts
-from apps.assistant import llm, readings
 from apps.assistant.models import AssistantCommand, ManagerInstruction
 from apps.availability.models import AvailabilityDay, AvailabilityState, TextRequest
 from apps.rules.services import NUMBER_PARAMS
@@ -29,6 +29,16 @@ from apps.tenancy.models import Location
 from engine.rules_catalog import RULES_BY_CODE
 
 logger = logging.getLogger(__name__)
+
+COMMAND_MAX_AGE = timedelta(hours=24)
+OUT_OF_SCOPE_REPLY = (
+    "Pomagam tylko ustawiać i wyjaśniać zasady układania grafiku oraz polecenia o osobach. "
+    "Opisz zasadę, którą chcesz zmienić. Pozostałych pytań nie obsługuję. Nic się nie zmieniło."
+)
+OUT_OF_SCOPE_REQUEST_REPLY = (
+    "Asystent przyjmuje tylko prośby o preferencje układania grafiku. "
+    "Napisz jedną prośbę, np. o wolne piątki lub pracę rano. Ta wiadomość została odrzucona."
+)
 
 WEEKDAY_NAMES = ("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")
 MAX_ACTIONS = 12  # changes one command may propose
@@ -88,8 +98,6 @@ def request_context(
             f"Okres grafiku: od {start.isoformat()} do {end.isoformat()}.",
             f"Współpracownicy: {', '.join(people) or '(brak)'}.",
             f"Zmiany: {_shift_lines(shift_types)}.",
-            facts.location_snapshot(location, today, employee=text_request.employee),
-            facts.own_availability(text_request, start, end),
             facts.request_history(previous if previous is not None else facts.prior_requests(text_request)),
         ]
     )
@@ -132,14 +140,14 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
             context, people, shift_types = request_context(row, today, previous)
             reading = llm.read_request(row.text, context)
             status, interpretation, why = _checked_request(reading, request_span(row), people, shift_types, row.text)
-            if reading.replaces_request is not None:
+            if reading.replaces_request is not None and status != TextRequest.Status.REJECTED:
                 n = reading.replaces_request
                 if status == TextRequest.Status.INTERPRETED and 1 <= n <= len(previous):
                     replacement = previous[n - 1]
                 else:
                     status, interpretation, why = TextRequest.Status.NEEDS_MANAGER, None, "niejednoznaczna korekta"
             reason = TextRequest.UnreadReason.NONE if interpretation else TextRequest.UnreadReason.UNSURE
-            if interpretation is None:
+            if interpretation is None or status == TextRequest.Status.REJECTED:
                 answer = {"why": why, **reading.model_dump(mode="json")}
         except llm.AssistantError as exc:
             logger.warning("request %s left to the manager: %s", row.pk, exc)
@@ -211,17 +219,12 @@ def _checked_request(
     """(status, interpretation, why it could not be used: "" when it could). `span`: the days it can be about."""
     start, end = span[0].isoformat(), span[1].isoformat()
     confidence = min(1.0, max(0.0, float(reading.confidence)))
-    if reading.type == "informacja":
-        if (
-            confidence >= settings.ASSISTANT_MIN_CONFIDENCE
-            and reading.summary.strip()
-            and not any((reading.person, reading.shift_type, reading.avoid_shift_type, reading.dates, reading.weekdays))
-            and reading.max_hours is None
-            and reading.min_days is None
-            and reading.shifts_per_day is None
-        ):
-            return TextRequest.Status.ANSWERED, {"type": "informacja", "summary": reading.summary.strip()[:1500]}, ""
-        return TextRequest.Status.NEEDS_MANAGER, None, "niepewna odpowiedź informacyjna"
+    if reading.scope == "out_of_scope" or reading.type == "informacja":
+        return (
+            TextRequest.Status.REJECTED,
+            {"type": "out_of_scope", "summary": OUT_OF_SCOPE_REQUEST_REPLY},
+            "poza zakresem asystenta",
+        )
     data = readings.clean(
         type=reading.type,
         person=reading.person,
@@ -268,7 +271,7 @@ def _month_start():
     return timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
-def submit_command(ctx: TenantContext, location: Location, text: str) -> AssistantCommand:
+def submit_command(ctx: TenantContext, location: Location, text: str, period_id=None) -> AssistantCommand:
     """Save the command and defer the assistant's job in one transaction (or mark it "assistant is off")."""
     text = text.strip()
     if not text:
@@ -277,8 +280,10 @@ def submit_command(ctx: TenantContext, location: Location, text: str) -> Assista
     if used >= settings.ASSISTANT_COMMANDS_MONTHLY_LIMIT:
         raise HttpError(429, "Wykorzystano miesięczny limit poleceń dla asystenta. Zasady możesz zmienić ręcznie.")
     with transaction.atomic():
+        agreements.lock_location(location)
+        rule_set = agreements.for_command(location, period_id)
         command = AssistantCommand.objects.for_company(ctx.company).create(
-            company=ctx.company, location=location, text=text, created_by=ctx.user
+            company=ctx.company, location=location, text=text, created_by=ctx.user, rule_set=rule_set
         )
         if llm.is_enabled():
             from apps.assistant.tasks import plan_assistant_command  # tasks import this module
@@ -290,10 +295,8 @@ def submit_command(ctx: TenantContext, location: Location, text: str) -> Assista
     return command
 
 
-def rules_scope(ctx: TenantContext, location: Location):
-    from apps.rules.api import _Scope
-
-    return _Scope(ctx, "location", location)
+def rules_scope(ctx: TenantContext, location: Location, rule_set=None):
+    return agreements.scope(ctx, location, rule_set)
 
 
 def _rule_items(sc) -> list:
@@ -304,8 +307,8 @@ def _rule_items(sc) -> list:
     ]
 
 
-def _instructions(location: Location) -> list[ManagerInstruction]:
-    rows = ManagerInstruction.objects.for_company(location.company_id).filter(location=location)
+def _instructions(location: Location, rule_set=None) -> list[ManagerInstruction]:
+    rows = ManagerInstruction.objects.for_company(location.company_id).filter(location=location, rule_set=rule_set)
     return list(rows.select_related("employee__membership__user").order_by("position", "created_at"))
 
 
@@ -324,7 +327,11 @@ def command_context(location: Location, sc, today: date, instructions: list[Mana
     names = {pid: label for label, pid in people.items()}
     shift_types = _shift_types(location)
     shift_names = {str(s.pk): s.name for s in shift_types}
-    positions = Position.objects.for_company(location.company_id).filter(location=location).order_by("name")
+    positions = (
+        Position.objects.for_company(location.company_id)
+        .filter(location=location, removed_at__isnull=True)
+        .order_by("name")
+    )
     position_names = {str(p.pk): p.name for p in positions}
     periods = list(
         SchedulePeriod.objects.for_company(location.company_id)
@@ -362,7 +369,6 @@ def command_context(location: Location, sc, today: date, instructions: list[Mana
         lines.append(f"{number}. {instruction_text(row, names, shift_names)}")
     if not instructions:
         lines.append("(brak)")
-    lines.append(facts.location_snapshot(location, today))
     return "\n".join(lines)
 
 
@@ -374,9 +380,16 @@ def run_command(command_id: str, today: date | None = None) -> str:
     today = today or timezone.localdate()
     status, plan, raw = AssistantCommand.Status.FAILED, None, None
     try:
-        sc = rules_scope(_SystemContext(command.company), command.location)
-        instructions = _instructions(command.location)
-        context = command_context(command.location, sc, today, instructions) + "\n" + facts.command_history(command)
+        sc = rules_scope(_SystemContext(command.company), command.location, command.rule_set)
+        instructions = _instructions(command.location, command.rule_set)
+        context = (
+            "Ustalenia na okres: "
+            + agreements.label(command.rule_set)
+            + "\n"
+            + command_context(command.location, sc, today, instructions)
+            + "\n"
+            + facts.command_history(command)
+        )
         answer = llm.plan_command(command.text, context)
         raw = answer.model_dump(mode="json")
         status, plan = (
@@ -424,11 +437,28 @@ def check_plan(
     """
     from apps.rules.api import RulesIn, _clean_items, _location_preview
 
+    if answer.scope == "out_of_scope":
+        return {
+            "scope": "out_of_scope",
+            "out_of_scope": True,
+            "reply": OUT_OF_SCOPE_REPLY,
+            "question": None,
+            "rule_changes": [],
+            "new_instructions": [],
+            "remove_instructions": [],
+            "lines": [],
+            "effects": [],
+            "notes": [],
+            "informational": False,
+        }
     people = _people(location)
     names = {pid: label for label, pid in people.items()}
     shift_types = {s.name: str(s.pk) for s in _shift_types(location)}
     shift_names = {pid: name for name, pid in shift_types.items()}
-    positions = {p.name: str(p.pk) for p in Position.objects.for_company(location.company_id).filter(location=location)}
+    positions = {
+        p.name: str(p.pk)
+        for p in Position.objects.for_company(location.company_id).filter(location=location, removed_at__isnull=True)
+    }
     lines: list[str] = []
     notes: list[str] = []
     rejected = False
@@ -542,7 +572,7 @@ def check_plan(
                 continue
             if not any(p.start <= d <= p.end for p in periods for d in days):
                 notes.append(
-                    f"Polecenie o osobie „{new.person}” zadziała, gdy założysz okres grafiku na te dni. "
+                    f"Polecenie o osobie „{new.person}” zadziała, gdy poprosisz o dyspozycje na te dni. "
                     "Do tego czasu nie zmienia żadnego grafiku."
                 )
         new_instructions.append({"employee": employee, "data": data, "place": new.place})
@@ -603,11 +633,12 @@ def check_plan(
     elif rule_changes or new_instructions or removed:
         reply = (
             "Po zatwierdzeniu zapiszę ustawienia wymienione poniżej. "
-            "Zostaną uwzględnione przy następnym układaniu grafiku."
+            "Dotyczą wyłącznie przypisanego okresu dyspozycji; bez okresu zaczekają na nową prośbę o dyspozycje."
         )
     elif not answer.informational and not answer.question:
         reply = "Nie ma żadnych zmian do zatwierdzenia. Ustawienia i grafik pozostały bez zmian."
     return {
+        "scope": "rules",
         "relative_append": True,
         "blocked": rejected,
         "informational": answer.informational and not (rejected or lines or answer.question),
@@ -704,18 +735,27 @@ def has_changes(plan: dict[str, Any] | None) -> bool:
 
 def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
     """The manager accepted the plan: change the rule list and the instructions in one transaction."""
-    from apps.rules.api import RulesIn, save_rules
-
     with transaction.atomic():
+        agreements.lock_location(command.location)
         locked = ctx.qs(AssistantCommand).select_for_update().get(pk=command.pk)
         plan = locked.plan or {}
         if locked.status != AssistantCommand.Status.READY or not has_changes(plan):
             raise HttpError(409, "Tego planu nie można już zastosować. Napisz polecenie jeszcze raz.")
+        if timezone.now() >= locked.created_at + COMMAND_MAX_AGE:
+            raise HttpError(409, "Propozycja wygasła po 24 godzinach. Wyślij polecenie ponownie, aby przygotować nową.")
         location = ctx.qs(Location).select_for_update().get(pk=command.location_id)
+        if locked.rule_set_id is None:
+            raise HttpError(409, "Ten plan nie ma przypisanego zestawu zasad. Wyślij polecenie ponownie.")
+        agreements.require_open(locked.rule_set)
+        if locked.rule_set.rules is None:
+            locked.rule_set.rules = agreements.base_items(location)
+            locked.rule_set.save(update_fields=["rules"])
         removed = set(plan.get("remove_instructions") or [])
         existing = {
             str(pk)
-            for pk in ctx.qs(ManagerInstruction).filter(location=location, pk__in=removed).values_list("pk", flat=True)
+            for pk in ctx.qs(ManagerInstruction)
+            .filter(location=location, rule_set=locked.rule_set, pk__in=removed)
+            .values_list("pk", flat=True)
         }
         if removed != existing:
             raise HttpError(409, "Polecenie poprawiane w tym planie już się zmieniło. Napisz polecenie jeszcze raz.")
@@ -730,14 +770,16 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
             ):
                 raise HttpError(409, "Osoby lub zmiany z tego planu już się zmieniły. Napisz polecenie jeszcze raz.")
         if plan.get("rule_changes"):
-            sc = rules_scope(ctx, location)
-            save_rules(
-                sc,
-                RulesIn(items=_changed_items(_rule_items(sc), plan["rule_changes"])),
-                changed_codes={change["code"] for change in plan["rule_changes"]},
+            sc = rules_scope(ctx, location, locked.rule_set)
+            agreements.save_items(
+                locked.rule_set,
+                _changed_items(_rule_items(sc), plan["rule_changes"]),
+                {change["code"] for change in plan["rule_changes"]},
             )
-        ctx.qs(ManagerInstruction).filter(location=location, pk__in=plan.get("remove_instructions") or []).delete()
-        rows = _instructions(location)
+        ctx.qs(ManagerInstruction).filter(
+            location=location, rule_set=locked.rule_set, pk__in=plan.get("remove_instructions") or []
+        ).delete()
+        rows = _instructions(location, locked.rule_set)
         for new in plan.get("new_instructions") or []:
             employee = ctx.qs(EmployeeProfile).filter(pk=new["employee"], home_location=location).first()
             if employee is None:
@@ -745,6 +787,7 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
             row = ManagerInstruction(
                 company=ctx.company,
                 location=location,
+                rule_set=locked.rule_set,
                 employee=employee,
                 data=new["data"],
                 position=0,

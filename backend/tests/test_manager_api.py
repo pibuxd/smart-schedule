@@ -155,7 +155,7 @@ class TestSettings:
         assert api.patch(f"/api/positions/{position_id}", {"name": "Piekarz nocny"}).json()["name"] == "Piekarz nocny"
         assert api.client.delete(f"/api/positions/{position_id}").status_code == 204
 
-    def test_position_used_in_a_schedule_cannot_be_deleted(self, api, shop):
+    def test_position_used_in_a_schedule_is_hidden_instead_of_deleted(self, api, shop):
         version = ScheduleVersion.objects.create(period=shop["period"], number=1)
         start = datetime.combine(shop["period"].start, time(6), WARSAW)
         Shift.objects.create(
@@ -167,8 +167,21 @@ class TestSettings:
             end_at=start + timedelta(hours=8),
             slot_key="x",
         )
+        StaffingRule.objects.create(
+            location=shop["location"], weekday=0, shift_type=shop["shift_type"], position=shop["position"], count=1
+        )
+        setup = f"/api/locations/{shop['location'].pk}/setup"
         response = as_manager(api, shop).client.delete(f"/api/positions/{shop['position'].pk}")
-        assert response.status_code == 409 and "w ułożonym grafiku" in response.json()["detail"]
+        assert response.status_code == 204
+        # The schedule keeps the position; settings, staffing and people no longer have it.
+        assert Shift.objects.filter(position=shop["position"]).exists()
+        body = api.get(setup).json()
+        assert body["positions"] == [] and body["staffing"] == []
+        assert not shop["employee"].positions.exists()
+        assert api.patch(f"/api/positions/{shop['position'].pk}", {"name": "Inna"}).status_code == 404
+        # The name is free again.
+        created = api.post(f"/api/locations/{shop['location'].pk}/positions", {"name": "Sprzedawca"})
+        assert created.status_code == 201
 
     def test_shift_types_fixed_need_hours_overnight_allowed(self, api, shop):
         as_manager(api, shop)
@@ -216,21 +229,44 @@ class TestSettings:
         }
         assert put(api, f"/api/locations/{shop['location'].pk}/staffing", {"cells": [cell]}).status_code == 400
 
-    def test_exceptions(self, api, shop):
+    def test_day_staffing_keeps_only_what_differs_from_the_weekday(self, api, shop):
         as_manager(api, shop)
-        url = f"/api/locations/{shop['location'].pk}/staffing-exceptions"
-        payload = {
-            "date": str(date(2026, 12, 24)),
-            "shift_type_id": str(shop["shift_type"].pk),
-            "position_id": str(shop["position"].pk),
-            "count": 0,
-            "note": "Wigilia",
-        }
-        created = api.post(url, payload)
-        assert created.status_code == 201
-        assert api.post(url, payload).status_code == 409
-        assert api.client.delete(f"/api/staffing-exceptions/{created.json()['id']}").status_code == 204
+        location, st, position = shop["location"], shop["shift_type"], shop["position"]
+        day = date(2026, 12, 24)
+        StaffingRule.objects.filter(location=location).delete()
+        StaffingRule.objects.create(location=location, weekday=day.weekday(), shift_type=st, position=position, count=2)
+        url = f"/api/locations/{location.pk}/staffing-days/{day}"
+        cell = {"shift_type_id": str(st.pk), "position_id": str(position.pk)}
+
+        body = put(api, url, {"cells": [{**cell, "count": 0}], "note": " Wigilia "}).json()
+        assert [(e["date"], e["count"], e["note"]) for e in body["exceptions"]] == [(str(day), 0, "Wigilia")]
+
+        put(api, url, {"cells": [{**cell, "count": 3, "start_time": "08:00", "end_time": "12:00"}]})
+        saved = StaffingException.objects.get()
+        assert (saved.count, f"{saved.start_time:%H:%M}", f"{saved.end_time:%H:%M}") == (3, "08:00", "12:00")
+
+        # The usual number with the usual hours is not an exception; neither is a pair left out.
+        usual = {**cell, "count": 2, "start_time": str(st.start_time), "end_time": str(st.end_time)}
+        assert put(api, url, {"cells": [usual]}).json()["exceptions"] == []
+        put(api, url, {"cells": [{**cell, "count": 1}]})
+        assert put(api, url, {"cells": []}).json()["exceptions"] == []
+
+    def test_day_staffing_checks_the_cells(self, api, shop, make_company):
+        other = make_company("Inna")
+        as_manager(api, shop)
+        cell = {"shift_type_id": str(shop["shift_type"].pk), "position_id": str(shop["position"].pk)}
+        url = f"/api/locations/{shop['location'].pk}/staffing-days/"
+        foreign = {**cell, "shift_type_id": str(other["shift_type"].pk), "count": 1}
+        assert put(api, url + "2026-12-24", {"cells": [foreign]}).status_code == 400
+        assert put(api, url + "2026-12-24", {"cells": [{**cell, "count": 1, "experienced": 2}]}).status_code == 400
+        assert put(api, url + "2099-12-24", {"cells": [{**cell, "count": 1}]}).status_code == 400
+        flexible = ShiftType.objects.create(location=shop["location"], name="Dostawa", kind="flexible")
+        delivery = {**cell, "shift_type_id": str(flexible.pk), "count": 1}
+        refused = put(api, url + "2026-12-24", {"cells": [delivery]})
+        assert refused.status_code == 400 and "godziny" in refused.json()["detail"]
         assert not StaffingException.objects.exists()
+        api.login(other["manager"])
+        assert put(api, url + "2026-12-24", {"cells": []}).status_code == 404
 
     def test_closed_days(self, api, shop):
         as_manager(api, shop)
@@ -379,10 +415,10 @@ class TestEmployees:
         assert StaffingRule.objects.get().experienced == 1
         too_many = put(api, url, {"cells": [{**base, "weekday": 0, "count": 2, "experienced": 3}]})
         assert too_many.status_code == 400 and "Doświadczonych" in too_many.json()["detail"]
-        exceptions = f"/api/locations/{shop['location'].pk}/staffing-exceptions"
-        day = {**base, "date": str(shop["period"].start), "count": 3}
-        assert api.post(exceptions, {**day, "experienced": 4}).status_code == 400
-        assert api.post(exceptions, {**day, "experienced": 2}).json()["experienced"] == 2
+        day = f"/api/locations/{shop['location'].pk}/staffing-days/{shop['period'].start}"
+        assert put(api, day, {"cells": [{**base, "count": 3, "experienced": 4}]}).status_code == 400
+        saved = put(api, day, {"cells": [{**base, "count": 3, "experienced": 2}]}).json()
+        assert saved["exceptions"][0]["experienced"] == 2
 
     def test_employee_never_sees_the_experience_level(self, api, shop):
         EmployeeProfile.objects.filter(pk=shop["employee"].pk).update(experience=1)
