@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import { useLocationInstructions } from "../../api/generated/assistant/assistant";
 import { InlineError, Loading } from "../../components/ui/status";
+import { CopyPreviousAgreements } from "./CopyPreviousAgreements";
 
 /** The settings attached to the availability period, preserved after publication. */
 export function AssistantRulesTable({
@@ -65,11 +66,21 @@ export function AssistantRulesTable({
       </div>
       <p className="m-0 text-sm text-ink-muted">
         {data.closed
-          ? "Te ustalenia pozostają przy tym okresie i obowiązują także przy jego korektach. Nie przejdą na następny okres."
+          ? "Te ustalenia pozostają przy tym okresie i obowiązują także przy jego korektach. Na następny okres nie przejdą same. Możesz je tam skopiować."
           : data.period_requested
-            ? "Zatwierdzone ustalenia dotyczą tego okresu. Po publikacji znikną z listy oczekujących."
-            : "Zatwierdzone ustalenia zaczekają na nową prośbę o dyspozycje. Samo utworzenie okresu ich nie przypisuje."}
+            ? "Dotyczą tylko tego okresu. Nowy okres zaczyna bez ustaleń."
+            : "Jeszcze bez okresu. Przypiszesz je przyciskiem „Poproś o dyspozycje”."}
       </p>
+      {!data.closed && (
+        <CopyPreviousAgreements
+          locationId={locationId}
+          periodId={periodId}
+          defaultOpen={
+            data.items.length === 0 &&
+            !(data.rules ?? []).some((rule) => rule.changed)
+          }
+        />
+      )}
       {rules.length > 0 || data.items.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">

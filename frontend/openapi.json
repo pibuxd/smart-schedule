@@ -3146,7 +3146,7 @@
             }
           }
         },
-        "description": "Correct how my request was understood: write it again, or say \"that is not what I meant\" (then the\nmanager reads it as written).",
+        "description": "Correct how my request was understood: write it again, or say \"that is not what I meant\" (then the\nmanager reads it as written). The same hands a request the assistant refused over to the manager.",
         "tags": [
           "availability"
         ],
@@ -6255,6 +6255,171 @@
         "tags": [
           "assistant"
         ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/agreements/previous": {
+      "get": {
+        "operationId": "previous_agreements",
+        "summary": "Previous Agreements",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviousAgreementsOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "What the manager may copy from the previous period into this one. Nothing is copied by itself.",
+        "tags": [
+          "assistant"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/agreements/copy": {
+      "post": {
+        "operationId": "copy_previous_agreements",
+        "summary": "Copy Previous Agreements",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstructionsOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Copy the ticked agreements of the previous period into this one (or into the waiting list).",
+        "tags": [
+          "assistant"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyAgreementsIn"
+              }
+            }
+          },
+          "required": true
+        },
         "security": [
           {
             "SessionAuth": []
@@ -9776,7 +9941,8 @@
               "",
               "off",
               "unsure",
-              "failed"
+              "failed",
+              "rejected"
             ],
             "title": "Unread Reason",
             "type": "string"
@@ -11773,6 +11939,77 @@
           "rules"
         ],
         "title": "InstructionsOut",
+        "type": "object"
+      },
+      "PreviousAgreementsOut": {
+        "properties": {
+          "period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/AgreedRuleOut"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InstructionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "period_label",
+          "rules",
+          "items"
+        ],
+        "title": "PreviousAgreementsOut",
+        "type": "object"
+      },
+      "CopyAgreementsIn": {
+        "properties": {
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
+          },
+          "rule_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Rule Codes",
+            "type": "array"
+          },
+          "instruction_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Instruction Ids",
+            "type": "array"
+          }
+        },
+        "title": "CopyAgreementsIn",
         "type": "object"
       },
       "InstructionOrderIn": {

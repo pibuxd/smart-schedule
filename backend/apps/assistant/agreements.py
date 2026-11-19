@@ -7,6 +7,7 @@ from apps.assistant.models import AssistantCommand, AssistantRuleSet, ManagerIns
 from apps.rules.services import Row, merge
 from apps.scheduling.models import SchedulePeriod
 from apps.tenancy.models import Company, Location
+from engine.rules_catalog import RULES_BY_CODE
 
 
 class ReadContext:
@@ -111,6 +112,111 @@ def save_items(rule_set, items, changed_codes):
     rule_set.save(update_fields=["rules", "changed_codes"])
 
 
+def merge_rules(target, source, codes):
+    """Put the chosen settings of `source` into `target`, on top of the target's (or the location's) list."""
+    baseline = rule_rows(target)
+    if baseline is None:
+        baseline = [
+            Row(i["code"], i["enabled"], i["is_hard"], n, i["params"])
+            for n, i in enumerate(base_items(target.location), 1)
+        ]
+    combined = merge(baseline, [r for r in rule_rows(source) or [] if r.rule_code in codes])
+    target.rules = [
+        {"code": r.rule_code, "enabled": r.enabled, "is_hard": r.is_hard, "params": r.params} for r in combined
+    ]
+    target.changed_codes = sorted(set(target.changed_codes) | set(codes))
+    target.save(update_fields=["rules", "changed_codes"])
+
+
+def previous(location, period_id=None):
+    """The newest earlier period's set that holds any agreement: the only source the manager can copy from."""
+    period = target_period(location, period_id)
+    rows = AssistantRuleSet.objects.for_company(location.company_id).filter(location=location, period__isnull=False)
+    if period is not None:
+        rows = rows.filter(period__start__lt=period.start)
+    for rule_set in rows.select_related("period").order_by("-period__start", "-pk")[:12]:
+        if rule_set.changed_codes or rule_set.instructions.exists():
+            return rule_set
+    return None
+
+
+def copyable(location, source, target):
+    """(rule settings, instructions) of `source` that still fit the location and are not in `target` yet."""
+    if source is None:
+        return [], []
+    from apps.assistant import readings
+    from apps.staffing.models import EmployeeProfile, ShiftType
+
+    mine = {i["code"]: i for i in (target.rules or [])} if target else {}
+    changed = set(target.changed_codes) if target else set()
+    rules = [
+        i
+        for i in source.rules or []
+        if i["code"] in source.changed_codes
+        and i["code"] in RULES_BY_CODE
+        and not (i["code"] in changed and mine.get(i["code"]) == i)
+    ]
+    people = {
+        str(pk)
+        for pk in EmployeeProfile.objects.for_company(location.company_id)
+        .filter(home_location=location, is_active=True)
+        .values_list("pk", flat=True)
+    }
+    shifts = {
+        str(pk)
+        for pk in ShiftType.objects.for_company(location.company_id)
+        .filter(location=location)
+        .values_list("pk", flat=True)
+    }
+    have = (
+        {
+            (row.employee_id, repr(row.data))
+            for row in ManagerInstruction.objects.for_company(location.company_id).filter(rule_set=target)
+        }
+        if target
+        else set()
+    )
+    today = timezone.localdate()
+    instructions = [
+        row
+        for row in ManagerInstruction.objects.for_company(location.company_id)
+        .filter(rule_set=source)
+        .order_by("position", "created_at")
+        if str(row.employee_id) in people
+        and not readings.is_over(row.data or {}, today)
+        and (not (row.data or {}).get("subject_employee") or str(row.data["subject_employee"]) in people)
+        and (not (row.data or {}).get("shift_type") or str(row.data["shift_type"]) in shifts)
+        and (row.employee_id, repr(row.data)) not in have
+    ]
+    return rules, instructions
+
+
+def copy_from_previous(location, period_id, rule_codes, instruction_ids, user):
+    """Caller holds the company and location locks. Copies only what the manager ticked; nothing by default."""
+    source = previous(location, period_id)
+    target = for_command(location, period_id)
+    rules, instructions = copyable(location, source, target)
+    codes, ids = set(rule_codes), set(instruction_ids)
+    chosen = [row for row in instructions if row.pk in ids]
+    if not codes <= {i["code"] for i in rules} or len(chosen) != len(ids):
+        raise HttpError(409, "Lista ustaleń zmieniła się w międzyczasie. Odśwież stronę i wybierz jeszcze raz.")
+    if codes:
+        merge_rules(target, source, codes)
+    last = ManagerInstruction.objects.for_company(location.company_id).filter(rule_set=target).count()
+    for n, row in enumerate(chosen, last + 1):
+        ManagerInstruction.objects.for_company(location.company_id).create(
+            company_id=location.company_id,
+            location=location,
+            rule_set=target,
+            employee=row.employee,
+            data=row.data,
+            position=n,
+            source_text=row.source_text,
+            created_by=user,
+        )
+    return target
+
+
 def bind_pending(period):
     """Adopt once when availability is requested. Never move another period's agreements."""
     rows = AssistantRuleSet.objects.for_company(period.company_id)
@@ -124,18 +230,7 @@ def bind_pending(period):
         return
     require_open(target)
     if pending.rules is not None:
-        baseline = rule_rows(target)
-        if baseline is None:
-            baseline = [
-                Row(i["code"], i["enabled"], i["is_hard"], n, i["params"])
-                for n, i in enumerate(base_items(period.location), 1)
-            ]
-        combined = merge(baseline, [r for r in rule_rows(pending) if r.rule_code in pending.changed_codes])
-        target.rules = [
-            {"code": r.rule_code, "enabled": r.enabled, "is_hard": r.is_hard, "params": r.params} for r in combined
-        ]
-        target.changed_codes = sorted(set(target.changed_codes) | set(pending.changed_codes))
-        target.save(update_fields=["rules", "changed_codes"])
+        merge_rules(target, pending, pending.changed_codes)
     instructions = list(
         ManagerInstruction.objects.for_company(period.company_id)
         .filter(rule_set=target)

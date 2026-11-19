@@ -147,16 +147,20 @@ it("does not send an employee request on Enter", async () => {
   );
 });
 
-it("does not claim an out-of-scope request reached the manager or offer forwarding", async () => {
-  mockApi(() => [
-    200,
-    [
-      request({
-        status: "rejected",
-        summary: "Pomagam tylko ustalać preferencje.",
-      }),
-    ],
-  ]);
+it("lets the employee forward a rejected request to the manager without claiming it was sent", async () => {
+  const calls = mockApi((method) =>
+    method === "PATCH"
+      ? [200, request({ status: "needs_manager", summary: null })]
+      : [
+          200,
+          [
+            request({
+              status: "rejected",
+              summary: "Pomagam tylko ustalać preferencje.",
+            }),
+          ],
+        ],
+  );
   renderScreen(
     <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
   );
@@ -165,7 +169,11 @@ it("does not claim an out-of-scope request reached the manager or offer forwardi
   ).toBeInTheDocument();
   expect(screen.getByText("Odrzucona")).toBeInTheDocument();
   expect(screen.queryByText("Wysłane do kierownika")).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole("button", { name: "Przekaż kierownikowi" }),
-  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Przekaż kierownikowi" }));
+  await waitFor(() =>
+    expect(calls.some((c) => c.method === "PATCH")).toBe(true),
+  );
+  expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
+    understood: false,
+  });
 });

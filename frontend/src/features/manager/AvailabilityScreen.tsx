@@ -386,6 +386,9 @@ function requestNote(request: ManagerRequestOut): string {
   if (request.unread_reason === 'failed') {
     return `Asystent nie zdołał przeczytać tej prośby (błąd połączenia). Spróbuj jeszcze raz albo ${yourself}`
   }
+  if (request.unread_reason === 'rejected') {
+    return `Asystent odrzucił tę wiadomość jako niezwiązaną z grafikiem. Pracownik przekazał ją Tobie do oceny. Generator jej nie bierze pod uwagę. Możesz ${yourself}`
+  }
   if (request.employee_corrected) return `Pracownik napisał, że asystent źle to zrozumiał. Możesz ${yourself}`
   return `Asystent przeczytał tę prośbę, ale nie umiał zamienić jej na coś, co generator sprawdzi sam. Możesz ${yourself}`
 }

@@ -523,7 +523,7 @@ def create_my_request(request, payload: RequestIn):
 )
 def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
     """Correct how my request was understood: write it again, or say "that is not what I meant" (then the
-    manager reads it as written)."""
+    manager reads it as written). The same hands a request the assistant refused over to the manager."""
     ctx, text_request = context_for(request, TextRequest, request_id)
     if text_request.employee.membership_id != ctx.membership.pk:
         raise HttpError(404, "Nie znaleziono.")
@@ -551,6 +551,16 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
             text_request.status = TextRequest.Status.NEEDS_MANAGER
             text_request.employee_corrected = True
             text_request.save(update_fields=["status", "employee_corrected", "updated_at"])
+        elif payload.understood is False and text_request.status == TextRequest.Status.REJECTED:
+            # The person thinks the refusal was wrong: the manager reads the text as written and decides by hand.
+            # Without an interpretation the request is never scored by the generator.
+            text_request.status = TextRequest.Status.NEEDS_MANAGER
+            text_request.interpretation = None
+            text_request.unread_reason = TextRequest.UnreadReason.REJECTED
+            text_request.employee_corrected = True
+            text_request.save(
+                update_fields=["status", "interpretation", "unread_reason", "employee_corrected", "updated_at"]
+            )
     return _request_out(text_request)
 
 
@@ -612,8 +622,9 @@ class ManagerRequestOut(Schema):
     # The person said the assistant got it wrong, or rewrote the request.
     employee_corrected: bool
     # Why there is no summary: "off" = the assistant was switched off when the request came, "unsure" = it read
-    # the request but could not turn it into a setting, "failed" = the call failed; "" otherwise.
-    unread_reason: Literal["", "off", "unsure", "failed"]
+    # the request but could not turn it into a setting, "failed" = the call failed, "rejected" = the assistant
+    # refused it as off-topic and the person handed it over for a manual decision; "" otherwise.
+    unread_reason: Literal["", "off", "unsure", "failed", "rejected"]
     # The assistant is on now and has not really read this request yet: the manager can hand it over again.
     can_reread: bool
     manager_priority: PriorityName
