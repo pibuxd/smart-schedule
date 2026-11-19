@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
@@ -45,6 +45,22 @@ describe('NotificationsScreen', () => {
         body: { company_id: 'c1', ids: ['n1'] },
       }),
     )
+  })
+
+  it('removes one notification with the X and all with one button', async () => {
+    const calls = mockApi((method) => (method === 'GET' ? [200, list] : [204, null]))
+    renderScreen(<NotificationsScreen companyId="c1" now={now} />)
+    await screen.findByText(/Ola Kos oddaje zmianę/)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Usuń powiadomienie' })[0])
+    await waitFor(() => expect(screen.queryByText(/Ola Kos oddaje zmianę/)).not.toBeInTheDocument())
+    expect(calls.find((c) => c.method === 'DELETE')).toMatchObject({ url: '/api/me/notifications/n1' })
+    expect(screen.getByText(/Jest nowy grafik/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń wszystkie' }))
+    expect(await screen.findByText('Nie masz powiadomień')).toBeInTheDocument()
+    expect(calls.filter((c) => c.method === 'DELETE').at(-1)).toMatchObject({
+      url: '/api/me/notifications?company_id=c1',
+    })
   })
 
   it('explains what will appear when there is nothing', async () => {

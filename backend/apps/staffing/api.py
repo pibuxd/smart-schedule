@@ -8,7 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
-from django.db.models import Count, ProtectedError, RestrictedError
+from django.db.models import Count
 from django.utils import timezone
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
@@ -16,7 +16,8 @@ from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
 from apps.rules.models import RuleSetting
-from apps.scheduling.models import Assignment, ScheduleVersion
+from apps.scheduling.models import Assignment, ScheduleVersion, Shift
+from apps.staffing import removal
 from apps.staffing.models import (
     EmployeeProfile,
     LocationClosure,
@@ -160,6 +161,8 @@ class EmployeeOut(Schema):
     is_manager: bool
     # Shifts from today on in drafts not published yet: switching the person off leaves them to be moved.
     draft_shifts: int = 0
+    # Shifts from today on in published schedules: removing the person leaves them on these shifts.
+    published_shifts: int = 0
 
 
 class EmployeeIn(Schema):
@@ -192,7 +195,14 @@ def _manage(request, model, object_id) -> tuple[TenantContext, object, Location]
 def _change(request, model, object_id):
     ctx, obj, location = _manage(request, model, object_id)
     ctx.require_writable()
+    if isinstance(obj, Position) and obj.removed_at is not None:
+        raise HttpError(404, "Nie znaleziono.")
     return ctx, obj, location
+
+
+def _positions(ctx: TenantContext, location: Location):
+    """The location's positions without the removed ones (those live on only in old schedules)."""
+    return ctx.qs(Position).filter(location=location, removed_at__isnull=True)
 
 
 def _position_out(position: Position, counts: dict) -> PositionOut:
@@ -220,7 +230,7 @@ def _exception_out(exc: StaffingException) -> StaffingExceptionOut:
 
 
 def _setup_out(ctx: TenantContext, location: Location) -> LocationSetupOut:
-    positions = list(ctx.qs(Position).filter(location=location).order_by("name"))
+    positions = list(_positions(ctx, location).order_by("name"))
     counts: dict = {}
     links = EmployeeProfile.positions.through.objects.filter(  # tenant-ok: links of this location's positions
         position__in=positions, employeeprofile__is_active=True
@@ -267,7 +277,8 @@ def _unique(save, message: str):
 
 
 def _in_location(ctx: TenantContext, model, pk, location: Location, what: str):
-    obj = ctx.qs(model).filter(pk=pk, location=location).first()
+    rows = _positions(ctx, location) if model is Position else ctx.qs(model).filter(location=location)
+    obj = rows.filter(pk=pk).first()
     if obj is None:
         raise HttpError(400, f"Wybierz {what} z tego lokalu.")
     return obj
@@ -313,9 +324,6 @@ def update_position(request, position_id: UUID, payload: PositionIn):
     return _position_out(position, {})
 
 
-IN_USE = "{what} jest już w ułożonym grafiku, więc nie można go usunąć. Możesz zmienić jego nazwę."
-
-
 def _check_rule_references(ctx: TenantContext, obj: Position | ShiftType, param: str) -> None:
     # Serialize against saving the location's rules, which store these references in JSON.
     ctx.qs(Location).select_for_update().get(pk=obj.location_id)
@@ -332,14 +340,20 @@ def _check_rule_references(ctx: TenantContext, obj: Position | ShiftType, param:
     "/positions/{position_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
 )
 def delete_position(request, position_id: UUID):
-    """Also removes its staffing; refused when a schedule already uses it (history stays intact)."""
+    """Also removes its staffing and takes it from people. A position that a saved schedule uses is kept hidden
+    (old schedules still show its name), so the manager can always get rid of it."""
     ctx, position, _ = _change(request, Position, position_id)
-    try:
-        with transaction.atomic():
-            _check_rule_references(ctx, position, "position")
+    with transaction.atomic():
+        _check_rule_references(ctx, position, "position")
+        if not ctx.qs(Shift).filter(position=position).exists():
             position.delete()
-    except (ProtectedError, RestrictedError) as exc:
-        raise HttpError(409, IN_USE.format(what="To stanowisko")) from exc
+        else:
+            ctx.qs(StaffingRule).filter(position=position).delete()
+            ctx.qs(StaffingException).filter(position=position).delete()
+            ctx.qs(PositionExperience).filter(position=position).delete()
+            position.employees.clear()
+            position.removed_at = timezone.now()
+            position.save(update_fields=["removed_at"])
     return Status(204, None)
 
 
@@ -383,12 +397,9 @@ def update_shift_type(request, shift_type_id: UUID, payload: ShiftTypeIn):
 def delete_shift_type(request, shift_type_id: UUID):
     """Removes its staffing too. Saved schedules keep their shifts (with the hours copied)."""
     ctx, st, _ = _change(request, ShiftType, shift_type_id)
-    try:
-        with transaction.atomic():
-            _check_rule_references(ctx, st, "shift_type")
-            st.delete()
-    except (ProtectedError, RestrictedError) as exc:
-        raise HttpError(409, IN_USE.format(what="Ta zmiana")) from exc
+    with transaction.atomic():
+        _check_rule_references(ctx, st, "shift_type")
+        st.delete()
     return Status(204, None)
 
 
@@ -401,7 +412,7 @@ def save_staffing(request, location_id: UUID, payload: StaffingIn):
     Cells with 0 (or left out) mean nobody."""
     ctx, location, _ = _change(request, Location, location_id)
     shift_types = {st.pk: st for st in ctx.qs(ShiftType).filter(location=location)}
-    positions = {p.pk: p for p in ctx.qs(Position).filter(location=location)}
+    positions = {p.pk: p for p in _positions(ctx, location)}
     rows: dict[tuple, StaffingRule] = {}
     for cell in payload.cells:
         st, position = shift_types.get(cell.shift_type_id), positions.get(cell.position_id)
@@ -549,15 +560,18 @@ def location_employees(request, location_id: UUID):
     ctx, location, _ = _manage(request, Location, location_id)
     profiles = list(
         ctx.qs(EmployeeProfile)
-        .filter(home_location=location)
+        .filter(home_location=location, removed_at__isnull=True)
         .select_related("membership__user")
         .order_by("-is_active", "membership__user__last_name", "membership__user__first_name")
     )
     positions = _position_ids(profiles)
     levels = _position_levels(profiles)
-    drafts = _draft_shifts(ctx, profiles)
+    drafts = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.DRAFT)
+    published = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.PUBLISHED)
     return [
-        _employee_out(p, positions[p.pk], levels[p.pk]).model_copy(update={"draft_shifts": drafts.get(p.pk, 0)})
+        _employee_out(p, positions[p.pk], levels[p.pk]).model_copy(
+            update={"draft_shifts": drafts.get(p.pk, 0), "published_shifts": published.get(p.pk, 0)}
+        )
         for p in profiles
     ]
 
@@ -591,13 +605,13 @@ def _closures_out(ctx: TenantContext, location: Location, closures=None) -> list
     ]
 
 
-def _draft_shifts(ctx: TenantContext, profiles) -> dict:
-    """profile id -> number of shifts from today on in drafts (not yet published)."""
+def _upcoming_shifts(ctx: TenantContext, profiles, status: str) -> dict:
+    """profile id -> number of shifts from today on in drafts (not yet published) or in published schedules."""
     rows = (
         ctx.qs(Assignment)
         .filter(
             employee__in=profiles,
-            shift__version__status=ScheduleVersion.Status.DRAFT,
+            shift__version__status=status,
             shift__date__gte=timezone.localdate(),
         )
         .values("employee")
@@ -621,7 +635,10 @@ def add_myself_as_employee(request, location_id: UUID):
             profile = EmployeeProfile.objects.for_company(ctx.company).create(
                 company=ctx.company, membership=ctx.membership, home_location=location
             )
-            profile.positions.set(ctx.qs(Position).filter(location=location))
+            profile.positions.set(_positions(ctx, location))
+        elif profile.removed_at is not None:
+            removal.restore_employee(profile, location)
+            profile.positions.set(_positions(ctx, location))
         elif profile.home_location_id != location.pk:
             raise HttpError(
                 409,
@@ -666,6 +683,8 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
     profile = ctx.qs(EmployeeProfile).select_for_update().get(pk=profile.pk)
     ctx.require_manager_of(profile.home_location)
     ctx.require_writable()
+    if profile.removed_at is not None:
+        raise HttpError(404, "Nie znaleziono.")
     if payload.revision is not None:
         current = _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])
         if current.revision != payload.revision:
@@ -691,7 +710,7 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
             user.save(update_fields=["first_name", "last_name"])
         profile.save()
         if "position_ids" in sent and payload.position_ids is not None:
-            positions = list(ctx.qs(Position).filter(pk__in=payload.position_ids, location=profile.home_location))
+            positions = list(_positions(ctx, profile.home_location).filter(pk__in=payload.position_ids))
             if len(positions) != len(set(payload.position_ids)):
                 raise HttpError(400, "Wybierz stanowiska z lokalu tej osoby.")
             profile.positions.set(positions)
@@ -710,3 +729,18 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
         stale.filter(level=profile.experience).delete()
     profile = ctx.qs(EmployeeProfile).select_related("membership__user").get(pk=profile.pk)
     return _employee_out(profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk])
+
+
+@router.delete(
+    "/employees/{employee_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
+)
+def remove_employee(request, employee_id: UUID):
+    """Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain
+    employee loses access to the company and can come back only through a new invitation."""
+    ctx, profile = context_for(request, EmployeeProfile, employee_id)
+    ctx.require_manager_of(profile.home_location)
+    ctx.require_writable()
+    if profile.removed_at is not None:
+        raise HttpError(404, "Nie znaleziono.")
+    removal.remove_employee(profile)
+    return Status(204, None)

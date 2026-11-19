@@ -327,7 +327,11 @@ def command_context(location: Location, sc, today: date, instructions: list[Mana
     names = {pid: label for label, pid in people.items()}
     shift_types = _shift_types(location)
     shift_names = {str(s.pk): s.name for s in shift_types}
-    positions = Position.objects.for_company(location.company_id).filter(location=location).order_by("name")
+    positions = (
+        Position.objects.for_company(location.company_id)
+        .filter(location=location, removed_at__isnull=True)
+        .order_by("name")
+    )
     position_names = {str(p.pk): p.name for p in positions}
     periods = list(
         SchedulePeriod.objects.for_company(location.company_id)
@@ -451,7 +455,10 @@ def check_plan(
     names = {pid: label for label, pid in people.items()}
     shift_types = {s.name: str(s.pk) for s in _shift_types(location)}
     shift_names = {pid: name for name, pid in shift_types.items()}
-    positions = {p.name: str(p.pk) for p in Position.objects.for_company(location.company_id).filter(location=location)}
+    positions = {
+        p.name: str(p.pk)
+        for p in Position.objects.for_company(location.company_id).filter(location=location, removed_at__isnull=True)
+    }
     lines: list[str] = []
     notes: list[str] = []
     rejected = False

@@ -21,4 +21,5 @@ export interface EmployeeOut {
   is_active: boolean;
   is_manager: boolean;
   draft_shifts?: number;
+  published_shifts?: number;
 }

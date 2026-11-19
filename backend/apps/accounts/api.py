@@ -14,7 +14,7 @@ from apps.accounts.login import request_login_code, verify_login_code
 from apps.billing.services import subscription_state
 from apps.core.http import client_ip, require_csrf
 from apps.core.schemas import ErrorOut
-from apps.tenancy.models import Invitation, InvitationStatus, Membership
+from apps.tenancy.models import Invitation, InvitationStatus, Membership, Role
 
 router = Router(tags=["auth"])
 
@@ -66,6 +66,12 @@ def _works_shifts(membership) -> bool:
         return False
 
 
+def _removed(membership) -> bool:
+    """A plain employee removed from the company by a manager (kept only for the schedule history)."""
+    profile = getattr(membership, "employee_profile", None)
+    return membership.role == Role.EMPLOYEE and profile is not None and profile.removed_at is not None
+
+
 def build_me(user) -> MeOut:
     memberships = Membership.objects.filter(user=user)  # tenant-ok: the person's own memberships
     memberships = memberships.select_related("company", "employee_profile").order_by("company__name")
@@ -86,6 +92,7 @@ def build_me(user) -> MeOut:
                 works_shifts=_works_shifts(m),
             )
             for m in memberships
+            if not _removed(m)
         ],
         pending_invitations=pending,
     )

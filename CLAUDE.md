@@ -120,6 +120,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   Employee screens get the company from `useEmployee()`; component tests use `renderScreen` and `mockApi` from `src/test/render.tsx`.
   Manager screens live in `src/features/manager/` under `/kierownik` and get the company from `useManager()`
   (tests wrap them in `AsManager` from `features/manager/test-utils.tsx`).
+- Removing keeps schedule history: where the database blocks a delete (`RESTRICT`), hide instead. `EmployeeProfile.removed_at`
+  (always with `is_active=False`; set by `apps/staffing/removal.py`, a removed plain employee gets 404 from `tenant_context`)
+  and `Position.removed_at` (read live positions with `removed_at__isnull=True`). Locations with history are archived.
 - Schedules are arranged only when the manager asks (after the availability deadline or once everyone has answered);
   never add jobs that generate schedules on a timer or by themselves.
 - To see "Mój grafik" on demo data: publish from "Grafik" in the manager panel, or `generate_schedule --period <id> --publish`.

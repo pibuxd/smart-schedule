@@ -26,8 +26,14 @@ import {
   useUpdatePosition,
   useUpdateShiftType,
 } from '../../api/generated/staffing/staffing'
-import { useManagerOverview, useLocationDetail, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
+import {
+  useDeleteLocation,
+  useLocationDetail,
+  useManagerOverview,
+  useUpdateLocation,
+} from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
+import { ConfirmSheet } from '../../components/ui/confirm'
 import { CheckField, Section, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
@@ -157,19 +163,50 @@ function ArchiveSection({ location }: { location: LocationOut }) {
   const update = useUpdateLocation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const remove = useDeleteLocation()
   const [open, setOpen] = useState(false)
-  if (role !== 'owner' || location.archived) return null
+  const [removing, setRemoving] = useState(false)
+  if (role !== 'owner') return null
   return (
     <Section
-      title="Archiwum"
+      title="Archiwum i usuwanie"
       alwaysExplain
-      description="Dawne grafiki i godziny zostaną. Dla lokalu w archiwum nie ułożysz nowego grafiku."
+      description="Dawne grafiki i godziny zostaną. Usunąć możesz tylko lokal bez pracowników i bez grafików."
     >
-      <div>
-        <Button variant="danger" size="normal" onClick={() => setOpen(true)} disabled={readOnly}>
-          Przenieś lokal do archiwum
+      <div className="flex flex-wrap gap-2">
+        {!location.archived && (
+          <Button variant="danger" size="normal" onClick={() => setOpen(true)} disabled={readOnly}>
+            Przenieś lokal do archiwum
+          </Button>
+        )}
+        <Button variant="quiet" size="normal" onClick={() => setRemoving(true)} disabled={readOnly}>
+          <Trash2 aria-hidden="true" size={18} />
+          Usuń lokal
         </Button>
       </div>
+      <ConfirmSheet
+        open={removing}
+        onOpenChange={setRemoving}
+        title="Usunąć lokal na dobre?"
+        confirmLabel="Tak, usuń lokal"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(
+            { locationId: location.id },
+            {
+              onSuccess: async () => {
+                await navigate({ to: '/kierownik' })
+                void queryClient.invalidateQueries()
+              },
+            },
+          )
+        }
+      >
+        <p className="m-0">
+          {location.name} zniknie razem ze stanowiskami, zmianami, obsadą i zaproszeniami. Tego nie da się cofnąć.
+        </p>
+      </ConfirmSheet>
       <Sheet open={open} onOpenChange={setOpen} title="Przenieść do archiwum?">
         <div className="grid gap-4">
           <p className="m-0">
@@ -214,8 +251,9 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
+  const [removing, setRemoving] = useState<{ id: string; name: string; employees: number } | null>(null)
   const refresh = () => void queryClient.invalidateQueries()
-  const error = create.error ?? rename.error ?? remove.error
+  const error = create.error ?? rename.error
 
   return (
     <Section title="Stanowiska" description="Np. Sprzedawca, Kelner, Kucharz, Kierownik zmiany.">
@@ -253,7 +291,10 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
                     size="normal"
                     aria-label={`Usuń stanowisko ${p.name}`}
                     disabled={readOnly || remove.isPending}
-                    onClick={() => remove.mutate({ positionId: p.id }, { onSuccess: refresh })}
+                    onClick={() => {
+                      remove.reset()
+                      setRemoving(p)
+                    }}
                   >
                     <Trash2 aria-hidden="true" size={18} />
                     Usuń
@@ -278,6 +319,24 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
         </Button>
       </form>
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
+      <ConfirmSheet
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Usunąć stanowisko „${removing?.name ?? ''}”?`}
+        confirmLabel="Tak, usuń stanowisko"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          removing &&
+          remove.mutate({ positionId: removing.id }, { onSuccess: () => { setRemoving(null); refresh() } })
+        }
+      >
+        <p className="m-0">
+          Zniknie z obsady i z wyjątków.
+          {removing && removing.employees > 0 ? ` Stracą je też osoby, które je mają (${removing.employees}).` : ''} W
+          ułożonych już grafikach zostaje.
+        </p>
+      </ConfirmSheet>
     </Section>
   )
 }
@@ -355,6 +414,7 @@ function ShiftTypeForm({
   const [start, setStart] = useState(hhmm(shiftType?.start_time))
   const [end, setEnd] = useState(hhmm(shiftType?.end_time))
   const [closing, setClosing] = useState(shiftType?.is_closing ?? false)
+  const [removing, setRemoving] = useState(false)
   const done = () => {
     void queryClient.invalidateQueries()
     onDone()
@@ -420,16 +480,30 @@ function ShiftTypeForm({
       <Button type="submit" wide disabled={create.isPending || update.isPending || tooLong}>
         Zapisz zmianę
       </Button>
-      {shiftType && (
-        <Button
-          variant="danger"
-          wide
-          disabled={remove.isPending}
-          onClick={() => remove.mutate({ shiftTypeId: shiftType.id }, { onSuccess: done })}
-        >
+      {shiftType && !removing && (
+        <Button variant="danger" wide onClick={() => setRemoving(true)}>
           <Trash2 aria-hidden="true" size={18} />
-          Usuń tę zmianę (razem z jej obsadą)
+          Usuń tę zmianę
         </Button>
+      )}
+      {shiftType && removing && (
+        <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
+          <p className="m-0">
+            <b>{`Usunąć zmianę „${shiftType.name}”?`}</b> Zniknie razem z obsadą na każdy dzień tygodnia i z wyjątkami.
+            W ułożonych już grafikach zostaje.
+          </p>
+          <Button
+            variant="danger"
+            wide
+            disabled={remove.isPending}
+            onClick={() => remove.mutate({ shiftTypeId: shiftType.id }, { onSuccess: done })}
+          >
+            Tak, usuń zmianę
+          </Button>
+          <Button variant="secondary" wide onClick={() => setRemoving(false)}>
+            Zostaw
+          </Button>
+        </div>
       )}
     </form>
   )

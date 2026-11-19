@@ -491,7 +491,8 @@ export const getDeletePositionUrl = (positionId: string,) => {
 }
 
 /**
- * Also removes its staffing; refused when a schedule already uses it (history stays intact).
+ * Also removes its staffing and takes it from people. A position that a saved schedule uses is kept hidden
+ * (old schedules still show its name), so the manager can always get rid of it.
  * @summary Delete Position
  */
 export const deletePosition = async (positionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deletePositionResponse> => {
@@ -544,7 +545,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeletePositionMutationVariables = {positionId: string}
 
     /**
- * Also removes its staffing; refused when a schedule already uses it (history stays intact).
+ * Also removes its staffing and takes it from people. A position that a saved schedule uses is kept hidden
+ * (old schedules still show its name), so the manager can always get rid of it.
  * @summary Delete Position
  */
 export const useDeletePosition = <TError = ErrorOut,
@@ -1882,4 +1884,115 @@ export const useUpdateEmployee = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getUpdateEmployeeMutationOptions(options), queryClient);
+    }
+    export type removeEmployeeResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeEmployeeResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type removeEmployeeResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type removeEmployeeResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type removeEmployeeResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type removeEmployeeResponseSuccess = (removeEmployeeResponse204) & {
+  headers: Headers;
+};
+export type removeEmployeeResponseError = (removeEmployeeResponse402 | removeEmployeeResponse403 | removeEmployeeResponse404 | removeEmployeeResponse409) & {
+  headers: Headers;
+};
+
+export type removeEmployeeResponse = (removeEmployeeResponseSuccess | removeEmployeeResponseError)
+
+export const getRemoveEmployeeUrl = (employeeId: string,) => {
+
+
+
+
+  return `/api/employees/${employeeId}`
+}
+
+/**
+ * Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain
+ * employee loses access to the company and can come back only through a new invitation.
+ * @summary Remove Employee
+ */
+export const removeEmployee = async (employeeId: string, options?: Parameters<typeof apiFetch>[1]): Promise<removeEmployeeResponse> => {
+
+  return apiFetch<removeEmployeeResponse>(getRemoveEmployeeUrl(employeeId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveEmployeeMutationKey = () => ['removeEmployee'] as const;
+
+export const getRemoveEmployeeMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeEmployee>>, TError,RemoveEmployeeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeEmployee>>, TError,RemoveEmployeeMutationVariables, TContext> => {
+
+const mutationKey = getRemoveEmployeeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeEmployee>>, RemoveEmployeeMutationVariables> = (props) => {
+          const {employeeId} = props ?? {};
+
+          return  removeEmployee(employeeId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveEmployeeMutationResult = NonNullable<Awaited<ReturnType<typeof removeEmployee>>>
+
+    export type RemoveEmployeeMutationError = ErrorOut
+    export type RemoveEmployeeMutationVariables = {employeeId: string}
+
+    /**
+ * Remove the person from the location for good. Shifts in saved schedules and their hours stay; a plain
+ * employee loses access to the company and can come back only through a new invitation.
+ * @summary Remove Employee
+ */
+export const useRemoveEmployee = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeEmployee>>, TError,RemoveEmployeeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof removeEmployee>>,
+        TError,
+        RemoveEmployeeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRemoveEmployeeMutationOptions(options), queryClient);
     }

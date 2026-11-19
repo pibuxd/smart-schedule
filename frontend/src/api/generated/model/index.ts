@@ -35,6 +35,7 @@ export * from './companyOut';
 export * from './copyAgreementsIn';
 export * from './dayIn';
 export * from './dayInState';
+export * from './dismissAllNotificationsParams';
 export * from './dropCheckOut';
 export * from './employeeHoursOut';
 export * from './employeeIn';

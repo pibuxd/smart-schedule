@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { CalendarPlus } from 'lucide-react'
+import { CalendarPlus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import {
@@ -15,9 +15,16 @@ import type {
   ManagerRequestOutManagerPriority,
   PeriodOut,
 } from '../../api/generated/model'
-import { useCreatePeriod, useLocationPeriods, useUpdatePeriod } from '../../api/generated/scheduling/scheduling'
+import {
+  getLocationPeriodsQueryKey,
+  useCreatePeriod,
+  useDeletePeriod,
+  useLocationPeriods,
+  useUpdatePeriod,
+} from '../../api/generated/scheduling/scheduling'
 import { useLocationDetail } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
+import { ConfirmSheet } from '../../components/ui/confirm'
 import { Section, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
@@ -115,6 +122,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
             <Tag tone={collecting ? 'accent' : 'muted'}>{PERIOD_STATUS[period.status]}</Tag>
           </span>
           <DeadlineEditor period={period} today={today} disabled={readOnly || !collecting} />
+          {period.status !== 'published' && <DeletePeriod period={period} disabled={readOnly} />}
         </div>
         <div className="grid content-start gap-2">
           <Progress done={total - missing.length} total={total} />
@@ -180,6 +188,46 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
 
       <AssistantRulesTable locationId={period.location_id} periodId={period.id} />
       <RequestsSection periodId={period.id} />
+    </div>
+  )
+}
+
+/** For a period added by mistake (e.g. wrong dates). A period whose schedule was published stays. */
+function DeletePeriod({ period, disabled }: { period: PeriodOut; disabled: boolean }) {
+  const remove = useDeletePeriod()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <Button variant="quiet" size="normal" disabled={disabled} onClick={() => setOpen(true)}>
+        <Trash2 aria-hidden="true" size={18} />
+        Usuń ten okres
+      </Button>
+      <ConfirmSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Usunąć ten okres grafiku?"
+        confirmLabel="Tak, usuń okres"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(
+            { periodId: period.id },
+            {
+              onSuccess: async () => {
+                // The list first, so this period's view is gone before its own data is asked for again.
+                await queryClient.invalidateQueries({ queryKey: getLocationPeriodsQueryKey(period.location_id) })
+                void queryClient.invalidateQueries()
+              },
+            },
+          )
+        }
+      >
+        <p className="m-0">
+          {`Okres ${periodTitle(period.start, period.end)} zniknie razem ze szkicem grafiku, Twoimi ręcznymi poprawkami i prośbami pracowników na ten okres. `}
+          Zaznaczone w kalendarzu dyspozycje zostają.
+        </p>
+      </ConfirmSheet>
     </div>
   )
 }

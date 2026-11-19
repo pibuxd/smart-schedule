@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Pencil, UserPlus } from 'lucide-react'
+import { Pencil, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 
 import type { EmployeeIn, EmployeeOut, InvitationOut, LocationSetupOut, MeOut, PositionOut } from '../../api/generated/model'
@@ -8,6 +8,7 @@ import {
   useAddMyselfAsEmployee,
   useLocationEmployees,
   useLocationSetup,
+  useRemoveEmployee,
   useUpdateEmployee,
 } from '../../api/generated/staffing/staffing'
 import { useCancelInvitation, useInviteToLocation, useLocationInvitations } from '../../api/generated/tenancy/tenancy'
@@ -344,7 +345,67 @@ function EmployeeForm({ employee, positions, onDone }: { employee: EmployeeOut; 
       <Button type="submit" wide disabled={update.isPending}>
         Zapisz
       </Button>
+      <RemoveEmployee employee={employee} onDone={onDone} />
     </form>
+  )
+}
+
+/** "Usuń z lokalu": for good, unlike switching off. Asks once more, because it cannot be undone from here. */
+function RemoveEmployee({ employee, onDone }: { employee: EmployeeOut; onDone: () => void }) {
+  const remove = useRemoveEmployee()
+  const queryClient = useQueryClient()
+  const [asking, setAsking] = useState(false)
+  const name = `${employee.first_name} ${employee.last_name}`.trim() || 'Ta osoba'
+  if (!asking) {
+    return (
+      <Button variant="danger" size="normal" wide onClick={() => setAsking(true)}>
+        <Trash2 aria-hidden="true" size={18} />
+        Usuń z lokalu
+      </Button>
+    )
+  }
+  return (
+    <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
+      <p className="m-0">
+        <b>{`Usunąć z lokalu: ${name}?`}</b>{' '}
+        {employee.is_manager
+          ? 'Zniknie z listy pracowników i nie dostanie nowych zmian. Dalej będzie kierownikiem.'
+          : 'Zniknie z listy i straci dostęp do firmy w Grafikomacie. Wróci tylko przez nowe zaproszenie.'}{' '}
+        Zmiany w dawnych grafikach i godziny zostają.
+      </p>
+      {(employee.published_shifts ?? 0) > 0 && (
+        <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
+          {`Ta osoba ma jeszcze ${shifts(employee.published_shifts ?? 0)} w opublikowanym grafiku. Zostanie na nich wpisana, ale nie zobaczy już grafiku. Najpierw przenieś te zmiany na kogoś innego.`}
+        </p>
+      )}
+      {(employee.draft_shifts ?? 0) > 0 && (
+        <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
+          {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Potem ułóż grafik od nowa albo przenieś je ręcznie.`}
+        </p>
+      )}
+      {remove.isError && <InlineError>{errorMessage(remove.error, NETWORK_PROBLEM)}</InlineError>}
+      <Button
+        variant="danger"
+        wide
+        disabled={remove.isPending}
+        onClick={() =>
+          remove.mutate(
+            { employeeId: employee.id },
+            {
+              onSuccess: () => {
+                void queryClient.invalidateQueries()
+                onDone()
+              },
+            },
+          )
+        }
+      >
+        Tak, usuń z lokalu
+      </Button>
+      <Button variant="secondary" wide onClick={() => setAsking(false)}>
+        Zostaw
+      </Button>
+    </div>
   )
 }
 

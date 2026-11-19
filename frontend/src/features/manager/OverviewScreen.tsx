@@ -1,11 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { LocationSummaryOut, ManagerOverviewOut } from '../../api/generated/model'
-import { useCreateGroup, useCreateLocation, useManagerOverview, useUpdateLocation } from '../../api/generated/tenancy/tenancy'
+import {
+  useCreateGroup,
+  useCreateLocation,
+  useDeleteGroup,
+  useManagerOverview,
+  useUpdateLocation,
+} from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
+import { ConfirmSheet } from '../../components/ui/confirm'
 import { SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
@@ -22,6 +29,7 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
   const overview = useManagerOverview({ company_id: companyId })
   const [addingGroup, setAddingGroup] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [removingGroup, setRemovingGroup] = useState<{ id: string; name: string; locations: number } | null>(null)
 
   if (overview.isPending) return <Loading>Wczytuję lokale…</Loading>
   if (overview.isError) {
@@ -93,13 +101,27 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-ink pb-1.5">
             <h2 className="m-0 text-lg font-extrabold">{group.name}</h2>
             {group.id && (
-              <Link
-                to="/kierownik/grupa/$groupId/zasady"
-                params={{ groupId: group.id }}
-                className="inline-flex min-h-(--touch) items-center font-semibold text-accent underline underline-offset-4"
-              >
-                Zasady wspólne dla grupy
-              </Link>
+              <span className="flex flex-wrap items-center gap-x-4">
+                <Link
+                  to="/kierownik/grupa/$groupId/zasady"
+                  params={{ groupId: group.id }}
+                  className="inline-flex min-h-(--touch) items-center font-semibold text-accent underline underline-offset-4"
+                >
+                  Zasady wspólne dla grupy
+                </Link>
+                {role === 'owner' && (
+                  <Button
+                    variant="quiet"
+                    size="normal"
+                    aria-label={`Usuń grupę ${group.name}`}
+                    disabled={data.subscription.read_only}
+                    onClick={() => setRemovingGroup({ id: group.id!, name: group.name, locations: group.locations.length })}
+                  >
+                    <Trash2 aria-hidden="true" size={18} />
+                    Usuń grupę
+                  </Button>
+                )}
+              </span>
             )}
           </div>
           <ul className="m-0 grid list-none gap-3 p-0">
@@ -111,6 +133,7 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
       ))}
 
       {data.archived.length > 0 && <ArchivedList data={data} />}
+      {removingGroup && <DeleteGroupSheet group={removingGroup} onClose={() => setRemovingGroup(null)} />}
       {addingGroup && <NewGroupSheet companyId={companyId} onClose={() => setAddingGroup(false)} />}
       <NewLocationSheet open={adding} onOpenChange={setAdding} data={data} />
     </div>
@@ -349,6 +372,30 @@ function ArchivedList({ data }: { data: ManagerOverviewOut }) {
         ))}
       </ul>
     </section>
+  )
+}
+
+function DeleteGroupSheet({ group, onClose }: { group: { id: string; name: string; locations: number }; onClose: () => void }) {
+  const remove = useDeleteGroup()
+  const queryClient = useQueryClient()
+  return (
+    <ConfirmSheet
+      open
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title={`Usunąć grupę „${group.name}”?`}
+      confirmLabel="Tak, usuń grupę"
+      pending={remove.isPending}
+      error={remove.error}
+      onConfirm={() =>
+        remove.mutate({ groupId: group.id }, { onSuccess: async () => { await queryClient.invalidateQueries(); onClose() } })
+      }
+    >
+      <p className="m-0">
+        {group.locations > 0
+          ? 'Lokale zostają, już bez grupy. Każdy zachowa zasady, które miał z grupy, jako własne. Od teraz zasady zmieniasz w każdym lokalu osobno.'
+          : 'W tej grupie nie ma lokali. Zniknie razem ze swoimi zasadami.'}
+      </p>
+    </ConfirmSheet>
   )
 }
 
