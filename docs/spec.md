@@ -4,15 +4,41 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Zakres asystenta: wyłącznie zasady (18.11.2026)
+
+Asystent służy WYŁĄCZNIE ustawianiu i wyjaśnianiu zasad układania grafiku oraz poleceń i preferencji o osobach. Nie odpowiada na pytania o bieżący grafik, godziny, obsadę, dyspozycje ani tematy ogólne i nie przygotowuje wiadomości. Wyjaśnienia dotyczą jedynie katalogu zasad i istniejących poleceń. Pytanie poza zakresem, także połączone z poprawnym poleceniem, jest odrzucane w całości stałym komunikatem aplikacji, bez zapisu zmian. Tak samo ograniczona jest interpretacja próśb pracownika. Odrzucona prośba nie trafia do generatora ani kolejki próśb kierownika; można poprawić jej treść. Model otrzymuje tylko dane potrzebne do ustawień i korekt, bez zestawień grafików, godzin lub dyspozycji. Powyższe zastępuje wcześniejszą funkcję odpowiedzi informacyjnych dodaną po QA.
+
+## Ustalenia asystenta na okres grafiku (18.11.2026)
+
+Zatwierdzone ustalenia dotyczą jednego okresu zbierania dyspozycji. Domyślnie jest to ostatni nieopublikowany okres, dla którego poproszono o dyspozycje; ekran okresu może otworzyć rozmowę z tym okresem wybranym jawnie. Bez takiego okresu ustalenia czekają bez przypisania. Rozmowa otwarta z okresu, dla którego jeszcze nie poproszono o dyspozycje, również zapisuje do wspólnej kolejki oczekującej; nie wybiera innego aktywnego okresu. „Poproś o dyspozycje” atomowo przejmuje oczekujące ustalenia dla wskazanego okresu. Ponowienie prośby nie przenosi ustaleń z innych okresów.
+
+Publikacja oznacza zestaw jako wykorzystany i usuwa go z domyślnej listy aktywnej, bez kasowania rozmowy, zasad lub poleceń. Regeneracja i korekty tego samego okresu używają jego zachowanego zestawu; nowy okres nie przejmuje wykorzystanych ustaleń. Nieudane generowanie, szkic ani samo rozpoczęcie układania nie zużywają zestawu. Tabela przy dyspozycjach pokazuje zasady i polecenia dla wybranego okresu.
+
+Technicznie `AssistantRuleSet` przechowuje migawkę zasad katalogowych, zmienione kody, lokal, opcjonalny okres oraz datę wykorzystania. Polecenia o osobach i wiadomości wskazują zestaw. Stałe zasady lokalu/grupy pozostają bazą nowych zestawów; rozmowa zmienia wyłącznie zestaw okresu. Migracja zachowuje wcześniejsze polecenia i przypisuje wykorzystane do ostatniej publikacji po ich utworzeniu, a pozostałe do otwartego zbierania dyspozycji lub kolejki oczekującej. Wszystkie zapisy serializują się z publikacją przez blokadę firmy. Zakres firmy, lokalu i wybranego okresu sprawdzany jest na serwerze.
+
+## Decyzje po przeglądzie ustaleń okresowych (18.11.2026)
+
+- **Ustalenia powtarzane w kilku okresach.** Nowy okres zaczyna bez ustaleń; nic nie przechodzi samo. Przy nowym okresie kierownik widzi listę ustaleń z poprzedniego okresu (zasady zmienione w rozmowie i polecenia o osobach) i zaznacza, które skopiować. Domyślnie nic nie jest zaznaczone. Kopia jest osobnym wpisem nowego okresu: późniejsze zmiany nie dotykają okresu źródłowego. Nie są proponowane polecenia o osobach, które odeszły z lokalu, ani takie, których dni już minęły, ani ustalenia już obecne w nowym okresie. Źródłem jest najnowszy wcześniejszy okres lokalu, który ma jakiekolwiek ustalenia.
+- **Prośba błędnie odrzucona przez asystenta.** Pracownik może jednym przyciskiem „Przekaż kierownikowi” przekazać oryginalny tekst odrzuconej wiadomości kierownikowi do ręcznej oceny. Samo przekazanie nie włącza prośby do generatora: trafia ona na listę próśb kierownika bez interpretacji, z informacją, że asystent ją odrzucił. Kierownik sam decyduje, czy poprawić grafik ręcznie albo wydać polecenie asystentowi. Przekazane prośby są liczone w raporcie `assistant_misses` (powód `rejected`), co pozwala policzyć błędne odrzucenia.
+- To zastępuje wcześniejsze zdania „nie można przekazać bez poprawienia treści” z sekcji o zakresie asystenta.
+
+## Widok rozmowy z asystentem (18.11.2026)
+
+Asystent kierownika ma własną zakładkę „Asystent” w lokalu. Wiadomości i odpowiedzi tworzą rozmowę, pole pisania jest pod nią, a propozycje zawierają osobne przyciski zatwierdzenia i odrzucenia. Przyjęte lub odrzucone propozycje pozostają w historii. Ostatnie 50 wiadomości danego kierownika w lokalu wraca po odświeżeniu; nie oznacza to rozszerzenia pamięci LLM poza istniejące 6 wiadomości z 24 godzin. Zapisane polecenia są w bocznym panelu, dostępnym również na telefonie. Ekran zasad prowadzi do rozmowy linkiem.
+
+Wiadomości pracownika w kalendarzu korzystają z tego samego stylu rozmowy i pola pisania. Zachowują dotychczasowy zakres miesiąca/okresu, możliwość edycji i usunięcia oraz przekazania prośby kierownikowi. U kierownika Enter wysyła, Shift+Enter dodaje wiersz. U pracownika Enter zawsze dodaje wiersz, a prośbę wysyła wyłącznie przycisk. Podczas wysyłania nie można wysłać duplikatu. Pracownik pisze prośby dotyczące swoich preferencji, po jednej sprawie. Błędy pozostawiają tekst do poprawy, a nieaktualne odpowiedzi nigdy nie zatwierdzają się same.
+
+Po przeglądzie czatu: limit pamięci (do 6 zakończonych wiadomości z ostatnich 24 godzin) jest widoczny przy polu pisania, a starsze wpisy są oznaczone jako archiwum poza pamięcią. Otwarte propozycje wygasają 24 godziny od wysłania polecenia; API odmawia zapisu, historia zostaje, a ponowne przygotowanie wymaga świadomego wysłania treści. Porównanie z grafikiem jest opisane jako pochodzące z chwili przygotowania propozycji. Polecenia o osobach są widoczne także na ekranie zasad, w kolejności ważności. Na telefonie panel ma przycisk z nazwą, a link powrotny i wszystkie zakładki lokalu pozostają widoczne. Prośby pracownika zachowują zasadę „jedna prośba, jedna sprawa” oraz jawny opis danych czytanych przez Claude; potwierdzenia systemowe nie udają odpowiedzi rozmówcy.
+
 ## Poprawki asystenta po niezależnym QA (18.11.2026)
 
 - Polecenie pracy w danym dniu może wskazywać konkretną zmianę. Zapis, opis i ocena generatora zachowują ten sam zakres. Nieobsługiwanej części odpowiedzi modelu nie wolno po cichu pominąć ani zatwierdzić niepełnego planu.
 - Polecenia o osobach i prośby pozostają preferencjami. Potwierdzenie nie obiecuje przydziału ani zmiany dyspozycji w kalendarzu. Zatwierdzenie ustawień nie uruchamia układania grafiku.
-- Asystent odpowiada także na pytania o dane dostępne w kontekście: grafik, godziny, obsadę i dyspozycje. Kierownik widzi dane swojego lokalu; pracownik tylko opublikowany własny grafik ze współpracownikami na swoich zmianach oraz własne dyspozycje i prośby. Kontekst jest ograniczony i opisuje swoje granice; brak danych nie oznacza wolnego dnia. Odpowiedź informacyjna pracownika nie jest prośbą dla generatora.
+- Funkcja odpowiedzi o danych została wycofana decyzją „Zakres asystenta: wyłącznie zasady” powyżej. Historyczne odpowiedzi pozostają w bazie. Nowe zapytania poza zakresem są odrzucane.
 - Kolejne wiadomości kierownika zawierają ostatnie wiadomości tego samego autora w tym lokalu z ostatnich 24 godzin, z informacją, czy plan został przyjęty. Korekta pracownika może zastąpić jedną wcześniejszą prośbę tego pracownika w tym samym okresie lub miesiącu. Stara treść pozostaje w historii jako zastąpiona; nie bierze udziału w układaniu grafiku. Niejasna lub nieaktualna korekta trafia do kierownika bez nowej interpretacji. Decyzja i ważność nadane przez kierownika przechodzą na poprawioną prośbę.
 - Interfejs informuje o zakresie danych czytanych przez zewnętrzny asystent. Ten etap nie dodaje publikacji, generowania, wysyłania wiadomości ani edycji kalendarza przez LLM.
-- Jeśli asystent błędnie potraktuje prośbę jako pytanie informacyjne, pracownik może przekazać jej oryginalną treść kierownikowi jednym przyciskiem.
-- Odpowiedź informacyjną formułuje model na podstawie kontekstu, a aplikacja oznacza ją jako odpowiedź asystenta i wyjaśnia, jak dodać wiadomość do listy próśb kierownika. Opisy zmian do zatwierdzenia nadal powstają ze sprawdzonej struktury.
+- Historyczną odpowiedź informacyjną pracownik może przekazać kierownikowi. Nową prośbę odrzuconą jako poza zakresem może przekazać kierownikowi do ręcznej oceny; nie trafia ona przez to do generatora.
+- Historyczne odpowiedzi informacyjne są oznaczone jako odpowiedzi asystenta. Opisy zmian do zatwierdzenia nadal powstają ze sprawdzonej struktury.
 
 Budujemy działający prototyp webowy aplikacji do układania grafików pracy dla lokali zmianowych (piekarnie, kawiarnie, restauracje, hotele). To własny, oryginalny produkt: nie kopiuj nazwy, wyglądu ani brandingu istniejących aplikacji. Nazwa robocza: "Grafikomat". Produkt będzie sprzedawany wielu firmom; pierwszym testerem jest sieć 4 piekarni pod Krakowem, w której grafik dla wszystkich lokali układa jedna osoba.
 

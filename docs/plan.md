@@ -3,10 +3,39 @@
 Plan do akceptacji przed pisaniem kodu aplikacji. Zakres i wymagania: [spec.md](spec.md).
 Kod, nazwy w kodzie i commity po angielsku; teksty interfejsu po polsku.
 
+## Ustalenia asystenta na okres grafiku (18.11.2026)
+
+Zatwierdzone ustalenia dotyczą jednego okresu zbierania dyspozycji. Domyślnie jest to ostatni nieopublikowany okres, dla którego poproszono o dyspozycje; ekran okresu może otworzyć rozmowę z tym okresem wybranym jawnie. Bez takiego okresu ustalenia czekają bez przypisania. Rozmowa otwarta jawnie z niezgłoszonego jeszcze okresu zapisuje do kolejki oczekującej lokalu. Przydzielenie następuje dopiero przez „Poproś o dyspozycje”, także gdy istnieje inny aktywny okres. „Poproś o dyspozycje” atomowo przejmuje oczekujące ustalenia dla wskazanego okresu. Ponowienie prośby nie przenosi ustaleń z innych okresów.
+
+Publikacja oznacza zestaw jako wykorzystany i usuwa go z domyślnej listy aktywnej, bez kasowania rozmowy, zasad lub poleceń. Regeneracja i korekty tego samego okresu używają jego zachowanego zestawu; nowy okres nie przejmuje wykorzystanych ustaleń. Nieudane generowanie, szkic ani samo rozpoczęcie układania nie zużywają zestawu. Tabela przy dyspozycjach pokazuje zasady i polecenia dla wybranego okresu.
+
+Technicznie `AssistantRuleSet` przechowuje migawkę zasad katalogowych, zmienione kody, lokal, opcjonalny okres oraz datę wykorzystania. Polecenia o osobach i wiadomości wskazują zestaw. Stałe zasady lokalu/grupy pozostają bazą nowych zestawów; rozmowa zmienia wyłącznie zestaw okresu. Migracja zachowuje wcześniejsze polecenia i przypisuje wykorzystane do ostatniej publikacji po ich utworzeniu, a pozostałe do otwartego zbierania dyspozycji lub kolejki oczekującej. Wszystkie zapisy serializują się z publikacją przez blokadę firmy. Zakres firmy, lokalu i wybranego okresu sprawdzany jest na serwerze.
+
+## Kopiowanie ustaleń i przekazanie odrzuconej prośby (18.11.2026)
+
+- `GET /locations/{id}/agreements/previous?period_id=` zwraca to, co można skopiować z najnowszego wcześniejszego okresu z ustaleniami (`agreements.previous`, `agreements.copyable`). `POST /locations/{id}/agreements/copy` kopiuje wyłącznie wskazane kody zasad i identyfikatory poleceń do zestawu okresu docelowego (albo kolejki oczekującej, gdy o dyspozycje jeszcze nie poproszono), pod blokadą firmy i lokalu. Pusty wybór niczego nie zmienia; wybór spoza aktualnej oferty daje 409; opublikowany okres docelowy daje 409. `bind_pending` nadal niczego nie przenosi z innych okresów.
+- UI: `CopyPreviousAgreements` w tabeli ustaleń okresu (dyspozycje i zasady), zwinięte, bez zaznaczonych pozycji.
+- `PATCH /me/requests/{id}` z `understood: false` dla statusu `rejected` ustawia `needs_manager`, czyści interpretację i zapisuje `unread_reason="rejected"` (migracja `availability.0008`). Generator traktuje taki wpis jak każdą nieodczytaną prośbę (`RequestType.OTHER`, bez punktacji). Karta prośby kierownika opisuje powód.
+
+## Ograniczenie zakresu asystenta (18.11.2026)
+
+- Obie struktury LLM wymagają klasyfikacji `scope=rules|out_of_scope`. Prompt dopuszcza wyłącznie zasady i preferencje. Mieszane żądania są poza zakresem. Serwer odrzuca taki wynik w całości, niezależnie od dodatkowych akcji lub tekstu zwróconego przez model.
+- Kierownik otrzymuje stałą odmowę, puste listy i `can_apply=false`. Wyjaśnienia zasad są dozwolone; pozostałe odpowiedzi informacyjne nie są. Pracownik otrzymuje istniejący status `rejected` z bezpiecznym opisem; wpis jest wyłączony z generatora i listy kierownika, dopóki pracownik nie przekaże go kierownikowi do ręcznej oceny (bez punktacji w generatorze).
+- Kontekst nie zawiera już `location_snapshot` ani `own_availability`; historia służy wyłącznie korektom ustawień. Brak nowych narzędzi modelu. UI i opis przekazywanych danych odpowiadają temu ograniczeniu.
+
+## Czat asystenta (18.11.2026)
+
+- Nowa trasa `/kierownik/lokal/$locationId/asystent`, dostępna z zakładek lokalu i zasad. Rozmowa oraz osobny panel przyjętych poleceń; na małym ekranie przełączanie między nimi. Istniejące kolory i typografia, lżejsze obramowania, wyraźny podział nadawców i pole pisania na dole.
+- GET `/locations/{location_id}/assistant-commands` zwraca ostatnie 50 wpisów aktualnego autora w lokalu chronionym uprawnieniami, od najstarszego do najnowszego. W historii nie ma wiadomości innych kierowników ani innych firm. Bez nowego modelu rozmów i bez przechowywania treści w localStorage.
+- Wspólne elementy rozmowy i edytora dla kierownika i pracownika. Polling tylko podczas oczekiwania, stan wydłużonego oczekiwania z ponownym odczytem, przewijanie do nowych odpowiedzi bez odrywania od czytanej historii. Przyciski zmieniające dane respektują tryb tylko do odczytu.
+- Przegląd produktu: widoczny limit pamięci i oznaczenia wpisów poza zakresem (ostatnie 6 zakończonych wpisów z 24 h). API zwraca `expires_at`; `can_apply` i zatwierdzenie sprawdzają ważność 24 h od `created_at`, także w transakcji zapisu. Bez nowego statusu lub migracji; wygasła propozycja zostaje w historii i pozwala wstawić treść do ponownego wysłania. Dotychczasowe kontrole osób, zmian i usuwanych poleceń pozostają aktywne. Efekty są historycznym porównaniem, nie bieżącym podglądem.
+- Zasady pokazują przyjęte polecenia o osobach i ich kolejność. Zakładki zawijają się na małym ekranie, link powrotny jest zawsze widoczny. Edytor pracownika ma osobną etykietę wysyłki i nie wysyła Enterem; zwykłe statusy wyświetlane są bez awatara asystenta.
+- Testy: zakres historii, trwałość widoku po ponownym wejściu, kolejne wiadomości i zatwierdzenia, obsługa błędów i klawiatury. Sprawdzenie widoku na komputerze i telefonie.
+
 ## Uzupełnienie etapu 10 po QA (18.11.2026)
 
 - `chce_pracowac` przechowuje opcjonalne `shift_type`; solver i validator liczą tylko pasujące zmiany. Walidacja nie dopuszcza planu po utracie części danych. Komunikaty o zapisie wynikają ze sprawdzonego planu, a prośby mają opis zbudowany ze sprawdzonej struktury.
-- Oddzielny moduł kontekstu odczytu ogranicza zakres do firmy, lokalu i roli. Obejmuje maksymalnie 6 okresów od bieżącego miesiąca, ostatni szkic i publikację, limity liczby wierszy z jawnym oznaczeniem obcięcia. Godziny liczy aplikacja w UTC. Pracownik nie otrzymuje szkiców, ocen doświadczenia ani cudzych prywatnych próśb/dyspozycji.
+- Historyczny moduł kontekstu odczytu (obecnie nieprzekazywany modelowi) ogranicza zakres do firmy, lokalu i roli. Obejmuje maksymalnie 6 okresów od bieżącego miesiąca, ostatni szkic i publikację, limity liczby wierszy z jawnym oznaczeniem obcięcia. Godziny liczy aplikacja w UTC. Pracownik nie otrzymuje szkiców, ocen doświadczenia ani cudzych prywatnych próśb/dyspozycji.
 - `TextRequest.status` otrzymuje `answered` (odpowiedź informacyjna) i `superseded` (zastąpiona). `supersedes` wskazuje poprzednią prośbę. Odpowiedzi i zastąpione wpisy są wyłączone z problemu generatora i aktywnej listy kierownika. Edycja zastąpionej prośby jest blokowana, aby nie wskrzesić jej przypadkiem.
 - LLM wskazuje korektę przez numer z migawki własnych wcześniejszych próśb. Worker sprawdza zakres, status i `updated_at`, blokuje bieżący i poprzedni wpis w transakcji oraz zapisuje oba stany razem. Obca, nieznana, zmieniona lub już zastąpiona prośba nie może być usunięta z działania przez korektę. Dane menedżerskie poprzedniej prośby pozostają w mocy.
 - Historia kierownika: maks. 6 wcześniejszych zakończonych wiadomości tego samego autora w lokalu, nie starszych niż 24 h. Nieprzyjęta propozycja nie jest obowiązującym ustawieniem.
@@ -675,4 +704,3 @@ Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi odda
   czy osoba z innego lokalu też bierze od razu (dziś tak, a jej kierownik dostaje powiadomienie). Do sprawdzenia
   w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
   sprawiedliwe (np. osoba blisko limitu godzin).
-
