@@ -84,6 +84,7 @@ class TestTools:
         data = json.loads(text)
         assert [s["date"] for s in data["shifts"]] == [day.isoformat()]  # the draft stays with the manager
         assert data["shifts"][0]["coworkers"] == ["Kasia"]
+        assert data["shifts"][0]["weekday"] == tools.WEEKDAYS[day.weekday()]  # the model never counts weekdays
         assert box.calls == [{"tool": "my_schedule", "status": 200}]
 
     def test_an_employee_has_no_manager_tools_and_manager_endpoints_refuse_them(self, shop):
@@ -106,6 +107,11 @@ class TestTools:
         assert error and text.startswith("Błąd 404")
         text, error = box.run("availability_grid", {"period_id": str(shop["period"].pk)})
         assert not error and "Kasia" in text and "+48" not in text
+
+    def test_every_date_gets_its_weekday(self):
+        cleaned = tools.clean({"date": "2026-11-21", "shift": {"date": "2026-11-23"}, "start": "2026-11-21T06:00"})
+        assert cleaned["weekday"] == "sobota" and cleaned["shift"]["weekday"] == "poniedziałek"
+        assert tools.clean({"date": "nie data"}) == {"date": "nie data"}
 
     def test_long_results_are_narrowed_and_cut_with_a_note(self):
         tool = next(t for t in tools.MANAGER_TOOLS if t.name == "schedule_version")

@@ -30,6 +30,7 @@ Zastępuje „Ograniczenie zakresu asystenta (18.11.2026)”. Zakres produktu: s
 - Zadanie okresowe `assistant.fail_stale_messages` (co 10 minut): wiadomość pracownika w stanie `new` lub polecenie `queued` starsze niż 15 minut przechodzi w `needs_manager`/`failed` (kierownik może dać prośbę asystentowi ponownie), żeby nic nie stało w „asystent czyta” bez końca.
 - „Przekaż kierownikowi” i „Niech przeczyta kierownik” wysyłają kierownikom lokalu powiadomienie `request_for_manager`. Przekazana odpowiedź na pytanie ma w `assistant_misses` powód `forwarded_answer`: w pilotażu widać, jak często kierownik dostaje zwykłe pytania zamiast próśb.
 - Kolumna `assistant_answer` zapisuje też listę wywołanych narzędzi (`tools`), żeby `assistant_misses` pokazywał, czego asystent szukał.
+- Wyniki narzędzi mają przy każdej dacie dzień tygodnia (`weekday`), a godziny zmian są w czasie lokalu (`start_time`/`end_time`), żeby model niczego nie przeliczał sam. W panelu administratora listy próśb i poleceń pokazują odpowiedź asystenta (`reply`), żeby w pilotażu przejrzeć próbkę prawdziwych odpowiedzi (pomyłki w danych, słowa brzmiące jak obietnica przydziału).
 
 ## Wysuwany czat i okienko ustaleń (18.11.2026)
 

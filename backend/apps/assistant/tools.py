@@ -313,8 +313,12 @@ def manager_toolbox(user, company_id, location_id) -> Toolbox:
 # --------------------------------------------------------------------------------------------- shaping results
 
 
+WEEKDAYS = ("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")
+
+
 def clean(value: Any) -> Any:
-    """Without personal and screen-only fields, empty values and nulls: shorter for the model, same meaning."""
+    """Without personal and screen-only fields, empty values and nulls: shorter for the model, same meaning.
+    Every `date` gets its Polish weekday next to it, so the model never works out "sobota 21.11" by itself."""
     if isinstance(value, dict):
         result = {}
         for key, item in value.items():
@@ -324,6 +328,9 @@ def clean(value: Any) -> Any:
             if item is None or item == [] or item == {} or item == "":
                 continue
             result[key] = item
+        weekday = _weekday(result.get("date"))
+        if weekday and "weekday" not in result:
+            result["weekday"] = weekday
         return result
     if isinstance(value, list):
         return [clean(item) for item in value]
@@ -360,6 +367,11 @@ def _lists(body: Any, path: str):
         return
     for item in body[key] if nested else []:
         yield from _lists(item, rest)
+
+
+def _weekday(value: Any) -> str | None:
+    day = _parse_day(value) if isinstance(value, str) and len(value) == 10 else None
+    return WEEKDAYS[day.weekday()] if day else None
 
 
 def narrowed(tool: ApiTool, body: Any, arguments: dict) -> Any:
