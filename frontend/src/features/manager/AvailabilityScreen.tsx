@@ -78,8 +78,7 @@ export function AvailabilityOverviewScreen({ locationId, today = new Date() }: {
       ) : (
         <EmptyState title="Nie ma jeszcze okresu grafiku">
           <p className="m-0">
-            Ustal, na jakie dni układasz grafik i do kiedy pracownicy wpisują dyspozycje. Potem poproś ich o to jednym
-            przyciskiem.
+            Ustal daty grafiku i termin dyspozycji.
           </p>
           <Button onClick={() => setAdding(true)}>Ustal daty grafiku</Button>
         </EmptyState>
@@ -124,7 +123,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
           )}
           {collecting && passed && missing.length > 0 && (
             <p className="m-0 font-semibold text-accent">
-              Termin minął. Możesz układać grafik. Kto nie wysłał dyspozycji, może dostać zmianę w każdy dzień.
+              Termin minął. Możesz układać grafik. Kto nie wysłał, może dostać zmianę w każdy dzień.
             </p>
           )}
           {period.availability_requested_at && (
@@ -146,7 +145,7 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
       {missing.length > 0 && (
         <Section
           title={`Jeszcze nie wysłali (${missing.length})`}
-          description="Te osoby nie nacisnęły jeszcze „Wyślij kierownikowi”. Mogły już zaznaczyć część dni."
+          description="Nie nacisnęli jeszcze „Wyślij kierownikowi”."
         >
           <p className="m-0">{namesList(missing.map((e) => e.name), 12)}</p>
         </Section>
@@ -154,8 +153,9 @@ function PeriodView({ period, today }: { period: PeriodOut; today: Date }) {
 
       {late.length > 0 && (
         <Section
-          title="Zmienione po terminie"
-          description="Pracownicy mogą zmieniać dyspozycje, dopóki nie ułożysz grafiku. Dni zmienione po terminie mają w tabeli znak zegara."
+          title={`Zmienione po terminie (${late.length})`}
+          collapsible
+          description="Te dni mają w tabeli znak zegara."
         >
           <ul className="m-0 grid list-none gap-1 p-0">
             {late.map((e) => (
@@ -262,7 +262,6 @@ function NewPeriodSheet({
       open={open}
       onOpenChange={onOpenChange}
       title="Nowy okres grafiku"
-      description="Wpisz, na jakie dni układasz grafik i do kiedy pracownicy wpisują dyspozycje."
     >
       {data && (
         <NewPeriodForm
@@ -318,7 +317,7 @@ function NewPeriodForm({
         max={start}
         onChange={(e) => setDeadline(e.target.value)}
         required
-        hint="Ostatni dzień na wpisanie dyspozycji. Potem układasz grafik."
+        hint="Ostatni dzień na wpisanie dyspozycji."
       />
       {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
       <Button type="submit" wide disabled={create.isPending}>
@@ -356,7 +355,7 @@ function RequestsSection({ periodId }: { periodId: string }) {
   return (
     <Section
       title={`Prośby pracowników (${list.length})`}
-      description="To, czego pracownicy nie mogli zaznaczyć w kalendarzu. Widzisz je tylko Ty. Każdą prośbę możesz odrzucić albo oznaczyć jako ważniejszą lub mniej ważną."
+      description="Czego nie dało się zaznaczyć w kalendarzu. Widzisz je tylko Ty."
     >
       {list.length === 0 ? (
         <EmptyState title="Nikt nie napisał prośby">

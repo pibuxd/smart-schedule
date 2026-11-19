@@ -105,11 +105,15 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - Do not edit generated files: `frontend/src/api/generated/**`, `frontend/src/routeTree.gen.ts`.
 - Frontend calls the API only through the generated hooks; `src/api/http.ts` adds the session cookie and CSRF token.
 - Every screen has an empty, loading and error state with plain-language Polish text.
+- Keep screens light on text: one short sentence at most under a heading. Longer explanations go in `Section`'s
+  `description` (hidden behind the "i" button; add `alwaysExplain` when the text states a consequence); rarely needed
+  lists use `<Section collapsible>`.
 - UI copy follows the plain-language rules in `docs/plan.md` 15a point 10: short sentences, "ty" form, active verbs, buttons as
   commands that say what happens ("Wyślij kierownikowi"), one word per concept (keep "dyspozycje", "kierownik", "lokal").
 - Visual tokens live in `frontend/src/styles/tokens.css` (Tailwind `@theme`; default colours, font sizes, radii and
   shadows are switched off, so only token classes exist: `bg-paper`, `text-ink`, `text-accent`, `rounded-md`, `text-lg`…).
-  Touch sizes: `min-h-(--touch)` (48 px) and `min-h-(--touch-main)` (56 px). No purple gradients, glass, emoji icons.
+  Control sizes: `min-h-(--touch)` (44 px, 36 px with a mouse) and `min-h-(--touch-main)` (48 px / 40 px). Body text is 16 px;
+  spacing is in `rem`, so it follows the body size. No purple gradients, glass, emoji icons.
   Availability states always use colour + icon + pattern (`.avail-<state>` + `StateIcon`).
 - Frontend layout: screens in `src/features/<area>/`, shadcn/ui-style building blocks in `src/components/ui/`
   (`Button`, `Sheet`, `Loading`/`ErrorState`/`EmptyState`), route files in `src/routes/` only wire them up.
