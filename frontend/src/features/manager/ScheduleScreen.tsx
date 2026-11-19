@@ -11,19 +11,31 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Hand, Pin, Send, SquarePen } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Hand, Pin, Plus, Send, ShieldAlert, SquarePen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
 import { useLocationInstructions } from '../../api/generated/assistant/assistant'
-import type { CheckOut, InstructionsOut, PeriodOut, ScoresOut, VersionOut, VersionShiftOut } from '../../api/generated/model'
+import type {
+  CheckOut,
+  DropCheckOut,
+  InstructionsOut,
+  PeriodOut,
+  ScoresOut,
+  ShiftFitOut,
+  VersionOut,
+  VersionShiftOut,
+} from '../../api/generated/model'
 import {
+  useAddScheduleSeat,
   useChangeAssignments,
   useCheckScheduleChanges,
+  useEmployeeFit,
   useLocationPeriods,
   usePinShift,
   usePublishSchedule,
   useScheduleVersion,
+  useShiftDropChecks,
   useStartCorrecting,
 } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
@@ -32,12 +44,14 @@ import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
+import { StateIcon } from '../availability/StateIcon'
 import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/dates'
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
 import { pickPeriod } from './periods'
 import { ClashQuestion } from './ClashQuestion'
-import { buildGrid, percent, swapChanges } from './schedule-grid'
+import { type DropCheck, dropWords, isDropTarget } from './drop-preview'
+import { buildGrid, type GridColumn, percent, swapChanges } from './schedule-grid'
 import { ShiftSheet } from './ShiftSheet'
 import { verdict } from './verdict'
 import { daysUntil, PERIOD_STATUS, periodTitle, shifts as shiftsWord } from './words'
@@ -139,7 +153,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           )}
           {period.latest_version_id && !period.active_run_id && (
             <span className="max-w-[40ch] text-sm text-ink-muted sm:text-right">
-              „Ułóż od nowa” zostawia przypięte zmiany i dni, które minęły. Resztę układa od początku.
+              „Ułóż od nowa” zostawia przypięte zmiany, osoby wpisane mimo przeszkód i minione dni.
             </span>
           )}
         </div>
@@ -155,8 +169,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
         !period.active_run_id && (
           <EmptyState title="Grafik nie jest jeszcze ułożony">
             <p className="m-0">
-              Gdy minie termin dyspozycji albo wszyscy je wyślą, naciśnij „Ułóż grafik”. Dostaniesz szkic, który
-              możesz poprawić, zanim pokażesz go pracownikom.
+              Naciśnij „Ułóż grafik”, gdy minie termin dyspozycji albo wszyscy je wyślą.
             </p>
           </EmptyState>
         )
@@ -185,6 +198,14 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
         <div role="alert" className="grid gap-1 rounded-md border border-cannot bg-cannot-soft p-3 text-cannot">
           <span className="font-semibold">Tego grafiku nie można opublikować, bo łamie zasady:</span>
           {data.hard_problems.map((p) => (
+            <span key={p}>{p}</span>
+          ))}
+        </div>
+      )}
+      {data.accepted_problems.length > 0 && (
+        <div className="grid gap-1 rounded-md border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+          <span className="font-semibold">Ręczne zmiany są niezgodne z obsadą. Możesz tak opublikować:</span>
+          {data.accepted_problems.map((p) => (
             <span key={p}>{p}</span>
           ))}
         </div>
@@ -231,9 +252,9 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
         </div>
         <span className="text-sm text-ink-muted">
           {data.status === 'draft'
-            ? 'Pracownicy jeszcze tego nie widzą. Wybierz zmianę, żeby sprawdzić powód przydziału i możliwe zastępstwa. Przeciągnij osobę na inną zmianę, żeby zamienić dwie osoby.'
+            ? 'Pracownicy jeszcze tego nie widzą. Kliknij zmianę albo przeciągnij osobę na inną zmianę.'
             : data.status === 'published'
-              ? 'Ten grafik widzą pracownicy w „Mój grafik”. Wybierz zmianę, żeby sprawdzić powód przydziału.'
+              ? 'Ten grafik widzą pracownicy w „Mój grafik”.'
               : 'Starsza wersja, tylko do podglądu.'}
         </span>
       </div>
@@ -248,7 +269,7 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
           </SelectField>
         )}
         {data.editable && (
-          <Button size="normal" onClick={() => setPublishing(true)} disabled={data.scores.hard_violations > 0}>
+          <Button size="normal" onClick={() => setPublishing(true)} disabled={data.hard_problems.length > 0}>
             <Send aria-hidden="true" size={20} />
             Opublikuj
           </Button>
@@ -286,7 +307,7 @@ function UnpinnedChanges({ data }: { data: VersionOut }) {
   const pin = usePinShift()
   const queryClient = useQueryClient()
   const [pinning, setPinning] = useState(false)
-  const unpinned = data.shifts.filter((s) => s.manual && !s.pinned && s.employee_id && !s.past)
+  const unpinned = data.shifts.filter((s) => s.manual && !s.pinned && s.employee_id)
   if (unpinned.length === 0) return null
   const pinAll = async () => {
     setPinning(true)
@@ -332,8 +353,7 @@ function PublishSheet({ data, open, onOpenChange }: { data: VersionOut; open: bo
           </p>
         )}
         <p className="m-0 text-sm text-ink-muted">
-          Pracownicy dostaną powiadomienie w aplikacji. Nie wysyłamy SMS-ów ani e-maili, więc komuś, kto rzadko
-          zagląda do Grafikomatu, powiedz o grafiku sam.
+          Pracownicy dostaną powiadomienie tylko w aplikacji. Komuś, kto rzadko do niej zagląda, powiedz sam.
         </p>
         {holes > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2">
@@ -370,12 +390,12 @@ function Scores({ scores }: { scores: ScoresOut }) {
     <section aria-label="Ocena grafiku" className="grid gap-3 sm:grid-cols-3">
       <div
         className={cn(
-          'grid content-start gap-1 rounded-md border-2 p-4',
+          'grid content-start gap-0.5 rounded-md border-2 px-3 py-2',
           incomplete ? 'border-cannot bg-cannot-soft text-cannot' : 'border-line bg-surface',
         )}
       >
         <span className="text-sm font-semibold">Zmiany bez obsady</span>
-        <span className="text-2xl font-extrabold">
+        <span className="text-xl font-extrabold">
           {scores.holes} <span className="text-base font-semibold">z {scores.slots}</span>
         </span>
         <span className="text-sm">{incomplete ? 'Nie wszystkie zmiany są obsadzone.' : 'Wszystkie zmiany obsadzone.'}</span>
@@ -398,9 +418,9 @@ function Scores({ scores }: { scores: ScoresOut }) {
 
 function ScoreBox({ label, value, muted, note }: { label: string; value: number; muted: boolean; note?: string }) {
   return (
-    <div className="grid content-start gap-1 rounded-md border-2 border-line bg-surface p-4">
+    <div className="grid content-start gap-0.5 rounded-md border-2 border-line bg-surface px-3 py-2">
       <span className="text-sm font-semibold text-ink-muted">{label}</span>
-      <span className={cn('text-2xl font-extrabold', muted ? 'text-ink-muted' : 'text-ink')}>{percent(value)}</span>
+      <span className={cn('text-xl font-extrabold', muted ? 'text-ink-muted' : 'text-ink')}>{percent(value)}</span>
       {note && <span className="text-sm text-ink-muted">{note}</span>}
     </div>
   )
@@ -408,91 +428,129 @@ function ScoreBox({ label, value, muted, note }: { label: string; value: number;
 
 // ----------------------------------------------------------------------------------------------- the grid
 
-type DragCheck = { overId: string; result: CheckOut | null; failed: boolean }
+type Change = { shift_id: string; employee_id: string | null }
+/** A change that breaks a hard rule, waiting for the manager's "save anyway". */
+type Override = { changes: Change[]; problems: string[]; done: string }
+
+/** How long the answers for one dragged person are reused; every saved change marks them stale anyway. */
+const DROPS_FRESH_MS = 30_000
 
 function ScheduleGrid({ data }: { data: VersionOut }) {
   const { columns, rows } = useMemo(() => buildGrid(data.shifts, data.period.start, data.period.end), [data])
   const byId = useMemo(() => new Map(data.shifts.map((s) => [s.id, s])), [data])
   const [open, setOpen] = useState<VersionShiftOut | null>(null)
   const [dragging, setDragging] = useState<VersionShiftOut | null>(null)
-  const [check, setCheck] = useState<DragCheck | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  // Answers for single drops of this drag, used until the answer for all shifts arrives.
+  const [singles, setSingles] = useState<Record<string, DropCheck>>({})
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
+  const [picked, setPicked] = useState('')
+  const [override, setOverride] = useState<Override | null>(null)
   // Dropped on a shift while the person works elsewhere at the same time: the question waits for the manager.
-  const [question, setQuestion] = useState<{ from: VersionShiftOut; to: VersionShiftOut; check: CheckOut } | null>(null)
+  const [question, setQuestion] = useState<{ changes: Change[]; done: string; check: CheckOut } | null>(null)
   const checker = useCheckScheduleChanges()
   const change = useChangeAssignments()
+  const addSeat = useAddScheduleSeat()
   const queryClient = useQueryClient()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const editable = data.editable
+  // The person whose calendar colours the grid: the one being dragged, else the one picked from the list.
+  const personId = dragging?.employee_id ?? picked
+  // While dragged, the person leaves their shift, so it does not block other shifts at that time.
+  const fit = useEmployeeFit(data.id, personId, dragging ? { moving_shift_id: dragging.id } : undefined, {
+    query: { enabled: editable && !!personId },
+  })
+  const fitByShift = useMemo(
+    () => new Map(personId && fit.data ? (fit.data.data as ShiftFitOut[]).map((f) => [f.shift_id, f]) : []),
+    [fit.data, personId],
+  )
   const template = `120px repeat(${columns.length}, minmax(0, 1fr))`
 
-  // Live check while dragging: what the swap would break, before it is dropped.
-  const overId = check?.overId
+  // When a drag starts, one request works out every possible drop, so hovering over a shift needs no request.
+  const drops = useShiftDropChecks(data.id, dragging?.id ?? '', {
+    query: { enabled: !!dragging, staleTime: DROPS_FRESH_MS, retry: false },
+  })
+  const allDrops = useMemo(
+    () => (drops.data ? new Map((drops.data.data as DropCheckOut[]).map((d) => [d.shift_id, d])) : null),
+    [drops.data],
+  )
+  const target = overId ? byId.get(overId) : undefined
+  const check: DropCheck = !dragging || !overId ? undefined : (allDrops?.get(overId) ?? singles[`${dragging.id}:${overId}`])
+
+  // Until that answer is here, the shift under the pointer is checked on its own, right away.
+  const known = check !== undefined
   useEffect(() => {
-    if (!dragging || !overId || overId === dragging.id) return
-    const target = byId.get(overId)
-    if (!target) return
-    const timer = window.setTimeout(() => {
-      checker.mutate(
-        { versionId: data.id, data: { changes: swapChanges(dragging, target) } },
-        {
-          onSuccess: (response) =>
-            setCheck((c) => (c?.overId === overId ? { overId, result: response.data as CheckOut, failed: false } : c)),
-          onError: () => setCheck((c) => (c?.overId === overId ? { overId, result: null, failed: true } : c)),
-        },
-      )
-    }, 150)
-    return () => window.clearTimeout(timer)
+    if (!dragging || known || !isDropTarget(dragging, target)) return
+    const key = `${dragging.id}:${target.id}`
+    checker
+      .mutateAsync({ versionId: data.id, data: { changes: swapChanges(dragging, target) } })
+      .then((response) => setSingles((s) => ({ ...s, [key]: response.data as CheckOut })))
+      .catch(() => setSingles((s) => ({ ...s, [key]: 'failed' })))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragging, overId])
+  }, [dragging, target, known])
 
   const onDragStart = (event: DragStartEvent) => {
     setMessage(null)
     setQuestion(null)
+    setSingles({})
+    setOverId(null)
     setDragging(byId.get(String(event.active.id)) ?? null)
   }
-  const onDragOver = (event: DragOverEvent) => {
-    const id = event.over ? String(event.over.id) : null
-    setCheck(id ? { overId: id, result: null, failed: false } : null)
-  }
-  const save = (from: VersionShiftOut, to: VersionShiftOut, removeClashes = false) =>
+  const onDragOver = (event: DragOverEvent) => setOverId(event.over ? String(event.over.id) : null)
+  const save = (changes: Change[], done: string, { force = false, removeClashes = false } = {}) =>
     change.mutate(
-      { versionId: data.id, data: { changes: swapChanges(from, to), remove_clashes: removeClashes } },
+      { versionId: data.id, data: { changes, force, remove_clashes: removeClashes } },
       {
         onSuccess: () => {
+          setMessage({ text: done, bad: false })
+          setOverride(null)
           setQuestion(null)
-          const done = to.employee_id
-            ? `Zamienione: ${from.employee_name} i ${to.employee_name}.`
-            : `Przeniesiono: ${from.employee_name}.`
-          setMessage({ text: removeClashes ? `${done} Tamta zmiana jest teraz pusta.` : done, bad: false })
           void queryClient.invalidateQueries()
         },
         onError: (error) => {
+          setOverride(null)
           setQuestion(null)
           setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true })
         },
       },
     )
-  // Another shift at the same time: ask first. Otherwise save at once (the server refuses what breaks a rule).
-  const decide = (from: VersionShiftOut, to: VersionShiftOut, result: CheckOut) => {
-    if (result.clashes.length > 0) setQuestion({ from, to, check: result })
-    else save(from, to)
-  }
   const onDragEnd = (event: DragEndEvent) => {
     const from = byId.get(String(event.active.id))
     const to = event.over ? byId.get(String(event.over.id)) : undefined
-    const known = check?.overId === to?.id ? check?.result : null
+    const known = to && overId === to.id && check && check !== 'failed' ? check : null
     setDragging(null)
-    setCheck(null)
+    setOverId(null)
     if (!from || !to || from.id === to.id || from.employee_id === to.employee_id) return
-    if (known) {
-      decide(from, to, known)
-      return
+    const changes = swapChanges(from, to)
+    const done = to.employee_id ? `Zamienione: ${from.employee_name} i ${to.employee_name}.` : `Przeniesiono: ${from.employee_name}.`
+    // Another shift at the same time: ask whether to take the person off it. A swap that breaks a hard rule is the
+    // manager's call: ask once, then save it as an override.
+    const decide = (result: CheckOut) => {
+      if (result.clashes.length > 0) setQuestion({ changes, done, check: result })
+      else if (result.ok) save(changes, done)
+      else if (result.can_force) setOverride({ changes, problems: result.problems, done })
+      else setMessage({ text: result.problems[0] ?? 'Tej zmiany nie można zapisać.', bad: true })
     }
+    if (known) return decide(known)
     checker.mutate(
-      { versionId: data.id, data: { changes: swapChanges(from, to) } },
+      { versionId: data.id, data: { changes } },
       {
-        onSuccess: (response) => decide(from, to, response.data as CheckOut),
+        onSuccess: (response) => decide(response.data as CheckOut),
+        onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
+      },
+    )
+  }
+
+  const addPlace = (date: string, column: GridColumn) => {
+    if (!column.shiftTypeId) return
+    setMessage(null)
+    addSeat.mutate(
+      { versionId: data.id, data: { date, shift_type_id: column.shiftTypeId, position_id: column.positionId } },
+      {
+        onSuccess: () => {
+          setMessage({ text: 'Dodano miejsce. Wybierz je, żeby wpisać osobę.', bad: false })
+          void queryClient.invalidateQueries()
+        },
         onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
       },
     )
@@ -508,7 +566,22 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
 
   return (
     <section className="grid gap-3" aria-label="Grafik">
-      <Legend />
+      {editable && (
+        <SelectField
+          label="Pokaż, kiedy ta osoba chce i może pracować"
+          value={picked}
+          onChange={(e) => setPicked(e.target.value)}
+          className="max-w-sm"
+        >
+          <option value="">Nikt nie jest wybrany</option>
+          {data.employees.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </SelectField>
+      )}
+      <Legend person={!!personId} />
       {message && (
         <p role="status" className={cn('m-0 rounded-sm px-3 py-2', message.bad ? 'bg-cannot-soft text-cannot' : 'bg-accent-soft')}>
           {message.text}
@@ -518,7 +591,13 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
         <ClashQuestion
           check={question.check}
           busy={change.isPending}
-          onMove={() => save(question.from, question.to, true)}
+          onMove={(force) =>
+            save(
+              question.changes,
+              `${question.done} ${question.check.clashes.length > 1 ? 'Tamte zmiany są teraz puste.' : 'Tamta zmiana jest teraz pusta.'}`,
+              { force, removeClashes: true },
+            )
+          }
           onCancel={() => setQuestion(null)}
         />
       )}
@@ -529,7 +608,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
         onDragEnd={onDragEnd}
         onDragCancel={() => {
           setDragging(null)
-          setCheck(null)
+          setOverId(null)
         }}
       >
         <div className="rounded-md border border-line bg-surface">
@@ -576,13 +655,25 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
                           {column.shiftTypeName || 'Zmiana'} · {column.positionName}
                         </span>
                       )}
+                      {cell.length === 0 && editable && column.shiftTypeId && row.date >= data.today && (
+                        <button
+                          type="button"
+                          disabled={addSeat.isPending}
+                          onClick={() => addPlace(row.date, column)}
+                          aria-label={`Dodaj miejsce: ${column.shiftTypeName} · ${column.positionName}, ${weekdayShort(day)} ${dayAndMonth(day)}`}
+                          className="flex min-h-(--touch) w-full cursor-pointer items-center justify-center rounded-sm border-2 border-dashed border-line text-ink-muted hover:border-accent hover:text-accent disabled:opacity-50"
+                        >
+                          <Plus aria-hidden="true" size={18} />
+                        </button>
+                      )}
                       {cell.map((shift) => (
                         <ShiftChip
                           key={shift.id}
                           shift={shift}
                           column={column}
-                          editable={editable && !shift.past}
+                          editable={editable}
                           dragging={dragging}
+                          fit={fitByShift.get(shift.id)}
                           onOpen={() => setOpen(shift)}
                         />
                       ))}
@@ -593,36 +684,45 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
             )
           })}
         </div>
-        <DragOverlay dropAnimation={null}>
-          {dragging && (
-            <div className="grid w-72 gap-1 rounded-sm border-2 border-accent bg-surface px-3 py-2 shadow-sheet">
-              <span className="font-semibold">{dragging.employee_name}</span>
-              <span role="status" className={cn('text-sm', dropWords(check).bad ? 'text-cannot' : 'text-ink-muted')}>
-                {dropWords(check).text}
-              </span>
-            </div>
-          )}
-        </DragOverlay>
+        <DragOverlay dropAnimation={null}>{dragging && <DragCard dragging={dragging} target={target} check={check} />}</DragOverlay>
       </DndContext>
       <ShiftSheet versionId={data.id} locationId={data.location_id} shift={open} editable={editable} onClose={() => setOpen(null)} />
+      <Sheet open={override !== null} onOpenChange={(o) => !o && setOverride(null)} title="Zapisać mimo to?">
+        {override && (
+          <div className="grid gap-4">
+            <div className="grid gap-1 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+              {override.problems.map((problem) => (
+                <span key={problem}>{problem}</span>
+              ))}
+            </div>
+            <p className="m-0 text-sm text-ink-muted">
+              Decyzja należy do Ciebie. Zmiana zostanie oznaczona i przypięta, więc ponowne układanie jej nie cofnie.
+            </p>
+            <Button wide disabled={change.isPending} onClick={() => save(override.changes, override.done, { force: true })}>
+              {change.isPending ? 'Zapisuję…' : 'Zapisz mimo to'}
+            </Button>
+            <Button wide variant="secondary" onClick={() => setOverride(null)}>
+              Anuluj
+            </Button>
+          </div>
+        )}
+      </Sheet>
     </section>
   )
 }
 
-/** What dropping here would do, while the person is being dragged. */
-function dropWords(check: DragCheck | null): { text: string; bad: boolean } {
-  if (!check) return { text: 'Upuść na innej zmianie, żeby zamienić osoby.', bad: false }
-  if (check.failed) return { text: 'Nie udało się sprawdzić tej zamiany.', bad: true }
-  if (!check.result) return { text: 'Sprawdzam…', bad: false }
-  const clash = check.result.clashes.find((c) => !c.can_remove) ?? check.result.clashes[0]
-  if (clash) {
-    if (!clash.can_remove) return { text: `${clash.text} ${clash.reason}`, bad: true }
-    if (!check.result.ok_if_removed) return { text: check.result.problems_if_removed[0] ?? clash.text, bad: true }
-    return { text: `${clash.text} Upuść, a zapytamy, czy ją stamtąd zdjąć.`, bad: false }
-  }
-  if (!check.result.ok) return { text: check.result.problems[0], bad: true }
-  const after = check.result.after
-  return { text: `Można. Zasady ${percent(after.manager_rules)}, prośby ${percent(after.employee_requests)}.`, bad: false }
+/** The card under the pointer: who is dragged, what dropping here does and, as soon as it is known, the result. */
+function DragCard({ dragging, target, check }: { dragging: VersionShiftOut; target?: VersionShiftOut; check: DropCheck }) {
+  const words = dropWords(dragging, target, check)
+  return (
+    <div className="grid w-72 gap-1 rounded-sm border-2 border-accent bg-surface px-3 py-2 shadow-sheet">
+      <span className="font-semibold">{dragging.employee_name}</span>
+      <span className="text-sm text-ink-muted">{words.what}</span>
+      <span role="status" className={cn('min-h-[1lh] text-sm', words.bad ? 'text-cannot' : 'text-ink-muted')}>
+        {words.verdict}
+      </span>
+    </div>
+  )
 }
 
 function ShiftChip({
@@ -630,12 +730,15 @@ function ShiftChip({
   column,
   editable,
   dragging,
+  fit,
   onOpen,
 }: {
   shift: VersionShiftOut
   column: { start: string; end: string }
   editable: boolean
   dragging: VersionShiftOut | null
+  /** How the picked (or dragged) person fits this shift; absent when nobody is picked or it is not their position. */
+  fit?: ShiftFitOut
   onOpen: () => void
 }) {
   const canDrag = editable && !!shift.employee_id
@@ -650,7 +753,9 @@ function ShiftChip({
     `${shift.start_time}–${shift.end_time}`,
     shift.pinned ? 'przypięta' : '',
     shift.manual ? 'zmieniona ręcznie' : '',
+    shift.forced ? 'wpisana mimo przeszkód' : '',
     bad ? 'łamie regułę' : '',
+    fit ? FIT_WORDS[fit.fit] : '',
   ]
     .filter(Boolean)
     .join(', ')
@@ -665,34 +770,68 @@ function ShiftChip({
         aria-label={describe}
         className={cn(
           'flex min-h-(--touch) w-full cursor-pointer items-center gap-1.5 rounded-sm border-2 px-2 text-left text-base',
-          hole
-            ? 'border-dashed border-cannot bg-cannot-soft font-semibold text-cannot'
-            : bad
-              ? 'border-cannot bg-surface'
-              : 'border-line bg-surface hover:border-accent',
-          shift.past && 'opacity-70',
+          fit
+            ? cn(FIT_CLASS[fit.fit], hole && 'border-dashed font-semibold')
+            : hole
+              ? 'border-dashed border-cannot bg-cannot-soft font-semibold text-cannot'
+              : bad
+                ? 'border-cannot bg-surface'
+                : 'border-line bg-surface hover:border-accent',
+          shift.past && !fit && 'opacity-70',
           draggable.isDragging && 'opacity-40',
           droppable.isOver && dragging && 'border-accent ring-3 ring-accent-soft',
           canDrag && 'touch-none',
         )}
       >
-        {hole && <AlertTriangle aria-hidden="true" size={18} className="shrink-0" />}
+        {fit ? (
+          <span className="shrink-0" title={fit.reason}>
+            <StateIcon state={fit.fit === 'can' ? 'neutral' : fit.fit} size={18} />
+          </span>
+        ) : (
+          hole && <AlertTriangle aria-hidden="true" size={18} className="shrink-0" />
+        )}
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {otherHours && (
           <span className="shrink-0 text-sm text-ink-muted">
             {shift.start_time}–{shift.end_time}
           </span>
         )}
-        {shift.manual && <Hand aria-hidden="true" size={16} className="shrink-0 text-ink-muted" />}
+        {shift.forced && <ShieldAlert aria-hidden="true" size={16} className="shrink-0 text-prefer-not" />}
+        {shift.manual && !shift.forced && <Hand aria-hidden="true" size={16} className="shrink-0 text-ink-muted" />}
         {shift.pinned && <Pin aria-hidden="true" size={16} className="shrink-0 text-accent" />}
       </button>
     </div>
   )
 }
 
-function Legend() {
+const FIT_CLASS: Record<ShiftFitOut['fit'], string> = {
+  prefer: 'avail-prefer',
+  can: 'avail-neutral',
+  cannot: 'fit-cannot',
+}
+
+const FIT_WORDS: Record<ShiftFitOut['fit'], string> = {
+  prefer: 'wybrana osoba chętnie',
+  can: 'wybrana osoba może',
+  cannot: 'wybrana osoba nie może',
+}
+
+function Legend({ person }: { person: boolean }) {
   return (
     <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-sm text-ink-muted">
+      {person && (
+        <>
+          <li className="avail-prefer flex items-center gap-1.5 rounded-sm border px-1.5 font-semibold">
+            <StateIcon state="prefer" size={16} /> chętnie
+          </li>
+          <li className="avail-neutral flex items-center gap-1.5 rounded-sm border px-1.5 font-semibold">
+            <StateIcon state="neutral" size={16} /> może
+          </li>
+          <li className="fit-cannot flex items-center gap-1.5 rounded-sm border px-1.5 font-semibold">
+            <StateIcon state="cannot" size={16} /> nie może
+          </li>
+        </>
+      )}
       <li className="flex items-center gap-1.5">
         <AlertTriangle aria-hidden="true" size={16} className="text-cannot" /> bez obsady
       </li>
@@ -701,6 +840,9 @@ function Legend() {
       </li>
       <li className="flex items-center gap-1.5">
         <Pin aria-hidden="true" size={16} className="text-accent" /> przypięte
+      </li>
+      <li className="flex items-center gap-1.5">
+        <ShieldAlert aria-hidden="true" size={16} className="text-prefer-not" /> wpisane mimo przeszkód
       </li>
     </ul>
   )

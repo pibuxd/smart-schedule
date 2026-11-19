@@ -11,7 +11,7 @@ from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.accounts.models import User
 from apps.assistant import llm, readings, services
-from apps.assistant.models import AssistantCommand, ManagerInstruction
+from apps.assistant.models import AssistantCommand, AssistantRuleSet, ManagerInstruction
 from apps.availability.models import TextRequest
 from apps.notifications.models import Notification
 from apps.notifications.services import notification_text
@@ -42,7 +42,9 @@ def shop(make_company, subscribe):
     today = timezone.localdate()
     start = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
     end = (start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-    data["period"] = SchedulePeriod.objects.create(location=data["location"], start=start, end=end)
+    data["period"] = SchedulePeriod.objects.create(
+        location=data["location"], start=start, end=end, availability_requested_at=timezone.now()
+    )
     return data
 
 
@@ -53,6 +55,7 @@ def with_key(settings):
 
 def reading(**changes) -> llm.RequestReading:
     values = {
+        "scope": "rules",
         "type": "wolne_dni",
         "person": None,
         "shift_type": None,
@@ -71,6 +74,7 @@ def reading(**changes) -> llm.RequestReading:
 
 def plan(**changes) -> llm.CommandPlan:
     values = {
+        "scope": "rules",
         "reply": "Gotowe.",
         "question": None,
         "rule_changes": [],
@@ -385,9 +389,15 @@ class TestCommands:
             cmd = run(api, shop, monkeypatch, answer)
             assert api.post(f"/api/assistant-commands/{cmd['id']}/apply").status_code == 200
             items = api.get(f"/api/scopes/location/{location.pk}/rules").json()["items"]
-            assert {i["code"] for i in items if i["source"] == "group"} == {"min_rest_between_shifts", "target_hours"}
+            assert {i["code"] for i in items if i["source"] == "group"} == {
+                "min_rest_between_shifts",
+                "target_hours",
+                "max_consecutive_days",
+            }
+            scoped = AssistantRuleSet.objects.get(period=shop["period"]).rules
+            assert next(i for i in scoped if i["code"] == "max_consecutive_days")["params"]["days"] == 4
             if place:
-                assert items[0]["code"] == "max_consecutive_days"
+                assert scoped[0]["code"] == "max_consecutive_days"
         RuleSetting.objects.filter(group=group, rule_code="min_rest_between_shifts").update(params={"hours": 18})
         items = api.get(f"/api/scopes/location/{location.pk}/rules").json()["items"]
         assert next(i for i in items if i["code"] == "min_rest_between_shifts")["params"]["hours"] == 18
@@ -455,8 +465,8 @@ class TestCommands:
 
         assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200
         first = RuleSetting.objects.get(location=shop["location"], position=1)
-        assert first.rule_code == "max_shifts_per_week" and first.enabled and first.params == {"shifts": 4}
-        items = api.get(f"/api/scopes/location/{shop['location'].pk}/rules").json()["items"]
+        assert first.rule_code == "fair_weekends" and first.enabled
+        items = AssistantRuleSet.objects.get(period=shop["period"]).rules
         assert items[0]["code"] == "max_shifts_per_week"
         assert next(i for i in items if i["code"] == "fair_weekends")["enabled"] is False
 
@@ -483,7 +493,9 @@ class TestCommands:
         body = run(api, shop, monkeypatch, answer)
         assert body["lines"] == [] and body["can_apply"] is False and len(body["notes"]) == 3
 
-    def test_a_command_can_be_about_a_month_with_no_period_yet(self, api, shop, with_key, monkeypatch):
+    def test_a_command_waits_for_an_availability_request_when_no_period_is_open(self, api, shop, with_key, monkeypatch):
+        shop["period"].availability_requested_at = None
+        shop["period"].save()
         later = (shop["period"].end + timedelta(days=1) + timedelta(days=40)).replace(day=1)
         seen = {}
 
@@ -500,7 +512,7 @@ class TestCommands:
         assert "także w miesiącach, na które nie ma jeszcze okresu" in seen["context"]
         body = api.get(f"/api/assistant-commands/{created['id']}").json()
         assert body["notes"][:1] == [
-            "Polecenie o osobie „Anna” zadziała, gdy założysz okres grafiku na te dni. "
+            "Polecenie o osobie „Anna” zadziała, gdy poprosisz o dyspozycje na te dni. "
             "Do tego czasu nie zmienia żadnego grafiku."
         ]
         assert api.post(f"/api/assistant-commands/{created['id']}/apply").status_code == 200
@@ -508,6 +520,8 @@ class TestCommands:
         assert not build_problem([shop["period"]]).problem.requests  # not this period
         end = (later + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         new_period = SchedulePeriod.objects.create(location=shop["location"], start=later, end=end)
+        assert not build_problem([new_period]).problem.requests
+        assert api.post(f"/api/periods/{new_period.pk}/ask-availability").status_code == 200
         [request] = build_problem([new_period]).problem.requests
         assert request.by_manager and request.dates == {later.replace(day=12)}
 

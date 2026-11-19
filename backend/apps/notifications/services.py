@@ -27,6 +27,11 @@ LINKS = {
     "offer_taken": "schedule",
     "offer_cancelled": "schedule",
     "offer_expired": "schedule",
+    "offer_opened_for_you": "schedule",
+    "offer_closed": "schedule",
+    "shift_assigned": "schedule",
+    "shift_unassigned": "schedule",
+    "shift_swapped": "schedule",
 }
 
 
@@ -134,6 +139,31 @@ def notification_text(kind: str, payload: dict) -> str:
             return (
                 f"Kierownik dał Twoją prośbę „{p.get('text', '')}” do przeczytania asystentowi AI (Claude, "
                 "zewnętrzna usługa), żeby generator mógł ją uwzględnić."
+            )
+        case "offer_opened_for_you":
+            if not p.get("able"):
+                return (
+                    f"Kierownik szuka kogoś na Twoją zmianę {shift}, ale nikt inny nie może jej teraz wziąć. "
+                    "To nadal Twoja zmiana."
+                )
+            return (
+                f"Kierownik szuka kogoś na Twoją zmianę {shift}. Daliśmy znać {_people_dative(p['able'])}. "
+                "Dopóki nikt jej nie weźmie, to nadal Twoja zmiana."
+            )
+        case "offer_closed":
+            return f"Kierownik zakończył oddawanie zmiany {shift}. To nadal Twoja zmiana."
+        case "shift_assigned":
+            if p.get("past"):
+                return f"Kierownik poprawił grafik: zmiana {shift} jest teraz zapisana na Ciebie."
+            return f"Kierownik wpisał Cię na zmianę {shift}. Jest już w Twoim grafiku."
+        case "shift_unassigned":
+            if p.get("past"):
+                return f"Kierownik poprawił grafik: zmiana {shift} jest teraz zapisana na inną osobę ({taker})."
+            return f"Kierownik zdjął Cię ze zmiany {shift}. Bierze ją {taker}. Nie musisz na nią przychodzić."
+        case "shift_swapped":
+            return (
+                f"Kierownik zamienił Twoje zmiany z: {p.get('with_name') or 'inna osoba'}. "
+                f"Zamiast {shift_words(p.get('given') or {})} masz teraz {shift}."
             )
         case "offer_expired":
             return f"Oddanie zmiany {shift} jest nieaktualne, bo grafik się zmienił. Sprawdź „Mój grafik”."

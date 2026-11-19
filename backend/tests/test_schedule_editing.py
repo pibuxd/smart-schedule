@@ -10,8 +10,10 @@ from django.utils import timezone
 
 from apps.availability.models import AvailabilityDay
 from apps.notifications.models import Notification
+from apps.rules.models import RuleSetting
 from apps.scheduling.generation import request_generation, run_generation
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
+from apps.staffing.models import EmployeeProfile, LocationClosure, StaffingException, StaffingRule
 from tests.test_generation import FAST, MON, _ctx, shop  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.django_db
@@ -166,6 +168,45 @@ def test_swap_two_people_in_one_change(api, shop, draft):
     assert (first.employee_id, second.employee_id) == (people[1], people[0])
 
 
+def test_drop_checks_answer_every_drop_of_a_drag_at_once(api, shop, draft):
+    api.login(shop["manager"])
+    rows = list(Assignment.objects.filter(shift__version=draft).select_related("shift").order_by("shift__slot_key"))
+    dragged = next(r for r in rows if r.employee_id)
+    Assignment.objects.filter(pk__in=[dragged.pk, rows[-1].pk]).update(pinned=True)  # pins move with the person
+
+    response = api.get(url(draft, f"/shifts/{dragged.shift_id}/drops"))
+
+    assert response.status_code == 200, response.json()
+    drops = {d["shift_id"]: d for d in response.json()}
+    others = [r for r in rows if r.employee_id != dragged.employee_id]
+    assert set(drops) == {str(r.shift_id) for r in others}  # not the shift itself, nor the person's other shifts
+    assert {d["ok"] for d in drops.values()} == {True, False}
+    for target in others:  # each answer is what checking that one swap says
+        swap = [
+            {"shift_id": str(target.shift_id), "employee_id": str(dragged.employee_id)},
+            {"shift_id": str(dragged.shift_id), "employee_id": str(target.employee_id) if target.employee_id else None},
+        ]
+        single = api.post(url(draft, "/check"), {"changes": swap}).json()
+        assert drops[str(target.shift_id)] == {**single, "shift_id": str(target.shift_id)}
+    dragged.refresh_from_db()
+    assert dragged.manual is False  # nothing is saved
+
+
+def test_drop_checks_skip_empty_shifts_and_cover_days_that_have_passed(api, shop, draft, monkeypatch):
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    later = shift_of(draft, MON + timedelta(days=3))
+    Assignment.objects.filter(pk=later.pk).update(employee=None)
+
+    assert api.get(url(draft, f"/shifts/{later.shift_id}/drops")).json() == []  # nobody to drag
+    # A draft can correct days that have passed (a swap made outside the app), so they are checked too.
+    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: MON + timedelta(days=2))
+    days = Shift.objects.filter(version=draft).values_list("pk", "date")
+    past = {str(pk) for pk, day in days if day < MON + timedelta(days=2)}
+    drops = api.get(url(draft, f"/shifts/{taken.shift_id}/drops")).json()
+    assert drops and past & {d["shift_id"] for d in drops}
+
+
 def test_leaving_a_shift_empty_makes_a_hole(api, shop, draft):
     api.login(shop["manager"])
     taken = shift_of(draft, MON)
@@ -252,15 +293,157 @@ def test_correcting_a_published_schedule_starts_a_draft_copy(api, shop, draft):
     assert Notification.objects.filter(kind="schedule_published", payload__changed=True).exists()
 
 
-def test_days_that_have_passed_cannot_be_changed(api, shop, draft, monkeypatch):
+def test_days_that_have_passed_can_be_corrected_and_the_correction_stays(api, shop, draft, monkeypatch):
+    """Someone swapped outside the app: the manager fixes the past shift so the hours are counted as worked."""
     api.login(shop["manager"])
-    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: MON + timedelta(days=2))
+    api.post(url(draft, "/publish"))
+    today = MON + timedelta(days=2)
+    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: today)
+    correction = ScheduleVersion.objects.get(pk=api.post(url(draft, "/draft")).json()["id"])
+    taken = shift_of(correction, MON)
+    free = free_person(shop, correction, MON)
+    was = taken.employee_id
+
+    saved = api.patch(
+        url(correction, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
+    )
+
+    assert saved.status_code == 200
+    taken.refresh_from_db()
+    # A correction of the past is pinned by itself: arranging again must not undo what really happened.
+    assert taken.employee_id == free.pk and taken.pinned is True
+    assert next(s for s in api.get(url(correction)).json()["shifts"] if s["id"] == str(taken.shift_id))["past"]
+
+    run = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, today=today, **FAST)
+    assert run.status == "succeeded", run.error
+    again = Assignment.objects.get(shift__version=run.versions.get(), shift__slot_key=taken.shift.slot_key)
+    assert again.employee_id == free.pk
+
+    assert api.post(url(run.versions.get(), "/publish")).status_code == 200
+    hours = {
+        e: Assignment.objects.filter(shift__version__status="published", shift__date=MON, employee=e).count()
+        for e in (was, free.pk)
+    }
+    assert hours == {was: 0, free.pk: 1}
+
+
+def test_manager_can_force_a_person_who_cannot_work(api, shop, draft):
+    api.login(shop["manager"])
     taken = shift_of(draft, MON)
+    free = free_person(shop, draft, MON)
+    AvailabilityDay.objects.create(employee=free, date=MON, state="cannot")
+    change = {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
 
-    refused = api.patch(url(draft, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id)}]})
+    check = api.post(url(draft, "/check"), change).json()
+    assert check["ok"] is False and check["can_force"] is True and "nie mogę" in check["problems"][0]
+    assert api.patch(url(draft, "/assignments"), change).status_code == 409
 
-    assert refused.status_code == 409 and "minął" in refused.json()["detail"]
-    assert api.get(url(draft)).json()["shifts"][0]["past"] is True
+    forced = api.patch(url(draft, "/assignments"), {**change, "force": True})
+
+    assert forced.status_code == 200
+    taken.refresh_from_db()
+    assert taken.employee_id == free.pk and taken.forced is True and taken.pinned is True
+    body = api.get(url(draft)).json()
+    row = next(s for s in body["shifts"] if s["id"] == str(taken.shift_id))
+    assert row["forced"] is True and "nie mogę" in row["overridden"][0] and row["problems"] == []
+    assert body["hard_problems"] == [] and body["scores"]["hard_violations"] == 0
+    # The override never blocks publishing, and arranging again keeps it.
+    assert api.post(url(draft, "/publish")).status_code == 200
+    run = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST)
+    assert run.status == "succeeded", run.error
+    again = Assignment.objects.get(shift__version=run.versions.get(), shift__slot_key=taken.shift.slot_key)
+    assert again.employee_id == free.pk and again.forced is True and again.pinned is True
+
+
+def test_two_shifts_at_the_same_time_cannot_be_forced(api, shop, draft):
+    """Nobody can work two shifts at once: that is a mistake, not a decision, so the override does not apply."""
+    api.login(shop["manager"])
+    a, b = Assignment.objects.filter(shift__version=draft, shift__date=MON).order_by("shift__slot_key")
+    change = {"changes": [{"shift_id": str(a.shift_id), "employee_id": str(b.employee_id)}], "force": True}
+
+    check = api.post(url(draft, "/check"), change).json()
+    refused = api.patch(url(draft, "/assignments"), change)
+
+    assert check["ok"] is False and check["can_force"] is False
+    assert refused.status_code == 409 and "dwie zmiany" in refused.json()["detail"]
+    a.refresh_from_db()
+    assert a.employee_id != b.employee_id and a.forced is False
+    explained = api.get(url(draft, f"/shifts/{a.shift_id}/explain")).json()
+    blocked = next(c for c in explained["candidates"] if c["employee_id"] == str(b.employee_id))
+    assert blocked["possible"] is False and blocked["can_force"] is False
+
+
+def test_an_override_does_not_cover_a_later_change_silently(api, shop, draft):
+    """One "Wpisz mimo to" must not switch off a "no exceptions" rule for that person's next shifts."""
+    from apps.rules.models import RuleSetting
+
+    api.login(shop["manager"])
+    person = shop["people"][0]
+    person.max_hours_month = 8
+    person.save(update_fields=["max_hours_month"])
+    RuleSetting.objects.update_or_create(
+        location=shop["location"],
+        rule_code="personal_max_hours",
+        defaults={"enabled": True, "is_hard": True, "position": 1},
+    )
+    works = Assignment.objects.filter(shift__version=draft, employee=person).values_list("shift__date", flat=True)
+    others = Assignment.objects.filter(shift__version=draft).exclude(shift__date__in=list(works))
+    others = others.order_by("shift__date")
+    first, second = others[0], others.exclude(shift__date=others[0].shift.date)[0]
+    put = lambda a: {"changes": [{"shift_id": str(a.shift_id), "employee_id": str(person.pk)}]}  # noqa: E731
+
+    # The draft already has the person over the maximum; one more shift is forced.
+    assert api.patch(url(draft, "/assignments"), {**put(first), "force": True}).status_code == 200
+
+    check = api.post(url(draft, "/check"), put(second)).json()
+    assert check["ok"] is False and check["can_force"] is True and "maksimum" in " ".join(check["problems"])
+    assert api.patch(url(draft, "/assignments"), put(second)).status_code == 409
+    # Taking the person off a shift is never held up by the override.
+    off = {"changes": [{"shift_id": str(first.shift_id), "employee_id": None}]}
+    assert api.post(url(draft, "/check"), off).json()["ok"] is True
+
+
+def test_override_ends_when_someone_else_takes_the_shift(api, shop, draft):
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    was = taken.employee_id
+    free = free_person(shop, draft, MON)
+    AvailabilityDay.objects.create(employee=free, date=MON, state="cannot")
+    shift = str(taken.shift_id)
+    api.patch(
+        url(draft, "/assignments"), {"changes": [{"shift_id": shift, "employee_id": str(free.pk)}], "force": True}
+    )
+
+    back = api.patch(url(draft, "/assignments"), {"changes": [{"shift_id": shift, "employee_id": str(was)}]})
+
+    assert back.status_code == 200
+    taken.refresh_from_db()
+    assert taken.employee_id == was and taken.forced is False and taken.pinned is False
+
+
+def test_fit_colours_where_a_person_wants_can_and_cannot_work(api, shop, draft):
+    api.login(shop["manager"])
+    mine = shift_of(draft, MON)
+    person = mine.employee
+    works = set(Assignment.objects.filter(shift__version=draft, employee=person).values_list("shift__date", flat=True))
+    tue, wed = [d for d in (MON + timedelta(days=n) for n in range(7)) if d not in works][:2]
+    AvailabilityDay.objects.filter(employee=person, date__in=[tue, wed]).delete()
+    AvailabilityDay.objects.create(employee=person, date=tue, state="prefer")
+    AvailabilityDay.objects.create(employee=person, date=wed, state="cannot")
+
+    body = api.get(url(draft, f"/employees/{person.pk}/fit")).json()
+
+    days = {str(pk): day for pk, day in Shift.objects.filter(version=draft).values_list("pk", "date")}
+    held = Assignment.objects.filter(shift__version=draft, employee=person)
+    own = {str(pk) for pk in held.values_list("shift_id", flat=True)}
+    assert body and not own & {row["shift_id"] for row in body}  # their own shifts are not offered
+    fits = {day: {r["fit"] for r in body if days[r["shift_id"]] == day} for day in (MON, tue, wed)}
+    assert fits[MON] == {"cannot"}  # the other place of the morning they already work
+    assert "inną zmianę" in next(r["reason"] for r in body if days[r["shift_id"]] == MON)
+    assert fits[tue] == {"prefer"} and fits[wed] == {"cannot"}
+    # Dragged away from the Monday shift, the person is free for the other place that morning.
+    moved = api.get(url(draft, f"/employees/{person.pk}/fit?moving_shift_id={mine.shift_id}")).json()
+    assert {r["fit"] for r in moved if days[r["shift_id"]] == MON} == {"can"}
 
 
 def test_read_only_company_can_look_but_not_change(api, shop, draft, subscribe):
@@ -272,6 +455,10 @@ def test_read_only_company_can_look_but_not_change(api, shop, draft, subscribe):
     assert api.patch(url(draft, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id)}]}).status_code == 402
     assert api.post(url(draft, "/publish")).status_code == 402
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 402
+    forced = {"changes": [{"shift_id": str(taken.shift_id)}], "force": True}
+    assert api.patch(url(draft, "/assignments"), forced).status_code == 402
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 402
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 402
 
 
 def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
@@ -283,10 +470,14 @@ def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
     assert api.get(url(draft)).status_code == 404
     assert api.get(url(draft, f"/shifts/{taken.shift_id}/explain")).status_code == 404
     assert api.post(url(draft, "/check"), change).status_code == 404
+    assert api.get(url(draft, f"/employees/{taken.employee_id}/fit")).status_code == 404
+    assert api.get(url(draft, f"/shifts/{taken.shift_id}/drops")).status_code == 404
     assert api.patch(url(draft, "/assignments"), change).status_code == 404
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 404
     assert api.post(url(draft, "/draft")).status_code == 404
     assert api.post(url(draft, "/publish")).status_code == 404
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 404
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 404
 
 
 def test_person_from_another_company_cannot_be_put_in(api, shop, draft, make_company):
@@ -319,3 +510,133 @@ def test_employee_list_counts_shifts_in_the_draft(api, shop, draft):
     }
     assert {r["id"]: r["draft_shifts"] for r in rows if r["draft_shifts"]} == expected
     assert sum(expected.values()) == 12  # switching someone off tells the manager about these shifts
+
+
+# ----------------------------------------------------------------- one place more or fewer on a day
+
+
+def seat(shop, day):
+    return {"date": str(day), "shift_type_id": str(shop["shift_type"].pk), "position_id": str(shop["position"].pk)}
+
+
+def test_adding_a_place_makes_a_hole_and_survives_arranging_again(api, shop, draft):
+    api.login(shop["manager"])
+
+    added = api.post(url(draft, "/seats"), seat(shop, MON))
+
+    assert added.status_code == 201
+    row = added.json()
+    assert row["employee_id"] is None and (row["start_time"], row["end_time"]) == ("06:00", "14:00")
+    assert row["shift_type_id"] == str(shop["shift_type"].pk)
+    body = api.get(url(draft)).json()
+    assert len([s for s in body["shifts"] if s["date"] == str(MON)]) == 3 and body["scores"]["holes"] == 1
+    assert StaffingException.objects.get(date=MON).count == 3  # Monday usually needs 2
+    setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+    assert setup["arranged"] == [{"start": str(MON), "end": str(MON + timedelta(days=6))}]
+
+    again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    assert Shift.objects.filter(version=again, date=MON).count() == 3
+
+
+def test_removing_a_place_keeps_the_other_person_and_the_numbering(api, shop, draft):
+    api.login(shop["manager"])
+    first, second = Assignment.objects.filter(shift__version=draft, shift__date=MON).order_by("shift__slot_key")
+    Assignment.objects.filter(pk=second.pk).update(pinned=True)
+
+    assert api.client.delete(url(draft, f"/shifts/{first.shift_id}")).status_code == 204
+
+    [left] = Assignment.objects.filter(shift__version=draft, shift__date=MON).select_related("shift")
+    assert left.shift.slot_key.endswith("/1") and left.employee_id == second.employee_id and left.pinned is True
+    assert StaffingException.objects.get(date=MON).count == 1
+    assert api.get(url(draft)).json()["scores"]["slots"] == 11
+    # Back to the usual two people: the date no longer differs from other Mondays.
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 201
+    assert not StaffingException.objects.exists()
+
+
+def test_removed_place_of_a_published_schedule_is_in_the_history(api, shop, draft):
+    api.login(shop["manager"])
+    api.post(url(draft, "/publish"))
+    correction = ScheduleVersion.objects.get(pk=api.post(url(draft, "/draft")).json()["id"])
+    rows = Assignment.objects.filter(shift__version=correction, shift__date=MON).select_related("shift")
+    gone = rows.order_by("-shift__slot_key").first()
+    name = gone.employee.membership.user.full_name
+
+    assert api.client.delete(url(correction, f"/shifts/{gone.shift_id}")).status_code == 204
+    assert api.get(url(correction)).json()["changed_people"] == [name]
+    assert api.post(url(correction, "/publish")).status_code == 200
+
+    event = AssignmentEvent.objects.filter(slot_key=gone.shift.slot_key).order_by("-at").first()
+    assert (event.from_employee_id, event.to_employee_id, event.reason) == (gone.employee_id, None, "manual")
+
+
+def test_places_cannot_change_on_closed_or_past_days_or_in_a_published_schedule(api, shop, draft, monkeypatch):
+    api.login(shop["manager"])
+    LocationClosure.objects.create(location=shop["location"], date=MON + timedelta(days=5))
+    closed = api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=5)))
+    assert closed.status_code == 409 and "zamknięty" in closed.json()["detail"]
+    assert api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=30))).status_code == 400
+
+    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: MON + timedelta(days=2))
+    taken = shift_of(draft, MON)
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 409
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 409
+    assert api.get(url(draft)).json()["today"] == str(MON + timedelta(days=2))
+
+    api.post(url(draft, "/publish"))
+    later = shift_of(draft, MON + timedelta(days=4))
+    assert api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=4))).status_code == 409
+    assert api.client.delete(url(draft, f"/shifts/{later.shift_id}")).status_code == 409
+    assert not StaffingException.objects.exists()
+
+
+def test_removing_a_place_is_refused_when_it_breaks_a_hard_rule(api, shop, draft):
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    hours = 8 * Assignment.objects.filter(shift__version=draft, employee=taken.employee_id).count()
+    # The person's hours goal becomes a rule without exceptions, met exactly by the shifts they have now.
+    EmployeeProfile.objects.filter(pk=taken.employee_id).update(target_hours_month=round(hours * 31 / 7))
+    RuleSetting.objects.create(location=shop["location"], rule_code="target_hours", position=1, is_hard=True)
+    assert api.get(url(draft)).json()["hard_problems"] == []
+
+    refused = api.client.delete(url(draft, f"/shifts/{taken.shift_id}"))
+
+    assert refused.status_code == 409 and "Tego miejsca nie można usunąć" in refused.json()["detail"]
+    assert Shift.objects.filter(pk=taken.shift_id).exists() and not StaffingException.objects.exists()
+
+
+def test_manager_may_keep_fewer_experienced_people_than_the_staffing_asks(api, shop):
+    location = shop["location"]
+    StaffingRule.objects.filter(location=location, weekday=MON.weekday()).update(experienced=1)
+    expert = shop["people"][0]
+    EmployeeProfile.objects.filter(pk=expert.pk).update(experience=3)
+    draft = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    on_monday = Assignment.objects.filter(shift__version=draft, shift__date=MON)
+    assert on_monday.filter(employee=expert).exists()
+    assert list(on_monday.filter(shift__needs_experienced=True).values_list("employee", flat=True)) == [expert.pk]
+    api.login(shop["manager"])
+    taken = on_monday.get(employee=expert)
+    free = free_person(shop, draft, MON)
+    change = {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
+
+    saved = api.patch(url(draft, "/assignments"), change)
+
+    assert saved.status_code == 200 and saved.json()["ok"] is True
+    assert "doświadczona osoba" in saved.json()["warnings"][0]
+    body = api.get(url(draft)).json()
+    assert body["hard_problems"] == [] and "doświadczona osoba" in body["accepted_problems"][0]
+    # Pinned, the choice survives arranging again instead of making the generator fail.
+    assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 200
+    again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST)
+    assert again.status == "succeeded", again.error
+    assert (
+        Assignment.objects.get(shift__version=again.versions.get(), shift__slot_key=taken.shift.slot_key).employee
+        == free
+    )
+    assert api.post(url(again.versions.get(), "/publish")).status_code == 200
+    # After a place is removed, the first place of the day still asks for experience.
+    version = ScheduleVersion.objects.get(pk=api.post(url(again.versions.get(), "/draft")).json()["id"])
+    first, _ = Shift.objects.filter(version=version, date=MON).order_by("slot_key")
+    assert api.client.delete(url(version, f"/shifts/{first.pk}")).status_code == 204
+    [left] = Shift.objects.filter(version=version, date=MON)
+    assert left.slot_key.endswith("/1") and left.needs_experienced is True

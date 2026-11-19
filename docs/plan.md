@@ -3,10 +3,47 @@
 Plan do akceptacji przed pisaniem kodu aplikacji. Zakres i wymagania: [spec.md](spec.md).
 Kod, nazwy w kodzie i commity po angielsku; teksty interfejsu po polsku.
 
+## Ustalenia asystenta na okres grafiku (18.11.2026)
+
+Zatwierdzone ustalenia dotyczą jednego okresu zbierania dyspozycji. Domyślnie jest to ostatni nieopublikowany okres, dla którego poproszono o dyspozycje; ekran okresu może otworzyć rozmowę z tym okresem wybranym jawnie. Bez takiego okresu ustalenia czekają bez przypisania. Rozmowa otwarta jawnie z niezgłoszonego jeszcze okresu zapisuje do kolejki oczekującej lokalu. Przydzielenie następuje dopiero przez „Poproś o dyspozycje”, także gdy istnieje inny aktywny okres. „Poproś o dyspozycje” atomowo przejmuje oczekujące ustalenia dla wskazanego okresu. Ponowienie prośby nie przenosi ustaleń z innych okresów.
+
+Publikacja oznacza zestaw jako wykorzystany i usuwa go z domyślnej listy aktywnej, bez kasowania rozmowy, zasad lub poleceń. Regeneracja i korekty tego samego okresu używają jego zachowanego zestawu; nowy okres nie przejmuje wykorzystanych ustaleń. Nieudane generowanie, szkic ani samo rozpoczęcie układania nie zużywają zestawu. Tabela przy dyspozycjach pokazuje zasady i polecenia dla wybranego okresu.
+
+Technicznie `AssistantRuleSet` przechowuje migawkę zasad katalogowych, zmienione kody, lokal, opcjonalny okres oraz datę wykorzystania. Polecenia o osobach i wiadomości wskazują zestaw. Stałe zasady lokalu/grupy pozostają bazą nowych zestawów; rozmowa zmienia wyłącznie zestaw okresu. Migracja zachowuje wcześniejsze polecenia i przypisuje wykorzystane do ostatniej publikacji po ich utworzeniu, a pozostałe do otwartego zbierania dyspozycji lub kolejki oczekującej. Wszystkie zapisy serializują się z publikacją przez blokadę firmy. Zakres firmy, lokalu i wybranego okresu sprawdzany jest na serwerze.
+
+## Kopiowanie ustaleń i przekazanie odrzuconej prośby (18.11.2026)
+
+- `GET /locations/{id}/agreements/previous?period_id=` zwraca to, co można skopiować z najnowszego wcześniejszego okresu z ustaleniami (`agreements.previous`, `agreements.copyable`). `POST /locations/{id}/agreements/copy` kopiuje wyłącznie wskazane kody zasad i identyfikatory poleceń do zestawu okresu docelowego (albo kolejki oczekującej, gdy o dyspozycje jeszcze nie poproszono), pod blokadą firmy i lokalu. Pusty wybór niczego nie zmienia; wybór spoza aktualnej oferty daje 409; opublikowany okres docelowy daje 409. `bind_pending` nadal niczego nie przenosi z innych okresów.
+- UI: `CopyPreviousAgreements` w tabeli ustaleń okresu (dyspozycje i zasady), zwinięte, bez zaznaczonych pozycji.
+- `PATCH /me/requests/{id}` z `understood: false` dla statusu `rejected` ustawia `needs_manager`, czyści interpretację i zapisuje `unread_reason="rejected"` (migracja `availability.0008`). Generator traktuje taki wpis jak każdą nieodczytaną prośbę (`RequestType.OTHER`, bez punktacji). Karta prośby kierownika opisuje powód.
+
+## Ograniczenie zakresu asystenta (18.11.2026)
+
+- Obie struktury LLM wymagają klasyfikacji `scope=rules|out_of_scope`. Prompt dopuszcza wyłącznie zasady i preferencje. Mieszane żądania są poza zakresem. Serwer odrzuca taki wynik w całości, niezależnie od dodatkowych akcji lub tekstu zwróconego przez model.
+- Kierownik otrzymuje stałą odmowę, puste listy i `can_apply=false`. Wyjaśnienia zasad są dozwolone; pozostałe odpowiedzi informacyjne nie są. Pracownik otrzymuje istniejący status `rejected` z bezpiecznym opisem; wpis jest wyłączony z generatora i listy kierownika, dopóki pracownik nie przekaże go kierownikowi do ręcznej oceny (bez punktacji w generatorze).
+- Kontekst nie zawiera już `location_snapshot` ani `own_availability`; historia służy wyłącznie korektom ustawień. Brak nowych narzędzi modelu. UI i opis przekazywanych danych odpowiadają temu ograniczeniu.
+
+## Wysuwany czat i okienko ustaleń (18.11.2026)
+
+- `components/ui/drawer.tsx`: panel z prawej na Radix Dialog w trybie niemodalnym (bez tła, kliknięcie obok go nie zamyka). `features/manager/AssistantDrawer.tsx` trzyma jeden czat na lokal (`AssistantDrawerProvider` w `LocationLayout`), a `useAssistantDrawer().openChat({ periodId, text })` otwiera go z dowolnego ekranu lokalu, opcjonalnie z wpisanym początkiem wiadomości. Na ekranie od 1280 px treść strony odsuwa się, żeby okienko ustaleń było widać obok rozmowy.
+- Trasa `/kierownik/lokal/$locationId/asystent` pokazuje teraz okienko ustaleń (`AssistantRulesTable`), zakładka nazywa się „Ustalenia”. To samo okienko jest przy dyspozycjach okresu i (skrócone) na ekranie zasad.
+- Nowy endpoint `DELETE /locations/{location_id}/agreed-rules/{code}?period_id=` (`revert_agreed_rule`): zasada ustalona w rozmowie wraca do bieżącego ustawienia lokalu i znika z `changed_codes`; 404, gdy zasady nie ma wśród ustaleń, 409 po publikacji. Kolejność i usuwanie poleceń korzystają z istniejących endpointów.
+- Pracownik: `RequestsSection` to okienko „Twoje prośby” (statusy `interpreted` i `needs_manager`, edycja i usuwanie istniejącymi endpointami) oraz ten sam `Drawer` z historią rozmowy i polem pisania. Bez zmian w API.
+- Założenie: rozmowa pracownika zostaje jednokrokowa (jedna wiadomość, jedno odczytanie; poprawka zastępuje wcześniejszą prośbę). Wieloetapowe dopytywanie pracownika wymagałoby zmian w `interpret_request` i nie jest częścią tego etapu.
+
+## Czat asystenta (18.11.2026)
+
+- Nowa trasa `/kierownik/lokal/$locationId/asystent`, dostępna z zakładek lokalu i zasad. Rozmowa oraz osobny panel przyjętych poleceń; na małym ekranie przełączanie między nimi. Istniejące kolory i typografia, lżejsze obramowania, wyraźny podział nadawców i pole pisania na dole.
+- GET `/locations/{location_id}/assistant-commands` zwraca ostatnie 50 wpisów aktualnego autora w lokalu chronionym uprawnieniami, od najstarszego do najnowszego. W historii nie ma wiadomości innych kierowników ani innych firm. Bez nowego modelu rozmów i bez przechowywania treści w localStorage.
+- Wspólne elementy rozmowy i edytora dla kierownika i pracownika. Polling tylko podczas oczekiwania, stan wydłużonego oczekiwania z ponownym odczytem, przewijanie do nowych odpowiedzi bez odrywania od czytanej historii. Przyciski zmieniające dane respektują tryb tylko do odczytu.
+- Przegląd produktu: widoczny limit pamięci i oznaczenia wpisów poza zakresem (ostatnie 6 zakończonych wpisów z 24 h). API zwraca `expires_at`; `can_apply` i zatwierdzenie sprawdzają ważność 24 h od `created_at`, także w transakcji zapisu. Bez nowego statusu lub migracji; wygasła propozycja zostaje w historii i pozwala wstawić treść do ponownego wysłania. Dotychczasowe kontrole osób, zmian i usuwanych poleceń pozostają aktywne. Efekty są historycznym porównaniem, nie bieżącym podglądem.
+- Zasady pokazują przyjęte polecenia o osobach i ich kolejność. Zakładki zawijają się na małym ekranie, link powrotny jest zawsze widoczny. Edytor pracownika ma osobną etykietę wysyłki i nie wysyła Enterem; zwykłe statusy wyświetlane są bez awatara asystenta.
+- Testy: zakres historii, trwałość widoku po ponownym wejściu, kolejne wiadomości i zatwierdzenia, obsługa błędów i klawiatury. Sprawdzenie widoku na komputerze i telefonie.
+
 ## Uzupełnienie etapu 10 po QA (18.11.2026)
 
 - `chce_pracowac` przechowuje opcjonalne `shift_type`; solver i validator liczą tylko pasujące zmiany. Walidacja nie dopuszcza planu po utracie części danych. Komunikaty o zapisie wynikają ze sprawdzonego planu, a prośby mają opis zbudowany ze sprawdzonej struktury.
-- Oddzielny moduł kontekstu odczytu ogranicza zakres do firmy, lokalu i roli. Obejmuje maksymalnie 6 okresów od bieżącego miesiąca, ostatni szkic i publikację, limity liczby wierszy z jawnym oznaczeniem obcięcia. Godziny liczy aplikacja w UTC. Pracownik nie otrzymuje szkiców, ocen doświadczenia ani cudzych prywatnych próśb/dyspozycji.
+- Historyczny moduł kontekstu odczytu (obecnie nieprzekazywany modelowi) ogranicza zakres do firmy, lokalu i roli. Obejmuje maksymalnie 6 okresów od bieżącego miesiąca, ostatni szkic i publikację, limity liczby wierszy z jawnym oznaczeniem obcięcia. Godziny liczy aplikacja w UTC. Pracownik nie otrzymuje szkiców, ocen doświadczenia ani cudzych prywatnych próśb/dyspozycji.
 - `TextRequest.status` otrzymuje `answered` (odpowiedź informacyjna) i `superseded` (zastąpiona). `supersedes` wskazuje poprzednią prośbę. Odpowiedzi i zastąpione wpisy są wyłączone z problemu generatora i aktywnej listy kierownika. Edycja zastąpionej prośby jest blokowana, aby nie wskrzesić jej przypadkiem.
 - LLM wskazuje korektę przez numer z migawki własnych wcześniejszych próśb. Worker sprawdza zakres, status i `updated_at`, blokuje bieżący i poprzedni wpis w transakcji oraz zapisuje oba stany razem. Obca, nieznana, zmieniona lub już zastąpiona prośba nie może być usunięta z działania przez korektę. Dane menedżerskie poprzedniej prośby pozostają w mocy.
 - Historia kierownika: maks. 6 wcześniejszych zakończonych wiadomości tego samego autora w lokalu, nie starszych niż 24 h. Nieprzyjęta propozycja nie jest obowiązującym ustawieniem.
@@ -193,7 +230,7 @@ Logowanie i konto
 
 Ustawienia (menedżer)
 - `GET/POST /groups`, `GET/POST/PATCH /locations`
-- `GET/POST/PATCH/DELETE /locations/{id}/positions`, `/shift-types`, `/staffing-rules`, `/staffing-exceptions`
+- `GET/POST/PATCH/DELETE /locations/{id}/positions`, `/shift-types`, `/staffing-rules`; obsada jednej daty: `PUT /locations/{id}/staffing-days/{data}` (sekcja 26)
 - `GET/PATCH /locations/{id}/employees`, `GET/POST /locations/{id}/invitations`, `POST /invitations/{id}/cancel`
 
 Dyspozycyjność i prośby
@@ -207,7 +244,7 @@ Zasady
 Grafik
 - `GET/POST /locations/{id}/periods` · `POST /periods/generate` (jeden lub kilka okresów; osobne `GenerationRun` dla każdego lokalu)
 - `GET /generation-runs/{id}` · `GET /versions/{id}` (zmiany, przypisania, ocena, zasady, niespełnione prośby, historia wersji)
-- `POST /versions/{id}/check` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena) · `PATCH /versions/{id}/assignments` (wpisanie, zamiana, zostawienie bez obsady) · `POST /versions/{id}/shifts/{shift_id}/pin`
+- `POST /versions/{id}/check` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena + `can_force`) · `GET /versions/{id}/shifts/{shift_id}/drops` (wynik upuszczenia osoby z tej zmiany na każdą inną zmianę, liczony raz na początku przeciągania) · `PATCH /versions/{id}/assignments` (wpisanie, zamiana, zostawienie bez obsady; `force` zapisuje mimo twardej reguły) · `GET /versions/{id}/employees/{employee_id}/fit` (dyspozycje osoby na zmianach, do podświetlania) · `POST /versions/{id}/shifts/{shift_id}/pin`
 - `POST /versions/{id}/draft` (poprawka opublikowanego grafiku) · `POST /versions/{id}/publish` · `GET /versions/{id}/shifts/{shift_id}/explain`
 - `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin, współpracownicy na zmianie)
 
@@ -232,7 +269,7 @@ Pracownik (telefon)
 Menedżer (komputer)
 1. Rejestracja firmy i kod dostępu (także później w Ustawieniach → Subskrypcja).
 2. Widok zbiorczy grupy (ekran startowy): lokale w wierszach, stan okresu każdego lokalu (zbieranie dyspozycji / szkic / opublikowany), kto nie zgłosił dyspozycji, przycisk "Ułóż grafik dla wszystkich" (osobne generowanie dla każdego lokalu), przycisk "Poproś o dyspozycje" (powiadomienie do pracowników z okresem i terminem).
-3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) z wyjątkami, okres i termin dyspozycji.
+3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) i kalendarz obsady w wybrane dni (sekcja 26), okres i termin dyspozycji.
 4. Pracownicy: lista, zaproszenia po numerze, stanowiska, maksimum i cel godzin.
 5. Dyspozycje: siatka pracownicy × dni, lista próśb z interpretacją i akcjami, lista osób bez zgłoszenia.
 6. Zasady: jedna lista do przeciągania, przełącznik włącz/wyłącz, "bez wyjątków", parametry, podgląd skutku przed zapisaniem.
@@ -263,7 +300,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 1. Dyspozycyjność: stan na cały dzień, z opcjonalnym zakresem godzin wybieranym z listy, nie pisanym (znaczenie godzin: spec.md, Pracownik, punkt 2). Domyślnie cały dzień.
 2. Brak zgłoszenia dyspozycji = dzień bez zaznaczenia ("mogę"), ale osoba jest na liście "nie zgłosił" u menedżera.
-3. Generator przypisuje ludzi tylko do ich lokali (główny i dodatkowe, sekcja 24); praca w innym lokalu tylko ręcznie albo przez wzięcie oddanej zmiany.
+3. Generator przypisuje ludzi tylko do ich lokali (główny i dodatkowe, sekcja 27); praca w innym lokalu tylko ręcznie albo przez wzięcie oddanej zmiany.
 4. Zmiany typu "dowolne godziny" generator traktuje jak sloty z godzinami ustawionymi w obsadzie lub wyjątku na dany dzień; menedżer może też dodać zmianę z dowolnymi godzinami ręcznie.
 5. Tydzień zaczyna się w poniedziałek, strefa czasowa Europe/Warsaw, godziny zmian liczone w czasie lokalnym z uwzględnieniem zmiany czasu.
 6. Menedżer też może mieć profil pracownika (np. kierownik, który sam stoi na zmianach).
@@ -274,7 +311,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 ## 8. Uwagi na kolejne etapy (z przeglądu etapu 2)
 
-- Usuwanie a historia (od etapu 2 pilnuje tego baza, `on_delete=RESTRICT`): nie da się usunąć pojedynczo lokalu z okresami grafiku, okresu z wersjami, stanowiska użytego w zmianach ani pracownika z przypisaniami. Usunięcie całej firmy (tylko superadmin, np. firma testowa) nadal usuwa wszystko. Etap 7: pracownika wyłącza się przez `is_active = false`, a lokal archiwizuje (nowe pole przy ekranach), zamiast usuwać.
+- Usuwanie a historia (od etapu 2 pilnuje tego baza, `on_delete=RESTRICT`): nie da się usunąć pojedynczo lokalu z okresami grafiku, okresu z wersjami, stanowiska użytego w zmianach ani pracownika z przypisaniami. Usunięcie całej firmy (tylko superadmin, np. firma testowa) nadal usuwa wszystko. Etap 7: pracownika wyłącza się przez `is_active = false`, a lokal archiwizuje (nowe pole przy ekranach). Od 18.11.2026 (sekcja 25) da się też usuwać: tam, gdzie baza blokuje, osoba i stanowisko są ukrywane (`removed_at`), lokal usuwa się tylko bez pracowników i okresów, a okres tylko przed pierwszą publikacją (razem ze szkicami).
 - Etap 7 (zrobione): lista zasad lokalu pokazuje, które zasady są dziedziczone z grupy, a które zmienione lub wyłączone w lokalu.
 - Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.
 - Etap 6/7 (z przeglądu etapu 3): na ekranie zaproszeń menedżer widzi podpowiedź "Powiedz tej osobie, żeby zalogowała się tym numerem" (SMS z zaproszeniem nie idzie) oraz informację, że zaproszona osoba pracuje już w innym lokalu firmy i zachowa tamten lokal domowy. Komunikat trybu tylko do odczytu rozróżnia firmę bez kodu od firmy po wygaśnięciu. W trybie tylko do odczytu pracownik nadal widzi swój opublikowany grafik.
@@ -297,7 +334,7 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 Założenia:
 1. Ekrany logowania, zaproszeń i subskrypcji powstają w etapie 6 (po akceptacji kierunku wizualnego); etap 3 dostarcza API, testy i wygenerowanego klienta.
-2. Osoba, która już pracuje w innym lokalu tej samej firmy i przyjmie zaproszenie pracownika do kolejnego, zachowuje dotychczasowy lokal domowy, a nowy lokal dostaje jako dodatkowy (od 19.11.2026, sekcja 24).
+2. Osoba, która już pracuje w innym lokalu tej samej firmy i przyjmie zaproszenie pracownika do kolejnego, zachowuje dotychczasowy lokal domowy, a nowy lokal dostaje jako dodatkowy (od 19.11.2026, sekcja 27).
 3. Zaproszenie na rolę menedżera przyjęte przez pracownika podnosi rolę do menedżera i zostawia profil pracownika.
 4. Odpowiedź na zaproszenie (akceptacja, odrzucenie) działa także wtedy, gdy firma jest w trybie tylko do odczytu; nowych zaproszeń wysłać wtedy nie można.
 5. Stan subskrypcji i kody widzi właściciel i menedżer firmy; pracownik widzi tylko, czy firma jest w trybie tylko do odczytu (`GET /me`).
@@ -388,18 +425,24 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 
 - Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Limit ułożeń grafiku działa też w okresie próbnym. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
 - Ekrany: "Załóż firmę" (`/rejestracja`: numer, kod SMS, nazwa firmy, imię i nazwisko, opcjonalny kod; link z ekranu logowania), "Dostęp" (`/kierownik/dostep`: stan, ułożenia w miesiącu, wpisanie kodu), baner dostępu w panelu kierownika, "Godziny" (`/kierownik/godziny`: miesiąc, tabela osób z podziałem na lokale, CSV) i karta "Grafik" w lokalu (`/kierownik/lokal/{id}/grafik`). Na "Lokale" przycisk "Ułóż grafik" przy każdym lokalu i "Ułóż dla wszystkich" (każdy lokal osobno), z arkuszem, który ostrzega przed terminem, mówi, ilu osób brakuje i ile nieprzypiętych ręcznych poprawek zniknie; postęp odpytywany co 1,5 s.
-- Karta "Grafik": trzy wartości oceny, twarde problemy, siatka dni × zmiany (przypięte, ręczne, pożyczone, bez obsady; znacznik "woli nie" usunięty 13.11.2026, zob. sekcja 15), przeciąganie osoby na inną zmianę z wynikiem sprawdzenia na żywo w trakcie przeciągania, arkusz zmiany z wyjaśnieniem (kto może, ile to kosztuje, kto nie może i dlaczego) i akcjami "Wpisz", "Zostaw bez obsady", "Przypnij", godziny osób, zasady z procentem, niespełnione prośby, wersje, "Opublikuj" i "Popraw grafik".
+- Karta "Grafik": trzy wartości oceny, twarde problemy, siatka dni × zmiany (przypięte, ręczne, pożyczone, bez obsady; znacznik "woli nie" usunięty 13.11.2026, zob. sekcja 15), przeciąganie osoby na inną zmianę z wynikiem sprawdzenia na żywo w trakcie przeciągania (prośba Piotra z 18.11.2026: bez napisu "Sprawdzam…"; gdy kierownik chwyci kafelek, jedno zapytanie liczy wynik dla wszystkich zmian, więc po najechaniu na zmianę wynik jest od razu; zanim ta odpowiedź przyjdzie, zmiana pod kursorem jest sprawdzana osobno, bez opóźnienia), arkusz zmiany z wyjaśnieniem (kto może, ile to kosztuje, kto nie może i dlaczego) i akcjami "Wpisz", "Zostaw bez obsady", "Przypnij", godziny osób, zasady z procentem, niespełnione prośby, wersje, "Opublikuj" i "Popraw grafik".
 - Nowe pole `Assignment.manual` (ręczna zmiana). Nowy moduł `engine/explain.py` (bez Django): dla każdej osoby ze stanowiskiem sprawdza walidatorem grafik z tą osobą na zmianie, więc wyjaśnienie zgadza się z walidatorem. `apps/scheduling/editing.py`: sprawdzanie i zapis ręcznych zmian, przypinanie, poprawka opublikowanego grafiku, publikacja. Raport godzin: `apps/reports`.
 
 Założenia:
-1. Ręcznie można zmieniać tylko najnowszy szkic okresu (jedyny wyjątek od etapu 9: zatwierdzona oddana zmiana przechodzi w opublikowanej wersji w miejscu, z wpisem w historii przypisań; zob. sekcja 18, punkt 4). Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
-2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmianę bez obsady można przypiąć jako pustą (od PR #25, patrz sekcja 22).
+1. Ręcznie można zmieniać tylko najnowszy szkic okresu (wyjątki: zatwierdzona oddana zmiana z etapu 9, zob. sekcja 18 punkt 4, oraz własne zmiany kierownika w "Oddane zmiany": inna osoba na zmianie i zamiana dwóch osób, zob. sekcja 24; tam kierownik może pominąć zastrzeżenia walidatora i poprawić też dni, które minęły). Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które minęły, też można poprawić w szkicu (niżej); tylko miejsc w obsadzie na takie dni nie da się zmienić (409, sekcja 26).
+2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem), poza wymogiem doświadczonych, który kierownik może złamać (ostrzeżenie zamiast odmowy; sekcja 26, punkt 7); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmianę bez obsady można przypiąć jako pustą (od PR #25, patrz sekcja 22).
 3. W edytorze można wpisać tylko osoby z lokalu (z danym stanowiskiem); pożyczanie z innych lokali zostaje dla oddawania zmian (etap 9).
-4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły. Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
+4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły; wyjątek: brak doświadczonych po ręcznej zmianie kierownika (sekcja 26, punkt 7). Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
 5. Okres próbny dostaje tylko pierwsza firma danej osoby; kolejne firmy bez kodu są od razu tylko do odczytu.
 6. Wyjaśnienie zmiany liczy szybkie sprawdzenie walidatorem dla każdej osoby (ok. 5 ms na osobę). Głębsza analiza ("kto by mógł, gdyby przestawić inne zmiany") wymaga solvera w workerze i zostaje na później.
 7. Raport godzin liczy tylko opublikowane zmiany w lokalach, którymi zarządza kierownik, w podanym miesiącu kalendarzowym (zmiana należy do dnia, w którym się zaczyna). CSV: średniki, przecinek dziesiętny, BOM, żeby Excel otworzył polskie znaki.
 
+
+Swobodna edycja (decyzje Piotra z 18.11.2026; zmieniają punkty 2 i 4 wyżej):
+- Wymuszenie: `PATCH /versions/{id}/assignments` przyjmuje `force: true`. Zmiana, która dodaje twarde naruszenie, bez `force` nadal dostaje 409, a z `force` jest zapisywana z `Assignment.forced = true` i przypięta. `Problem.forced` (slot -> osoba) mówi walidatorowi, żeby naruszenia dotyczące tej osoby na tym slocie (`cannot`, `one_shift`, `experience`, zasada "bez wyjątków") trafiły do `ValidationReport.waived` zamiast `hard`: widać je przy zmianie jako "wpisane mimo przeszkód", ale nie blokują publikacji ani kolejnych poprawek. Stanowisko, przypięcia i dwie zmiany w tym samym czasie (`overlap`) zostają twarde; tę ostatnią kierownik rozwiązuje pytaniem i zdjęciem osoby z tamtej zmiany (sekcja 27). Wyjaśnienie zmiany zwraca przy każdej zablokowanej osobie `can_force`. Wymuszenie kończy się, gdy slot dostaje inną osobę. `POST /versions/{id}/check` zwraca `can_force`.
+- Solver nie modeluje wymuszonych przypisań: przypięte albo z minionego dnia wyjmuje z problemu jako zmiany, które osoba już ma (bez nakładania, z odpoczynkiem), i dokleja do wyniku. Dzięki temu "Ułóż od nowa" działa także wtedy, gdy wymuszenie łamie twardą regułę.
+- Dni, które minęły, można poprawiać w szkicu. Taka poprawka jest przypinana sama, a przypięcie na minionym dniu wygrywa z zamrożeniem (walidator nie zgłasza wtedy `frozen`), więc ponowne układanie zostawia poprawkę także przed publikacją. Godziny liczą się z opublikowanej wersji, więc poprawkę trzeba opublikować.
+- Podświetlanie: `GET /versions/{id}/employees/{employee_id}/fit` zwraca dla każdej zmiany ze stanowiskiem osoby, której ta osoba nie ma: `prefer` / `can` / `cannot` z powodem (tylko kalendarz i nakładanie się zmian, bez pełnej walidacji, żeby odpowiedź była natychmiast). Siatka koloruje kafelki dla osoby wybranej z listy albo przeciąganej (`.avail-prefer`, `.avail-neutral`, `.fit-cannot` + `StateIcon`).
 
 Po przeglądzie Prelinta (PR #10): nad siatką jest pasek "Ręczne poprawki bez przypięcia: N" z przyciskiem "Przypnij poprawki", bo ponowne układanie je usuwa; arkusz publikacji mówi, że powiadomień w aplikacji jeszcze nie ma (trzeba powiedzieć pracownikom), a przy poprawce opublikowanego grafiku wymienia osoby, których zmiany się zmieniają (`VersionOut.changed_people`); ekran "Godziny" mówi, że to plan z opublikowanych grafików w lokalach kierownika, a nie ewidencja czasu pracy, i oznacza osobę, która w tym miesiącu pracuje też w lokalach, których kierownik nie prowadzi (suma niepełna; w CSV kolumna "Uwagi"). Ręczna zmiana osoby w edytorze zawsze zdejmuje przypięcie (wyjątek od etapu 9: zatwierdzona oddana zmiana jest przypięta, bo to uzgodnienie trzech osób, a nie poprawka kierownika do przemyślenia). Link "Załóż firmę" zostaje w pustym stanie zaproszeń, bo to jedyna droga do rejestracji dla zalogowanej osoby bez firmy (np. kierownika, który najpierw się zalogował). Do sprawdzenia w pilocie: czy kierownik oczekuje, że ręczne poprawki zostają domyślnie, i czy potrzebuje obejścia „nie mogę” po rozmowie z pracownikiem.
 
@@ -540,7 +583,7 @@ Decyzja Piotra po przeglądzie konkurencji (raport: https://claude.ai/artifact/P
 1. `PositionExperience` (employee, position, level): tylko wyjątki od `EmployeeProfile.experience`. Wiersz równy stopniowi domyślnemu nie jest zapisywany; odznaczenie stanowiska usuwa jego wyjątek. Istniejące dane nie wymagają migracji danych.
 2. `StaffingRule.experienced` i `StaffingException.experienced` (domyślnie 0, nie więcej niż `count`): ile osób z obsady ma być doświadczonych. Wyjątek na datę ma własną wartość; formularz wyjątku zostawiony pusty przyjmuje liczbę ze zwykłej obsady tego dnia (nie więcej niż liczba osób), żeby wymóg nie znikał po cichu. Wolne miejsce z powodu wymogu jest nazwane w wyjaśnieniu zmiany ("obsada wymaga tu doświadczonej osoby").
 3. Silnik: `Employee.experience_by_position` i `Employee.level(position)`; `Slot.needs_experienced` na pierwszych N miejscach grupy (lokal × dzień × typ zmiany × stanowisko). Wymóg liczony na grupę, nie na miejsce: liczba mniej doświadczonych osób w grupie nie może przekroczyć liczby miejsc bez wymogu. Dzięki temu nie ma znaczenia, na którym miejscu grupy stoi doświadczona osoba, a niepełna obsada nie jest błędem, dopóki zostaje miejsce dla doświadczonej.
-4. Walidator: twarde naruszenie `experience` (nie zasada katalogu, bo wynika z obsady). Solver: to samo jako ograniczenie; nigdy nie daje sprzeczności, bo miejsce może zostać luką. Przypięcie, które samo łamie wymóg, jest zgłaszane jak inne konflikty przypięć. Dni, które minęły, zachowują opublikowane zmiany bez wymogu.
+4. Walidator: twarde naruszenie `experience` (nie zasada katalogu, bo wynika z obsady). Twarde dla generatora i oddawania zmian; kierownik może je złamać ręcznie i opublikować grafik z ostrzeżeniem (jedyny taki wyjątek, `editing.MANAGER_MAY_BREAK`, sekcja 26, punkt 7). Solver: to samo jako ograniczenie; nigdy nie daje sprzeczności, bo miejsce może zostać luką. Przypięcie, które samo łamie wymóg, zmniejsza go przy ponownym układaniu (od 19.11.2026, sekcja 26, punkt 7; wcześniej było zgłaszane jak inne konflikty przypięć). Dni, które minęły, zachowują opublikowane zmiany; od 19.11.2026 zapisana zmiana pamięta wymóg (`Shift.needs_experienced`).
 5. `experience_mix` i wyjaśnienia liczą stopień na stanowisku danej zmiany. Osoba pożyczona z innego lokalu ma stopień ze stanowiska o tej samej nazwie.
 6. API: `EmployeeOut.position_experience` (stopień na każdym stanowisku osoby) i `EmployeeIn.position_experience`; komórki obsady i wyjątki mają pole `experienced`. Pracownik nadal nie widzi żadnego stopnia.
 7. Ekrany: w arkuszu pracownika z co najmniej dwoma stanowiskami "Inny stopień na którymś stanowisku"; w obsadzie pole "w tym doświadczonych" przy komórce i przy wyjątku.
@@ -676,7 +719,105 @@ Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi odda
   w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
   sprawiedliwe (np. osoba blisko limitu godzin).
 
-## 24. Praca w kilku lokalach (19.11.2026)
+## 24. Ręczne zarządzanie oddawaniem i zamianami przez kierownika (18.11.2026)
+
+Prośba Piotra: oddawanie zmian jest ważne, a kierownik może chcieć zrobić to ręcznie.
+
+- Logika: `apps/marketplace/services.py`, sekcja "the manager's own changes": `manager_reassign` (inna osoba na
+  opublikowanej zmianie, także pustej), `manager_swap` (dwie osoby zamieniają się zmianami, historia z powodem
+  "zamiana"), `offer_shift(by_manager=...)` (kierownik szuka chętnych w imieniu pracownika), `manager_close_offer`
+  (koniec oddawania, zmiana zostaje u oddającego; status oddania "rejected").
+- Endpointy: `GET /locations/{id}/handover-shifts` (opublikowane zmiany lokalu: 14 dni wstecz, 62 dni naprzód),
+  `GET /assignments/{id}/handover-candidates`, `POST /assignments/{id}/reassign`, `POST /shift-swaps/check`,
+  `POST /shift-swaps`, `POST /assignments/{id}/offer`, `POST /offers/{id}/close`. Wszystkie tylko dla kierownika lokalu.
+- Ekran: w "Oddane zmiany" przy aktywnym oddaniu "Wybierz osobę sam" i "Zakończ oddawanie"; pod listą sekcja
+  "Zmień obsadę sam" (lokal, dzień, zmiana, potem arkusz z osobami, "Zamień z inną zmianą" i "Poszukaj chętnych").
+
+Decyzje i założenia:
+
+1. Kierownik może pominąć zastrzeżenia walidatora (`force`). Na liście osób najpierw są ci, którzy mogą przyjść
+   (chętni z "Weź zmianę" na początku), potem osoby z zastrzeżeniami i przyciskiem "Wpisz mimo to".
+2. Zmiana zgodna z zasadami jest przypięta (jak zatwierdzone oddanie). Zmiana wbrew zasadom nie jest przypinana,
+   bo przypięcie łamiące twardą zasadę uniemożliwia ponowne ułożenie okresu (solver zgłasza sprzeczność).
+3. Na liście są osoby z tym stanowiskiem z całej firmy oraz wszyscy z lokalu zmiany (brak stanowiska to zastrzeżenie).
+4. Zmiany, które już się zaczęły albo minęły, też można poprawić (ale nie wystawić do wzięcia). Powiadomienie ma
+   wtedy treść "Kierownik poprawił grafik".
+5. Zamiana dotyczy dwóch zmian z tego samego opublikowanego grafiku (lokal i okres). Zamiana między okresami albo
+   lokalami: dwa razy "Wpisz".
+6. Gdy kierownik wpisze kogoś na oddawaną zmianę, oddanie kończy się jako zatwierdzone, a pozostali chętni dostają
+   odmowę. Po zamianie aktywne oddanie tej zmiany wygasa.
+7. Zmiana przechodzi w opublikowanej wersji w miejscu i w najnowszym szkicu, jeśli ma tam tę samą osobę (jak przy
+   zatwierdzonym oddaniu). Historia: powód "ręczna zmiana" albo "zamiana", z kierownikiem jako autorem.
+8. Zamiany proponowane przez pracowników (pracownik prosi konkretną osobę) nadal na później.
+## 25. Usuwanie ludzi, stanowisk, grup, lokali, okresów i powiadomień (18.11.2026)
+
+Prośba Piotra: w aplikacji nie było jak usunąć osoby z lokalu ani powiadomienia. Przegląd pokazał też, że stanowiska
+użytego w grafiku nie dało się usunąć nigdy (409), a grup, lokali i okresów w ogóle. Zasada z sekcji o historii zostaje:
+zapisane grafiki i godziny nie giną, więc tam, gdzie baza blokuje usunięcie (`RESTRICT`), rzecz jest ukrywana.
+
+- `EmployeeProfile.removed_at` i `Position.removed_at` (migracja `staffing.0007`). Usunięta osoba ma zawsze
+  `is_active = false` (ograniczenie w bazie), więc wszystkie miejsca, które biorą aktywnych, pomijają ją same.
+  Nazwa stanowiska jest unikalna tylko wśród nieusuniętych.
+- `DELETE /employees/{id}` (`apps/staffing/removal.py`): bez przypisań usuwa profil, a przy roli pracownika także
+  członkostwo i powiadomienia; z przypisaniami cofa otwarte oddania i zgłoszenia, usuwa polecenia kierownika o tej
+  osobie i jej stanowiska, ustawia `removed_at`. `tenant_context` i `GET /me` nie wpuszczają usuniętego pracownika
+  (404). Nowe zaproszenie przywraca profil w lokalu, który zaprasza.
+- `DELETE /positions/{id}`: gdy stanowisko jest w jakiejś zmianie, ustawia `removed_at`, usuwa obsadę, wyjątki
+  i powiązania z ludźmi. Zasada lokalu, która go używa, nadal blokuje (409), jak wcześniej.
+- `DELETE /groups/{id}` (właściciel): przed usunięciem kopiuje zasady i profil wag grupy do lokali, które nie mają
+  własnych, więc połączona lista zasad lokalu się nie zmienia.
+- `DELETE /locations/{id}` (właściciel): 409, gdy lokal ma okres grafiku albo pracowników.
+- `DELETE /periods/{id}`: 409, gdy jakaś wersja była opublikowana albo trwa układanie; inaczej usuwa szkice i okres.
+- `DELETE /me/notifications/{id}` i `DELETE /me/notifications?company_id=`: tylko własne, bez `require_writable`.
+- Ekrany: "Usuń z lokalu" w formularzu pracownika, krzyżyk i "Usuń wszystkie" w powiadomieniach, "Usuń grupę" na
+  liście lokali, "Usuń lokal" w ustawieniach, "Usuń ten okres" w dyspozycjach, pytanie przed usunięciem stanowiska
+  (`components/ui/confirm.tsx`).
+
+Założenia: usunięcie osoby nie zmienia zapisanych grafików, więc jej przyszłe zmiany kierownik przenosi ręcznie albo
+układa grafik od nowa (tak samo jak przy wyłączeniu z grafiku). Działało już wcześniej i zostało bez zmian: usuwanie
+zmian (typów zmian), dni zamknięcia, wyjątków w obsadzie, poleceń kierownika i próśb pracownika.
+## 26. Obsada wybranego dnia w kalendarzu i miejsca w edycji grafiku (18.11.2026)
+
+Prośba Piotra: lista wyjątków (dzień, zmiana, stanowisko, każdy wpis osobno) była mało czytelna. Zamiast niej:
+
+- Ustawienia lokalu mają kalendarz "Obsada w wybrane dni": miesiąc, w każdym dniu liczba potrzebnych osób, ikona przy
+  dniu z inną obsadą niż zwykle i przy dniu zamknięcia. Wybranie dnia otwiera jego obsadę: dla każdej zmiany
+  i stanowiska liczba osób (minus, plus), a po rozwinięciu doświadczeni i inne godziny. Tam też "Wróć do zwykłej
+  obsady" i "Zamknij lokal w ten dzień" / "Otwórz lokal w ten dzień" (te same dni zamknięcia co na liście niżej).
+- Dane zostają w `StaffingException` (bez migracji). Wiersz istnieje tylko wtedy, gdy data różni się od dnia
+  tygodnia: `apps/staffing/day_staffing.py` usuwa go, gdy liczby i godziny są takie jak zwykle.
+- `PUT /locations/{id}/staffing-days/{data}` zapisuje cały dzień naraz (`cells`, `note`); para pominięta wraca do
+  zwykłej obsady. Zastępuje `POST /locations/{id}/staffing-exceptions` i `DELETE /staffing-exceptions/{id}`.
+- Edycja grafiku (najnowszy szkic): `POST /versions/{id}/seats` dodaje puste miejsce na zmianie i stanowisku danego
+  dnia, `DELETE /versions/{id}/shifts/{shift_id}` usuwa miejsce razem z osobą. Oba zapisują tę samą liczbę jako
+  obsadę tej daty, więc "Ułóż od nowa" jej nie cofa. Przyciski są w arkuszu zmiany ("Ile osób na tej zmianie"),
+  a w pustej komórce siatki jest "+".
+
+Założenia:
+1. Numery miejsc zostają 1…n, jak przy układaniu: gdy znika miejsce o niższym numerze, osoba z ostatniego miejsca
+   (z przypięciem) przechodzi na jego numer.
+2. Dni, które minęły, dni zamknięcia i opublikowane wersje: bez zmian miejsc (409). Osobę na minionym dniu można zmienić (sekcja 14).
+3. Nowe miejsce bierze godziny innych miejsc tej zmiany w tym dniu, a gdy ich nie ma: godziny z obsady daty, dnia
+   tygodnia albo typu zmiany. Zmiana "dowolne godziny" bez godzin: 409 z prośbą o ustawienie ich w kalendarzu.
+3a. Usunięcie miejsca przechodzi przez walidator jak każda ręczna zmiana: gdy grafik złamałby przez to twardą
+   regułę, której wcześniej nie łamał, jest odrzucane (409 z powodem). Po przeglądzie Prelinta (PR #39).
+4. Miejsce usunięte z poprawki opublikowanego grafiku trafia do historii (`AssignmentEvent`, "ręcznie", do nikogo),
+   a osoba jest na liście osób, którym zmienia się grafik (`changed_people`).
+5. Kolumnę, której w grafiku jeszcze nie ma (zmiana i stanowisko bez żadnego miejsca w okresie), dodaje się
+   w kalendarzu obsady i przez "Ułóż od nowa". Na telefonie pustych komórek siatki nie pokazujemy.
+6. Zmiana obsady w kalendarzu nie rusza gotowych szkiców; działa od następnego ułożenia grafiku (jak dotąd).
+   Po przeglądzie Prelinta (PR #39): arkusz dnia mówi to wprost, gdy data jest w okresie z ułożonym grafikiem
+   (`LocationSetupOut.arranged`), także przy "Zamknij lokal w ten dzień".
+7. Doświadczeni (decyzja Piotra z 19.11.2026: "kierownik może to łamać, ma władzę absolutną"). Zapisana zmiana
+   pamięta, czy jej miejsce jest dla doświadczonej osoby (`Shift.needs_experienced`, migracja `scheduling.0009`
+   uzupełnia je z obsady dla szkiców i opublikowanych grafików od dziś), więc walidator sprawdza wymóg także
+   w zapisanym grafiku. Generator zawsze go spełnia. Ręczna zmiana, usunięcie miejsca i publikacja go nie blokują:
+   `editing.MANAGER_MAY_BREAK` przenosi takie naruszenia do ostrzeżeń (`CheckOut.warnings`,
+   `VersionOut.accepted_problems`, żółta ramka nad siatką), a `hard_problems` zawiera tylko to, co blokuje publikację.
+   Przypięta zmiana kierownika zmniejsza wymóg przy "Ułóż od nowa" (`_keep_pinned_beginners`), zamiast przerywać
+   układanie. Oddawanie zmian między pracownikami nadal wymaga doświadczonej osoby, bo tam o przejęciu decyduje
+   pracownik (albo zasada lokalu bez zatwierdzania), a władza łamania wymogu należy tylko do kierownika.
+## 27. Praca w kilku lokalach (19.11.2026)
 
 Pytanie Piotra 18.11.2026: czy pracownik z jednym numerem może pracować w kilku lokalach firmy i czy jego dyspozycje oraz
 zmiany są wtedy liczone między lokalami. Dotąd nie mógł (zaproszenie kończyło się odmową, generator układał tylko w lokalu
@@ -722,9 +863,18 @@ wspólna dyspozycyjność.
   powiadomienia `shift_removed` (osoba) i `shift_emptied` (kierownicy tamtego lokalu poza tym, kto zmienia). Nie wolno
   zdjąć osoby ze zmiany lokalu, którego kierownik nie prowadzi (właściciel prowadzi wszystkie), ani z opublikowanej
   zmiany, która już się zaczęła: wtedy `can_remove = false` z powodem, a zapis jest odrzucany.
+  Razem z "Wpisz mimo to" (PR #44): sama kolizja nie daje się wymusić (`force` jej nie obejmuje), tylko zdjąć. Gdy po
+  zdjęciu zostają problemy, które kierownik może pominąć ("nie mogę", zasada "bez wyjątków"), `check` zwraca
+  `can_force_if_removed`, a ekran pyta raz i wysyła razem `remove_clashes` i `force`. Odpowiedź dla całego
+  przeciągania (`GET .../shifts/{id}/drops`, PR #41) czyta zmiany innych lokali raz i szuka kolizji tylko dla
+  upuszczeń, które dają komuś dwie zmiany naraz, więc podgląd od razu mówi "Upuść, a zapytamy, czy ją stamtąd zdjąć".
+- Usuwanie (PR #40) przy kilku lokalach: `DELETE /employees/{id}?location_id=` (domyślnie lokal główny). Gdy osoba
+  pracuje też w innym lokalu, `removal.leave_location` zdejmuje tylko ten lokal, jej stanowiska tam i polecenia
+  kierownika o niej w tym lokalu; usunięcie z lokalu głównego robi lokalem głównym jeden z dodatkowych (pierwszy
+  alfabetycznie). Usunięcie z jedynego lokalu działa jak wcześniej (sekcja 25). `EmployeeOut.other_location_names`
+  podaje pozostałe lokale osoby, więc pytanie przed usunięciem mówi, gdzie osoba zostanie.
 - Między różnymi firmami nic się nie łączy: to osobni pracodawcy i ich dane są rozdzielone.
 - Założenia: lokal ułożony pierwszy "ma pierwszeństwo" do osoby (kolejność układania decyduje, jak w Kadromierzu).
-  Usuwanie osoby z lokalu dodatkowego (PR #40) zdejmuje tylko ten lokal i jego stanowiska.
 - Do sprawdzenia w pilotażu (uwagi Prelinta do #45): czy kierownicy akceptują, że szkic jednego lokalu zabiera osobę
   z puli drugiego (czy lokal główny ma mieć pierwszeństwo); czy pracownik rozumie, że jeden kalendarz i jedno „Gotowe”
   służą wszystkim jego lokalom (dziś „Gotowe” obejmuje okresy innych lokali mieszczące się w tych samych dniach, nie

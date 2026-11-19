@@ -21,7 +21,7 @@ from dataclasses import dataclass, replace
 from engine.problem import AvailabilityState, Problem, Schedule
 from engine.rules_catalog import RULES_BY_CODE
 from engine.scoring import Scores, score
-from engine.validator import Code, ValidationReport, validate
+from engine.validator import WAIVABLE, Code, ValidationReport, validate
 
 WISH_WORDS = {
     AvailabilityState.PREFER: "chętnie pracuje tego dnia",
@@ -50,6 +50,7 @@ class Candidate:
     current: bool  # works this slot now
     blocked: tuple[str, ...]  # hard problems if they take it (empty: they can)
     block_code: Code | None  # the kind of the first hard problem
+    can_force: bool  # blocked, but only by problems the manager may overrule ("Wpisz mimo to")
     notes: tuple[str, ...]  # soft costs: rules they would break
     wish: AvailabilityState  # their calendar mark for this slot
     hours: float  # their hours in this schedule if they take the slot
@@ -119,6 +120,7 @@ def explain_slot(
             changed[slot_id] = employee.id
             report = validate(problem, changed)
             hard = [v for v in report.hard if v.message not in base_messages]
+            hard += new_waived_violations(base, report, {employee.id})
             notes = tuple(new_soft_violations(base, report, employee.id))
             if not hard and current is not None:
                 alternatives[employee.id] = report
@@ -130,6 +132,7 @@ def explain_slot(
                 blocked=tuple(v.message for v in hard),
                 block_code=hard[0].code if hard else None,
                 clash=any(v.code == Code.OVERLAP for v in hard),
+                can_force=bool(hard) and not is_current and all(v.code in WAIVABLE for v in hard),
                 notes=notes[:MAX_NOTES],
                 wish=problem.availability_for(employee.id, slot),
                 hours=round(report.hours.get(employee.id, 0.0), 2),
@@ -235,6 +238,27 @@ def _summary(problem: Problem, slot_id: str, current: str | None, candidates: li
     else:
         text += " Nikt inny nie mógł wziąć tej zmiany."
     return text
+
+
+def new_waived_violations(base: ValidationReport, after: ValidationReport, receivers: set[str]) -> list:
+    """Overruled hard problems that a change adds. An earlier override must not cover a later change silently:
+    a problem that was not waived before counts, and so does a problem about a person as a whole (e.g. hours
+    over the maximum) when the change gives that person (`receivers`) another shift."""
+
+    known = {_key(v) for v in base.waived}
+    return [v for v in after.waived if _key(v) not in known or (not v.slots and v.employee in receivers)]
+
+
+def _key(violation) -> tuple:
+    return (violation.code, violation.rule_code, violation.employee, violation.location, violation.slots)
+
+
+def returned_violations(base: ValidationReport, after: ValidationReport, receivers: set[str]) -> set[str]:
+    """Messages of hard problems that are not new although their text is: a problem about a person as a whole
+    that was overruled before and is hard again because the override ended (the person left the forced shift),
+    while the change gives that person nothing."""
+    known = {_key(v) for v in base.waived if not v.slots}
+    return {v.message for v in after.hard if _key(v) in known and v.employee not in receivers}
 
 
 def new_soft_violations(base: ValidationReport, after: ValidationReport, employee: str | None = None) -> list[str]:

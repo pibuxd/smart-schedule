@@ -6,12 +6,13 @@ from uuid import UUID
 
 from django.utils import timezone
 from ninja import Field, Router, Schema
+from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
 from apps.notifications.models import Notification
 from apps.notifications.services import LINKS, notification_text
-from apps.tenancy.context import tenant_context
+from apps.tenancy.context import context_for, tenant_context
 
 router = Router(tags=["notifications"])
 
@@ -72,4 +73,22 @@ def mark_notifications_read(request, payload: MarkReadIn):
     if payload.ids is not None:
         rows = rows.filter(pk__in=payload.ids)
     rows.update(read_at=timezone.now())
+    return Status(204, None)
+
+
+@router.delete("/me/notifications/{notification_id}", response={204: None, 404: ErrorOut})
+def dismiss_notification(request, notification_id: UUID):
+    """Remove one of my notifications for good (the "X" on it). Allowed in read-only mode, like marking as seen."""
+    ctx, notification = context_for(request, Notification, notification_id)
+    if notification.user_id != ctx.user.pk:
+        raise HttpError(404, "Nie znaleziono.")
+    notification.delete()
+    return Status(204, None)
+
+
+@router.delete("/me/notifications", response={204: None, 404: ErrorOut})
+def dismiss_all_notifications(request, company_id: UUID):
+    """Remove all of my notifications in this company."""
+    ctx = tenant_context(request, company_id)
+    ctx.qs(Notification).filter(user=ctx.user).delete()
     return Status(204, None)

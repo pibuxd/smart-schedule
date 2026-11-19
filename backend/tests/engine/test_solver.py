@@ -239,6 +239,22 @@ def test_pinned_person_who_cannot_work_is_reported_not_solved():
     assert any("Anna ma zaznaczone „nie mogę”" in m for m in result.messages)
 
 
+def test_forced_pinned_person_who_cannot_work_stays_and_the_rest_is_arranged():
+    p = problem(
+        [employee("anna"), employee("ewa")],
+        [slot("m0", day(0)), slot("x0", day(0), "10:00", "18:00", shift_type="x"), slot("m1", day(1))],
+        pinned={"m0": "anna"},
+        forced={"m0": "anna"},
+        availability=[Availability("anna", day(0), "cannot")],
+    )
+    result = solve(p, **FAST)
+    assert result.schedule["m0"] == "anna"
+    assert result.schedule["x0"] == "ewa"  # anna already works then
+    assert result.holes == 0
+    report = validate(p, result.schedule)
+    assert report.ok and [v.code for v in report.waived] == ["cannot"]
+
+
 def test_impossible_hard_rule_is_named():
     # Target hours "no exceptions" for someone who can work only one 8 h shift: impossible.
     p = problem(

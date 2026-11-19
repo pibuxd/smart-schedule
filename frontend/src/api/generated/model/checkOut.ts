@@ -9,6 +9,7 @@ import type { ScoresOut } from './scoresOut';
 
 export interface CheckOut {
   ok: boolean;
+  can_force: boolean;
   problems: string[];
   warnings: string[];
   before: ScoresOut;
@@ -16,4 +17,5 @@ export interface CheckOut {
   clashes: ClashOut[];
   problems_if_removed: string[];
   ok_if_removed: boolean;
+  can_force_if_removed: boolean;
 }

@@ -60,6 +60,7 @@ describe('AvailabilityScreen', () => {
   it('takes a request for the month before the manager asks', async () => {
     const calls = api({ period: null, days: [] })
     show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Napisz prośbę' }))
     const box = await screen.findByLabelText('Twoja prośba')
     expect(screen.getByText(/Prośba dotyczy tego miesiąca/)).toBeInTheDocument()
     fireEvent.change(box, { target: { value: 'W grudniu bez nocek.' } })

@@ -1,15 +1,19 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { X } from 'lucide-react'
 import { useEffect } from 'react'
 
 import type { NotificationOut, NotificationsOut } from '../../api/generated/model'
 import {
   getMyNotificationsQueryKey,
+  useDismissAllNotifications,
+  useDismissNotification,
   useMarkNotificationsRead,
   useMyNotifications,
 } from '../../api/generated/notifications/notifications'
-import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
-import { errorMessage } from '../../lib/api-error'
+import { Button } from '../../components/ui/button'
+import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
+import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { NOTIFICATIONS_REFRESH_MS, whenText } from './unread'
 
 const LINKS = {
@@ -30,14 +34,31 @@ export function NotificationsScreen({
 }) {
   const notifications = useMyNotifications({ company_id: companyId }, { query: { refetchInterval: NOTIFICATIONS_REFRESH_MS } })
   const markRead = useMarkNotificationsRead()
+  const dismiss = useDismissNotification()
+  const dismissAll = useDismissAllNotifications()
   const queryClient = useQueryClient()
   const data = notifications.data?.status === 200 ? (notifications.data.data as NotificationsOut) : undefined
   const unseen = data?.notifications.filter((n) => !n.read).map((n) => n.id) ?? []
   const unseenKey = unseen.join(',')
 
+  const key = getMyNotificationsQueryKey({ company_id: companyId })
+  /** Take notifications off the list at once; the server confirms in the background. */
+  const drop = (gone: (n: NotificationOut) => boolean) =>
+    queryClient.setQueryData(key, (old: typeof notifications.data) =>
+      old?.status === 200
+        ? {
+            ...old,
+            data: {
+              notifications: old.data.notifications.filter((n) => !gone(n)),
+              unread: old.data.notifications.filter((n) => !n.read && !gone(n)).length,
+            },
+          }
+        : old,
+    )
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: key })
+
   useEffect(() => {
     if (!unseenKey) return
-    const key = getMyNotificationsQueryKey({ company_id: companyId })
     markRead.mutate(
       { data: { company_id: companyId, ids: unseenKey.split(',') } },
       {
@@ -71,15 +92,51 @@ export function NotificationsScreen({
     )
   }
   return (
-    <ul className="m-0 grid list-none gap-3 p-0">
-      {data.notifications.map((notification) => (
-        <NotificationItem key={notification.id} notification={notification} now={now} />
-      ))}
-    </ul>
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {(dismiss.isError || dismissAll.isError) && (
+          <InlineError>{errorMessage(dismiss.error ?? dismissAll.error, NETWORK_PROBLEM)}</InlineError>
+        )}
+        <Button
+          variant="quiet"
+          size="normal"
+          disabled={dismissAll.isPending}
+          onClick={() =>
+            dismissAll.mutate(
+              { params: { company_id: companyId } },
+              { onSuccess: () => drop(() => true), onError: refresh },
+            )
+          }
+        >
+          Usuń wszystkie
+        </Button>
+      </div>
+      <ul className="m-0 grid list-none gap-3 p-0">
+        {data.notifications.map((notification) => (
+          <NotificationItem
+            key={notification.id}
+            notification={notification}
+            now={now}
+            onDismiss={() => {
+              drop((n) => n.id === notification.id)
+              dismiss.mutate({ notificationId: notification.id }, { onError: refresh })
+            }}
+          />
+        ))}
+      </ul>
+    </div>
   )
 }
 
-function NotificationItem({ notification, now }: { notification: NotificationOut; now: Date }) {
+function NotificationItem({
+  notification,
+  now,
+  onDismiss,
+}: {
+  notification: NotificationOut
+  now: Date
+  onDismiss: () => void
+}) {
   const link = notification.link === 'none' ? null : LINKS[notification.link]
   return (
     <li
@@ -88,11 +145,24 @@ function NotificationItem({ notification, now }: { notification: NotificationOut
         (notification.read ? 'border-line' : 'border-l-8 border-accent')
       }
     >
-      <div className="flex items-baseline justify-between gap-3 text-sm text-ink-muted">
-        <span>{whenText(new Date(notification.created_at), now)}</span>
-        {!notification.read && <b className="text-accent">Nowe</b>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid gap-2">
+          <div className="flex items-baseline gap-3 text-sm text-ink-muted">
+            <span>{whenText(new Date(notification.created_at), now)}</span>
+            {!notification.read && <b className="text-accent">Nowe</b>}
+          </div>
+          <p className="m-0 text-base">{notification.text}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Usuń powiadomienie"
+          title="Usuń powiadomienie"
+          className="-mt-2 -mr-2 inline-flex min-h-(--touch) min-w-(--touch) shrink-0 cursor-pointer items-center justify-center rounded-md text-ink-muted hover:bg-accent-soft hover:text-ink"
+        >
+          <X aria-hidden="true" size={22} />
+        </button>
       </div>
-      <p className="m-0 text-base">{notification.text}</p>
       {link && (
         <Link to={link.to} className="min-h-(--touch) content-center font-semibold text-accent underline underline-offset-4">
           {link.label}

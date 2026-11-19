@@ -78,12 +78,25 @@ class TenantContext:
             raise HttpError(402, state.read_only_message)
 
 
+def removed_from_company(membership: Membership) -> bool:
+    """A plain employee whom a manager removed: the membership stays only because old schedules point at the
+    person, so it gives no access (a manager with a removed profile keeps managing)."""
+    from apps.staffing.models import EmployeeProfile
+
+    return (
+        membership.role == Role.EMPLOYEE
+        and EmployeeProfile.objects.for_company(membership.company_id)
+        .filter(membership=membership, removed_at__isnull=False)
+        .exists()
+    )
+
+
 def tenant_context(request, company_id: UUID | str) -> TenantContext:
     user = getattr(request, "user", None)
     if user is None or not user.is_authenticated:
         raise HttpError(401, "Zaloguj się.")
     membership = Membership.objects.select_related("company", "user").filter(user=user, company_id=company_id).first()
-    if membership is None:
+    if membership is None or removed_from_company(membership):
         raise HttpError(404, "Nie znaleziono.")
     return TenantContext(company=membership.company, membership=membership)
 

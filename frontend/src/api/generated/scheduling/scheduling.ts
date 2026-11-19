@@ -28,6 +28,8 @@ import type {
   AskAvailabilityOut,
   ChangesIn,
   CheckOut,
+  DropCheckOut,
+  EmployeeFitParams,
   ErrorOut,
   GenerateIn,
   GenerationRunOut,
@@ -37,7 +39,9 @@ import type {
   PeriodOut,
   PeriodUpdateIn,
   PinIn,
+  SeatIn,
   ShiftExplanationOut,
+  ShiftFitOut,
   VersionOut,
   VersionShiftOut,
   VersionSummaryOut
@@ -442,6 +446,117 @@ export const useUpdatePeriod = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getUpdatePeriodMutationOptions(options), queryClient);
+    }
+    export type deletePeriodResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deletePeriodResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type deletePeriodResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type deletePeriodResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type deletePeriodResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type deletePeriodResponseSuccess = (deletePeriodResponse204) & {
+  headers: Headers;
+};
+export type deletePeriodResponseError = (deletePeriodResponse402 | deletePeriodResponse403 | deletePeriodResponse404 | deletePeriodResponse409) & {
+  headers: Headers;
+};
+
+export type deletePeriodResponse = (deletePeriodResponseSuccess | deletePeriodResponseError)
+
+export const getDeletePeriodUrl = (periodId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}`
+}
+
+/**
+ * Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+ * published stays: employees saw it and hours are counted from it.
+ * @summary Delete Period
+ */
+export const deletePeriod = async (periodId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deletePeriodResponse> => {
+
+  return apiFetch<deletePeriodResponse>(getDeletePeriodUrl(periodId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePeriodMutationKey = () => ['deletePeriod'] as const;
+
+export const getDeletePeriodMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext> => {
+
+const mutationKey = getDeletePeriodMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePeriod>>, DeletePeriodMutationVariables> = (props) => {
+          const {periodId} = props ?? {};
+
+          return  deletePeriod(periodId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePeriodMutationResult = NonNullable<Awaited<ReturnType<typeof deletePeriod>>>
+
+    export type DeletePeriodMutationError = ErrorOut
+    export type DeletePeriodMutationVariables = {periodId: string}
+
+    /**
+ * Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+ * published stays: employees saw it and hours are counted from it.
+ * @summary Delete Period
+ */
+export const useDeletePeriod = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deletePeriod>>,
+        TError,
+        DeletePeriodMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeletePeriodMutationOptions(options), queryClient);
     }
     export type askForAvailabilityResponse200 = {
   data: AskAvailabilityOut
@@ -1479,7 +1594,157 @@ export const useCheckScheduleChanges = <TError = ErrorOut,
       > => {
       return useMutation(getCheckScheduleChangesMutationOptions(options), queryClient);
     }
-    export type changeAssignmentsResponse200 = {
+    export type shiftDropChecksResponse200 = {
+  data: DropCheckOut[]
+  status: 200
+}
+
+export type shiftDropChecksResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type shiftDropChecksResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type shiftDropChecksResponseSuccess = (shiftDropChecksResponse200) & {
+  headers: Headers;
+};
+export type shiftDropChecksResponseError = (shiftDropChecksResponse403 | shiftDropChecksResponse404) & {
+  headers: Headers;
+};
+
+export type shiftDropChecksResponse = (shiftDropChecksResponseSuccess | shiftDropChecksResponseError)
+
+export const getShiftDropChecksUrl = (versionId: string,
+    shiftId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/shifts/${shiftId}/drops`
+}
+
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export const shiftDropChecks = async (versionId: string,
+    shiftId: string, options?: Parameters<typeof apiFetch>[1]): Promise<shiftDropChecksResponse> => {
+
+  return apiFetch<shiftDropChecksResponse>(getShiftDropChecksUrl(versionId,shiftId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getShiftDropChecksQueryKey = (versionId: string,
+    shiftId: string,) => {
+    return [
+    `/api/versions/${versionId}/shifts/${shiftId}/drops`
+    ] as const;
+    }
+
+
+export const getShiftDropChecksQueryOptions = <TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getShiftDropChecksQueryKey(versionId,shiftId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof shiftDropChecks>>> = ({ signal }) => shiftDropChecks(versionId,shiftId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: versionId !== null && versionId !== undefined && shiftId !== null && shiftId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ShiftDropChecksQueryResult = NonNullable<Awaited<ReturnType<typeof shiftDropChecks>>>
+export type ShiftDropChecksQueryError = ErrorOut
+
+
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof shiftDropChecks>>,
+          TError,
+          Awaited<ReturnType<typeof shiftDropChecks>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof shiftDropChecks>>,
+          TError,
+          Awaited<ReturnType<typeof shiftDropChecks>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getShiftDropChecksQueryOptions(versionId,shiftId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type changeAssignmentsResponse200 = {
   data: CheckOut
   status: 200
 }
@@ -1522,8 +1787,9 @@ export const getChangeAssignmentsUrl = (versionId: string,) => {
 }
 
 /**
- * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
- * With `remove_clashes` the person is first taken off their other shifts at the same time.
+ * Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks
+ * a hard rule is refused with the reasons, unless `force` is set: the manager has the last word. With
+ * `remove_clashes` the person is first taken off their other shifts at the same time.
  * @summary Change Assignments
  */
 export const changeAssignments = async (versionId: string,
@@ -1591,8 +1857,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ChangeAssignmentsMutationVariables = {versionId: string;data: ChangesIn}
 
     /**
- * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
- * With `remove_clashes` the person is first taken off their other shifts at the same time.
+ * Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks
+ * a hard rule is refused with the reasons, unless `force` is set: the manager has the last word. With
+ * `remove_clashes` the person is first taken off their other shifts at the same time.
  * @summary Change Assignments
  */
 export const useChangeAssignments = <TError = ErrorOut,
@@ -1605,7 +1872,182 @@ export const useChangeAssignments = <TError = ErrorOut,
       > => {
       return useMutation(getChangeAssignmentsMutationOptions(options), queryClient);
     }
-    export type pinShiftResponse200 = {
+    export type employeeFitResponse200 = {
+  data: ShiftFitOut[]
+  status: 200
+}
+
+export type employeeFitResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type employeeFitResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type employeeFitResponseSuccess = (employeeFitResponse200) & {
+  headers: Headers;
+};
+export type employeeFitResponseError = (employeeFitResponse403 | employeeFitResponse404) & {
+  headers: Headers;
+};
+
+export type employeeFitResponse = (employeeFitResponseSuccess | employeeFitResponseError)
+
+export const getEmployeeFitUrl = (versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/versions/${versionId}/employees/${employeeId}/fit?${stringifiedParams}` : `/api/versions/${versionId}/employees/${employeeId}/fit`
+}
+
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export const employeeFit = async (versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: Parameters<typeof apiFetch>[1]): Promise<employeeFitResponse> => {
+
+  return apiFetch<employeeFitResponse>(getEmployeeFitUrl(versionId,employeeId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getEmployeeFitQueryKey = (versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams,) => {
+    return [
+    `/api/versions/${versionId}/employees/${employeeId}/fit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getEmployeeFitQueryOptions = <TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getEmployeeFitQueryKey(versionId,employeeId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof employeeFit>>> = ({ signal }) => employeeFit(versionId,employeeId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: versionId !== null && versionId !== undefined && employeeId !== null && employeeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type EmployeeFitQueryResult = NonNullable<Awaited<ReturnType<typeof employeeFit>>>
+export type EmployeeFitQueryError = ErrorOut
+
+
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params: undefined |  EmployeeFitParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof employeeFit>>,
+          TError,
+          Awaited<ReturnType<typeof employeeFit>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof employeeFit>>,
+          TError,
+          Awaited<ReturnType<typeof employeeFit>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getEmployeeFitQueryOptions(versionId,employeeId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type pinShiftResponse200 = {
   data: VersionShiftOut
   status: 200
 }
@@ -1735,6 +2177,250 @@ export const usePinShift = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getPinShiftMutationOptions(options), queryClient);
+    }
+    export type addScheduleSeatResponse201 = {
+  data: VersionShiftOut
+  status: 201
+}
+
+export type addScheduleSeatResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type addScheduleSeatResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type addScheduleSeatResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type addScheduleSeatResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type addScheduleSeatResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type addScheduleSeatResponseSuccess = (addScheduleSeatResponse201) & {
+  headers: Headers;
+};
+export type addScheduleSeatResponseError = (addScheduleSeatResponse400 | addScheduleSeatResponse402 | addScheduleSeatResponse403 | addScheduleSeatResponse404 | addScheduleSeatResponse409) & {
+  headers: Headers;
+};
+
+export type addScheduleSeatResponse = (addScheduleSeatResponseSuccess | addScheduleSeatResponseError)
+
+export const getAddScheduleSeatUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/seats`
+}
+
+/**
+ * One more person needed on a shift that day: an empty place in the draft, kept when arranging again
+ * (the date's staffing in the location's settings gets the same number).
+ * @summary Add Schedule Seat
+ */
+export const addScheduleSeat = async (versionId: string,
+    seatIn: SeatIn, options?: Parameters<typeof apiFetch>[1]): Promise<addScheduleSeatResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<addScheduleSeatResponse>(getAddScheduleSeatUrl(versionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(seatIn)
+  }
+);}
+
+
+
+
+
+export const getAddScheduleSeatMutationKey = () => ['addScheduleSeat'] as const;
+
+export const getAddScheduleSeatMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addScheduleSeat>>, TError,AddScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addScheduleSeat>>, TError,AddScheduleSeatMutationVariables, TContext> => {
+
+const mutationKey = getAddScheduleSeatMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addScheduleSeat>>, AddScheduleSeatMutationVariables> = (props) => {
+          const {versionId,data} = props ?? {};
+
+          return  addScheduleSeat(versionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddScheduleSeatMutationResult = NonNullable<Awaited<ReturnType<typeof addScheduleSeat>>>
+    export type AddScheduleSeatMutationBody = SeatIn
+    export type AddScheduleSeatMutationError = ErrorOut
+    export type AddScheduleSeatMutationVariables = {versionId: string;data: SeatIn}
+
+    /**
+ * One more person needed on a shift that day: an empty place in the draft, kept when arranging again
+ * (the date's staffing in the location's settings gets the same number).
+ * @summary Add Schedule Seat
+ */
+export const useAddScheduleSeat = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addScheduleSeat>>, TError,AddScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof addScheduleSeat>>,
+        TError,
+        AddScheduleSeatMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAddScheduleSeatMutationOptions(options), queryClient);
+    }
+    export type removeScheduleSeatResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeScheduleSeatResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type removeScheduleSeatResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type removeScheduleSeatResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type removeScheduleSeatResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type removeScheduleSeatResponseSuccess = (removeScheduleSeatResponse204) & {
+  headers: Headers;
+};
+export type removeScheduleSeatResponseError = (removeScheduleSeatResponse402 | removeScheduleSeatResponse403 | removeScheduleSeatResponse404 | removeScheduleSeatResponse409) & {
+  headers: Headers;
+};
+
+export type removeScheduleSeatResponse = (removeScheduleSeatResponseSuccess | removeScheduleSeatResponseError)
+
+export const getRemoveScheduleSeatUrl = (versionId: string,
+    shiftId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/shifts/${shiftId}`
+}
+
+/**
+ * One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the
+ * date's staffing gets the same number.
+ * @summary Remove Schedule Seat
+ */
+export const removeScheduleSeat = async (versionId: string,
+    shiftId: string, options?: Parameters<typeof apiFetch>[1]): Promise<removeScheduleSeatResponse> => {
+
+  return apiFetch<removeScheduleSeatResponse>(getRemoveScheduleSeatUrl(versionId,shiftId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveScheduleSeatMutationKey = () => ['removeScheduleSeat'] as const;
+
+export const getRemoveScheduleSeatMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeScheduleSeat>>, TError,RemoveScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeScheduleSeat>>, TError,RemoveScheduleSeatMutationVariables, TContext> => {
+
+const mutationKey = getRemoveScheduleSeatMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeScheduleSeat>>, RemoveScheduleSeatMutationVariables> = (props) => {
+          const {versionId,shiftId} = props ?? {};
+
+          return  removeScheduleSeat(versionId,shiftId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveScheduleSeatMutationResult = NonNullable<Awaited<ReturnType<typeof removeScheduleSeat>>>
+
+    export type RemoveScheduleSeatMutationError = ErrorOut
+    export type RemoveScheduleSeatMutationVariables = {versionId: string;shiftId: string}
+
+    /**
+ * One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the
+ * date's staffing gets the same number.
+ * @summary Remove Schedule Seat
+ */
+export const useRemoveScheduleSeat = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeScheduleSeat>>, TError,RemoveScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof removeScheduleSeat>>,
+        TError,
+        RemoveScheduleSeatMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRemoveScheduleSeatMutationOptions(options), queryClient);
     }
     export type startCorrectingResponse201 = {
   data: VersionSummaryOut

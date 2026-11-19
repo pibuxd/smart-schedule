@@ -1,14 +1,16 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Pin, PinOff } from 'lucide-react'
+import { Pin, PinOff, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { CandidateOut, CheckOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
 import {
+  useAddScheduleSeat,
   useChangeAssignments,
   useCheckScheduleChanges,
   useExplainShift,
   usePinShift,
+  useRemoveScheduleSeat,
 } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
@@ -51,7 +53,7 @@ export function ShiftSheet({
       description={shift ? `${shortDay(shift.date)}, ${shift.position_name}` : undefined}
     >
       {shift && (
-        <ShiftDetails versionId={versionId} locationId={locationId} shift={shift} editable={editable && !shift.past} onDone={onClose} />
+        <ShiftDetails versionId={versionId} locationId={locationId} shift={shift} editable={editable} onDone={onClose} />
       )}
     </Sheet>
   )
@@ -74,6 +76,8 @@ function ShiftDetails({
   const change = useChangeAssignments()
   const checker = useCheckScheduleChanges()
   const pin = usePinShift()
+  const addSeat = useAddScheduleSeat()
+  const removeSeat = useRemoveScheduleSeat()
   const queryClient = useQueryClient()
   // The chosen person has another shift at the same time: the question waits for the manager's answer.
   const [question, setQuestion] = useState<{ employeeId: string; check: CheckOut } | null>(null)
@@ -104,15 +108,26 @@ function ShiftDetails({
       },
     )
 
-  const put = (employeeId: string | null, removeClashes = false) =>
+  const saved = {
+    onSuccess: () => {
+      refresh()
+      onDone()
+    },
+  }
+  const addPlace = () =>
+    shift.shift_type_id &&
+    addSeat.mutate(
+      { versionId, data: { date: shift.date, shift_type_id: shift.shift_type_id, position_id: shift.position_id } },
+      saved,
+    )
+
+  const put = (employeeId: string | null, { force = false, removeClashes = false } = {}) =>
     change.mutate(
-      { versionId, data: { changes: [{ shift_id: shift.id, employee_id: employeeId }], remove_clashes: removeClashes } },
       {
-        onSuccess: () => {
-          refresh()
-          onDone()
-        },
+        versionId,
+        data: { changes: [{ shift_id: shift.id, employee_id: employeeId }], force, remove_clashes: removeClashes },
       },
+      saved,
     )
 
   // Check first: when the person works elsewhere at the same time, ask before taking them off that shift.
@@ -134,14 +149,20 @@ function ShiftDetails({
       <ClashQuestion
         check={question.check}
         busy={busy}
-        onMove={() => put(candidate.employee_id, true)}
+        onMove={(force) => put(candidate.employee_id, { force, removeClashes: true })}
         onCancel={() => setQuestion(null)}
       />
     )
 
   return (
     <div className="grid gap-5">
-      {shift.past && <p className="m-0 text-ink-muted">Ten dzień już minął, więc tej zmiany nie zmienisz.</p>}
+      {shift.past && (
+        <p className="m-0 text-ink-muted">
+          {editable
+            ? 'Ten dzień już minął. Popraw, jeśli pracował ktoś inny, żeby godziny się zgadzały.'
+            : 'Ten dzień już minął. Żeby go poprawić, naciśnij „Popraw grafik”.'}
+        </p>
+      )}
       <section className="grid gap-2" aria-label="Wyjaśnienie przydziału">
         <h3 className="m-0 text-lg font-extrabold">{shift.employee_id ? 'Co uzasadnia ten przydział w obecnym grafiku?' : 'Dlaczego zmiana jest bez obsady?'}</h3>
         {shift.manual && shift.employee_id && <p className="m-0">Ten przydział zmieniono ręcznie.</p>}
@@ -159,6 +180,18 @@ function ShiftDetails({
       {data.shift.problems.map((problem) => (
         <InlineError key={problem}>{problem}</InlineError>
       ))}
+      {data.shift.forced && (
+        <div className="grid gap-1 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+          <span className="flex items-center gap-1.5 font-semibold">
+            <ShieldAlert aria-hidden="true" size={18} /> Wpisane mimo przeszkód
+          </span>
+          {data.shift.overridden.map((problem) => (
+            <span key={problem} className="text-sm">
+              {problem}
+            </span>
+          ))}
+        </div>
+      )}
 
       {current && (
         <div className="grid gap-2 rounded-md border-2 border-ink bg-surface p-3">
@@ -202,16 +235,11 @@ function ShiftDetails({
         <div className="grid gap-1 rounded-md border border-line bg-surface p-3">
           <span className="font-semibold">Nikt nie może wziąć tej zmiany.</span>
           <span className="text-sm">
-            Każda osoba ma powód, np. dzień „nie mogę”, inną zmianę o tej porze albo zasadę bez wyjątków. Wpisanie
-            kogoś mimo to złamałoby te zasady, a takiego grafiku nie da się opublikować. Możesz:
+            Każda osoba ma powód, np. dzień „nie mogę”, inną zmianę o tej porze albo zasadę bez wyjątków. Osobę z
+            „nie mogę” albo zasadą możesz wpisać mimo to (lista niżej). Możesz też:
           </span>
           <ul className="m-0 grid gap-1 pl-5 text-sm">
-            <li>
-              <Link to="/kierownik/lokal/$locationId/ustawienia" params={{ locationId }} className="font-semibold text-accent">
-                zmniejszyć obsadę tego dnia
-              </Link>{' '}
-              (wyjątek w obsadzie),
-            </li>
+            <li>usunąć to miejsce (przycisk niżej),</li>
             <li>
               <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
                 zmienić zasadę
@@ -264,15 +292,24 @@ function ShiftDetails({
                     {problem}
                   </span>
                 ))}
-                {editable && candidate.clash && !asked(candidate) && (
+                {editable && (candidate.clash || candidate.can_force) && !asked(candidate) && (
                   <Button
                     variant="secondary"
                     size="normal"
                     className="w-fit"
                     disabled={busy}
-                    onClick={() => choose(candidate.employee_id)}
+                    onClick={() =>
+                      candidate.clash ? choose(candidate.employee_id) : put(candidate.employee_id, { force: true })
+                    }
                   >
-                    Przenieś tutaj: {candidate.name}
+                    {candidate.clash ? (
+                      `Przenieś tutaj: ${candidate.name}`
+                    ) : (
+                      <>
+                        <ShieldAlert aria-hidden="true" size={20} />
+                        Wpisz mimo to: {candidate.name}
+                      </>
+                    )}
                   </Button>
                 )}
                 {asked(candidate)}
@@ -280,6 +317,31 @@ function ShiftDetails({
             ))}
           </ul>
         </details>
+      )}
+      {editable && (
+        <section className="grid gap-2 rounded-md border border-line bg-surface p-3">
+          <h3 className="m-0 text-base font-extrabold">Ile osób na tej zmianie</h3>
+          <p className="m-0 text-sm text-ink-muted">Zmieniasz obsadę tylko tego dnia. Zostanie też, gdy ułożysz grafik od nowa.</p>
+          <div className="flex flex-wrap gap-2">
+            {shift.shift_type_id && (
+              <Button variant="secondary" size="normal" disabled={addSeat.isPending || removeSeat.isPending} onClick={addPlace}>
+                <Plus aria-hidden="true" size={20} />
+                Dodaj miejsce
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              size="normal"
+              disabled={addSeat.isPending || removeSeat.isPending}
+              onClick={() => removeSeat.mutate({ versionId, shiftId: shift.id }, saved)}
+            >
+              <Trash2 aria-hidden="true" size={20} />
+              {shift.employee_id ? `Usuń miejsce (${shift.employee_name} traci zmianę)` : 'Usuń to miejsce'}
+            </Button>
+          </div>
+          {addSeat.isError && <InlineError>{errorMessage(addSeat.error, NETWORK_PROBLEM)}</InlineError>}
+          {removeSeat.isError && <InlineError>{errorMessage(removeSeat.error, NETWORK_PROBLEM)}</InlineError>}
+        </section>
       )}
       <SlotHistory events={data.history} />
     </div>

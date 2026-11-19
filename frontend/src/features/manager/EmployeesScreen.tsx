@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Pencil, UserPlus } from 'lucide-react'
+import { Pencil, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 
 import type { EmployeeIn, EmployeeOut, InvitationOut, LocationSetupOut, MeOut, PositionOut } from '../../api/generated/model'
@@ -8,6 +8,7 @@ import {
   useAddMyselfAsEmployee,
   useLocationEmployees,
   useLocationSetup,
+  useRemoveEmployee,
   useUpdateEmployee,
 } from '../../api/generated/staffing/staffing'
 import { useCancelInvitation, useInviteToLocation, useLocationInvitations } from '../../api/generated/tenancy/tenancy'
@@ -48,7 +49,7 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
     <div className="grid gap-8">
       <Section
         title={`W grafiku (${active.length})`}
-        description="Stanowisko mówi, na jakie zmiany ktoś może przyjść. Doświadczenie widzisz tylko Ty: dzięki niemu na zmianie nie zostaną sami początkujący. Cel i maksimum godzin to wskazówki przy układaniu grafiku."
+        description="Doświadczenie widzisz tylko Ty. Cel i maksimum godzin to wskazówki dla grafiku."
       >
         {active.length === 0 ? (
           <EmptyState title="Nikt jeszcze nie pracuje w tym lokalu">
@@ -65,7 +66,7 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
       {off.length > 0 && (
         <Section
           title={`Wyłączeni z grafiku (${off.length})`}
-          description="Nie dostają nowych zmian. Dawne grafiki zostają. Każdą osobę możesz włączyć z powrotem."
+          description="Nie dostają nowych zmian. Możesz ich włączyć z powrotem."
         >
           <EmployeeList employees={off} names={names} onEdit={setEditing} />
         </Section>
@@ -107,7 +108,7 @@ function AddMyself({ locationId, employees }: { locationId: string; employees: E
         <span>
           <b>Też pracujesz na zmianach?</b>
           <span className="block text-sm text-ink-muted">
-            Dodaj siebie do grafiku tego lokalu. Dostaniesz wszystkie stanowiska. Potem możesz je zmienić.
+            Dodaj siebie do grafiku tego lokalu.
           </span>
         </span>
         <Button
@@ -272,8 +273,7 @@ function EmployeeForm({
         <fieldset className="m-0 grid gap-1 border-0 p-0">
           <legend className="mb-1 font-semibold">Doświadczenie</legend>
           <p className="m-0 text-sm text-ink-muted">
-            Widzisz to tylko Ty. Na każdej zmianie ma być co najmniej tylu doświadczonych, ilu początkujących (zasada
-            „Początkujący z doświadczonymi”).
+            Widzisz to tylko Ty. Liczy się w zasadzie „Początkujący z doświadczonymi”.
           </p>
           {([1, 2, 3] as const).map((value) => (
             <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
@@ -296,7 +296,7 @@ function EmployeeForm({
         <fieldset className="m-0 grid gap-2 border-0 p-0">
           <legend className="mb-1 font-semibold">Inny stopień na którymś stanowisku</legend>
           <p className="m-0 text-sm text-ink-muted">
-            Zmień tylko tam, gdzie jest inaczej, np. ktoś doświadczony przy piecu dopiero uczy się kasy.
+            Np. ktoś doświadczony przy piecu dopiero uczy się kasy.
           </p>
           {positions
             .filter((p) => chosen.includes(p.id))
@@ -361,7 +361,7 @@ function EmployeeForm({
       ) : (
         <CheckField
           label="W grafiku"
-          hint="Odznacz, gdy ktoś odchodzi albo długo nie pracuje. Dawne zmiany tej osoby zostaną."
+          hint="Dawne zmiany tej osoby zostaną."
           checked={active}
           onChange={(e) => setActive(e.target.checked)}
         />
@@ -375,7 +375,84 @@ function EmployeeForm({
       <Button type="submit" wide disabled={update.isPending}>
         Zapisz
       </Button>
+      <RemoveEmployee employee={employee} locationId={locationId} onDone={onDone} />
     </form>
+  )
+}
+
+/** "Usuń z lokalu": for good, unlike switching off. Asks once more, because it cannot be undone from here.
+ * A person who also works in other locations leaves only this one. */
+function RemoveEmployee({
+  employee,
+  locationId,
+  onDone,
+}: {
+  employee: EmployeeOut
+  locationId: string
+  onDone: () => void
+}) {
+  const remove = useRemoveEmployee()
+  const queryClient = useQueryClient()
+  const [asking, setAsking] = useState(false)
+  const name = `${employee.first_name} ${employee.last_name}`.trim() || 'Ta osoba'
+  const others = employee.other_location_names ?? []
+  if (!asking) {
+    return (
+      <Button variant="danger" size="normal" wide onClick={() => setAsking(true)}>
+        <Trash2 aria-hidden="true" size={18} />
+        Usuń z lokalu
+      </Button>
+    )
+  }
+  return (
+    <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
+      {others.length > 0 ? (
+        <p className="m-0">
+          <b>{`Usunąć z lokalu: ${name}?`}</b>{' '}
+          {`Przestanie pracować w tym lokalu i zostanie w: ${others.join(', ')}. Zmiany, na które jest już wpisana, zostaną w grafikach.`}
+        </p>
+      ) : (
+        <p className="m-0">
+          <b>{`Usunąć z lokalu: ${name}?`}</b>{' '}
+          {employee.is_manager
+            ? 'Zniknie z listy pracowników i nie dostanie nowych zmian. Dalej będzie kierownikiem.'
+            : 'Zniknie z listy i straci dostęp do firmy w Grafikomacie. Wróci tylko przez nowe zaproszenie.'}{' '}
+          Zmiany w dawnych grafikach i godziny zostają.
+        </p>
+      )}
+      {others.length === 0 && (employee.published_shifts ?? 0) > 0 && (
+        <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
+          {`Ta osoba ma jeszcze ${shifts(employee.published_shifts ?? 0)} w opublikowanym grafiku. Zostanie na nich wpisana, ale nie zobaczy już grafiku. Najpierw przenieś te zmiany na kogoś innego.`}
+        </p>
+      )}
+      {others.length === 0 && (employee.draft_shifts ?? 0) > 0 && (
+        <p className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
+          {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Potem ułóż grafik od nowa albo przenieś je ręcznie.`}
+        </p>
+      )}
+      {remove.isError && <InlineError>{errorMessage(remove.error, NETWORK_PROBLEM)}</InlineError>}
+      <Button
+        variant="danger"
+        wide
+        disabled={remove.isPending}
+        onClick={() =>
+          remove.mutate(
+            { employeeId: employee.id, params: { location_id: locationId } },
+            {
+              onSuccess: () => {
+                void queryClient.invalidateQueries()
+                onDone()
+              },
+            },
+          )
+        }
+      >
+        Tak, usuń z lokalu
+      </Button>
+      <Button variant="secondary" wide onClick={() => setAsking(false)}>
+        Zostaw
+      </Button>
+    </div>
   )
 }
 
@@ -417,7 +494,7 @@ function InvitationsSection({ locationId }: { locationId: string }) {
   return (
     <Section
       title="Zaproś do lokalu"
-      description="Wpisz numer telefonu. Ta osoba zaloguje się kodem z SMS-a i przyjmie zaproszenie w aplikacji."
+      description="Ta osoba zaloguje się kodem z SMS-a i przyjmie zaproszenie."
     >
       <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
         <TextField label="Numer telefonu" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="512 345 678" />

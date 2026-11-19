@@ -4,6 +4,9 @@ import { addDays, parseDate, toIsoDate } from '../../lib/dates'
 /** One column of the schedule grid: a shift type on one position, with its usual hours. */
 export type GridColumn = {
   key: string
+  /** Empty when the shift type was deleted after the schedule was made. */
+  shiftTypeId: string | null
+  positionId: string
   shiftTypeName: string
   positionName: string
   start: string
@@ -30,6 +33,8 @@ export function buildGrid(shifts: VersionShiftOut[], start: string, end: string)
   }
   const columns: GridColumn[] = [...byColumn.entries()].map(([key, list]) => ({
     key,
+    shiftTypeId: list[0].shift_type_id,
+    positionId: list[0].position_id,
     shiftTypeName: list[0].shift_type_name,
     positionName: list[0].position_name,
     start: mostCommon(list.map((s) => s.start_time)),

@@ -8,6 +8,7 @@ from django.utils import timezone
 from ninja.errors import HttpError
 
 from apps.staffing.models import EmployeeProfile
+from apps.staffing.removal import restore_employee
 from apps.tenancy.models import Invitation, InvitationStatus, Location, Membership, Role
 
 ALREADY_DECIDED = "To zaproszenie nie jest już aktualne."
@@ -23,12 +24,10 @@ def create_invitation(
         .first()
     )
     if membership is not None:
-        # Someone working in another location of the company can work here too (an extra location).
-        if (
-            role == Role.EMPLOYEE
-            and hasattr(membership, "employee_profile")
-            and membership.employee_profile.works_in(location)
-        ):
+        # Someone working in another location of the company can work here too (an extra location); a removed
+        # person can be invited back.
+        profile = getattr(membership, "employee_profile", None)
+        if role == Role.EMPLOYEE and profile is not None and profile.removed_at is None and profile.works_in(location):
             raise HttpError(409, "Ta osoba już pracuje w tym lokalu.")
         if role == Role.MANAGER and (
             membership.role == Role.OWNER
@@ -87,9 +86,11 @@ def accept_invitation(invitation_id, user) -> Invitation:
         profile = EmployeeProfile.objects.for_company(invitation.company_id).filter(membership=membership).first()
         if profile is None:
             EmployeeProfile.objects.create(membership=membership, home_location=location)
+        elif profile.removed_at is not None:
+            restore_employee(profile, location)
         elif not profile.works_in(location):
             # A person who already works in another location of this company keeps their main location and gets
-            # this one as an extra location (docs/plan.md, section 24).
+            # this one as an extra location (docs/plan.md, section 27).
             profile.extra_locations.add(location)
 
     changed = []

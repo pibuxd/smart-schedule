@@ -13,10 +13,11 @@ from ninja.responses import Status
 from apps.core.schemas import ErrorOut
 from apps.marketplace import services
 from apps.marketplace.models import ShiftClaim, ShiftOffer
-from apps.scheduling.models import Assignment
+from apps.scheduling.models import Assignment, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
 from apps.staffing.models import EmployeeProfile
 from apps.tenancy.context import TenantContext, context_for, tenant_context
+from apps.tenancy.models import Location
 
 router = Router(tags=["marketplace"])
 
@@ -76,6 +77,8 @@ class ClaimOut(Schema):
 
 class ManagerOfferOut(Schema):
     id: UUID
+    # The published shift being given away (for "Wybierz osobę").
+    assignment_id: UUID
     status: OfferStatus
     shift: OfferShiftOut
     offered_by_name: str
@@ -92,8 +95,8 @@ class ManagerOffersOut(Schema):
     waiting: int
 
 
-def _shift_out(offer: ShiftOffer) -> OfferShiftOut:
-    shift = offer.assignment.shift
+def _shift_out(offer: ShiftOffer | Shift) -> OfferShiftOut:
+    shift = offer if isinstance(offer, Shift) else offer.assignment.shift
     tz = ZoneInfo(shift.location.timezone)
     return OfferShiftOut(
         date=shift.date,
@@ -243,6 +246,7 @@ def manager_offers(request, company_id: UUID):
     offers = [
         ManagerOfferOut(
             id=o.pk,
+            assignment_id=o.assignment_id,
             status=o.status,
             shift=_shift_out(o),
             offered_by_name=services.person_name(o.offered_by),
@@ -281,3 +285,189 @@ def reject_claim(request, claim_id: UUID):
     ctx, claim = _managed_claim(request, claim_id)
     services.reject_claim(claim, ctx.user)
     return Status(204, None)
+
+
+# --- The manager's own changes: another person on a shift, a swap, an offer on someone's behalf ---------------
+
+# How far back and ahead "Zmień obsadę" lists published shifts.
+PAST_DAYS = 14
+AHEAD_DAYS = 62
+
+
+class ManagerShiftOut(Schema):
+    id: UUID  # the assignment
+    version_id: UUID
+    shift: OfferShiftOut
+    employee_id: UUID | None
+    employee_name: str  # "" = nobody on the shift
+    # The shift has already started: it can still be corrected, but not offered.
+    started: bool
+    # An active offer of this shift ("Oddane zmiany").
+    offer_id: UUID | None = None
+
+
+class HandoverCandidateOut(Schema):
+    employee_id: UUID
+    name: str
+    home_location_name: str
+    # Works in the shift's own location.
+    here: bool
+    # Said "Weź zmianę" for this shift and waits for a decision.
+    wants: bool
+    # Hard problems this person on the shift would add (empty: fine). The manager may overrule them.
+    problems: list[str]
+
+
+class ReassignIn(Schema):
+    employee_id: UUID
+    # Put the person there although the validator has objections.
+    force: bool = False
+
+
+class SwapIn(Schema):
+    first_id: UUID
+    second_id: UUID
+    force: bool = False
+
+
+class SwapCheckOut(Schema):
+    problems: list[str]
+
+
+def _managed_assignment(request, assignment_id: UUID, write: bool = True) -> tuple[TenantContext, Assignment]:
+    ctx, assignment = context_for(request, Assignment, assignment_id)
+    ctx.require_manager_of(assignment.shift.location)
+    if write:
+        ctx.require_writable()
+    return ctx, assignment
+
+
+@router.get("/locations/{location_id}/handover-shifts", response={200: list[ManagerShiftOut], **DECISION_ERRORS})
+def handover_shifts(request, location_id: UUID):
+    """Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"."""
+    ctx, location = context_for(request, Location, location_id)
+    ctx.require_manager_of(location)
+    today = timezone.localdate()
+    rows = list(
+        ctx.qs(Assignment)
+        .filter(
+            shift__location=location,
+            shift__version__status=ScheduleVersion.Status.PUBLISHED,
+            shift__date__range=(today - timedelta(days=PAST_DAYS), today + timedelta(days=AHEAD_DAYS)),
+        )
+        .select_related("shift__location", "shift__position", "shift__shift_type", "employee__membership__user")
+        .order_by("shift__start_at", "shift__position__name", "shift__slot_key")
+    )
+    offers = dict(
+        ctx.qs(ShiftOffer)
+        .filter(assignment__in=[a.pk for a in rows], status__in=services.ACTIVE)
+        .values_list("assignment_id", "pk")
+    )
+    now = timezone.now()
+    return [
+        ManagerShiftOut(
+            id=a.pk,
+            version_id=a.shift.version_id,
+            shift=_shift_out(a.shift),
+            employee_id=a.employee_id,
+            employee_name=services.person_name(a.employee) if a.employee else "",
+            started=a.shift.start_at <= now,
+            offer_id=offers.get(a.pk),
+        )
+        for a in rows
+    ]
+
+
+@router.get(
+    "/assignments/{assignment_id}/handover-candidates",
+    response={200: list[HandoverCandidateOut], **DECISION_ERRORS},
+)
+def handover_candidates(request, assignment_id: UUID):
+    """Who the manager can put on this published shift: people who can come first, then those with problems."""
+    ctx, assignment = _managed_assignment(request, assignment_id, write=False)
+    if assignment.shift.version.status != ScheduleVersion.Status.PUBLISHED:
+        raise HttpError(409, services.NOT_PUBLISHED)
+    wants = set(
+        ctx.qs(ShiftClaim)
+        .filter(offer__assignment=assignment, offer__status__in=services.ACTIVE, status=ShiftClaim.Status.PENDING)
+        .values_list("employee_id", flat=True)
+    )
+    location_id = assignment.shift.location_id
+    result = [
+        HandoverCandidateOut(
+            employee_id=v.employee.pk,
+            name=services.person_name(v.employee),
+            home_location_name=v.employee.home_location.name,
+            here=v.employee.works_in(location_id),
+            wants=v.employee.pk in wants,
+            problems=list(v.problems),
+        )
+        for v in services.manager_candidates(assignment)
+    ]
+    result.sort(key=lambda c: (bool(c.problems), not c.wants, not c.here, c.name))
+    return result
+
+
+@router.post("/assignments/{assignment_id}/reassign", response={200: ManagerShiftOut, **DECISION_ERRORS})
+def reassign_shift(request, assignment_id: UUID, payload: ReassignIn):
+    """The manager puts another person on a published shift, without anyone's "Weź zmianę"."""
+    ctx, assignment = _managed_assignment(request, assignment_id)
+    taker = ctx.get(EmployeeProfile, pk=payload.employee_id)
+    row = services.manager_reassign(assignment, taker, ctx.user, force=payload.force)
+    return ManagerShiftOut(
+        id=row.pk,
+        version_id=row.shift.version_id,
+        shift=_shift_out(row.shift),
+        employee_id=row.employee_id,
+        employee_name=services.person_name(row.employee),
+        started=row.shift.start_at <= timezone.now(),
+    )
+
+
+def _swap_pair(request, payload: SwapIn, write: bool) -> tuple[TenantContext, Assignment, Assignment]:
+    ctx, first = _managed_assignment(request, payload.first_id, write=write)
+    second = ctx.get(Assignment, pk=payload.second_id)
+    ctx.require_manager_of(second.shift.location)
+    return ctx, first, second
+
+
+@router.post("/shift-swaps/check", response={200: SwapCheckOut, **DECISION_ERRORS})
+def check_shift_swap(request, payload: SwapIn):
+    """What the validator says about two people exchanging their published shifts (nothing is saved)."""
+    _, first, second = _swap_pair(request, payload, write=False)
+    if first.shift.version.status != ScheduleVersion.Status.PUBLISHED:
+        raise HttpError(409, services.NOT_PUBLISHED)
+    return SwapCheckOut(problems=list(services.swap_problems(first, second)))
+
+
+@router.post("/shift-swaps", response={204: None, **DECISION_ERRORS})
+def swap_shifts(request, payload: SwapIn):
+    """Two people exchange their published shifts; both are told in the app."""
+    ctx, first, second = _swap_pair(request, payload, write=True)
+    services.manager_swap(first, second, ctx.user, force=payload.force)
+    return Status(204, None)
+
+
+@router.post("/assignments/{assignment_id}/offer", response={201: OfferMadeOut, **DECISION_ERRORS})
+def offer_shift_for_employee(request, assignment_id: UUID):
+    """The manager looks for someone to take an employee's shift: the same offer as the employee's "Oddaj zmianę"."""
+    ctx, assignment = _managed_assignment(request, assignment_id)
+    if assignment.employee_id is None:
+        raise HttpError(409, "Na tej zmianie nikogo nie ma. Wybierz osobę sam.")
+    giver = ctx.get(EmployeeProfile, pk=assignment.employee_id)
+    offer, notified, here = services.offer_shift(assignment, giver, by_manager=ctx.user)
+    at_once = assignment.shift.location.handover_without_approval
+    return Status(
+        201, OfferMadeOut(id=offer.pk, status=offer.status, notified=notified, notified_here=here, at_once=at_once)
+    )
+
+
+@router.post("/offers/{offer_id}/close", response={200: OfferMadeOut, **DECISION_ERRORS})
+def close_offer(request, offer_id: UUID):
+    """The manager ends an offer: the shift stays with the person who gave it away."""
+    ctx, offer = context_for(request, ShiftOffer, offer_id)
+    offer = services.offer_query(ctx.company.pk).get(pk=offer.pk)
+    ctx.require_manager_of(offer.assignment.shift.location)
+    ctx.require_writable()
+    offer = services.manager_close_offer(offer, ctx.user)
+    return OfferMadeOut(id=offer.pk, status=offer.status, notified=0)

@@ -24,7 +24,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.assistant import readings
-from apps.assistant.models import ManagerInstruction
+from apps.assistant.models import AssistantRuleSet, ManagerInstruction
 from apps.availability.models import AvailabilityDay, TextRequest
 from apps.rules.models import RuleSetting
 from apps.rules.models import WeightProfile as WeightProfileModel
@@ -42,6 +42,7 @@ from apps.staffing.models import (
 )
 from apps.tenancy.models import Location
 from engine.problem import (
+    EXPERIENCED,
     Availability,
     Employee,
     ExternalShift,
@@ -176,6 +177,28 @@ def check_periods(periods: Sequence[SchedulePeriod]) -> None:
         raise BuildError("Lokale w różnych strefach czasowych trzeba układać osobno.")
 
 
+def _keep_pinned_beginners(slots: list[Slot], pinned: dict, employees: dict) -> list[Slot]:
+    """The manager may keep fewer experienced people than the staffing asks (a pinned manual change). Arranging
+    again then asks for experience only on the places the pinned people leave, instead of failing."""
+    groups: dict[tuple, list[Slot]] = defaultdict(list)
+    for slot in slots:
+        if slot.needs_experienced:
+            groups[(slot.location, slot.date, slot.shift_type, slot.position)].append(slot)
+    if not groups:
+        return slots
+    released: set[str] = set()
+    for key, marked in groups.items():
+        group = [s for s in slots if (s.location, s.date, s.shift_type, s.position) == key]
+        beginners = sum(
+            1
+            for s in group
+            if (e := pinned.get(s.id)) and e in employees and employees[e].level(s.position) != EXPERIENCED
+        )
+        excess = beginners - (len(group) - len(marked))
+        released.update(s.id for s in marked[len(marked) - excess :] if excess > 0)
+    return [replace(s, needs_experienced=False) if s.id in released else s for s in slots]
+
+
 def _employee_name(profile: EmployeeProfile) -> str:
     return profile.membership.user.full_name or "Pracownik bez imienia"
 
@@ -184,6 +207,7 @@ class _Reader:
     # Shifts from the newest drafts of other locations count as taken (only when generating; editing and
     # publishing check the published schedules of other locations).
     include_drafts = True
+    arranging = True  # building the problem for the generator (a saved version is read as it is)
 
     def __init__(self, periods: Sequence[SchedulePeriod], today: date | None) -> None:
         check_periods(periods)
@@ -242,6 +266,7 @@ class _Reader:
                     end=shift.end_at.astimezone(self.tz),
                     shift_name=shift_type.name if shift_type else "",
                     is_closing=bool(shift_type and shift_type.is_closing),
+                    needs_experienced=shift.needs_experienced,
                 )
             )
             self.sources[key] = SlotSource(
@@ -318,12 +343,16 @@ class _Reader:
 
     # ----------------------------------------------------------------- people
 
-    def assignments(self, version: ScheduleVersion | None, keys: set[str], pinned_only: bool = False):
+    def assignments(
+        self, version: ScheduleVersion | None, keys: set[str], pinned_only: bool = False, forced_only: bool = False
+    ):
         if version is None:
             return {}
         rows = self.qs(Assignment).filter(shift__version=version, shift__slot_key__in=keys)
         if pinned_only:
             rows = rows.filter(pinned=True)  # a pinned hole stays empty
+        if forced_only:
+            rows = rows.filter(forced=True, employee__isnull=False)
         return {
             key: str(employee) if employee else None
             for key, employee in rows.values_list("shift__slot_key", "employee")
@@ -411,7 +440,7 @@ class _Reader:
     def external_versions(self) -> list:
         """Versions of other periods whose shifts the same people already have: the published one of each period,
         and (when generating) its newest draft instead, if there is one newer, so that locations arranged one after
-        another do not give a person the same hours twice (docs/plan.md, section 24)."""
+        another do not give a person the same hours twice (docs/plan.md, section 27)."""
         statuses = [ScheduleVersion.Status.PUBLISHED]
         if self.include_drafts:
             statuses.append(ScheduleVersion.Status.DRAFT)
@@ -460,6 +489,12 @@ class _Reader:
         for location in self.locations:
             group_rows = self.qs(RuleSetting).filter(group_id=location.group_id) if location.group_id else []
             rows = merge(group_rows, self.qs(RuleSetting).filter(location=location))
+            from apps.assistant.agreements import rule_rows
+
+            agreement = self.qs(AssistantRuleSet).filter(location=location, period__in=self.periods).first()
+            snapshot = rule_rows(agreement)
+            if snapshot is not None:
+                rows = snapshot
             result += rule_configs(str(location.id), rows)
         return result
 
@@ -516,6 +551,7 @@ class _Reader:
         rows = (
             self.qs(ManagerInstruction)
             .filter(location__in=self.locations)
+            .filter(Q(rule_set__period__in=self.periods) | Q(rule_set__isnull=True))
             .select_related("employee__membership__user")
             .order_by("location_id", "position", "created_at")
         )
@@ -553,6 +589,18 @@ class _Reader:
             stability_penalty=float(profile.stability_penalty),
         )
 
+    def forced(self, slots: Sequence[Slot], published: dict, pinned: dict) -> dict[str, str]:
+        """The manager's overrides that still stand when arranging again: on a pinned slot (newest version) or
+        on a day that has passed (published version), as long as that person keeps the slot."""
+        keys = {s.id for s in slots}
+        fixed = {s.id: published[s.id] for s in slots if s.date < self.today and s.id in published}
+        fixed.update(pinned)
+        marked: dict[str, str] = {}
+        for period in self.periods:
+            marked.update(self.assignments(self.published.get(period.id), keys, forced_only=True))
+            marked.update(self.assignments(self.latest.get(period.id), keys, pinned_only=True, forced_only=True))
+        return {key: employee for key, employee in marked.items() if fixed.get(key) == employee}
+
     def position_names(self) -> dict[str, str]:
         return {
             str(pk): name
@@ -571,6 +619,8 @@ class _Reader:
             pinned.update(self.assignments(self.latest.get(period.id), keys, pinned_only=True))
         referenced = {e for e in (*published.values(), *pinned.values()) if e}
         employees = self.employees(referenced)
+        if self.arranging:
+            slots = _keep_pinned_beginners(slots, pinned, {e.id: e for e in employees})
         employee_ids = [e.id for e in employees]
         problem = Problem(
             period_start=self.start,
@@ -585,6 +635,7 @@ class _Reader:
             pinned=pinned,
             published=published,
             frozen_before=self.today,
+            forced=self.forced(slots, published, pinned),
             external_shifts=tuple(self.external_shifts(employee_ids)),
             position_names=self.position_names(),
         )
@@ -595,6 +646,7 @@ class _VersionReader(_Reader):
     """The slots and people of one saved version, as they were (not as the settings say today)."""
 
     include_drafts = False
+    arranging = False
 
     def __init__(self, version: ScheduleVersion, extra_employees: Sequence[str] = ()) -> None:
         # No frozen days: the version is read as a whole.
@@ -606,6 +658,9 @@ class _VersionReader(_Reader):
     def slots(self) -> list[Slot]:
         by_day = self._published_slots(self.version)
         return [slot for day in sorted(by_day) for slot in by_day[day]]
+
+    def forced(self, slots: Sequence[Slot], published: dict, pinned: dict) -> dict[str, str]:
+        return self.assignments(self.version, {s.id for s in slots}, forced_only=True)
 
     def employees(self, referenced: set[str]) -> list[Employee]:
         in_version = self.qs(Assignment).filter(shift__version=self.version, employee__isnull=False)

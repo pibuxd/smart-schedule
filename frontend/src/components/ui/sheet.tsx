@@ -41,7 +41,7 @@ export function Sheet({
             'md:-translate-y-1/2 md:rounded-lg md:pb-6'
           }
         >
-          <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div className="grid gap-1">
               <Dialog.Title className="text-xl font-extrabold">{title}</Dialog.Title>
               {description ? (
@@ -53,7 +53,7 @@ export function Sheet({
             <Dialog.Close
               className="inline-flex min-h-(--touch) min-w-(--touch) cursor-pointer items-center justify-center gap-1 rounded-md text-sm font-semibold text-accent hover:bg-accent-soft"
             >
-              <X aria-hidden="true" size={22} />
+              <X aria-hidden="true" size={18} />
               Zamknij
             </Dialog.Close>
           </div>

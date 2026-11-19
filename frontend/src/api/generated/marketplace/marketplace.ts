@@ -27,9 +27,14 @@ import type {
   AvailableOfferOut,
   AvailableOffersParams,
   ErrorOut,
+  HandoverCandidateOut,
   ManagerOffersOut,
   ManagerOffersParams,
-  OfferMadeOut
+  ManagerShiftOut,
+  OfferMadeOut,
+  ReassignIn,
+  SwapCheckOut,
+  SwapIn
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -966,4 +971,886 @@ export const useRejectClaim = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getRejectClaimMutationOptions(options), queryClient);
+    }
+    export type handoverShiftsResponse200 = {
+  data: ManagerShiftOut[]
+  status: 200
+}
+
+export type handoverShiftsResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type handoverShiftsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type handoverShiftsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type handoverShiftsResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type handoverShiftsResponseSuccess = (handoverShiftsResponse200) & {
+  headers: Headers;
+};
+export type handoverShiftsResponseError = (handoverShiftsResponse402 | handoverShiftsResponse403 | handoverShiftsResponse404 | handoverShiftsResponse409) & {
+  headers: Headers;
+};
+
+export type handoverShiftsResponse = (handoverShiftsResponseSuccess | handoverShiftsResponseError)
+
+export const getHandoverShiftsUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/handover-shifts`
+}
+
+/**
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * @summary Handover Shifts
+ */
+export const handoverShifts = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<handoverShiftsResponse> => {
+
+  return apiFetch<handoverShiftsResponse>(getHandoverShiftsUrl(locationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getHandoverShiftsQueryKey = (locationId: string,) => {
+    return [
+    `/api/locations/${locationId}/handover-shifts`
+    ] as const;
+    }
+
+
+export const getHandoverShiftsQueryOptions = <TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getHandoverShiftsQueryKey(locationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof handoverShifts>>> = ({ signal }) => handoverShifts(locationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: locationId !== null && locationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type HandoverShiftsQueryResult = NonNullable<Awaited<ReturnType<typeof handoverShifts>>>
+export type HandoverShiftsQueryError = ErrorOut
+
+
+/**
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * @summary Handover Shifts
+ */
+export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
+ locationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof handoverShifts>>,
+          TError,
+          Awaited<ReturnType<typeof handoverShifts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * @summary Handover Shifts
+ */
+export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof handoverShifts>>,
+          TError,
+          Awaited<ReturnType<typeof handoverShifts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * @summary Handover Shifts
+ */
+export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * @summary Handover Shifts
+ */
+export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
+ locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getHandoverShiftsQueryOptions(locationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type handoverCandidatesResponse200 = {
+  data: HandoverCandidateOut[]
+  status: 200
+}
+
+export type handoverCandidatesResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type handoverCandidatesResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type handoverCandidatesResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type handoverCandidatesResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type handoverCandidatesResponseSuccess = (handoverCandidatesResponse200) & {
+  headers: Headers;
+};
+export type handoverCandidatesResponseError = (handoverCandidatesResponse402 | handoverCandidatesResponse403 | handoverCandidatesResponse404 | handoverCandidatesResponse409) & {
+  headers: Headers;
+};
+
+export type handoverCandidatesResponse = (handoverCandidatesResponseSuccess | handoverCandidatesResponseError)
+
+export const getHandoverCandidatesUrl = (assignmentId: string,) => {
+
+
+
+
+  return `/api/assignments/${assignmentId}/handover-candidates`
+}
+
+/**
+ * Who the manager can put on this published shift: people who can come first, then those with problems.
+ * @summary Handover Candidates
+ */
+export const handoverCandidates = async (assignmentId: string, options?: Parameters<typeof apiFetch>[1]): Promise<handoverCandidatesResponse> => {
+
+  return apiFetch<handoverCandidatesResponse>(getHandoverCandidatesUrl(assignmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getHandoverCandidatesQueryKey = (assignmentId: string,) => {
+    return [
+    `/api/assignments/${assignmentId}/handover-candidates`
+    ] as const;
+    }
+
+
+export const getHandoverCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof handoverCandidates>>, TError = ErrorOut>(assignmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverCandidates>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getHandoverCandidatesQueryKey(assignmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof handoverCandidates>>> = ({ signal }) => handoverCandidates(assignmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: assignmentId !== null && assignmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof handoverCandidates>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type HandoverCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof handoverCandidates>>>
+export type HandoverCandidatesQueryError = ErrorOut
+
+
+/**
+ * Who the manager can put on this published shift: people who can come first, then those with problems.
+ * @summary Handover Candidates
+ */
+export function useHandoverCandidates<TData = Awaited<ReturnType<typeof handoverCandidates>>, TError = ErrorOut>(
+ assignmentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverCandidates>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof handoverCandidates>>,
+          TError,
+          Awaited<ReturnType<typeof handoverCandidates>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Who the manager can put on this published shift: people who can come first, then those with problems.
+ * @summary Handover Candidates
+ */
+export function useHandoverCandidates<TData = Awaited<ReturnType<typeof handoverCandidates>>, TError = ErrorOut>(
+ assignmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverCandidates>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof handoverCandidates>>,
+          TError,
+          Awaited<ReturnType<typeof handoverCandidates>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Who the manager can put on this published shift: people who can come first, then those with problems.
+ * @summary Handover Candidates
+ */
+export function useHandoverCandidates<TData = Awaited<ReturnType<typeof handoverCandidates>>, TError = ErrorOut>(
+ assignmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverCandidates>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Who the manager can put on this published shift: people who can come first, then those with problems.
+ * @summary Handover Candidates
+ */
+export function useHandoverCandidates<TData = Awaited<ReturnType<typeof handoverCandidates>>, TError = ErrorOut>(
+ assignmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverCandidates>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getHandoverCandidatesQueryOptions(assignmentId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type reassignShiftResponse200 = {
+  data: ManagerShiftOut
+  status: 200
+}
+
+export type reassignShiftResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type reassignShiftResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type reassignShiftResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type reassignShiftResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type reassignShiftResponseSuccess = (reassignShiftResponse200) & {
+  headers: Headers;
+};
+export type reassignShiftResponseError = (reassignShiftResponse402 | reassignShiftResponse403 | reassignShiftResponse404 | reassignShiftResponse409) & {
+  headers: Headers;
+};
+
+export type reassignShiftResponse = (reassignShiftResponseSuccess | reassignShiftResponseError)
+
+export const getReassignShiftUrl = (assignmentId: string,) => {
+
+
+
+
+  return `/api/assignments/${assignmentId}/reassign`
+}
+
+/**
+ * The manager puts another person on a published shift, without anyone's "Weź zmianę".
+ * @summary Reassign Shift
+ */
+export const reassignShift = async (assignmentId: string,
+    reassignIn: ReassignIn, options?: Parameters<typeof apiFetch>[1]): Promise<reassignShiftResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<reassignShiftResponse>(getReassignShiftUrl(assignmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reassignIn)
+  }
+);}
+
+
+
+
+
+export const getReassignShiftMutationKey = () => ['reassignShift'] as const;
+
+export const getReassignShiftMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reassignShift>>, TError,ReassignShiftMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reassignShift>>, TError,ReassignShiftMutationVariables, TContext> => {
+
+const mutationKey = getReassignShiftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reassignShift>>, ReassignShiftMutationVariables> = (props) => {
+          const {assignmentId,data} = props ?? {};
+
+          return  reassignShift(assignmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReassignShiftMutationResult = NonNullable<Awaited<ReturnType<typeof reassignShift>>>
+    export type ReassignShiftMutationBody = ReassignIn
+    export type ReassignShiftMutationError = ErrorOut
+    export type ReassignShiftMutationVariables = {assignmentId: string;data: ReassignIn}
+
+    /**
+ * The manager puts another person on a published shift, without anyone's "Weź zmianę".
+ * @summary Reassign Shift
+ */
+export const useReassignShift = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reassignShift>>, TError,ReassignShiftMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reassignShift>>,
+        TError,
+        ReassignShiftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReassignShiftMutationOptions(options), queryClient);
+    }
+    export type checkShiftSwapResponse200 = {
+  data: SwapCheckOut
+  status: 200
+}
+
+export type checkShiftSwapResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type checkShiftSwapResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type checkShiftSwapResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type checkShiftSwapResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type checkShiftSwapResponseSuccess = (checkShiftSwapResponse200) & {
+  headers: Headers;
+};
+export type checkShiftSwapResponseError = (checkShiftSwapResponse402 | checkShiftSwapResponse403 | checkShiftSwapResponse404 | checkShiftSwapResponse409) & {
+  headers: Headers;
+};
+
+export type checkShiftSwapResponse = (checkShiftSwapResponseSuccess | checkShiftSwapResponseError)
+
+export const getCheckShiftSwapUrl = () => {
+
+
+
+
+  return `/api/shift-swaps/check`
+}
+
+/**
+ * What the validator says about two people exchanging their published shifts (nothing is saved).
+ * @summary Check Shift Swap
+ */
+export const checkShiftSwap = async (swapIn: SwapIn, options?: Parameters<typeof apiFetch>[1]): Promise<checkShiftSwapResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<checkShiftSwapResponse>(getCheckShiftSwapUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(swapIn)
+  }
+);}
+
+
+
+
+
+export const getCheckShiftSwapMutationKey = () => ['checkShiftSwap'] as const;
+
+export const getCheckShiftSwapMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkShiftSwap>>, TError,CheckShiftSwapMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkShiftSwap>>, TError,CheckShiftSwapMutationVariables, TContext> => {
+
+const mutationKey = getCheckShiftSwapMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkShiftSwap>>, CheckShiftSwapMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  checkShiftSwap(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckShiftSwapMutationResult = NonNullable<Awaited<ReturnType<typeof checkShiftSwap>>>
+    export type CheckShiftSwapMutationBody = SwapIn
+    export type CheckShiftSwapMutationError = ErrorOut
+    export type CheckShiftSwapMutationVariables = {data: SwapIn}
+
+    /**
+ * What the validator says about two people exchanging their published shifts (nothing is saved).
+ * @summary Check Shift Swap
+ */
+export const useCheckShiftSwap = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkShiftSwap>>, TError,CheckShiftSwapMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof checkShiftSwap>>,
+        TError,
+        CheckShiftSwapMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCheckShiftSwapMutationOptions(options), queryClient);
+    }
+    export type swapShiftsResponse204 = {
+  data: void
+  status: 204
+}
+
+export type swapShiftsResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type swapShiftsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type swapShiftsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type swapShiftsResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type swapShiftsResponseSuccess = (swapShiftsResponse204) & {
+  headers: Headers;
+};
+export type swapShiftsResponseError = (swapShiftsResponse402 | swapShiftsResponse403 | swapShiftsResponse404 | swapShiftsResponse409) & {
+  headers: Headers;
+};
+
+export type swapShiftsResponse = (swapShiftsResponseSuccess | swapShiftsResponseError)
+
+export const getSwapShiftsUrl = () => {
+
+
+
+
+  return `/api/shift-swaps`
+}
+
+/**
+ * Two people exchange their published shifts; both are told in the app.
+ * @summary Swap Shifts
+ */
+export const swapShifts = async (swapIn: SwapIn, options?: Parameters<typeof apiFetch>[1]): Promise<swapShiftsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<swapShiftsResponse>(getSwapShiftsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(swapIn)
+  }
+);}
+
+
+
+
+
+export const getSwapShiftsMutationKey = () => ['swapShifts'] as const;
+
+export const getSwapShiftsMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof swapShifts>>, TError,SwapShiftsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof swapShifts>>, TError,SwapShiftsMutationVariables, TContext> => {
+
+const mutationKey = getSwapShiftsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof swapShifts>>, SwapShiftsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  swapShifts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SwapShiftsMutationResult = NonNullable<Awaited<ReturnType<typeof swapShifts>>>
+    export type SwapShiftsMutationBody = SwapIn
+    export type SwapShiftsMutationError = ErrorOut
+    export type SwapShiftsMutationVariables = {data: SwapIn}
+
+    /**
+ * Two people exchange their published shifts; both are told in the app.
+ * @summary Swap Shifts
+ */
+export const useSwapShifts = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof swapShifts>>, TError,SwapShiftsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof swapShifts>>,
+        TError,
+        SwapShiftsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSwapShiftsMutationOptions(options), queryClient);
+    }
+    export type offerShiftForEmployeeResponse201 = {
+  data: OfferMadeOut
+  status: 201
+}
+
+export type offerShiftForEmployeeResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type offerShiftForEmployeeResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type offerShiftForEmployeeResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type offerShiftForEmployeeResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type offerShiftForEmployeeResponseSuccess = (offerShiftForEmployeeResponse201) & {
+  headers: Headers;
+};
+export type offerShiftForEmployeeResponseError = (offerShiftForEmployeeResponse402 | offerShiftForEmployeeResponse403 | offerShiftForEmployeeResponse404 | offerShiftForEmployeeResponse409) & {
+  headers: Headers;
+};
+
+export type offerShiftForEmployeeResponse = (offerShiftForEmployeeResponseSuccess | offerShiftForEmployeeResponseError)
+
+export const getOfferShiftForEmployeeUrl = (assignmentId: string,) => {
+
+
+
+
+  return `/api/assignments/${assignmentId}/offer`
+}
+
+/**
+ * The manager looks for someone to take an employee's shift: the same offer as the employee's "Oddaj zmianę".
+ * @summary Offer Shift For Employee
+ */
+export const offerShiftForEmployee = async (assignmentId: string, options?: Parameters<typeof apiFetch>[1]): Promise<offerShiftForEmployeeResponse> => {
+
+  return apiFetch<offerShiftForEmployeeResponse>(getOfferShiftForEmployeeUrl(assignmentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getOfferShiftForEmployeeMutationKey = () => ['offerShiftForEmployee'] as const;
+
+export const getOfferShiftForEmployeeMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof offerShiftForEmployee>>, TError,OfferShiftForEmployeeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof offerShiftForEmployee>>, TError,OfferShiftForEmployeeMutationVariables, TContext> => {
+
+const mutationKey = getOfferShiftForEmployeeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof offerShiftForEmployee>>, OfferShiftForEmployeeMutationVariables> = (props) => {
+          const {assignmentId} = props ?? {};
+
+          return  offerShiftForEmployee(assignmentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type OfferShiftForEmployeeMutationResult = NonNullable<Awaited<ReturnType<typeof offerShiftForEmployee>>>
+
+    export type OfferShiftForEmployeeMutationError = ErrorOut
+    export type OfferShiftForEmployeeMutationVariables = {assignmentId: string}
+
+    /**
+ * The manager looks for someone to take an employee's shift: the same offer as the employee's "Oddaj zmianę".
+ * @summary Offer Shift For Employee
+ */
+export const useOfferShiftForEmployee = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof offerShiftForEmployee>>, TError,OfferShiftForEmployeeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof offerShiftForEmployee>>,
+        TError,
+        OfferShiftForEmployeeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getOfferShiftForEmployeeMutationOptions(options), queryClient);
+    }
+    export type closeOfferResponse200 = {
+  data: OfferMadeOut
+  status: 200
+}
+
+export type closeOfferResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type closeOfferResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type closeOfferResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type closeOfferResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type closeOfferResponseSuccess = (closeOfferResponse200) & {
+  headers: Headers;
+};
+export type closeOfferResponseError = (closeOfferResponse402 | closeOfferResponse403 | closeOfferResponse404 | closeOfferResponse409) & {
+  headers: Headers;
+};
+
+export type closeOfferResponse = (closeOfferResponseSuccess | closeOfferResponseError)
+
+export const getCloseOfferUrl = (offerId: string,) => {
+
+
+
+
+  return `/api/offers/${offerId}/close`
+}
+
+/**
+ * The manager ends an offer: the shift stays with the person who gave it away.
+ * @summary Close Offer
+ */
+export const closeOffer = async (offerId: string, options?: Parameters<typeof apiFetch>[1]): Promise<closeOfferResponse> => {
+
+  return apiFetch<closeOfferResponse>(getCloseOfferUrl(offerId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCloseOfferMutationKey = () => ['closeOffer'] as const;
+
+export const getCloseOfferMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeOffer>>, TError,CloseOfferMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeOffer>>, TError,CloseOfferMutationVariables, TContext> => {
+
+const mutationKey = getCloseOfferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeOffer>>, CloseOfferMutationVariables> = (props) => {
+          const {offerId} = props ?? {};
+
+          return  closeOffer(offerId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseOfferMutationResult = NonNullable<Awaited<ReturnType<typeof closeOffer>>>
+
+    export type CloseOfferMutationError = ErrorOut
+    export type CloseOfferMutationVariables = {offerId: string}
+
+    /**
+ * The manager ends an offer: the shift stays with the person who gave it away.
+ * @summary Close Offer
+ */
+export const useCloseOffer = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeOffer>>, TError,CloseOfferMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof closeOffer>>,
+        TError,
+        CloseOfferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCloseOfferMutationOptions(options), queryClient);
     }

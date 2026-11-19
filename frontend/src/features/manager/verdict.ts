@@ -11,7 +11,7 @@ function things(n: number): string {
  */
 export function verdict(data: VersionOut): string {
   const { scores } = data
-  if (scores.hard_violations > 0) {
+  if (data.hard_problems.length > 0) {
     return 'Ten grafik łamie zasady bez wyjątków. Popraw je, zanim go opublikujesz.'
   }
   if (scores.holes > 0) {

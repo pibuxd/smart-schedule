@@ -1,4 +1,4 @@
-"""One person in several locations (docs/plan.md, section 24): the generator may put them in each of their locations,
+"""One person in several locations (docs/plan.md, section 27): the generator may put them in each of their locations,
 location rules cover them, and the monthly maximum and target count hours worked in other locations."""
 
 from datetime import date, time, timedelta

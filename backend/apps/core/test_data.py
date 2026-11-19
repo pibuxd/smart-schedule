@@ -916,7 +916,7 @@ def _invitations_a(rynek, dworcowa, cafe, owner) -> None:
         (rynek, INVITED_ONLY_PHONES[2], "", "", Role.EMPLOYEE),
         (cafe, INVITED_ONLY_PHONES[2], "", "", Role.EMPLOYEE),  # the same number invited to two places
         (cafe, PHONES["hotel"]["h1"], "Kinga", "Lewicka", Role.EMPLOYEE),  # works in company B already
-        # Works at Rynek already: accepting adds Dworcowa as an extra location (docs/plan.md, section 24).
+        # Works at Rynek already: accepting adds Dworcowa as an extra location (docs/plan.md, section 27).
         (dworcowa, PHONES["rynek"]["anna"], "", "", Role.EMPLOYEE),
     ]
     for location, phone, first, last, role in pending:

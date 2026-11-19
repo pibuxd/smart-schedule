@@ -7,7 +7,8 @@ import { InlineError } from '../../components/ui/status'
 /**
  * The person has another shift at the same time (here, or in a draft or the published schedule of another location).
  * The manager decides: take the person off it (it becomes an empty shift) and put them here, or leave things as they
- * are. When that is not possible, says why (another manager's location, a shift that has started, a rule).
+ * are. When that is not possible, says why (another manager's location, a shift that has started, a rule). When the
+ * only problems left are ones the manager may overrule, the same answer also saves it anyway (`force`).
  */
 export function ClashQuestion({
   check,
@@ -17,13 +18,14 @@ export function ClashQuestion({
 }: {
   check: CheckOut
   busy: boolean
-  onMove: () => void
+  onMove: (force: boolean) => void
   onCancel: () => void
 }) {
   const titleId = useId()
   const several = check.clashes.length > 1
   const blocked = check.clashes.some((c) => !c.can_remove)
   const published = check.clashes.some((c) => c.kind === 'published')
+  const forcing = !check.ok_if_removed && !blocked && check.can_force_if_removed
   return (
     <div role="alertdialog" aria-labelledby={titleId} className="grid gap-2 rounded-md border-2 border-ink bg-surface p-3">
       <span id={titleId} className="font-semibold">
@@ -37,7 +39,7 @@ export function ClashQuestion({
           </li>
         ))}
       </ul>
-      {check.ok_if_removed ? (
+      {check.ok_if_removed || forcing ? (
         <>
           <p className="m-0">
             Na pewno chcesz to zmienić?{' '}
@@ -46,9 +48,17 @@ export function ClashQuestion({
               : 'Zdejmiemy tę osobę z tamtej zmiany, a ona zostanie pusta.'}
             {published ? ' Damy znać tej osobie i kierownikowi tamtego lokalu.' : ''}
           </p>
+          {forcing && (
+            <>
+              <p className="m-0">Ta zmiana złamie też zasady. Możesz ją zapisać mimo to:</p>
+              {check.problems_if_removed.map((problem) => (
+                <InlineError key={problem}>{problem}</InlineError>
+              ))}
+            </>
+          )}
           <div className="flex flex-wrap gap-2">
-            <Button size="normal" disabled={busy} onClick={onMove}>
-              Tak, przenieś tutaj
+            <Button size="normal" disabled={busy} onClick={() => onMove(forcing)}>
+              {forcing ? 'Tak, przenieś mimo to' : 'Tak, przenieś tutaj'}
             </Button>
             <Button variant="secondary" size="normal" disabled={busy} onClick={onCancel}>
               Zostaw jak jest

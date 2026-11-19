@@ -11,4 +11,5 @@ export interface CommandIn {
      * @maxLength 1000
      */
   text: string;
+  period_id?: string | null;
 }

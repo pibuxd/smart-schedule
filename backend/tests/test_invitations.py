@@ -82,7 +82,7 @@ def test_person_already_working_here_cannot_be_invited_again(api, a):
 
 
 def test_person_from_another_location_gets_this_one_as_an_extra_location(api, a):
-    """docs/plan.md, section 24: one number, several locations of the company; the main location stays."""
+    """docs/plan.md, section 27: one number, several locations of the company; the main location stays."""
     other = Location.objects.create(company=a["company"], name="Rynek")
     api.login(a["manager"])  # the owner manages every location
     assert invite(api, other, a["worker"].phone_e164).status_code == 201

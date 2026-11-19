@@ -24,4 +24,6 @@ export interface EmployeeOut {
   home_location_id?: string | null;
   home_location_name?: string;
   is_home?: boolean;
+  published_shifts?: number;
+  other_location_names?: string[];
 }

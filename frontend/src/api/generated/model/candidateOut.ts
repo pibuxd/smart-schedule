@@ -11,6 +11,7 @@ export interface CandidateOut {
   name: string;
   current: boolean;
   possible: boolean;
+  can_force: boolean;
   problems: string[];
   clash: boolean;
   notes: string[];

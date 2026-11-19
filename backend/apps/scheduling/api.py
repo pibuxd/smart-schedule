@@ -18,7 +18,7 @@ from apps.scheduling.editing import manual_changes
 from apps.scheduling.generation import ACTIVE, cancel_generation, request_generation
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.me import employee_context
-from apps.staffing.models import EmployeeProfile, works_in_q
+from apps.staffing.models import EmployeeProfile, Position, ShiftType, works_in_q
 from apps.staffing.shortage import ExperiencedShortOut, experienced_shortage
 from apps.tenancy.context import context_for
 from apps.tenancy.models import Location
@@ -254,6 +254,27 @@ def update_period(request, period_id: UUID, payload: PeriodUpdateIn):
     return _period_out(period)
 
 
+@router.delete(
+    "/periods/{uuid:period_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
+)
+def delete_period(request, period_id: UUID):
+    """Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+    published stays: employees saw it and hours are counted from it."""
+    ctx, period = context_for(request, SchedulePeriod, period_id)
+    ctx.require_manager_of(period.location)
+    ctx.require_writable()
+    with transaction.atomic():
+        period = ctx.qs(SchedulePeriod).select_for_update().get(pk=period.pk)
+        versions = ctx.qs(ScheduleVersion).filter(period=period)
+        if versions.filter(published_at__isnull=False).exists():
+            raise HttpError(409, "Ten grafik był już opublikowany, więc okresu nie można usunąć.")
+        if period.generation_runs.filter(status__in=ACTIVE).exists():
+            raise HttpError(409, "Grafik na ten okres właśnie się układa. Poczekaj albo przerwij układanie.")
+        versions.delete()
+        period.delete()
+    return Status(204, None)
+
+
 @router.post(
     "/periods/{period_id}/ask-availability",
     response={200: AskAvailabilityOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
@@ -283,6 +304,13 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
         "deadline": period.deadline.isoformat(),
     }
     with transaction.atomic():
+        from apps.assistant import agreements
+
+        agreements.lock_location(period.location)
+        period = ctx.qs(SchedulePeriod).select_for_update().get(pk=period.pk)
+        if period.status != SchedulePeriod.Status.COLLECTING:
+            raise HttpError(409, "Grafik na ten okres jest już ułożony.")
+        agreements.bind_pending(period)
         Notification.objects.for_company(ctx.company).bulk_create(
             Notification(company=ctx.company, user_id=user_id, kind="availability_requested", payload=note)
             for user_id in user_ids
@@ -484,6 +512,7 @@ class VersionShiftOut(Schema):
     start_time: str
     end_time: str
     hours: float
+    shift_type_id: UUID | None  # empty when the shift type was deleted later
     shift_type_name: str
     position_id: UUID
     position_name: str
@@ -497,6 +526,9 @@ class VersionShiftOut(Schema):
     # Hard problems on this shift (Polish sentences); a valid schedule has none.
     problems: list[str]
     past: bool
+    # The manager put this person here against a hard rule; `overridden` are the problems they accepted.
+    forced: bool
+    overridden: list[str]
 
 
 class VersionEmployeeOut(Schema):
@@ -562,11 +594,14 @@ class VersionOut(Schema):
     shifts: list[VersionShiftOut]
     employees: list[VersionEmployeeOut]
     positions: list[PositionNameOut]
-    hard_problems: list[str]
+    hard_problems: list[str]  # stop publishing
+    # Hard rules the manager broke by hand and may keep (e.g. fewer experienced people than the staffing asks).
+    accepted_problems: list[str]
     rules: list[RuleResultOut]
     unmet_requests: list[UnmetRequestOut]
     notes: list[str]
     history: list[VersionSummaryOut]
+    today: date  # days before it have passed: their shifts and places cannot be changed
     # A correction of a published schedule: people whose shifts would change on publishing.
     changed_people: list[str]
 
@@ -576,6 +611,8 @@ class CandidateOut(Schema):
     name: str
     current: bool
     possible: bool
+    # Not possible, but the manager may put the person in anyway ("Wpisz mimo to").
+    can_force: bool
     problems: list[str]
     # Blocked (also) because they have another shift at the same time: the manager may move them here.
     clash: bool
@@ -639,6 +676,8 @@ class ChangeIn(Schema):
 
 class ChangesIn(Schema):
     changes: list[ChangeIn] = Field(min_length=1, max_length=20)
+    # Save even when the change breaks a hard rule ("nie mogę", a "no exceptions" rule).
+    force: bool = False
     # The manager confirmed: take the person off their other shifts at the same time (they become holes).
     remove_clashes: bool = False
 
@@ -655,6 +694,8 @@ class ClashOut(Schema):
 
 class CheckOut(Schema):
     ok: bool
+    # Not ok, but the manager can save it anyway with `force`.
+    can_force: bool
     problems: list[str]
     warnings: list[str]
     before: ScoresOut
@@ -664,10 +705,31 @@ class CheckOut(Schema):
     clashes: list[ClashOut]
     problems_if_removed: list[str]
     ok_if_removed: bool
+    # Not fine once the person is taken off, but only because of problems the manager may overrule: one
+    # confirmation saves it with `remove_clashes` and `force`.
+    can_force_if_removed: bool
+
+
+class ShiftFitOut(Schema):
+    shift_id: UUID
+    # prefer: marked "chętnie"; can: marked "mogę"; cannot: "nie mogę" (the manager may overrule it) or another
+    # shift at that time (never possible).
+    fit: Literal["prefer", "can", "cannot"]
+    reason: str
+
+
+class DropCheckOut(CheckOut):
+    shift_id: str  # the shift the person would be dropped on
 
 
 class PinIn(Schema):
     pinned: bool
+
+
+class SeatIn(Schema):
+    date: date
+    shift_type_id: UUID
+    position_id: UUID
 
 
 def _scores_out(scores) -> ScoresOut:
@@ -695,6 +757,12 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
     for violation in loaded.report.hard:
         for slot_id in violation.slots:
             problems_by_slot[slot_id].append(violation.message)
+    overridden_by_slot: dict[str, list[str]] = defaultdict(list)
+    for violation in loaded.report.waived:
+        about = violation.slots or [s for s, e in problem.forced.items() if e == violation.employee]
+        for slot_id in about:
+            if slot_id in problem.forced:
+                overridden_by_slot[slot_id].append(violation.message)
     rows = {}
     shifts = (
         Shift.objects.for_company(loaded.version.company_id)
@@ -716,6 +784,7 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
             start_time=start,
             end_time=end,
             hours=_hours(shift),
+            shift_type_id=shift.shift_type_id,
             shift_type_name=shift.shift_type.name if shift.shift_type else "",
             position_id=shift.position_id,
             position_name=shift.position.name,
@@ -727,6 +796,8 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
             wish=wish,
             problems=problems_by_slot.get(shift.slot_key, []),
             past=shift.date < today,
+            forced=assignment.forced and employee_id is not None,
+            overridden=overridden_by_slot.get(shift.slot_key, []),
         )
     return rows
 
@@ -807,7 +878,7 @@ def _history(version: ScheduleVersion) -> list[VersionSummaryOut]:
 
 def _version_out(ctx, loaded, today: date) -> VersionOut:
     from apps.billing.services import subscription_state
-    from apps.scheduling.editing import changed_people, is_editable
+    from apps.scheduling.editing import accepted, blocking, changed_people, is_editable
 
     version, problem = loaded.version, loaded.problem
     period = version.period
@@ -856,11 +927,13 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
             (PositionNameOut(id=pk, name=name) for pk, name in problem.position_names.items() if pk in position_ids),
             key=lambda p: p.name,
         ),
-        hard_problems=[v.message for v in loaded.report.hard],
+        hard_problems=[v.message for v in blocking(loaded.report.hard)],
+        accepted_problems=[v.message for v in accepted(loaded.report.hard)],
         rules=_rule_results(loaded),
         unmet_requests=_unmet_requests(loaded),
         notes=notes,
         history=_history(version),
+        today=today,
         changed_people=changed_people(loaded),
     )
 
@@ -899,6 +972,7 @@ def explain_shift(request, version_id: UUID, shift_id: UUID):
                 name=c.name,
                 current=c.current,
                 possible=c.possible,
+                can_force=c.can_force,
                 problems=list(c.blocked),
                 clash=c.clash,
                 notes=list(c.notes),
@@ -928,6 +1002,7 @@ def _changes(ctx, payload: ChangesIn) -> dict[str, str | None]:
 def _check_out(result) -> CheckOut:
     return CheckOut(
         ok=result.ok,
+        can_force=result.can_force,
         problems=result.problems,
         warnings=result.warnings,
         before=_scores_out(result.before),
@@ -946,6 +1021,7 @@ def _check_out(result) -> CheckOut:
         ],
         problems_if_removed=result.problems_if_removed,
         ok_if_removed=result.ok_if_removed,
+        can_force_if_removed=result.can_force_if_removed,
     )
 
 
@@ -967,21 +1043,84 @@ def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
     return _check_out(result)
 
 
+@router.get(
+    "/versions/{version_id}/shifts/{shift_id}/drops",
+    response={200: list[DropCheckOut], 403: ErrorOut, 404: ErrorOut},
+)
+def shift_drop_checks(request, version_id: UUID, shift_id: UUID):
+    """What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+    Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it."""
+    from apps.scheduling.editing import check_drops, load_version
+
+    ctx, version = _version_context(request, version_id)
+    shift = ctx.get(Shift, pk=shift_id, version=version)
+    results = check_drops(load_version(version), str(shift.pk), manages=_managed_ids(ctx))
+    return [DropCheckOut(shift_id=target, **_check_out(result).dict()) for target, result in results.items()]
+
+
 @router.patch(
     "/versions/{version_id}/assignments",
     response={200: CheckOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def change_assignments(request, version_id: UUID, payload: ChangesIn):
-    """Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
-    With `remove_clashes` the person is first taken off their other shifts at the same time."""
+    """Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks
+    a hard rule is refused with the reasons, unless `force` is set: the manager has the last word. With
+    `remove_clashes` the person is first taken off their other shifts at the same time."""
     from apps.scheduling.editing import apply_changes
 
     ctx, version = _version_context(request, version_id)
     ctx.require_writable()
     result = apply_changes(
-        version, _changes(ctx, payload), ctx.user, remove_clashes=payload.remove_clashes, manages=_managed_ids(ctx)
+        version,
+        _changes(ctx, payload),
+        ctx.user,
+        force=payload.force,
+        remove_clashes=payload.remove_clashes,
+        manages=_managed_ids(ctx),
     )
     return _check_out(result)
+
+
+@router.get(
+    "/versions/{version_id}/employees/{employee_id}/fit",
+    response={200: list[ShiftFitOut], 403: ErrorOut, 404: ErrorOut},
+)
+def employee_fit(request, version_id: UUID, employee_id: UUID, moving_shift_id: UUID | None = None):
+    """Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+    shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+    the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+    dragged away from, so it does not count as "another shift at that time"."""
+    from apps.scheduling.editing import load_version
+    from engine.problem import AvailabilityState
+
+    ctx, version = _version_context(request, version_id)
+    profile = ctx.get(EmployeeProfile, pk=employee_id)
+    loaded = load_version(version)
+    problem = loaded.problem
+    employee = problem.employee_by_id.get(str(profile.pk))
+    if employee is None:
+        return []
+    ids = dict(ctx.qs(Shift).filter(version=version).values_list("slot_key", "pk"))
+    busy = [
+        (s.start_utc, s.end_utc)
+        for s in problem.slots
+        if loaded.schedule.get(s.id) == employee.id and ids[s.id] != moving_shift_id
+    ] + [(e.start_utc, e.end_utc) for e in problem.external_shifts if e.employee == employee.id]
+    result = []
+    for slot in problem.slots:
+        if slot.position not in employee.positions or loaded.schedule.get(slot.id) == employee.id:
+            continue
+        wish = problem.availability_for(employee.id, slot)
+        if wish == AvailabilityState.CANNOT:
+            fit, reason = "cannot", "ma zaznaczone „nie mogę”"
+        elif any(start < slot.end_utc and slot.start_utc < end for start, end in busy):
+            fit, reason = "cannot", "ma inną zmianę w tym czasie"
+        elif wish == AvailabilityState.PREFER:
+            fit, reason = "prefer", "chętnie"
+        else:
+            fit, reason = "can", "może"
+        result.append(ShiftFitOut(shift_id=ids[slot.id], fit=fit, reason=reason))
+    return result
 
 
 @router.post(
@@ -997,6 +1136,39 @@ def pin_shift(request, version_id: UUID, shift_id: UUID, payload: PinIn):
     shift = ctx.get(Shift, pk=shift_id, version=version)
     set_pinned(version, str(shift.pk), payload.pinned)
     return _shift_rows(load_version(version), timezone.localdate())[shift.slot_key]
+
+
+@router.post(
+    "/versions/{version_id}/seats",
+    response={201: VersionShiftOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def add_schedule_seat(request, version_id: UUID, payload: SeatIn):
+    """One more person needed on a shift that day: an empty place in the draft, kept when arranging again
+    (the date's staffing in the location's settings gets the same number)."""
+    from apps.scheduling.editing import add_seat, load_version
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    location = version.period.location
+    shift_type = ctx.get(ShiftType, pk=payload.shift_type_id, location=location)
+    position = ctx.get(Position, pk=payload.position_id, location=location)
+    shift = add_seat(version, payload.date, shift_type, position)
+    return Status(201, _shift_rows(load_version(version), timezone.localdate())[shift.slot_key])
+
+
+@router.delete(
+    "/versions/{version_id}/shifts/{shift_id}",
+    response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def remove_schedule_seat(request, version_id: UUID, shift_id: UUID):
+    """One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the
+    date's staffing gets the same number."""
+    from apps.scheduling.editing import remove_seat
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    remove_seat(version, str(ctx.get(Shift, pk=shift_id, version=version).pk))
+    return Status(204, None)
 
 
 @router.post(

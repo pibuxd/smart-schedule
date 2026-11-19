@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("staffing", "0006_location_closure"),
+        ("staffing", "0007_removed_at"),
         ("tenancy", "0004_handover_without_approval"),
     ]
 

@@ -8,4 +8,5 @@
 export interface InstructionOrderIn {
   /** @maxItems 200 */
   ids: string[];
+  period_id?: string | null;
 }

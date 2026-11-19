@@ -1,5 +1,5 @@
 # ruff: noqa: F811  (the `shop` fixture is imported from test_generation)
-"""One phone number in several locations of a company (docs/plan.md, section 24): a main location plus extra ones,
+"""One phone number in several locations of a company (docs/plan.md, section 27): a main location plus extra ones,
 shared availability, and shifts in one location counted when arranging and editing another."""
 
 from datetime import timedelta
@@ -12,7 +12,7 @@ from apps.scheduling.editing import publish
 from apps.scheduling.generation import request_generation, run_generation
 from apps.scheduling.models import Assignment, SchedulePeriod
 from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule
-from apps.tenancy.models import Location
+from apps.tenancy.models import Location, Membership
 from tests.test_generation import FAST, MON, _ctx, add_employee, shop  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.django_db
@@ -251,3 +251,55 @@ def test_other_company_cannot_see_or_change_the_person(api, two, make_company):
     assert api.get(f"/api/locations/{two['market'].id}/employees").status_code == 404
     response = api.patch(f"/api/employees/{two['kasia'].pk}", {"location_id": str(other["location"].id)})
     assert response.status_code == 404
+
+
+def test_removing_from_an_extra_location_keeps_the_main_one(api, two):
+    api.login(two["manager"])
+    kasia = two["kasia"]
+    rows = {r["id"]: r for r in api.get(f"/api/locations/{two['location'].id}/employees").json()}
+    assert rows[str(kasia.pk)]["other_location_names"] == ["Rynek"]
+
+    response = api.client.delete(f"/api/employees/{kasia.pk}?location_id={two['market'].id}")
+
+    assert response.status_code == 204
+    kasia.refresh_from_db()
+    assert kasia.removed_at is None and kasia.is_active and kasia.home_location == two["location"]
+    assert not kasia.extra_locations.exists()
+    assert set(kasia.positions.all()) == {two["position"]}
+    assert api.get(f"/api/locations/{two['market'].id}/employees").json() == []
+    rows = {r["id"]: r for r in api.get(f"/api/locations/{two['location'].id}/employees").json()}
+    assert rows[str(kasia.pk)]["other_location_names"] == []
+
+
+def test_removing_from_the_main_location_makes_an_extra_one_main(api, two):
+    api.login(two["manager"])
+    kasia = two["kasia"]
+
+    response = api.client.delete(f"/api/employees/{kasia.pk}?location_id={two['location'].id}")
+
+    assert response.status_code == 204
+    kasia.refresh_from_db()
+    assert kasia.removed_at is None and kasia.is_active and kasia.home_location == two["market"]
+    assert not kasia.extra_locations.exists()
+    assert set(kasia.positions.all()) == {two["market_seller"]}
+    assert Membership.objects.filter(pk=kasia.membership_id).exists()
+    assert str(kasia.pk) not in {r["id"] for r in api.get(f"/api/locations/{two['location'].id}/employees").json()}
+
+
+def test_drag_preview_names_a_shift_in_another_location_at_the_same_time(api, two):
+    arrange(two, two["market_period"])
+    bakery = arrange(two, two["period"])
+    monday, tuesday = (
+        Assignment.objects.filter(shift__version=bakery, shift__date=day).order_by("shift__slot_key").first()
+        for day in (MON, MON + timedelta(days=1))
+    )
+    Assignment.objects.filter(pk=monday.pk).update(employee=two["kasia"])
+    api.login(two["manager"])
+
+    response = api.get(f"/api/versions/{bakery.pk}/shifts/{monday.shift_id}/drops")
+
+    assert response.status_code == 200, response.json()
+    drops = {d["shift_id"]: d for d in response.json()}
+    (clash,) = drops[str(tuesday.shift_id)]["clashes"]
+    assert clash["kind"] == "draft" and clash["location_name"] == "Rynek" and clash["can_remove"]
+    assert drops[str(tuesday.shift_id)]["ok_if_removed"]
