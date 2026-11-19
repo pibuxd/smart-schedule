@@ -29,8 +29,8 @@ import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
-import { AssistantPanel } from './Assistant'
 import { useManager } from './ManagerContext'
+import { AssistantRulesTable } from './AssistantRulesTable'
 
 type Scope = 'location' | 'group'
 type Item = RuleItemOut
@@ -68,10 +68,14 @@ export function RulesScreen({ scope, scopeId }: { scope: Scope; scopeId: string 
     )
   }
   const data = rules.data.data as RulesOut
-  // The assistant's panel stays mounted while the list below is rebuilt after its plan is accepted.
   return (
     <div className="grid gap-8">
-      {scope === 'location' && <AssistantPanel locationId={scopeId} />}
+      {scope === 'location' && (
+        <>
+          <AssistantRulesTable locationId={scopeId} compact />
+          <h2 className="m-0 text-lg font-semibold">Domyślne zasady lokalu</h2>
+        </>
+      )}
       <RulesEditor key={JSON.stringify(data.items)} data={data} scope={scope} scopeId={scopeId} />
       {scope === 'location' && <HandoverRule locationId={scopeId} />}
     </div>

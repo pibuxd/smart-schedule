@@ -1268,7 +1268,7 @@ export const getUpdateMyRequestUrl = (requestId: string,) => {
 
 /**
  * Correct how my request was understood: write it again, or say "that is not what I meant" (then the
- * manager reads it as written).
+ * manager reads it as written). The same hands a request the assistant refused over to the manager.
  * @summary Update My Request
  */
 export const updateMyRequest = async (requestId: string,
@@ -1337,7 +1337,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     /**
  * Correct how my request was understood: write it again, or say "that is not what I meant" (then the
- * manager reads it as written).
+ * manager reads it as written). The same hands a request the assistant refused over to the manager.
  * @summary Update My Request
  */
 export const useUpdateMyRequest = <TError = ErrorOut,

@@ -46,7 +46,7 @@ describe('RulesScreen', () => {
     }
     const calls = mockApi((_method, path) => {
       if (path.endsWith('/preview')) return [200, preview]
-      if (path.endsWith('/instructions')) return [200, { assistant_enabled: true, items: [] }]
+      if (path.endsWith('/instructions')) return [200, { assistant_enabled: true, items: [], rules: [], closed: false, period_requested: false, period_label: '' }]
       return [200, rules]
     })
     renderScreen(

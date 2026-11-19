@@ -283,6 +283,13 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
         "deadline": period.deadline.isoformat(),
     }
     with transaction.atomic():
+        from apps.assistant import agreements
+
+        agreements.lock_location(period.location)
+        period = ctx.qs(SchedulePeriod).select_for_update().get(pk=period.pk)
+        if period.status != SchedulePeriod.Status.COLLECTING:
+            raise HttpError(409, "Grafik na ten okres jest już ułożony.")
+        agreements.bind_pending(period)
         Notification.objects.for_company(ctx.company).bulk_create(
             Notification(company=ctx.company, user_id=user_id, kind="availability_requested", payload=note)
             for user_id in user_ids

@@ -67,6 +67,8 @@
 
   --shadow-*: initial;
   --shadow-sheet: 0 -12px 32px -16px rgb(23 33 47 / 0.35);
+  --shadow-chat: 0 8px 30px -18px rgb(23 33 47 / 0.18);
+  --shadow-drawer: -16px 0 40px -20px rgb(23 33 47 / 0.4);
 }
 
 :root {
@@ -119,6 +121,15 @@
 }
 
 @layer components {
+  /* The panel that slides in from the right edge (assistant chat). */
+  .drawer-panel {
+    animation: drawer-in 200ms ease-out;
+  }
+  @keyframes drawer-in {
+    from {
+      transform: translateX(100%);
+    }
+  }
   /* Availability states: colour + pattern (the icon is in the markup). */
   .avail-cannot {
     color: var(--color-cannot);
