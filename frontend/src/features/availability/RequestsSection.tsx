@@ -685,7 +685,7 @@ function RequestsChat({
               }}
               footer={
                 assistantReads
-                  ? "Czyta to asystent AI (Claude) i kierownik."
+                  ? "Czyta to asystent AI (Claude), kierownik i jego asystent."
                   : "Wiadomość dla kierownika."
               }
             />
