@@ -337,7 +337,7 @@ export function AssistantPanel({
         <p className="mt-0 mb-2 text-sm font-semibold">
           {data?.period_requested
             ? `Zasady na ${data.period_label}`
-            : "Ustalenia czekają na nową prośbę o dyspozycje"}
+            : "Jeszcze bez okresu. Ustalenia zadziałają, gdy klikniesz „Poproś o dyspozycje”."}
         </p>
         <ChatComposer
           text={text}

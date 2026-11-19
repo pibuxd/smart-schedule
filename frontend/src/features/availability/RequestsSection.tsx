@@ -41,9 +41,29 @@ function RequestStatus({
 }) {
   if (request.status === "rejected")
     return (
-      <p className="m-0 text-sm text-ink-muted">
-        {request.summary ?? "Ta prośba została odrzucona."}
-      </p>
+      <div className="grid gap-2">
+        <p className="m-0 text-sm text-ink-muted">
+          {request.summary ?? "Ta prośba została odrzucona."}
+        </p>
+        {editable && (
+          <>
+            <p className="m-0 text-sm">
+              Asystent się pomylił? Przekaż tę wiadomość kierownikowi. Oceni ją
+              sam. Generator jej nie użyje.
+            </p>
+            <div>
+              <Button
+                variant="quiet"
+                size="normal"
+                disabled={busy}
+                onClick={onWrong}
+              >
+                Przekaż kierownikowi
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     );
   if (request.status === "superseded") {
     return (

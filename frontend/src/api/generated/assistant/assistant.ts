@@ -26,10 +26,13 @@ import type {
 import type {
   AssistantCommandOut,
   CommandIn,
+  CopyAgreementsIn,
   ErrorOut,
   InstructionOrderIn,
   InstructionsOut,
   LocationInstructionsParams,
+  PreviousAgreementsOut,
+  PreviousAgreementsParams,
   RevertAgreedRuleParams
 } from '../model';
 
@@ -952,6 +955,282 @@ export const useRevertAgreedRule = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getRevertAgreedRuleMutationOptions(options), queryClient);
+    }
+    export type previousAgreementsResponse200 = {
+  data: PreviousAgreementsOut
+  status: 200
+}
+
+export type previousAgreementsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type previousAgreementsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type previousAgreementsResponseSuccess = (previousAgreementsResponse200) & {
+  headers: Headers;
+};
+export type previousAgreementsResponseError = (previousAgreementsResponse403 | previousAgreementsResponse404) & {
+  headers: Headers;
+};
+
+export type previousAgreementsResponse = (previousAgreementsResponseSuccess | previousAgreementsResponseError)
+
+export const getPreviousAgreementsUrl = (locationId: string,
+    params?: PreviousAgreementsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locations/${locationId}/agreements/previous?${stringifiedParams}` : `/api/locations/${locationId}/agreements/previous`
+}
+
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export const previousAgreements = async (locationId: string,
+    params?: PreviousAgreementsParams, options?: Parameters<typeof apiFetch>[1]): Promise<previousAgreementsResponse> => {
+
+  return apiFetch<previousAgreementsResponse>(getPreviousAgreementsUrl(locationId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getPreviousAgreementsQueryKey = (locationId: string,
+    params?: PreviousAgreementsParams,) => {
+    return [
+    `/api/locations/${locationId}/agreements/previous`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getPreviousAgreementsQueryOptions = <TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPreviousAgreementsQueryKey(locationId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof previousAgreements>>> = ({ signal }) => previousAgreements(locationId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: locationId !== null && locationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PreviousAgreementsQueryResult = NonNullable<Awaited<ReturnType<typeof previousAgreements>>>
+export type PreviousAgreementsQueryError = ErrorOut
+
+
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params: undefined |  PreviousAgreementsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof previousAgreements>>,
+          TError,
+          Awaited<ReturnType<typeof previousAgreements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof previousAgreements>>,
+          TError,
+          Awaited<ReturnType<typeof previousAgreements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What the manager may copy from the previous period into this one. Nothing is copied by itself.
+ * @summary Previous Agreements
+ */
+export function usePreviousAgreements<TData = Awaited<ReturnType<typeof previousAgreements>>, TError = ErrorOut>(
+ locationId: string,
+    params?: PreviousAgreementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof previousAgreements>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getPreviousAgreementsQueryOptions(locationId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type copyPreviousAgreementsResponse200 = {
+  data: InstructionsOut
+  status: 200
+}
+
+export type copyPreviousAgreementsResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type copyPreviousAgreementsResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type copyPreviousAgreementsResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type copyPreviousAgreementsResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type copyPreviousAgreementsResponseSuccess = (copyPreviousAgreementsResponse200) & {
+  headers: Headers;
+};
+export type copyPreviousAgreementsResponseError = (copyPreviousAgreementsResponse402 | copyPreviousAgreementsResponse403 | copyPreviousAgreementsResponse404 | copyPreviousAgreementsResponse409) & {
+  headers: Headers;
+};
+
+export type copyPreviousAgreementsResponse = (copyPreviousAgreementsResponseSuccess | copyPreviousAgreementsResponseError)
+
+export const getCopyPreviousAgreementsUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/agreements/copy`
+}
+
+/**
+ * Copy the ticked agreements of the previous period into this one (or into the waiting list).
+ * @summary Copy Previous Agreements
+ */
+export const copyPreviousAgreements = async (locationId: string,
+    copyAgreementsIn: CopyAgreementsIn, options?: Parameters<typeof apiFetch>[1]): Promise<copyPreviousAgreementsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<copyPreviousAgreementsResponse>(getCopyPreviousAgreementsUrl(locationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(copyAgreementsIn)
+  }
+);}
+
+
+
+
+
+export const getCopyPreviousAgreementsMutationKey = () => ['copyPreviousAgreements'] as const;
+
+export const getCopyPreviousAgreementsMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyPreviousAgreements>>, TError,CopyPreviousAgreementsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof copyPreviousAgreements>>, TError,CopyPreviousAgreementsMutationVariables, TContext> => {
+
+const mutationKey = getCopyPreviousAgreementsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof copyPreviousAgreements>>, CopyPreviousAgreementsMutationVariables> = (props) => {
+          const {locationId,data} = props ?? {};
+
+          return  copyPreviousAgreements(locationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CopyPreviousAgreementsMutationResult = NonNullable<Awaited<ReturnType<typeof copyPreviousAgreements>>>
+    export type CopyPreviousAgreementsMutationBody = CopyAgreementsIn
+    export type CopyPreviousAgreementsMutationError = ErrorOut
+    export type CopyPreviousAgreementsMutationVariables = {locationId: string;data: CopyAgreementsIn}
+
+    /**
+ * Copy the ticked agreements of the previous period into this one (or into the waiting list).
+ * @summary Copy Previous Agreements
+ */
+export const useCopyPreviousAgreements = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyPreviousAgreements>>, TError,CopyPreviousAgreementsMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof copyPreviousAgreements>>,
+        TError,
+        CopyPreviousAgreementsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCopyPreviousAgreementsMutationOptions(options), queryClient);
     }
     export type orderLocationInstructionsResponse200 = {
   data: InstructionsOut

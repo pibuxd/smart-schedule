@@ -76,6 +76,20 @@ class InstructionsOut(Schema):
     rules: list[AgreedRuleOut]
 
 
+class PreviousAgreementsOut(Schema):
+    # The newest earlier period with agreements; None when there is nothing to copy from.
+    period_label: str | None
+    rules: list[AgreedRuleOut]
+    items: list[InstructionOut]
+
+
+class CopyAgreementsIn(Schema):
+    # Only what the manager ticked is copied; an empty choice copies nothing.
+    period_id: UUID | None = None
+    rule_codes: list[str] = Field(default_factory=list, max_length=100)
+    instruction_ids: list[UUID] = Field(default_factory=list, max_length=200)
+
+
 class InstructionOrderIn(Schema):
     # Every instruction of the location, most important first.
     ids: list[UUID] = Field(max_length=200)
@@ -122,13 +136,10 @@ def _managed_command(request, command_id: UUID) -> tuple[TenantContext, Assistan
     return ctx, command
 
 
-def _instructions_out(ctx: TenantContext, location: Location, period_id=None) -> InstructionsOut:
+def _agreed_rules(ctx: TenantContext, location: Location, rule_set) -> list[AgreedRuleOut]:
     from apps.rules.api import _rules_out
     from apps.rules.services import NUMBER_PARAMS
-    from apps.scheduling.models import SchedulePeriod
 
-    rule_set = agreements.current(location, period_id)
-    period = agreements.target_period(location, period_id)
     rule_data = _rules_out(agreements.scope(ctx, location, rule_set))
     positions = {str(p.id): p.name for p in rule_data.positions}
     shifts = {str(s.id): s.name for s in rule_data.shift_types}
@@ -143,9 +154,47 @@ def _instructions_out(ctx: TenantContext, location: Location, period_id=None) ->
             if value is not None
         )
 
+    return [
+        AgreedRuleOut(
+            code=i.code,
+            label=i.label,
+            enabled=i.enabled,
+            is_hard=i.is_hard,
+            details=details(i),
+            changed=i.code in changed,
+        )
+        for i in rule_data.items
+    ]
+
+
+def _names(ctx: TenantContext, location: Location) -> tuple[dict[str, str], dict[str, str]]:
     people = ctx.qs(EmployeeProfile).filter(home_location=location).select_related("membership__user")
     names = {str(p.pk): p.membership.user.full_name or "Bez imienia" for p in people}
-    shift_names = {str(s.pk): s.name for s in ctx.qs(ShiftType).filter(location=location)}
+    return names, {str(s.pk): s.name for s in ctx.qs(ShiftType).filter(location=location)}
+
+
+def _previous_out(ctx: TenantContext, location: Location, period_id=None) -> PreviousAgreementsOut:
+    source = agreements.previous(location, period_id)
+    rules, rows = agreements.copyable(location, source, agreements.current(location, period_id))
+    codes = {i["code"] for i in rules}
+    names, shift_names = _names(ctx, location)
+    return PreviousAgreementsOut(
+        period_label=agreements.label(source) if source and (rules or rows) else None,
+        rules=[i for i in _agreed_rules(ctx, location, source) if i.code in codes] if codes else [],
+        items=[
+            InstructionOut(id=row.pk, text=services.instruction_text(row, names, shift_names), active=True)
+            for row in rows
+        ],
+    )
+
+
+def _instructions_out(ctx: TenantContext, location: Location, period_id=None) -> InstructionsOut:
+    from apps.scheduling.models import SchedulePeriod
+
+    rule_set = agreements.current(location, period_id)
+    period = agreements.target_period(location, period_id)
+    rules = [i for i in _agreed_rules(ctx, location, rule_set) if i.enabled or i.changed]
+    names, shift_names = _names(ctx, location)
     today = timezone.localdate()
     rows = ctx.qs(ManagerInstruction).filter(location=location, rule_set=rule_set).order_by("position", "created_at")
     return InstructionsOut(
@@ -162,18 +211,7 @@ def _instructions_out(ctx: TenantContext, location: Location, period_id=None) ->
         closed=bool(
             (rule_set and rule_set.consumed_at) or (period and period.status == SchedulePeriod.Status.PUBLISHED)
         ),
-        rules=[
-            AgreedRuleOut(
-                code=i.code,
-                label=i.label,
-                enabled=i.enabled,
-                is_hard=i.is_hard,
-                details=details(i),
-                changed=i.code in changed,
-            )
-            for i in rule_data.items
-            if i.enabled or i.code in changed
-        ],
+        rules=rules,
         items=[
             InstructionOut(
                 id=row.pk,
@@ -278,6 +316,33 @@ def revert_agreed_rule(request, location_id: UUID, code: str, period_id: UUID | 
         agreements.require_open(rule_set)
         agreements.revert_rule(rule_set, code)
     return _instructions_out(ctx, location, period_id)
+
+
+@router.get(
+    "/locations/{location_id}/agreements/previous",
+    response={200: PreviousAgreementsOut, 403: ErrorOut, 404: ErrorOut},
+)
+def previous_agreements(request, location_id: UUID, period_id: UUID | None = None):
+    """What the manager may copy from the previous period into this one. Nothing is copied by itself."""
+    ctx, location = _managed_location(request, location_id)
+    return _previous_out(ctx, location, period_id)
+
+
+@router.post(
+    "/locations/{location_id}/agreements/copy",
+    response={200: InstructionsOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def copy_previous_agreements(request, location_id: UUID, payload: CopyAgreementsIn):
+    """Copy the ticked agreements of the previous period into this one (or into the waiting list)."""
+    ctx, location = _managed_location(request, location_id)
+    ctx.require_writable()
+    if payload.rule_codes or payload.instruction_ids:
+        with transaction.atomic():
+            agreements.lock_location(location)
+            agreements.copy_from_previous(
+                location, payload.period_id, payload.rule_codes, payload.instruction_ids, ctx.user
+            )
+    return _instructions_out(ctx, location, payload.period_id)
 
 
 @router.put(

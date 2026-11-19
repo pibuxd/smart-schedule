@@ -7,11 +7,12 @@ import pytest
 from django.utils import timezone
 
 from apps.assistant import context, llm, services
-from apps.assistant.management.commands.assistant_misses import _command_reason
+from apps.assistant.management.commands.assistant_misses import _command_reason, misses
 from apps.assistant.models import AssistantCommand, AssistantRuleSet, ManagerInstruction
 from apps.availability.models import AvailabilityDay, AvailabilitySubmission, TextRequest
 from apps.scheduling.models import Assignment, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import build_problem
+from engine.problem import RequestType
 from tests.test_assistant import instruction, plan, reading, rule_change, run, send_request
 from tests.test_assistant import shop as shop
 from tests.test_assistant import with_key as with_key
@@ -130,7 +131,9 @@ def test_rule_explanation_is_not_reported_as_a_miss(api, shop, with_key, monkeyp
     assert _command_reason(AssistantCommand.objects.get(pk=body["id"])) == ""
 
 
-def test_information_is_rejected_without_forwarding_or_a_solver_request(api, shop, with_key, monkeypatch):
+def test_rejected_message_reaches_the_manager_only_when_forwarded_and_never_the_solver(
+    api, shop, with_key, monkeypatch
+):
     row = submit_and_read(
         api,
         shop,
@@ -149,9 +152,16 @@ def test_information_is_rejected_without_forwarding_or_a_solver_request(api, sho
     api.login(shop["manager"])
     assert api.get(f"/api/periods/{shop['period'].pk}/requests").json() == []
     api.login(shop["worker"])
-    assert api.patch(f"/api/me/requests/{row.pk}", {"understood": False}).json()["status"] == "rejected"
+    forwarded = api.patch(f"/api/me/requests/{row.pk}", {"understood": False}).json()
+    assert forwarded["status"] == "needs_manager" and forwarded["summary"] is None
     api.login(shop["manager"])
-    assert api.get(f"/api/periods/{shop['period'].pk}/requests").json() == []
+    (seen,) = api.get(f"/api/periods/{shop['period'].pk}/requests").json()
+    assert seen["text"] == "Kiedy pracuję?" and seen["unread_reason"] == "rejected"
+    assert seen["summary"] is None and seen["employee_corrected"] and not seen["can_reread"]
+    # Forwarding is only a note for the manager: the generator still scores nothing from it.
+    (unscored,) = build_problem([shop["period"]]).problem.requests
+    assert unscored.type == RequestType.OTHER
+    assert ("request", "rejected") in {(r[1], r[5]) for r in misses(timezone.now() - timedelta(days=1))}
 
 
 def test_correction_replaces_old_days_and_preserves_audit_and_manager_priority(api, shop, with_key, monkeypatch):

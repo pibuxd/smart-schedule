@@ -299,3 +299,80 @@ def test_published_agreements_cannot_be_reverted(api, shop, with_key, monkeypatc
     assert api.client.delete(url).status_code == 409
     saved.rule_set.refresh_from_db()
     assert saved.rule_set.changed_codes == ["max_shifts_per_week"]
+
+
+def agreed_then_published(api, shop, monkeypatch):
+    """A published first period with one rule and two instructions, and a requested next period."""
+    accept(
+        api,
+        shop,
+        monkeypatch,
+        plan(
+            rule_changes=[rule_change("max_shifts_per_week", enabled=True, number=4)],
+            new_instructions=[instruction(), instruction(person="Kasia", other_person="Anna")],
+        ),
+    )
+    draft = ScheduleVersion.objects.create(period=shop["period"], number=1)
+    assert api.post(f"/api/versions/{draft.pk}/publish").status_code == 200
+    later = next_period(shop)
+    assert api.post(f"/api/periods/{later.pk}/ask-availability").status_code == 200
+    return later
+
+
+def test_a_new_period_starts_empty_and_takes_only_the_ticked_agreements(api, shop, with_key, monkeypatch):
+    later = agreed_then_published(api, shop, monkeypatch)
+    url = f"/api/locations/{shop['location'].pk}/agreements"
+    offer = api.get(f"{url}/previous?period_id={later.pk}").json()
+    assert offer["period_label"].startswith(f"{shop['period'].start:%d.%m.%Y}")
+    assert [r["code"] for r in offer["rules"]] == ["max_shifts_per_week"] and len(offer["items"]) == 2
+    # Nothing moves by itself, and an empty choice copies nothing.
+    assert not build_problem([later]).problem.requests and not build_problem([later]).problem.rules
+    assert api.post(f"{url}/copy", {"period_id": str(later.pk)}).json()["items"] == []
+    assert not build_problem([later]).problem.requests
+    first = offer["items"][0]
+    copied = api.post(f"{url}/copy", {"period_id": str(later.pk), "instruction_ids": [first["id"]]})
+    assert copied.status_code == 200, copied.json()
+    assert [i["text"] for i in copied.json()["items"]] == [first["text"]]
+    built = build_problem([later]).problem
+    assert len(built.requests) == 1 and not built.rules
+    # The copy is a new row: the published period keeps its own two instructions.
+    assert len(build_problem([shop["period"]]).problem.requests) == 2
+    assert ManagerInstruction.objects.count() == 3
+    offer = api.get(f"{url}/previous?period_id={later.pk}").json()
+    assert len(offer["items"]) == 1 and len(offer["rules"]) == 1
+    # What was copied is no longer offered, so sending it twice is refused instead of duplicated.
+    assert api.post(f"{url}/copy", {"period_id": str(later.pk), "instruction_ids": [first["id"]]}).status_code == 409
+    both = {"period_id": str(later.pk), "rule_codes": ["max_shifts_per_week"]}
+    assert api.post(f"{url}/copy", both).json()["rules"][0]["changed"]
+    assert build_problem([later]).problem.rules[0].params["shifts"] == 4
+    assert api.post(f"{url}/copy", {"period_id": str(later.pk), "rule_codes": ["no_such_rule"]}).status_code == 409
+
+
+def test_copy_skips_people_who_left_and_passed_days_and_needs_an_open_period(api, shop, with_key, monkeypatch):
+    later = agreed_then_published(api, shop, monkeypatch)
+    url = f"/api/locations/{shop['location'].pk}/agreements"
+    passed = ManagerInstruction.objects.filter(rule_set__period=shop["period"]).first()
+    passed.data = {**passed.data, "weekdays": [], "dates": ["2020-01-01"]}
+    passed.save()
+    shop["kasia"].is_active = False
+    shop["kasia"].save()
+    assert api.get(f"{url}/previous?period_id={later.pk}").json()["items"] == []
+    # The published period itself takes no copies, and its own history offers nothing from later periods.
+    assert api.get(f"{url}/previous?period_id={shop['period'].pk}").json()["period_label"] is None
+    closed = api.post(f"{url}/copy", {"period_id": str(shop["period"].pk), "rule_codes": ["max_shifts_per_week"]})
+    assert closed.status_code == 409
+
+
+def test_previous_agreements_are_closed_to_other_companies_and_employees(api, shop, make_company, with_key):
+    other = make_company("Obca")
+    url = f"/api/locations/{shop['location'].pk}/agreements"
+    for user in (other["manager"], shop["worker"]):
+        api.login(user)
+        assert api.get(f"{url}/previous").status_code in (403, 404)
+        assert api.post(f"{url}/copy", {"rule_codes": ["max_shifts_per_week"]}).status_code in (403, 404)
+    api.login(shop["manager"])
+    foreign = SchedulePeriod.objects.create(
+        location=other["location"], start=shop["period"].start, end=shop["period"].end
+    )
+    assert api.get(f"{url}/previous?period_id={foreign.pk}").status_code == 404
+    assert api.post(f"{url}/copy", {"period_id": str(foreign.pk), "rule_codes": ["x"]}).status_code == 404

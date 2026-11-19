@@ -137,4 +137,7 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   `useAssistantDrawer().openChat()` (`features/manager/AssistantDrawer.tsx`, one per location), employees from
   "Twoje prośby". Approved results live in a separate editable window: `AssistantRulesTable` ("Ustalenia") for
   managers, the saved list in `RequestsSection` for employees. Never show a chat inline in a page.
+  Agreements belong to one availability period (`apps/assistant/agreements.py`): a new period starts empty and the
+  manager copies chosen ones from the previous period (`copy_from_previous`); nothing carries over by itself. An
+  employee may forward a rejected message to the manager (`unread_reason="rejected"`); it is never scored.
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

@@ -16,6 +16,7 @@ import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { useAssistantDrawer } from './assistant-drawer'
 import { OpenAssistantButton } from './AssistantDrawer'
 import { useManager } from './ManagerContext'
+import { CopyPreviousAgreements } from './CopyPreviousAgreements'
 
 function RowButton({
   label,
@@ -131,6 +132,14 @@ export function AssistantRulesTable({
         </div>
         {!data.closed && !readOnly && <OpenAssistantButton periodId={chatPeriod}>Ustal w rozmowie</OpenAssistantButton>}
       </div>
+
+      {!data.closed && (
+        <CopyPreviousAgreements
+          locationId={locationId}
+          periodId={periodId}
+          defaultOpen={items.length === 0 && agreed.length === 0}
+        />
+      )}
 
       {agreed.length === 0 && items.length === 0 && (
         <p className="m-0 text-sm text-ink-muted">
