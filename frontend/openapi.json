@@ -2045,6 +2045,79 @@
         ]
       }
     },
+    "/api/versions/{version_id}/shifts/{shift_id}/drops": {
+      "get": {
+        "operationId": "shift_drop_checks",
+        "summary": "Shift Drop Checks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DropCheckOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "What dropping this shift's person on each other shift would do (swap or move): new problems and scores.\nAsked once when a drag starts, so the answer for every shift is there before the manager hovers over it.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/versions/{version_id}/assignments": {
       "patch": {
         "operationId": "change_assignments",
@@ -9196,6 +9269,48 @@
           "changes"
         ],
         "title": "ChangesIn",
+        "type": "object"
+      },
+      "DropCheckOut": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ScoresOut"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ScoresOut"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "problems",
+          "warnings",
+          "before",
+          "after",
+          "shift_id"
+        ],
+        "title": "DropCheckOut",
         "type": "object"
       },
       "PinIn": {

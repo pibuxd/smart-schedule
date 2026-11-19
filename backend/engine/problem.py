@@ -152,15 +152,15 @@ class Slot:
         if self.end_utc <= self.start_utc:
             raise ProblemError(f"Slot {self.id} ends before it starts")
 
-    @property
+    @cached_property
     def start_utc(self) -> datetime:
         return self.start.astimezone(UTC)
 
-    @property
+    @cached_property
     def end_utc(self) -> datetime:
         return self.end.astimezone(UTC)
 
-    @property
+    @cached_property
     def hours(self) -> float:
         return (self.end_utc - self.start_utc).total_seconds() / 3600
 

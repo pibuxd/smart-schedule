@@ -106,29 +106,64 @@ def _resolve(loaded: LoadedVersion, changes: Mapping[str, str | None], today: da
     return result
 
 
-def check_changes(
-    loaded: LoadedVersion, changes: Mapping[str, str | None], today: date | None = None
-) -> tuple[CheckResult, dict[str, str | None]]:
-    """Validate the version with `changes` (shift id -> employee id or None) applied; nothing is saved."""
-    today = today or timezone.localdate()
-    by_key = _resolve(loaded, changes, today)
+def _check(loaded: LoadedVersion, by_key: Mapping[str, str | None], before: ValidationReport | None = None):
+    """The result of putting `by_key` (slot key -> employee id or None) into the schedule of `loaded`."""
     problem = loaded.problem
     for key in by_key:  # a manual change moves the pin to the new person
         problem = without_pin(problem, key)
-    before = validate(problem, loaded.schedule)
-    after_schedule = {**loaded.schedule, **by_key}
-    after = validate(problem, after_schedule)
+    before = before or validate(problem, loaded.schedule)
+    after = validate(problem, {**loaded.schedule, **by_key})
     known = {v.message for v in before.hard}
     problems = [v.message for v in after.hard if v.message not in known]
     warnings = new_soft_violations(before, after)
-    result = CheckResult(
+    return CheckResult(
         ok=not problems,
         problems=problems,
         warnings=warnings[:5],
         before=score(problem, before, location=loaded.location_id),
         after=score(problem, after, location=loaded.location_id),
     )
-    return result, by_key
+
+
+def check_changes(
+    loaded: LoadedVersion, changes: Mapping[str, str | None], today: date | None = None
+) -> tuple[CheckResult, dict[str, str | None]]:
+    """Validate the version with `changes` (shift id -> employee id or None) applied; nothing is saved."""
+    today = today or timezone.localdate()
+    by_key = _resolve(loaded, changes, today)
+    return _check(loaded, by_key), by_key
+
+
+def check_drops(loaded: LoadedVersion, shift_id: str, today: date | None = None) -> dict[str, CheckResult]:
+    """What dropping the person of `shift_id` on every other shift would do (a swap, or a move onto an empty
+    shift), by the id of the shift dropped on. One answer for the whole drag, so the screen has the result of
+    each drop before the manager gets there. Days that have passed and shifts of the same person are left out.
+    One validator run per shift (about 5 ms each on a month of one location); nothing is saved."""
+    today = today or timezone.localdate()
+    shifts = {
+        str(pk): (key, day)
+        for pk, key, day in Shift.objects.for_company(loaded.version.company_id)
+        .filter(version=loaded.version)
+        .values_list("pk", "slot_key", "date")
+    }
+    if shift_id not in shifts:
+        raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
+    source, source_day = shifts[shift_id]
+    person = loaded.schedule.get(source)
+    if person is None or source_day < today:
+        return {}
+    # Before the drop only pins differ between targets, and a pin never breaks the schedule it was read from,
+    # so one "before" serves every target that is not pinned itself.
+    pinned = loaded.problem.pinned
+    before = validate(without_pin(loaded.problem, source), loaded.schedule)
+    results = {}
+    for target_id, (target, day) in shifts.items():
+        other = loaded.schedule.get(target)
+        if day < today or other == person:
+            continue
+        by_key = {target: person, source: other}
+        results[target_id] = _check(loaded, by_key, None if target in pinned else before)
+    return results
 
 
 def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], user) -> CheckResult:
@@ -382,6 +417,7 @@ __all__ = [
     "LoadedVersion",
     "apply_changes",
     "check_changes",
+    "check_drops",
     "is_editable",
     "latest_version",
     "load_version",

@@ -138,7 +138,7 @@ export function Section({
                 aria-expanded={explained}
                 aria-controls={descriptionId}
                 onClick={() => setExplained((open) => !open)}
-                className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-accent hover:bg-accent-soft"
+                className="grid min-h-(--touch) min-w-(--touch) shrink-0 cursor-pointer place-items-center rounded-full text-accent hover:bg-accent-soft"
               >
                 <Info aria-hidden="true" size={18} />
               </button>

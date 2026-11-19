@@ -650,6 +650,10 @@ class CheckOut(Schema):
     after: ScoresOut
 
 
+class DropCheckOut(CheckOut):
+    shift_id: str  # the shift the person would be dropped on
+
+
 class PinIn(Schema):
     pinned: bool
 
@@ -923,6 +927,21 @@ def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
     ctx, version = _version_context(request, version_id)
     result, _ = check_changes(load_version(version), _changes(ctx, payload))
     return _check_out(result)
+
+
+@router.get(
+    "/versions/{version_id}/shifts/{shift_id}/drops",
+    response={200: list[DropCheckOut], 403: ErrorOut, 404: ErrorOut},
+)
+def shift_drop_checks(request, version_id: UUID, shift_id: UUID):
+    """What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+    Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it."""
+    from apps.scheduling.editing import check_drops, load_version
+
+    ctx, version = _version_context(request, version_id)
+    shift = ctx.get(Shift, pk=shift_id, version=version)
+    results = check_drops(load_version(version), str(shift.pk))
+    return [DropCheckOut(shift_id=target, **_check_out(result).dict()) for target, result in results.items()]
 
 
 @router.patch(
