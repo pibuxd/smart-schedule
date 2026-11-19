@@ -200,6 +200,9 @@ describe("RequestsSection", () => {
       screen.getAllByRole("button", { name: "Niech przeczyta kierownik" }),
     ).toHaveLength(2);
     expect(
+      screen.getAllByText(/Asystent może się pomylić/).length,
+    ).toBeGreaterThan(0);
+    expect(
       screen.queryByText("Zapisane w Twoich prośbach"),
     ).not.toBeInTheDocument();
   });
