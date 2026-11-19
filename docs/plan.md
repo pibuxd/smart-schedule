@@ -568,12 +568,12 @@ Co powstało:
 
 Założenia:
 
-1. Jedna prośba = jedna sprawa. Tekst z kilkoma życzeniami naraz asystent oznacza jako "inne" i czyta go kierownik.
+1. ~~Jedna prośba = jedna sprawa. Tekst z kilkoma życzeniami naraz asystent oznacza jako "inne" i czyta go kierownik.~~ Zmienione 19.11.2026 ("Asystent z dostępem do API"): jedna wiadomość może mieć pytanie i do 3 preferencji, każda jest osobną prośbą dla generatora (`<pk>`, `<pk>:2`, …); więcej niż 3 albo część nie do sprawdzenia czyta kierownik.
 2. Asystent kierownika działa na poziomie lokalu (ludzie należą do lokalu). Zasady grupy ustawia się ręcznie na ekranie zasad grupy. Powiązanie lokali poleceniem ("ułóż te dwa razem") zostaje na później; silnik to umie, ale nie ma jeszcze na to ustawienia.
 3. Polecenia o osobach są miękkie (generator nie zostawi przez nie zmiany bez obsady). "Bez wyjątków" mają tylko zasady z katalogu.
 4. Polecenia o osobach mają własną kolejność, osobną od listy zasad: polecenie na miejscu k waży tyle, co zasada na miejscu k. Jedna wspólna lista zasad i poleceń to możliwy następny krok.
 5. Polecenie z samymi datami, które minęły, zostaje na liście z etykietą "minęło" i nie wpływa na grafik; kierownik je usuwa.
-6. Limity: `ASSISTANT_COMMANDS_MONTHLY_LIMIT` (200 poleceń na firmę w miesiącu) i `TEXT_REQUESTS_PER_PERIOD` (10 próśb jednej osoby na okres). Tryb tylko do odczytu blokuje polecenia jak każdą zmianę.
+6. Limity: `ASSISTANT_COMMANDS_MONTHLY_LIMIT` (400 poleceń na firmę w miesiącu od 19.11.2026, wcześniej 200) i `TEXT_REQUESTS_PER_PERIOD` (10 próśb jednej osoby na okres; od 19.11.2026 liczą się tylko `new`, `interpreted` i `needs_manager`, a koszt pytań ogranicza `ASSISTANT_MESSAGES_PER_DAY`). Tryb tylko do odczytu blokuje polecenia jak każdą zmianę.
 7. Nie włączamy automatycznego przełączania na inny model po odmowie; odmowa lub ucięta odpowiedź to po prostu "do decyzji menedżera" / "asystent nie dał rady".
 8. Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie.
 
