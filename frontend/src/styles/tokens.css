@@ -151,4 +151,11 @@
     border-color: var(--color-prefer);
     background: var(--color-prefer-fill);
   }
+  /* The manager's grid, for the picked person: a shift they cannot take (the manager may still put them there). */
+  .fit-cannot {
+    color: var(--color-prefer-not);
+    border-color: var(--color-prefer-not);
+    background:
+      repeating-linear-gradient(45deg, transparent 0 6px, rgb(122 83 0 / 0.14) 6px 8px), var(--color-prefer-not-soft);
+  }
 }

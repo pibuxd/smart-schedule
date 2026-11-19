@@ -29,6 +29,7 @@ import type {
   ChangesIn,
   CheckOut,
   DropCheckOut,
+  EmployeeFitParams,
   ErrorOut,
   GenerateIn,
   GenerationRunOut,
@@ -40,6 +41,7 @@ import type {
   PinIn,
   SeatIn,
   ShiftExplanationOut,
+  ShiftFitOut,
   VersionOut,
   VersionShiftOut,
   VersionSummaryOut
@@ -1783,7 +1785,8 @@ export const getChangeAssignmentsUrl = (versionId: string,) => {
 }
 
 /**
- * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
+ * Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks
+ * a hard rule is refused with the reasons, unless `force` is set: the manager has the last word.
  * @summary Change Assignments
  */
 export const changeAssignments = async (versionId: string,
@@ -1851,7 +1854,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ChangeAssignmentsMutationVariables = {versionId: string;data: ChangesIn}
 
     /**
- * Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.
+ * Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks
+ * a hard rule is refused with the reasons, unless `force` is set: the manager has the last word.
  * @summary Change Assignments
  */
 export const useChangeAssignments = <TError = ErrorOut,
@@ -1864,7 +1868,182 @@ export const useChangeAssignments = <TError = ErrorOut,
       > => {
       return useMutation(getChangeAssignmentsMutationOptions(options), queryClient);
     }
-    export type pinShiftResponse200 = {
+    export type employeeFitResponse200 = {
+  data: ShiftFitOut[]
+  status: 200
+}
+
+export type employeeFitResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type employeeFitResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type employeeFitResponseSuccess = (employeeFitResponse200) & {
+  headers: Headers;
+};
+export type employeeFitResponseError = (employeeFitResponse403 | employeeFitResponse404) & {
+  headers: Headers;
+};
+
+export type employeeFitResponse = (employeeFitResponseSuccess | employeeFitResponseError)
+
+export const getEmployeeFitUrl = (versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/versions/${versionId}/employees/${employeeId}/fit?${stringifiedParams}` : `/api/versions/${versionId}/employees/${employeeId}/fit`
+}
+
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export const employeeFit = async (versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: Parameters<typeof apiFetch>[1]): Promise<employeeFitResponse> => {
+
+  return apiFetch<employeeFitResponse>(getEmployeeFitUrl(versionId,employeeId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getEmployeeFitQueryKey = (versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams,) => {
+    return [
+    `/api/versions/${versionId}/employees/${employeeId}/fit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getEmployeeFitQueryOptions = <TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getEmployeeFitQueryKey(versionId,employeeId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof employeeFit>>> = ({ signal }) => employeeFit(versionId,employeeId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: versionId !== null && versionId !== undefined && employeeId !== null && employeeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type EmployeeFitQueryResult = NonNullable<Awaited<ReturnType<typeof employeeFit>>>
+export type EmployeeFitQueryError = ErrorOut
+
+
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params: undefined |  EmployeeFitParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof employeeFit>>,
+          TError,
+          Awaited<ReturnType<typeof employeeFit>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof employeeFit>>,
+          TError,
+          Awaited<ReturnType<typeof employeeFit>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Where one person could work in this schedule, for colouring the grid while the manager moves them: every
+ * shift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);
+ * the rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being
+ * dragged away from, so it does not count as "another shift at that time".
+ * @summary Employee Fit
+ */
+export function useEmployeeFit<TData = Awaited<ReturnType<typeof employeeFit>>, TError = ErrorOut>(
+ versionId: string,
+    employeeId: string,
+    params?: EmployeeFitParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof employeeFit>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getEmployeeFitQueryOptions(versionId,employeeId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type pinShiftResponse200 = {
   data: VersionShiftOut
   status: 200
 }

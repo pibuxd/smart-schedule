@@ -20,7 +20,10 @@ export function dropWords(dragged: VersionShiftOut, target: VersionShiftOut | un
   const what = target.employee_id ? `Zamiana z: ${target.employee_name}` : 'Przeniesienie na zmianę bez obsady'
   if (check === undefined) return { what, verdict: null, bad: false }
   if (check === 'failed') return { what, verdict: 'Nie udało się sprawdzić tej zamiany.', bad: true }
-  if (!check.ok) return { what, verdict: check.problems[0] ?? 'Ta zamiana łamie zasady.', bad: true }
+  if (!check.ok) {
+    const problem = check.problems[0] ?? 'Ta zamiana łamie zasady.'
+    return { what, verdict: check.can_force ? `${problem} Upuść, jeśli chcesz zapisać mimo to.` : problem, bad: true }
+  }
   const after = check.after
   return { what, verdict: `Można. Zasady ${percent(after.manager_rules)}, prośby ${percent(after.employee_requests)}.`, bad: false }
 }

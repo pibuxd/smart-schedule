@@ -11,16 +11,26 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Hand, Pin, Plus, Send, SquarePen } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Hand, Pin, Plus, Send, ShieldAlert, SquarePen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
 import { useLocationInstructions } from '../../api/generated/assistant/assistant'
-import type { CheckOut, DropCheckOut, InstructionsOut, PeriodOut, ScoresOut, VersionOut, VersionShiftOut } from '../../api/generated/model'
+import type {
+  CheckOut,
+  DropCheckOut,
+  InstructionsOut,
+  PeriodOut,
+  ScoresOut,
+  ShiftFitOut,
+  VersionOut,
+  VersionShiftOut,
+} from '../../api/generated/model'
 import {
   useAddScheduleSeat,
   useChangeAssignments,
   useCheckScheduleChanges,
+  useEmployeeFit,
   useLocationPeriods,
   usePinShift,
   usePublishSchedule,
@@ -34,6 +44,7 @@ import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { cn } from '../../lib/cn'
+import { StateIcon } from '../availability/StateIcon'
 import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/dates'
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
@@ -141,7 +152,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           )}
           {period.latest_version_id && !period.active_run_id && (
             <span className="max-w-[40ch] text-sm text-ink-muted sm:text-right">
-              „Ułóż od nowa” zostawia przypięte zmiany i minione dni.
+              „Ułóż od nowa” zostawia przypięte zmiany, osoby wpisane mimo przeszkód i minione dni.
             </span>
           )}
         </div>
@@ -295,7 +306,7 @@ function UnpinnedChanges({ data }: { data: VersionOut }) {
   const pin = usePinShift()
   const queryClient = useQueryClient()
   const [pinning, setPinning] = useState(false)
-  const unpinned = data.shifts.filter((s) => s.manual && !s.pinned && s.employee_id && !s.past)
+  const unpinned = data.shifts.filter((s) => s.manual && !s.pinned && s.employee_id)
   if (unpinned.length === 0) return null
   const pinAll = async () => {
     setPinning(true)
@@ -416,6 +427,10 @@ function ScoreBox({ label, value, muted, note }: { label: string; value: number;
 
 // ----------------------------------------------------------------------------------------------- the grid
 
+type Change = { shift_id: string; employee_id: string | null }
+/** A change that breaks a hard rule, waiting for the manager's "save anyway". */
+type Override = { changes: Change[]; problems: string[]; done: string }
+
 /** How long the answers for one dragged person are reused; every saved change marks them stale anyway. */
 const DROPS_FRESH_MS = 30_000
 
@@ -428,12 +443,24 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
   // Answers for single drops of this drag, used until the answer for all shifts arrives.
   const [singles, setSingles] = useState<Record<string, DropCheck>>({})
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
+  const [picked, setPicked] = useState('')
+  const [override, setOverride] = useState<Override | null>(null)
   const checker = useCheckScheduleChanges()
   const change = useChangeAssignments()
   const addSeat = useAddScheduleSeat()
   const queryClient = useQueryClient()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const editable = data.editable
+  // The person whose calendar colours the grid: the one being dragged, else the one picked from the list.
+  const personId = dragging?.employee_id ?? picked
+  // While dragged, the person leaves their shift, so it does not block other shifts at that time.
+  const fit = useEmployeeFit(data.id, personId, dragging ? { moving_shift_id: dragging.id } : undefined, {
+    query: { enabled: editable && !!personId },
+  })
+  const fitByShift = useMemo(
+    () => new Map(personId && fit.data ? (fit.data.data as ShiftFitOut[]).map((f) => [f.shift_id, f]) : []),
+    [fit.data, personId],
+  )
   const template = `120px repeat(${columns.length}, minmax(0, 1fr))`
 
   // When a drag starts, one request works out every possible drop, so hovering over a shift needs no request.
@@ -466,22 +493,41 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
     setDragging(byId.get(String(event.active.id)) ?? null)
   }
   const onDragOver = (event: DragOverEvent) => setOverId(event.over ? String(event.over.id) : null)
+  const save = (changes: Change[], done: string, force = false) =>
+    change.mutate(
+      { versionId: data.id, data: { changes, force } },
+      {
+        onSuccess: () => {
+          setMessage({ text: done, bad: false })
+          setOverride(null)
+          void queryClient.invalidateQueries()
+        },
+        onError: (error) => {
+          setOverride(null)
+          setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true })
+        },
+      },
+    )
   const onDragEnd = (event: DragEndEvent) => {
     const from = byId.get(String(event.active.id))
     const to = event.over ? byId.get(String(event.over.id)) : undefined
+    const known = to && overId === to.id && check && check !== 'failed' ? check : null
     setDragging(null)
     setOverId(null)
     if (!from || !to || from.id === to.id || from.employee_id === to.employee_id) return
-    change.mutate(
-      { versionId: data.id, data: { changes: swapChanges(from, to) } },
+    const changes = swapChanges(from, to)
+    const done = to.employee_id ? `Zamienione: ${from.employee_name} i ${to.employee_name}.` : `Przeniesiono: ${from.employee_name}.`
+    // A swap that breaks a hard rule is the manager's call: ask once, then save it as an override.
+    const decide = (result: CheckOut) => {
+      if (result.ok) save(changes, done)
+      else if (result.can_force) setOverride({ changes, problems: result.problems, done })
+      else setMessage({ text: result.problems[0] ?? 'Tej zmiany nie można zapisać.', bad: true })
+    }
+    if (known) return decide(known)
+    checker.mutate(
+      { versionId: data.id, data: { changes } },
       {
-        onSuccess: () => {
-          setMessage({
-            text: to.employee_id ? `Zamienione: ${from.employee_name} i ${to.employee_name}.` : `Przeniesiono: ${from.employee_name}.`,
-            bad: false,
-          })
-          void queryClient.invalidateQueries()
-        },
+        onSuccess: (response) => decide(response.data as CheckOut),
         onError: (error) => setMessage({ text: errorMessage(error, NETWORK_PROBLEM), bad: true }),
       },
     )
@@ -512,7 +558,22 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
 
   return (
     <section className="grid gap-3" aria-label="Grafik">
-      <Legend />
+      {editable && (
+        <SelectField
+          label="Pokaż, kiedy ta osoba chce i może pracować"
+          value={picked}
+          onChange={(e) => setPicked(e.target.value)}
+          className="max-w-sm"
+        >
+          <option value="">Nikt nie jest wybrany</option>
+          {data.employees.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </SelectField>
+      )}
+      <Legend person={!!personId} />
       {message && (
         <p role="status" className={cn('m-0 rounded-sm px-3 py-2', message.bad ? 'bg-cannot-soft text-cannot' : 'bg-accent-soft')}>
           {message.text}
@@ -588,8 +649,9 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
                           key={shift.id}
                           shift={shift}
                           column={column}
-                          editable={editable && !shift.past}
+                          editable={editable}
                           dragging={dragging}
+                          fit={fitByShift.get(shift.id)}
                           onOpen={() => setOpen(shift)}
                         />
                       ))}
@@ -603,6 +665,26 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
         <DragOverlay dropAnimation={null}>{dragging && <DragCard dragging={dragging} target={target} check={check} />}</DragOverlay>
       </DndContext>
       <ShiftSheet versionId={data.id} locationId={data.location_id} shift={open} editable={editable} onClose={() => setOpen(null)} />
+      <Sheet open={override !== null} onOpenChange={(o) => !o && setOverride(null)} title="Zapisać mimo to?">
+        {override && (
+          <div className="grid gap-4">
+            <div className="grid gap-1 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
+              {override.problems.map((problem) => (
+                <span key={problem}>{problem}</span>
+              ))}
+            </div>
+            <p className="m-0 text-sm text-ink-muted">
+              Decyzja należy do Ciebie. Zmiana zostanie oznaczona i przypięta, więc ponowne układanie jej nie cofnie.
+            </p>
+            <Button wide disabled={change.isPending} onClick={() => save(override.changes, override.done, true)}>
+              {change.isPending ? 'Zapisuję…' : 'Zapisz mimo to'}
+            </Button>
+            <Button wide variant="secondary" onClick={() => setOverride(null)}>
+              Anuluj
+            </Button>
+          </div>
+        )}
+      </Sheet>
     </section>
   )
 }
@@ -626,12 +708,15 @@ function ShiftChip({
   column,
   editable,
   dragging,
+  fit,
   onOpen,
 }: {
   shift: VersionShiftOut
   column: { start: string; end: string }
   editable: boolean
   dragging: VersionShiftOut | null
+  /** How the picked (or dragged) person fits this shift; absent when nobody is picked or it is not their position. */
+  fit?: ShiftFitOut
   onOpen: () => void
 }) {
   const canDrag = editable && !!shift.employee_id
@@ -646,7 +731,9 @@ function ShiftChip({
     `${shift.start_time}–${shift.end_time}`,
     shift.pinned ? 'przypięta' : '',
     shift.manual ? 'zmieniona ręcznie' : '',
+    shift.forced ? 'wpisana mimo przeszkód' : '',
     bad ? 'łamie regułę' : '',
+    fit ? FIT_WORDS[fit.fit] : '',
   ]
     .filter(Boolean)
     .join(', ')
@@ -661,34 +748,68 @@ function ShiftChip({
         aria-label={describe}
         className={cn(
           'flex min-h-(--touch) w-full cursor-pointer items-center gap-1.5 rounded-sm border-2 px-2 text-left text-base',
-          hole
-            ? 'border-dashed border-cannot bg-cannot-soft font-semibold text-cannot'
-            : bad
-              ? 'border-cannot bg-surface'
-              : 'border-line bg-surface hover:border-accent',
-          shift.past && 'opacity-70',
+          fit
+            ? cn(FIT_CLASS[fit.fit], hole && 'border-dashed font-semibold')
+            : hole
+              ? 'border-dashed border-cannot bg-cannot-soft font-semibold text-cannot'
+              : bad
+                ? 'border-cannot bg-surface'
+                : 'border-line bg-surface hover:border-accent',
+          shift.past && !fit && 'opacity-70',
           draggable.isDragging && 'opacity-40',
           droppable.isOver && dragging && 'border-accent ring-3 ring-accent-soft',
           canDrag && 'touch-none',
         )}
       >
-        {hole && <AlertTriangle aria-hidden="true" size={18} className="shrink-0" />}
+        {fit ? (
+          <span className="shrink-0" title={fit.reason}>
+            <StateIcon state={fit.fit === 'can' ? 'neutral' : fit.fit} size={18} />
+          </span>
+        ) : (
+          hole && <AlertTriangle aria-hidden="true" size={18} className="shrink-0" />
+        )}
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {otherHours && (
           <span className="shrink-0 text-sm text-ink-muted">
             {shift.start_time}–{shift.end_time}
           </span>
         )}
-        {shift.manual && <Hand aria-hidden="true" size={16} className="shrink-0 text-ink-muted" />}
+        {shift.forced && <ShieldAlert aria-hidden="true" size={16} className="shrink-0 text-prefer-not" />}
+        {shift.manual && !shift.forced && <Hand aria-hidden="true" size={16} className="shrink-0 text-ink-muted" />}
         {shift.pinned && <Pin aria-hidden="true" size={16} className="shrink-0 text-accent" />}
       </button>
     </div>
   )
 }
 
-function Legend() {
+const FIT_CLASS: Record<ShiftFitOut['fit'], string> = {
+  prefer: 'avail-prefer',
+  can: 'avail-neutral',
+  cannot: 'fit-cannot',
+}
+
+const FIT_WORDS: Record<ShiftFitOut['fit'], string> = {
+  prefer: 'wybrana osoba chętnie',
+  can: 'wybrana osoba może',
+  cannot: 'wybrana osoba nie może',
+}
+
+function Legend({ person }: { person: boolean }) {
   return (
     <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-sm text-ink-muted">
+      {person && (
+        <>
+          <li className="avail-prefer flex items-center gap-1.5 rounded-sm border px-1.5 font-semibold">
+            <StateIcon state="prefer" size={16} /> chętnie
+          </li>
+          <li className="avail-neutral flex items-center gap-1.5 rounded-sm border px-1.5 font-semibold">
+            <StateIcon state="neutral" size={16} /> może
+          </li>
+          <li className="fit-cannot flex items-center gap-1.5 rounded-sm border px-1.5 font-semibold">
+            <StateIcon state="cannot" size={16} /> nie może
+          </li>
+        </>
+      )}
       <li className="flex items-center gap-1.5">
         <AlertTriangle aria-hidden="true" size={16} className="text-cannot" /> bez obsady
       </li>
@@ -697,6 +818,9 @@ function Legend() {
       </li>
       <li className="flex items-center gap-1.5">
         <Pin aria-hidden="true" size={16} className="text-accent" /> przypięte
+      </li>
+      <li className="flex items-center gap-1.5">
+        <ShieldAlert aria-hidden="true" size={16} className="text-prefer-not" /> wpisane mimo przeszkód
       </li>
     </ul>
   )

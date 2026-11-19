@@ -8,6 +8,7 @@ import type { ScoresOut } from './scoresOut';
 
 export interface DropCheckOut {
   ok: boolean;
+  can_force: boolean;
   problems: string[];
   warnings: string[];
   before: ScoresOut;

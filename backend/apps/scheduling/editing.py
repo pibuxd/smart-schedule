@@ -2,8 +2,12 @@
 
 - `load_version` reads a saved version for the engine (its own slots, people and pins) and validates it.
 - `check_changes` / `apply_changes`: a manual change (who works which slot) is validated by the same validator as
-  the generator's result; a change that would add a hard problem is refused with the validator's sentences.
-  Only the newest version of a period can be edited, and only while it is a draft; days that have passed cannot.
+  the generator's result; a change that would add a hard problem is refused with the validator's sentences,
+  unless the manager forces it (`force=True`): the manager has the last word, so the person is saved as
+  `forced` and pinned, and the validator reports those problems as waived (they never block publishing).
+  Only the newest version of a period can be edited, and only while it is a draft. Days that have passed can be
+  corrected too (someone swapped outside the app), so hours are counted as they were worked; such a
+  correction is pinned, because arranging again must not undo what really happened.
 - `add_seat` / `remove_seat`: one more or one fewer place on a shift of one day. The same number is saved as that
   date's staffing (`apps.staffing.day_staffing`), so arranging the schedule again keeps it.
 - `start_draft`: editing a published schedule starts a new draft copy (publishing makes it the published one).
@@ -15,7 +19,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date
 from zoneinfo import ZoneInfo
 
@@ -28,7 +32,7 @@ from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, 
 from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version, slot_key
 from apps.staffing import day_staffing
 from apps.staffing.models import EmployeeProfile, LocationClosure, Position, ShiftType
-from engine.explain import new_soft_violations, without_pin
+from engine.explain import new_soft_violations, new_waived_violations, returned_violations, without_pin
 from engine.problem import Problem, shift_bounds
 from engine.scoring import Scores, score
 from engine.validator import Code, ValidationReport, Violation, validate
@@ -104,24 +108,26 @@ class CheckResult:
     warnings: list[str]  # new broken soft rules, for information
     before: Scores
     after: Scores
+    # Not ok, but the manager may save it anyway (`force`): every new problem is one the manager can overrule.
+    can_force: bool = False
+    # Slot keys that get the `forced` mark when the change is saved with `force`, and the scores then.
+    forced: frozenset[str] = field(default_factory=frozenset)
+    after_forced: Scores | None = None
 
 
-def _resolve(loaded: LoadedVersion, changes: Mapping[str, str | None], today: date) -> dict[str, str | None]:
-    """shift id -> employee id, translated to slot keys; refuses unknown shifts and days that have passed."""
-    shifts = {
-        str(pk): (key, day)
-        for pk, key, day in Shift.objects.for_company(loaded.version.company_id)
+def _resolve(loaded: LoadedVersion, changes: Mapping[str, str | None]) -> dict[str, str | None]:
+    """shift id -> employee id, translated to slot keys; refuses unknown shifts."""
+    shifts = dict(
+        (str(pk), key)
+        for pk, key in Shift.objects.for_company(loaded.version.company_id)
         .filter(version=loaded.version, pk__in=list(changes))
-        .values_list("pk", "slot_key", "date")
-    }
+        .values_list("pk", "slot_key")
+    )
     result = {}
     for shift_id, employee_id in changes.items():
         if shift_id not in shifts:
             raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
-        key, day = shifts[shift_id]
-        if day < today:
-            raise HttpError(409, "Ten dzień już minął, więc tej zmiany nie można poprawić.")
-        result[key] = employee_id
+        result[shifts[shift_id]] = employee_id
     return result
 
 
@@ -131,34 +137,60 @@ def _check(loaded: LoadedVersion, by_key: Mapping[str, str | None], before: Vali
     for key in by_key:  # a manual change moves the pin to the new person
         problem = without_pin(problem, key)
     before = before or validate(problem, loaded.schedule)
-    after = validate(problem, {**loaded.schedule, **by_key})
+    after_schedule = {**loaded.schedule, **by_key}
+    # An earlier override was about the person who held the slot; the new one needs the manager's word again.
+    standing = {k: v for k, v in problem.forced.items() if by_key.get(k, v) == v}
+    problem = replace(problem, forced=standing)
+    after = validate(problem, after_schedule)
     known = {v.message for v in before.hard}
-    problems = [v.message for v in blocking(after.hard) if v.message not in known]
+    receivers = {e for k, e in by_key.items() if e is not None and loaded.schedule.get(k) != e}
+    known |= returned_violations(before, after, receivers)
+    new = [v for v in blocking(after.hard) if v.message not in known]
+    # An earlier override does not cover this change: what it would newly waive needs the manager's word too.
+    new += blocking(new_waived_violations(before, after, receivers))
     warnings = [v.message for v in accepted(after.hard) if v.message not in known] + new_soft_violations(before, after)
+
+    forced: frozenset[str] = frozenset()
+    after_forced = None
+    if new:
+        # First only the changed slots the new problems are about; if that is not enough, every changed slot.
+        filled = {k for k, e in by_key.items() if e is not None}
+        touched = {k for k in filled if any(k in v.slots or (not v.slots and v.employee == by_key[k]) for v in new)}
+        for keys in (touched, filled):
+            if not keys:
+                continue
+            trial = replace(problem, forced={**standing, **{k: by_key[k] for k in keys}})
+            report = validate(trial, after_schedule)
+            if all(v.message in known for v in blocking(report.hard)):
+                forced = frozenset(keys)
+                after_forced = score(trial, report, location=loaded.location_id)
+                break
     return CheckResult(
-        ok=not problems,
-        problems=problems,
+        ok=not new,
+        problems=[v.message for v in new],
         warnings=warnings[:5],
         before=score(problem, before, location=loaded.location_id),
         after=score(problem, after, location=loaded.location_id),
+        can_force=bool(forced),
+        forced=forced,
+        after_forced=after_forced,
     )
 
 
 def check_changes(
-    loaded: LoadedVersion, changes: Mapping[str, str | None], today: date | None = None
+    loaded: LoadedVersion, changes: Mapping[str, str | None]
 ) -> tuple[CheckResult, dict[str, str | None]]:
     """Validate the version with `changes` (shift id -> employee id or None) applied; nothing is saved."""
-    today = today or timezone.localdate()
-    by_key = _resolve(loaded, changes, today)
+    by_key = _resolve(loaded, changes)
     return _check(loaded, by_key), by_key
 
 
-def check_drops(loaded: LoadedVersion, shift_id: str, today: date | None = None) -> dict[str, CheckResult]:
+def check_drops(loaded: LoadedVersion, shift_id: str) -> dict[str, CheckResult]:
     """What dropping the person of `shift_id` on every other shift would do (a swap, or a move onto an empty
     shift), by the id of the shift dropped on. One answer for the whole drag, so the screen has the result of
-    each drop before the manager gets there. Days that have passed and shifts of the same person are left out.
-    One validator run per shift (about 5 ms each on a month of one location); nothing is saved."""
-    today = today or timezone.localdate()
+    each drop before the manager gets there. Shifts of the same person are left out; days that have passed are
+    in, because a draft can correct them. One validator run per shift (about 5 ms each on a month of one
+    location); nothing is saved."""
     shifts = {
         str(pk): (key, day)
         for pk, key, day in Shift.objects.for_company(loaded.version.company_id)
@@ -167,33 +199,42 @@ def check_drops(loaded: LoadedVersion, shift_id: str, today: date | None = None)
     }
     if shift_id not in shifts:
         raise HttpError(404, "Nie ma takiej zmiany w tym grafiku.")
-    source, source_day = shifts[shift_id]
+    source, _ = shifts[shift_id]
     person = loaded.schedule.get(source)
-    if person is None or source_day < today:
+    if person is None:
         return {}
     # Before the drop only pins differ between targets, and a pin never breaks the schedule it was read from,
     # so one "before" serves every target that is not pinned itself.
     pinned = loaded.problem.pinned
     before = validate(without_pin(loaded.problem, source), loaded.schedule)
     results = {}
-    for target_id, (target, day) in shifts.items():
+    for target_id, (target, _) in shifts.items():
         other = loaded.schedule.get(target)
-        if day < today or other == person:
+        if other == person:
             continue
         by_key = {target: person, source: other}
         results[target_id] = _check(loaded, by_key, None if target in pinned else before)
     return results
 
 
-def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], user) -> CheckResult:
-    """Save a manual change of people. Refused (409) when it adds a hard problem or the version is not editable."""
+def apply_changes(
+    version: ScheduleVersion,
+    changes: Mapping[str, str | None],
+    user,
+    force: bool = False,
+    today: date | None = None,
+) -> CheckResult:
+    """Save a manual change of people. Refused (409) when the version is not editable, or when it adds a hard
+    problem and the manager did not `force` it."""
+    today = today or timezone.localdate()
     with transaction.atomic():
         version = ScheduleVersion.objects.select_for_update().get(pk=version.pk)
         if not is_editable(version):
             raise HttpError(409, NOT_EDITABLE)
         loaded = load_version(version)
         result, by_key = check_changes(loaded, changes)
-        if not result.ok:
+        forced = result.forced if force else frozenset()
+        if not result.ok and not forced:
             raise HttpError(409, "Tej zmiany nie można zapisać: " + " ".join(result.problems))
         home = {e.id: e.home_location for e in loaded.problem.employees}
         rows = Assignment.objects.for_company(version.company_id).filter(
@@ -206,10 +247,13 @@ def apply_changes(version: ScheduleVersion, changes: Mapping[str, str | None], u
             assignment.employee_id = employee_id
             assignment.manual = True
             assignment.borrowed = employee_id is not None and home.get(employee_id) != str(assignment.shift.location_id)
-            # A new person (or a hole) is not pinned until the manager pins it, as check_changes assumed.
-            assignment.pinned = False
-            assignment.save(update_fields=["employee", "manual", "borrowed", "pinned"])
-        save_scores(version, result.after)
+            assignment.forced = assignment.shift.slot_key in forced
+            # A new person (or a hole) is not pinned until the manager pins it, as check_changes assumed. Two
+            # kinds stay through arranging again by themselves: an override (the generator would never repeat
+            # it) and a correction of a day that has passed (it records what really happened).
+            assignment.pinned = assignment.forced or assignment.shift.date < today
+            assignment.save(update_fields=["employee", "manual", "borrowed", "pinned", "forced"])
+        save_scores(version, result.after_forced if forced and result.after_forced else result.after)
     return result
 
 
@@ -387,6 +431,7 @@ def start_draft(version: ScheduleVersion, user) -> ScheduleVersion:
                 pinned=old[s.slot_key].pinned,
                 borrowed=old[s.slot_key].borrowed,
                 manual=old[s.slot_key].manual,
+                forced=old[s.slot_key].forced,
             )
             for s in new_shifts
         )

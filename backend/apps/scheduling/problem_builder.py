@@ -339,12 +339,16 @@ class _Reader:
 
     # ----------------------------------------------------------------- people
 
-    def assignments(self, version: ScheduleVersion | None, keys: set[str], pinned_only: bool = False):
+    def assignments(
+        self, version: ScheduleVersion | None, keys: set[str], pinned_only: bool = False, forced_only: bool = False
+    ):
         if version is None:
             return {}
         rows = self.qs(Assignment).filter(shift__version=version, shift__slot_key__in=keys)
         if pinned_only:
             rows = rows.filter(pinned=True)  # a pinned hole stays empty
+        if forced_only:
+            rows = rows.filter(forced=True, employee__isnull=False)
         return {
             key: str(employee) if employee else None
             for key, employee in rows.values_list("shift__slot_key", "employee")
@@ -541,6 +545,18 @@ class _Reader:
             stability_penalty=float(profile.stability_penalty),
         )
 
+    def forced(self, slots: Sequence[Slot], published: dict, pinned: dict) -> dict[str, str]:
+        """The manager's overrides that still stand when arranging again: on a pinned slot (newest version) or
+        on a day that has passed (published version), as long as that person keeps the slot."""
+        keys = {s.id for s in slots}
+        fixed = {s.id: published[s.id] for s in slots if s.date < self.today and s.id in published}
+        fixed.update(pinned)
+        marked: dict[str, str] = {}
+        for period in self.periods:
+            marked.update(self.assignments(self.published.get(period.id), keys, forced_only=True))
+            marked.update(self.assignments(self.latest.get(period.id), keys, pinned_only=True, forced_only=True))
+        return {key: employee for key, employee in marked.items() if fixed.get(key) == employee}
+
     def position_names(self) -> dict[str, str]:
         return {
             str(pk): name
@@ -575,6 +591,7 @@ class _Reader:
             pinned=pinned,
             published=published,
             frozen_before=self.today,
+            forced=self.forced(slots, published, pinned),
             external_shifts=tuple(self.external_shifts(employee_ids)),
             position_names=self.position_names(),
         )
@@ -596,6 +613,9 @@ class _VersionReader(_Reader):
     def slots(self) -> list[Slot]:
         by_day = self._published_slots(self.version)
         return [slot for day in sorted(by_day) for slot in by_day[day]]
+
+    def forced(self, slots: Sequence[Slot], published: dict, pinned: dict) -> dict[str, str]:
+        return self.assignments(self.version, {s.id for s in slots}, forced_only=True)
 
     def employees(self, referenced: set[str]) -> list[Employee]:
         in_version = self.qs(Assignment).filter(shift__version=self.version, employee__isnull=False)

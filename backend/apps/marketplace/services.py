@@ -292,7 +292,8 @@ def _move(assignment: Assignment, to: EmployeeProfile, pinned: bool = True) -> N
     assignment.manual = True
     # The new person was agreed on: arranging the period again keeps them there.
     assignment.pinned = pinned
-    assignment.save(update_fields=["employee", "borrowed", "manual", "pinned"])
+    assignment.forced = False  # an earlier override was about the person who had the shift
+    assignment.save(update_fields=["employee", "borrowed", "manual", "pinned", "forced"])
 
 
 def _transfer(published: Assignment, taker: EmployeeProfile, reason: str, by, now, pinned: bool = True) -> None:

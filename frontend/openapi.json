@@ -2388,7 +2388,7 @@
             }
           }
         },
-        "description": "Save a manual change (one shift, or two for a swap). Refused with the reasons when it breaks a hard rule.",
+        "description": "Save a manual change (one shift, or two for a swap), also on days that have passed. A change that breaks\na hard rule is refused with the reasons, unless `force` is set: the manager has the last word.",
         "tags": [
           "scheduling"
         ],
@@ -2402,6 +2402,96 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/employees/{employee_id}/fit": {
+      "get": {
+        "operationId": "employee_fit",
+        "summary": "Employee Fit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "employee_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Employee Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "moving_shift_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Moving Shift Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ShiftFitOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Where one person could work in this schedule, for colouring the grid while the manager moves them: every\nshift of their positions that they do not hold, with their calendar mark. Calendar and overlaps only (fast);\nthe rules are checked when the manager picks a shift. `moving_shift_id`: the shift the person is being\ndragged away from, so it does not count as \"another shift at that time\".",
+        "tags": [
+          "scheduling"
+        ],
         "security": [
           {
             "SessionAuth": []
@@ -9991,6 +10081,17 @@
           "past": {
             "title": "Past",
             "type": "boolean"
+          },
+          "forced": {
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "overridden": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Overridden",
+            "type": "array"
           }
         },
         "required": [
@@ -10010,7 +10111,9 @@
           "borrowed",
           "wish",
           "problems",
-          "past"
+          "past",
+          "forced",
+          "overridden"
         ],
         "title": "VersionShiftOut",
         "type": "object"
@@ -10092,6 +10195,10 @@
             "title": "Possible",
             "type": "boolean"
           },
+          "can_force": {
+            "title": "Can Force",
+            "type": "boolean"
+          },
           "problems": {
             "items": {
               "type": "string"
@@ -10159,6 +10266,7 @@
           "name",
           "current",
           "possible",
+          "can_force",
           "problems",
           "notes",
           "wish",
@@ -10259,6 +10367,10 @@
             "title": "Ok",
             "type": "boolean"
           },
+          "can_force": {
+            "title": "Can Force",
+            "type": "boolean"
+          },
           "problems": {
             "items": {
               "type": "string"
@@ -10282,6 +10394,7 @@
         },
         "required": [
           "ok",
+          "can_force",
           "problems",
           "warnings",
           "before",
@@ -10326,6 +10439,11 @@
             "minItems": 1,
             "title": "Changes",
             "type": "array"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10338,6 +10456,10 @@
         "properties": {
           "ok": {
             "title": "Ok",
+            "type": "boolean"
+          },
+          "can_force": {
+            "title": "Can Force",
             "type": "boolean"
           },
           "problems": {
@@ -10367,6 +10489,7 @@
         },
         "required": [
           "ok",
+          "can_force",
           "problems",
           "warnings",
           "before",
@@ -10374,6 +10497,35 @@
           "shift_id"
         ],
         "title": "DropCheckOut",
+        "type": "object"
+      },
+      "ShiftFitOut": {
+        "properties": {
+          "shift_id": {
+            "format": "uuid",
+            "title": "Shift Id",
+            "type": "string"
+          },
+          "fit": {
+            "enum": [
+              "prefer",
+              "can",
+              "cannot"
+            ],
+            "title": "Fit",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "fit",
+          "reason"
+        ],
+        "title": "ShiftFitOut",
         "type": "object"
       },
       "PinIn": {

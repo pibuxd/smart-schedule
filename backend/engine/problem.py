@@ -381,6 +381,10 @@ class Problem:
     published: Mapping[str, str | None] = field(default_factory=dict)
     # Slots dated before this day keep their published assignment (days that have passed).
     frozen_before: date | None = None
+    # slot id -> employee id the manager put there knowingly against a hard rule ("nie mogę", another shift at
+    # that time, a "no exceptions" rule). While that person holds the slot, the validator reports those problems
+    # as `waived` instead of `hard`, and the solver leaves the slot alone when it is pinned or a day that passed.
+    forced: Mapping[str, str] = field(default_factory=dict)
     external_shifts: tuple[ExternalShift, ...] = ()
     # Display names for messages (position id -> name); ids are used where a name is missing.
     position_names: Mapping[str, str] = field(default_factory=dict)
@@ -390,6 +394,7 @@ class Problem:
             object.__setattr__(self, name, tuple(getattr(self, name)))
         object.__setattr__(self, "pinned", _freeze(self.pinned))
         object.__setattr__(self, "published", _freeze(self.published))
+        object.__setattr__(self, "forced", _freeze(self.forced))
         object.__setattr__(self, "position_names", _freeze(self.position_names))
         self._check()
 
@@ -420,6 +425,9 @@ class Problem:
         for slot_id, employee_id in self.pinned.items():
             if slot_id not in self.slot_by_id or (employee_id is not None and employee_id not in known):
                 raise ProblemError(f"Pin on {slot_id} refers to an unknown slot or employee")
+        for slot_id, employee_id in self.forced.items():
+            if slot_id not in self.slot_by_id or employee_id not in known:
+                raise ProblemError(f"Forced assignment on {slot_id} refers to an unknown slot or employee")
 
     @cached_property
     def tz(self) -> ZoneInfo:

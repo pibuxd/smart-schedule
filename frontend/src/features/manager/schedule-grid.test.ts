@@ -19,6 +19,8 @@ function shift(id: string, date: string, start: string, end: string, type: strin
     pinned: false,
     manual: false,
     borrowed: false,
+    forced: false,
+    overridden: [],
     wish: 'neutral',
     problems: [],
     past: false,

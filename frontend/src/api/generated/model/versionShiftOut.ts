@@ -24,4 +24,6 @@ export interface VersionShiftOut {
   wish: VersionShiftOutWish;
   problems: string[];
   past: boolean;
+  forced: boolean;
+  overridden: string[];
 }

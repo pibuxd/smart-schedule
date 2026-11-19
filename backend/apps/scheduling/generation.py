@@ -255,6 +255,8 @@ def _save_versions(run: GenerationRun, built: BuiltProblem, schedule, report) ->
                 shift=shift,
                 employee_id=schedule.get(shift.slot_key),
                 pinned=shift.slot_key in problem.pinned,
+                forced=shift.slot_key in problem.forced
+                and schedule.get(shift.slot_key) == problem.forced[shift.slot_key],
                 borrowed=schedule.get(shift.slot_key) is not None and home[schedule[shift.slot_key]] != location_id,
             )
             for shift in shifts
