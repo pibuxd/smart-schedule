@@ -10,17 +10,14 @@ import type {
   ShiftTypeIn,
   ShiftTypeOut,
   StaffingCellIn,
-  StaffingExceptionOut,
 } from '../../api/generated/model'
 import {
   useCreateClosure,
   useCreatePosition,
   useCreateShiftType,
-  useCreateStaffingException,
   useDeleteClosure,
   useDeletePosition,
   useDeleteShiftType,
-  useDeleteStaffingException,
   useLocationSetup,
   useSaveStaffing,
   useUpdatePosition,
@@ -40,6 +37,7 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { dayTitle, parseDate, shortTime, spanHours, WEEKDAY_HEADERS } from '../../lib/dates'
 import { useManager } from './ManagerContext'
+import { StaffingCalendar } from './StaffingCalendar'
 
 const hhmm = (value: string | null | undefined) => (value ? value.slice(0, 5) : '')
 
@@ -77,8 +75,8 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
         <ShiftTypesSection locationId={locationId} setup={data} />
       </div>
       <StaffingSection key={JSON.stringify(data.staffing)} locationId={locationId} setup={data} />
+      <StaffingCalendar locationId={locationId} setup={data} />
       <ClosuresSection locationId={locationId} setup={data} />
-      <ExceptionsSection locationId={locationId} setup={data} />
       <ArchiveSection location={info} />
     </div>
   )
@@ -685,123 +683,6 @@ function ClosuresSection({ locationId, setup }: { locationId: string; setup: Loc
             <Button type="submit" variant="secondary" size="normal" disabled={create.isPending || readOnly}>
               <Plus aria-hidden="true" size={20} />
               Dodaj dzień zamknięcia
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Section>
-  )
-}
-
-// --------------------------------------------------------------------------------------------- exceptions
-
-function ExceptionsSection({ locationId, setup }: { locationId: string; setup: LocationSetupOut }) {
-  const { readOnly } = useManager()
-  const create = useCreateStaffingException()
-  const remove = useDeleteStaffingException()
-  const queryClient = useQueryClient()
-  const [date, setDate] = useState('')
-  const [shift, setShift] = useState(setup.shift_types[0]?.id ?? '')
-  const [position, setPosition] = useState(setup.positions[0]?.id ?? '')
-  const [count, setCount] = useState('0')
-  const [experiencedCount, setExperiencedCount] = useState('')
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
-  const [note, setNote] = useState('')
-  const shiftName = new Map(setup.shift_types.map((s) => [s.id, s.name]))
-  const positionName = new Map(setup.positions.map((p) => [p.id, p.name]))
-  const refresh = () => void queryClient.invalidateQueries()
-
-  if (setup.shift_types.length === 0 || setup.positions.length === 0) return null
-
-  // Left empty, the exception keeps what the weekday usually asks for, so the requirement does not vanish
-  // on the very day the manager adds more people.
-  const weekday = date ? (parseDate(date).getDay() + 6) % 7 : null
-  const usual =
-    setup.staffing.find((c) => c.weekday === weekday && c.shift_type_id === shift && c.position_id === position)
-      ?.experienced ?? 0
-  const experiencedNow = experiencedCount === '' ? Math.min(Number(count), usual) : Number(experiencedCount)
-
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault()
-    create.mutate(
-      {
-        locationId,
-        data: {
-          date,
-          shift_type_id: shift,
-          position_id: position,
-          count: Number(count),
-          experienced: experiencedNow,
-          start_time: start || null,
-          end_time: end || null,
-          note,
-        },
-      },
-      {
-        onSuccess: () => {
-          setNote('')
-          setStart('')
-          setEnd('')
-          refresh()
-        },
-      },
-    )
-  }
-  const describe = (e: StaffingExceptionOut) => {
-    const who = `${shiftName.get(e.shift_type_id) ?? 'Zmiana'}, ${positionName.get(e.position_id) ?? 'stanowisko'}`
-    const what = e.count === 0 ? 'nikt' : `${e.count} os.${e.experienced ? `, w tym ${e.experienced} dośw.` : ''}`
-    const hours = e.start_time && e.end_time ? `, ${shortTime(hhmm(e.start_time))}–${shortTime(hhmm(e.end_time))}` : ''
-    return `${who}: ${what}${hours}`
-  }
-
-  return (
-    <Section
-      title="Wyjątki w obsadzie"
-      description="Inna obsada w wybrany dzień, np. w Wigilię. Zastępuje zwykłą obsadę tego dnia. Gdy lokal jest zamknięty cały dzień, dodaj go wyżej, w dniach zamknięcia."
-    >
-      {setup.exceptions.length > 0 && (
-        <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
-          {setup.exceptions.map((e) => (
-            <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-1.5 last:border-b-0">
-              <span>
-                <b>{dayTitle(parseDate(e.date))}</b> · {describe(e)}
-                {e.note && <span className="text-ink-muted"> ({e.note})</span>}
-              </span>
-              <Button variant="quiet" size="normal" disabled={readOnly || remove.isPending} onClick={() => remove.mutate({ exceptionId: e.id }, { onSuccess: refresh })}>
-                Usuń
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-start">
-        <TextField label="Dzień" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-        <SelectField label="Zmiana" value={shift} onChange={(e) => setShift(e.target.value)}>
-          {setup.shift_types.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField label="Stanowisko" value={position} onChange={(e) => setPosition(e.target.value)}>
-          {setup.positions.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </SelectField>
-        <TextField label="Liczba osób" type="number" inputMode="numeric" min={0} max={50} value={count} onChange={(e) => setCount(e.target.value)} required />
-        <TextField label="W tym doświadczonych" type="number" inputMode="numeric" min={0} max={50} placeholder={String(experiencedNow)} value={experiencedCount} onChange={(e) => setExperiencedCount(e.target.value)} hint={usual > 0 ? `Puste = jak zwykle w ten dzień (${experiencedNow}).` : undefined} />
-        <TextField label="Inne godziny: od (nieobowiązkowo)" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
-        <TextField label="do" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
-        <TextField label="Powód (nieobowiązkowo)" className="sm:col-span-2" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="np. Wigilia" />
-        <div className="grid gap-2 sm:col-span-2 lg:col-span-4">
-          {create.isError && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
-          <div>
-            <Button type="submit" variant="secondary" size="normal" disabled={create.isPending || readOnly}>
-              <Plus aria-hidden="true" size={20} />
-              Dodaj wyjątek
             </Button>
           </div>
         </div>

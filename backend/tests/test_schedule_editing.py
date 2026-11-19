@@ -10,8 +10,10 @@ from django.utils import timezone
 
 from apps.availability.models import AvailabilityDay
 from apps.notifications.models import Notification
+from apps.rules.models import RuleSetting
 from apps.scheduling.generation import request_generation, run_generation
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
+from apps.staffing.models import EmployeeProfile, LocationClosure, StaffingException, StaffingRule
 from tests.test_generation import FAST, MON, _ctx, shop  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.django_db
@@ -296,6 +298,8 @@ def test_read_only_company_can_look_but_not_change(api, shop, draft, subscribe):
     assert api.patch(url(draft, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id)}]}).status_code == 402
     assert api.post(url(draft, "/publish")).status_code == 402
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 402
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 402
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 402
 
 
 def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
@@ -312,6 +316,8 @@ def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 404
     assert api.post(url(draft, "/draft")).status_code == 404
     assert api.post(url(draft, "/publish")).status_code == 404
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 404
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 404
 
 
 def test_person_from_another_company_cannot_be_put_in(api, shop, draft, make_company):
@@ -344,3 +350,133 @@ def test_employee_list_counts_shifts_in_the_draft(api, shop, draft):
     }
     assert {r["id"]: r["draft_shifts"] for r in rows if r["draft_shifts"]} == expected
     assert sum(expected.values()) == 12  # switching someone off tells the manager about these shifts
+
+
+# ----------------------------------------------------------------- one place more or fewer on a day
+
+
+def seat(shop, day):
+    return {"date": str(day), "shift_type_id": str(shop["shift_type"].pk), "position_id": str(shop["position"].pk)}
+
+
+def test_adding_a_place_makes_a_hole_and_survives_arranging_again(api, shop, draft):
+    api.login(shop["manager"])
+
+    added = api.post(url(draft, "/seats"), seat(shop, MON))
+
+    assert added.status_code == 201
+    row = added.json()
+    assert row["employee_id"] is None and (row["start_time"], row["end_time"]) == ("06:00", "14:00")
+    assert row["shift_type_id"] == str(shop["shift_type"].pk)
+    body = api.get(url(draft)).json()
+    assert len([s for s in body["shifts"] if s["date"] == str(MON)]) == 3 and body["scores"]["holes"] == 1
+    assert StaffingException.objects.get(date=MON).count == 3  # Monday usually needs 2
+    setup = api.get(f"/api/locations/{shop['location'].pk}/setup").json()
+    assert setup["arranged"] == [{"start": str(MON), "end": str(MON + timedelta(days=6))}]
+
+    again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    assert Shift.objects.filter(version=again, date=MON).count() == 3
+
+
+def test_removing_a_place_keeps_the_other_person_and_the_numbering(api, shop, draft):
+    api.login(shop["manager"])
+    first, second = Assignment.objects.filter(shift__version=draft, shift__date=MON).order_by("shift__slot_key")
+    Assignment.objects.filter(pk=second.pk).update(pinned=True)
+
+    assert api.client.delete(url(draft, f"/shifts/{first.shift_id}")).status_code == 204
+
+    [left] = Assignment.objects.filter(shift__version=draft, shift__date=MON).select_related("shift")
+    assert left.shift.slot_key.endswith("/1") and left.employee_id == second.employee_id and left.pinned is True
+    assert StaffingException.objects.get(date=MON).count == 1
+    assert api.get(url(draft)).json()["scores"]["slots"] == 11
+    # Back to the usual two people: the date no longer differs from other Mondays.
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 201
+    assert not StaffingException.objects.exists()
+
+
+def test_removed_place_of_a_published_schedule_is_in_the_history(api, shop, draft):
+    api.login(shop["manager"])
+    api.post(url(draft, "/publish"))
+    correction = ScheduleVersion.objects.get(pk=api.post(url(draft, "/draft")).json()["id"])
+    rows = Assignment.objects.filter(shift__version=correction, shift__date=MON).select_related("shift")
+    gone = rows.order_by("-shift__slot_key").first()
+    name = gone.employee.membership.user.full_name
+
+    assert api.client.delete(url(correction, f"/shifts/{gone.shift_id}")).status_code == 204
+    assert api.get(url(correction)).json()["changed_people"] == [name]
+    assert api.post(url(correction, "/publish")).status_code == 200
+
+    event = AssignmentEvent.objects.filter(slot_key=gone.shift.slot_key).order_by("-at").first()
+    assert (event.from_employee_id, event.to_employee_id, event.reason) == (gone.employee_id, None, "manual")
+
+
+def test_places_cannot_change_on_closed_or_past_days_or_in_a_published_schedule(api, shop, draft, monkeypatch):
+    api.login(shop["manager"])
+    LocationClosure.objects.create(location=shop["location"], date=MON + timedelta(days=5))
+    closed = api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=5)))
+    assert closed.status_code == 409 and "zamknięty" in closed.json()["detail"]
+    assert api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=30))).status_code == 400
+
+    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: MON + timedelta(days=2))
+    taken = shift_of(draft, MON)
+    assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 409
+    assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 409
+    assert api.get(url(draft)).json()["today"] == str(MON + timedelta(days=2))
+
+    api.post(url(draft, "/publish"))
+    later = shift_of(draft, MON + timedelta(days=4))
+    assert api.post(url(draft, "/seats"), seat(shop, MON + timedelta(days=4))).status_code == 409
+    assert api.client.delete(url(draft, f"/shifts/{later.shift_id}")).status_code == 409
+    assert not StaffingException.objects.exists()
+
+
+def test_removing_a_place_is_refused_when_it_breaks_a_hard_rule(api, shop, draft):
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    hours = 8 * Assignment.objects.filter(shift__version=draft, employee=taken.employee_id).count()
+    # The person's hours goal becomes a rule without exceptions, met exactly by the shifts they have now.
+    EmployeeProfile.objects.filter(pk=taken.employee_id).update(target_hours_month=round(hours * 31 / 7))
+    RuleSetting.objects.create(location=shop["location"], rule_code="target_hours", position=1, is_hard=True)
+    assert api.get(url(draft)).json()["hard_problems"] == []
+
+    refused = api.client.delete(url(draft, f"/shifts/{taken.shift_id}"))
+
+    assert refused.status_code == 409 and "Tego miejsca nie można usunąć" in refused.json()["detail"]
+    assert Shift.objects.filter(pk=taken.shift_id).exists() and not StaffingException.objects.exists()
+
+
+def test_manager_may_keep_fewer_experienced_people_than_the_staffing_asks(api, shop):
+    location = shop["location"]
+    StaffingRule.objects.filter(location=location, weekday=MON.weekday()).update(experienced=1)
+    expert = shop["people"][0]
+    EmployeeProfile.objects.filter(pk=expert.pk).update(experience=3)
+    draft = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    on_monday = Assignment.objects.filter(shift__version=draft, shift__date=MON)
+    assert on_monday.filter(employee=expert).exists()
+    assert list(on_monday.filter(shift__needs_experienced=True).values_list("employee", flat=True)) == [expert.pk]
+    api.login(shop["manager"])
+    taken = on_monday.get(employee=expert)
+    free = free_person(shop, draft, MON)
+    change = {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
+
+    saved = api.patch(url(draft, "/assignments"), change)
+
+    assert saved.status_code == 200 and saved.json()["ok"] is True
+    assert "doświadczona osoba" in saved.json()["warnings"][0]
+    body = api.get(url(draft)).json()
+    assert body["hard_problems"] == [] and "doświadczona osoba" in body["accepted_problems"][0]
+    # Pinned, the choice survives arranging again instead of making the generator fail.
+    assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 200
+    again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST)
+    assert again.status == "succeeded", again.error
+    assert (
+        Assignment.objects.get(shift__version=again.versions.get(), shift__slot_key=taken.shift.slot_key).employee
+        == free
+    )
+    assert api.post(url(again.versions.get(), "/publish")).status_code == 200
+    # After a place is removed, the first place of the day still asks for experience.
+    version = ScheduleVersion.objects.get(pk=api.post(url(again.versions.get(), "/draft")).json()["id"])
+    first, _ = Shift.objects.filter(version=version, date=MON).order_by("slot_key")
+    assert api.client.delete(url(version, f"/shifts/{first.pk}")).status_code == 204
+    [left] = Shift.objects.filter(version=version, date=MON)
+    assert left.slot_key.endswith("/1") and left.needs_experienced is True

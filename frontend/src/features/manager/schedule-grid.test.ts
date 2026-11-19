@@ -10,6 +10,7 @@ function shift(id: string, date: string, start: string, end: string, type: strin
     start_time: start,
     end_time: end,
     hours: 8,
+    shift_type_id: `st-${type}`,
     shift_type_name: type,
     position_id: position,
     position_name: position === 'p1' ? 'Sprzedawca' : 'Piekarz',

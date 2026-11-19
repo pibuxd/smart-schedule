@@ -38,6 +38,7 @@ import type {
   PeriodOut,
   PeriodUpdateIn,
   PinIn,
+  SeatIn,
   ShiftExplanationOut,
   VersionOut,
   VersionShiftOut,
@@ -1993,6 +1994,250 @@ export const usePinShift = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getPinShiftMutationOptions(options), queryClient);
+    }
+    export type addScheduleSeatResponse201 = {
+  data: VersionShiftOut
+  status: 201
+}
+
+export type addScheduleSeatResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type addScheduleSeatResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type addScheduleSeatResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type addScheduleSeatResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type addScheduleSeatResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type addScheduleSeatResponseSuccess = (addScheduleSeatResponse201) & {
+  headers: Headers;
+};
+export type addScheduleSeatResponseError = (addScheduleSeatResponse400 | addScheduleSeatResponse402 | addScheduleSeatResponse403 | addScheduleSeatResponse404 | addScheduleSeatResponse409) & {
+  headers: Headers;
+};
+
+export type addScheduleSeatResponse = (addScheduleSeatResponseSuccess | addScheduleSeatResponseError)
+
+export const getAddScheduleSeatUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/seats`
+}
+
+/**
+ * One more person needed on a shift that day: an empty place in the draft, kept when arranging again
+ * (the date's staffing in the location's settings gets the same number).
+ * @summary Add Schedule Seat
+ */
+export const addScheduleSeat = async (versionId: string,
+    seatIn: SeatIn, options?: Parameters<typeof apiFetch>[1]): Promise<addScheduleSeatResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<addScheduleSeatResponse>(getAddScheduleSeatUrl(versionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(seatIn)
+  }
+);}
+
+
+
+
+
+export const getAddScheduleSeatMutationKey = () => ['addScheduleSeat'] as const;
+
+export const getAddScheduleSeatMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addScheduleSeat>>, TError,AddScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addScheduleSeat>>, TError,AddScheduleSeatMutationVariables, TContext> => {
+
+const mutationKey = getAddScheduleSeatMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addScheduleSeat>>, AddScheduleSeatMutationVariables> = (props) => {
+          const {versionId,data} = props ?? {};
+
+          return  addScheduleSeat(versionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddScheduleSeatMutationResult = NonNullable<Awaited<ReturnType<typeof addScheduleSeat>>>
+    export type AddScheduleSeatMutationBody = SeatIn
+    export type AddScheduleSeatMutationError = ErrorOut
+    export type AddScheduleSeatMutationVariables = {versionId: string;data: SeatIn}
+
+    /**
+ * One more person needed on a shift that day: an empty place in the draft, kept when arranging again
+ * (the date's staffing in the location's settings gets the same number).
+ * @summary Add Schedule Seat
+ */
+export const useAddScheduleSeat = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addScheduleSeat>>, TError,AddScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof addScheduleSeat>>,
+        TError,
+        AddScheduleSeatMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAddScheduleSeatMutationOptions(options), queryClient);
+    }
+    export type removeScheduleSeatResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeScheduleSeatResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type removeScheduleSeatResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type removeScheduleSeatResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type removeScheduleSeatResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type removeScheduleSeatResponseSuccess = (removeScheduleSeatResponse204) & {
+  headers: Headers;
+};
+export type removeScheduleSeatResponseError = (removeScheduleSeatResponse402 | removeScheduleSeatResponse403 | removeScheduleSeatResponse404 | removeScheduleSeatResponse409) & {
+  headers: Headers;
+};
+
+export type removeScheduleSeatResponse = (removeScheduleSeatResponseSuccess | removeScheduleSeatResponseError)
+
+export const getRemoveScheduleSeatUrl = (versionId: string,
+    shiftId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/shifts/${shiftId}`
+}
+
+/**
+ * One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the
+ * date's staffing gets the same number.
+ * @summary Remove Schedule Seat
+ */
+export const removeScheduleSeat = async (versionId: string,
+    shiftId: string, options?: Parameters<typeof apiFetch>[1]): Promise<removeScheduleSeatResponse> => {
+
+  return apiFetch<removeScheduleSeatResponse>(getRemoveScheduleSeatUrl(versionId,shiftId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveScheduleSeatMutationKey = () => ['removeScheduleSeat'] as const;
+
+export const getRemoveScheduleSeatMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeScheduleSeat>>, TError,RemoveScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeScheduleSeat>>, TError,RemoveScheduleSeatMutationVariables, TContext> => {
+
+const mutationKey = getRemoveScheduleSeatMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeScheduleSeat>>, RemoveScheduleSeatMutationVariables> = (props) => {
+          const {versionId,shiftId} = props ?? {};
+
+          return  removeScheduleSeat(versionId,shiftId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveScheduleSeatMutationResult = NonNullable<Awaited<ReturnType<typeof removeScheduleSeat>>>
+
+    export type RemoveScheduleSeatMutationError = ErrorOut
+    export type RemoveScheduleSeatMutationVariables = {versionId: string;shiftId: string}
+
+    /**
+ * One person fewer needed on a shift that day: the place leaves the draft (with whoever had it) and the
+ * date's staffing gets the same number.
+ * @summary Remove Schedule Seat
+ */
+export const useRemoveScheduleSeat = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeScheduleSeat>>, TError,RemoveScheduleSeatMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof removeScheduleSeat>>,
+        TError,
+        RemoveScheduleSeatMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRemoveScheduleSeatMutationOptions(options), queryClient);
     }
     export type startCorrectingResponse201 = {
   data: VersionSummaryOut

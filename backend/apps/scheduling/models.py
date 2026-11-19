@@ -149,6 +149,8 @@ class Shift(CompanyOwnedModel):
     slot_key = models.CharField(
         max_length=120, help_text="Stały klucz miejsca (data, zmiana, stanowisko, numer) między wersjami."
     )
+    # The staffing asked for an experienced person on this place (kept so a saved version is checked as arranged).
+    needs_experienced = models.BooleanField("dla doświadczonej osoby", default=False)
 
     class Meta:
         verbose_name = "zmiana"

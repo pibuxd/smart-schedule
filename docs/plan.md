@@ -230,7 +230,7 @@ Logowanie i konto
 
 Ustawienia (menedżer)
 - `GET/POST /groups`, `GET/POST/PATCH /locations`
-- `GET/POST/PATCH/DELETE /locations/{id}/positions`, `/shift-types`, `/staffing-rules`, `/staffing-exceptions`
+- `GET/POST/PATCH/DELETE /locations/{id}/positions`, `/shift-types`, `/staffing-rules`; obsada jednej daty: `PUT /locations/{id}/staffing-days/{data}` (sekcja 24)
 - `GET/PATCH /locations/{id}/employees`, `GET/POST /locations/{id}/invitations`, `POST /invitations/{id}/cancel`
 
 Dyspozycyjność i prośby
@@ -269,7 +269,7 @@ Pracownik (telefon)
 Menedżer (komputer)
 1. Rejestracja firmy i kod dostępu (także później w Ustawieniach → Subskrypcja).
 2. Widok zbiorczy grupy (ekran startowy): lokale w wierszach, stan okresu każdego lokalu (zbieranie dyspozycji / szkic / opublikowany), kto nie zgłosił dyspozycji, przycisk "Ułóż grafik dla wszystkich" (osobne generowanie dla każdego lokalu), przycisk "Poproś o dyspozycje" (powiadomienie do pracowników z okresem i terminem).
-3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) z wyjątkami, okres i termin dyspozycji.
+3. Ustawienia lokalu: stanowiska, zmiany i godziny, obsada (tabela dzień tygodnia × zmiana × stanowisko) i kalendarz obsady w wybrane dni (sekcja 24), okres i termin dyspozycji.
 4. Pracownicy: lista, zaproszenia po numerze, stanowiska, maksimum i cel godzin.
 5. Dyspozycje: siatka pracownicy × dni, lista próśb z interpretacją i akcjami, lista osób bez zgłoszenia.
 6. Zasady: jedna lista do przeciągania, przełącznik włącz/wyłącz, "bez wyjątków", parametry, podgląd skutku przed zapisaniem.
@@ -430,9 +430,9 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 
 Założenia:
 1. Ręcznie można zmieniać tylko najnowszy szkic okresu (jedyny wyjątek od etapu 9: zatwierdzona oddana zmiana przechodzi w opublikowanej wersji w miejscu, z wpisem w historii przypisań; zob. sekcja 18, punkt 4). Opublikowany grafik poprawia się przez "Popraw grafik" (kopia jako nowy szkic), a starsze szkice dostają status "zastąpiony" przy nowym szkicu lub publikacji. Dni, które już minęły, są zamrożone (409).
-2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmianę bez obsady można przypiąć jako pustą (od PR #25, patrz sekcja 22).
+2. Ręczna zmiana, która dodaje naruszenie twardej reguły, jest odrzucana (409 z powodem), poza wymogiem doświadczonych, który kierownik może złamać (ostrzeżenie zamiast odmowy; sekcja 24, punkt 7); miękkie skutki (np. ponad cel godzin) są pokazane jako ostrzeżenie, ale dozwolone. Zmieniona ręcznie zmiana traci przypięcie; "Przypnij" trzeba kliknąć osobno. Zmianę bez obsady można przypiąć jako pustą (od PR #25, patrz sekcja 22).
 3. W edytorze można wpisać tylko osoby z lokalu (z danym stanowiskiem); pożyczanie z innych lokali zostaje dla oddawania zmian (etap 9).
-4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły. Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
+4. Publikacja jest możliwa z dziurami (kierownik dostaje ostrzeżenie), ale nie z naruszeniem twardej reguły; wyjątek: brak doświadczonych po ręcznej zmianie kierownika (sekcja 24, punkt 7). Historia przypisań (`AssignmentEvent`) jest zapisywana przy publikacji, dla każdej zmienionej względem poprzedniej publikacji zmiany, z powodem "ręcznie" albo "ułożone". Publikacja zapisuje powiadomienie `schedule_published` dla pracowników lokalu (pokazanie to etap 9).
 5. Okres próbny dostaje tylko pierwsza firma danej osoby; kolejne firmy bez kodu są od razu tylko do odczytu.
 6. Wyjaśnienie zmiany liczy szybkie sprawdzenie walidatorem dla każdej osoby (ok. 5 ms na osobę). Głębsza analiza ("kto by mógł, gdyby przestawić inne zmiany") wymaga solvera w workerze i zostaje na później.
 7. Raport godzin liczy tylko opublikowane zmiany w lokalach, którymi zarządza kierownik, w podanym miesiącu kalendarzowym (zmiana należy do dnia, w którym się zaczyna). CSV: średniki, przecinek dziesiętny, BOM, żeby Excel otworzył polskie znaki.
@@ -577,7 +577,7 @@ Decyzja Piotra po przeglądzie konkurencji (raport: https://claude.ai/artifact/P
 1. `PositionExperience` (employee, position, level): tylko wyjątki od `EmployeeProfile.experience`. Wiersz równy stopniowi domyślnemu nie jest zapisywany; odznaczenie stanowiska usuwa jego wyjątek. Istniejące dane nie wymagają migracji danych.
 2. `StaffingRule.experienced` i `StaffingException.experienced` (domyślnie 0, nie więcej niż `count`): ile osób z obsady ma być doświadczonych. Wyjątek na datę ma własną wartość; formularz wyjątku zostawiony pusty przyjmuje liczbę ze zwykłej obsady tego dnia (nie więcej niż liczba osób), żeby wymóg nie znikał po cichu. Wolne miejsce z powodu wymogu jest nazwane w wyjaśnieniu zmiany ("obsada wymaga tu doświadczonej osoby").
 3. Silnik: `Employee.experience_by_position` i `Employee.level(position)`; `Slot.needs_experienced` na pierwszych N miejscach grupy (lokal × dzień × typ zmiany × stanowisko). Wymóg liczony na grupę, nie na miejsce: liczba mniej doświadczonych osób w grupie nie może przekroczyć liczby miejsc bez wymogu. Dzięki temu nie ma znaczenia, na którym miejscu grupy stoi doświadczona osoba, a niepełna obsada nie jest błędem, dopóki zostaje miejsce dla doświadczonej.
-4. Walidator: twarde naruszenie `experience` (nie zasada katalogu, bo wynika z obsady). Solver: to samo jako ograniczenie; nigdy nie daje sprzeczności, bo miejsce może zostać luką. Przypięcie, które samo łamie wymóg, jest zgłaszane jak inne konflikty przypięć. Dni, które minęły, zachowują opublikowane zmiany bez wymogu.
+4. Walidator: twarde naruszenie `experience` (nie zasada katalogu, bo wynika z obsady). Twarde dla generatora i oddawania zmian; kierownik może je złamać ręcznie i opublikować grafik z ostrzeżeniem (jedyny taki wyjątek, `editing.MANAGER_MAY_BREAK`, sekcja 24, punkt 7). Solver: to samo jako ograniczenie; nigdy nie daje sprzeczności, bo miejsce może zostać luką. Przypięcie, które samo łamie wymóg, zmniejsza go przy ponownym układaniu (od 19.11.2026, sekcja 24, punkt 7; wcześniej było zgłaszane jak inne konflikty przypięć). Dni, które minęły, zachowują opublikowane zmiany; od 19.11.2026 zapisana zmiana pamięta wymóg (`Shift.needs_experienced`).
 5. `experience_mix` i wyjaśnienia liczą stopień na stanowisku danej zmiany. Osoba pożyczona z innego lokalu ma stopień ze stanowiska o tej samej nazwie.
 6. API: `EmployeeOut.position_experience` (stopień na każdym stanowisku osoby) i `EmployeeIn.position_experience`; komórki obsady i wyjątki mają pole `experienced`. Pracownik nadal nie widzi żadnego stopnia.
 7. Ekrany: w arkuszu pracownika z co najmniej dwoma stanowiskami "Inny stopień na którymś stanowisku"; w obsadzie pole "w tym doświadczonych" przy komórce i przy wyjątku.
@@ -770,3 +770,44 @@ zapisane grafiki i godziny nie giną, więc tam, gdzie baza blokuje usunięcie (
 Założenia: usunięcie osoby nie zmienia zapisanych grafików, więc jej przyszłe zmiany kierownik przenosi ręcznie albo
 układa grafik od nowa (tak samo jak przy wyłączeniu z grafiku). Działało już wcześniej i zostało bez zmian: usuwanie
 zmian (typów zmian), dni zamknięcia, wyjątków w obsadzie, poleceń kierownika i próśb pracownika.
+## 24. Obsada wybranego dnia w kalendarzu i miejsca w edycji grafiku (18.11.2026)
+
+Prośba Piotra: lista wyjątków (dzień, zmiana, stanowisko, każdy wpis osobno) była mało czytelna. Zamiast niej:
+
+- Ustawienia lokalu mają kalendarz "Obsada w wybrane dni": miesiąc, w każdym dniu liczba potrzebnych osób, ikona przy
+  dniu z inną obsadą niż zwykle i przy dniu zamknięcia. Wybranie dnia otwiera jego obsadę: dla każdej zmiany
+  i stanowiska liczba osób (minus, plus), a po rozwinięciu doświadczeni i inne godziny. Tam też "Wróć do zwykłej
+  obsady" i "Zamknij lokal w ten dzień" / "Otwórz lokal w ten dzień" (te same dni zamknięcia co na liście niżej).
+- Dane zostają w `StaffingException` (bez migracji). Wiersz istnieje tylko wtedy, gdy data różni się od dnia
+  tygodnia: `apps/staffing/day_staffing.py` usuwa go, gdy liczby i godziny są takie jak zwykle.
+- `PUT /locations/{id}/staffing-days/{data}` zapisuje cały dzień naraz (`cells`, `note`); para pominięta wraca do
+  zwykłej obsady. Zastępuje `POST /locations/{id}/staffing-exceptions` i `DELETE /staffing-exceptions/{id}`.
+- Edycja grafiku (najnowszy szkic): `POST /versions/{id}/seats` dodaje puste miejsce na zmianie i stanowisku danego
+  dnia, `DELETE /versions/{id}/shifts/{shift_id}` usuwa miejsce razem z osobą. Oba zapisują tę samą liczbę jako
+  obsadę tej daty, więc "Ułóż od nowa" jej nie cofa. Przyciski są w arkuszu zmiany ("Ile osób na tej zmianie"),
+  a w pustej komórce siatki jest "+".
+
+Założenia:
+1. Numery miejsc zostają 1…n, jak przy układaniu: gdy znika miejsce o niższym numerze, osoba z ostatniego miejsca
+   (z przypięciem) przechodzi na jego numer.
+2. Dni, które minęły, dni zamknięcia i opublikowane wersje: bez zmian miejsc (409), tak jak przy ręcznej zmianie osoby.
+3. Nowe miejsce bierze godziny innych miejsc tej zmiany w tym dniu, a gdy ich nie ma: godziny z obsady daty, dnia
+   tygodnia albo typu zmiany. Zmiana "dowolne godziny" bez godzin: 409 z prośbą o ustawienie ich w kalendarzu.
+3a. Usunięcie miejsca przechodzi przez walidator jak każda ręczna zmiana: gdy grafik złamałby przez to twardą
+   regułę, której wcześniej nie łamał, jest odrzucane (409 z powodem). Po przeglądzie Prelinta (PR #39).
+4. Miejsce usunięte z poprawki opublikowanego grafiku trafia do historii (`AssignmentEvent`, "ręcznie", do nikogo),
+   a osoba jest na liście osób, którym zmienia się grafik (`changed_people`).
+5. Kolumnę, której w grafiku jeszcze nie ma (zmiana i stanowisko bez żadnego miejsca w okresie), dodaje się
+   w kalendarzu obsady i przez "Ułóż od nowa". Na telefonie pustych komórek siatki nie pokazujemy.
+6. Zmiana obsady w kalendarzu nie rusza gotowych szkiców; działa od następnego ułożenia grafiku (jak dotąd).
+   Po przeglądzie Prelinta (PR #39): arkusz dnia mówi to wprost, gdy data jest w okresie z ułożonym grafikiem
+   (`LocationSetupOut.arranged`), także przy "Zamknij lokal w ten dzień".
+7. Doświadczeni (decyzja Piotra z 19.11.2026: "kierownik może to łamać, ma władzę absolutną"). Zapisana zmiana
+   pamięta, czy jej miejsce jest dla doświadczonej osoby (`Shift.needs_experienced`, migracja `scheduling.0009`
+   uzupełnia je z obsady dla szkiców i opublikowanych grafików od dziś), więc walidator sprawdza wymóg także
+   w zapisanym grafiku. Generator zawsze go spełnia. Ręczna zmiana, usunięcie miejsca i publikacja go nie blokują:
+   `editing.MANAGER_MAY_BREAK` przenosi takie naruszenia do ostrzeżeń (`CheckOut.warnings`,
+   `VersionOut.accepted_problems`, żółta ramka nad siatką), a `hard_problems` zawiera tylko to, co blokuje publikację.
+   Przypięta zmiana kierownika zmniejsza wymóg przy "Ułóż od nowa" (`_keep_pinned_beginners`), zamiast przerywać
+   układanie. Oddawanie zmian między pracownikami nadal wymaga doświadczonej osoby, bo tam o przejęciu decyduje
+   pracownik (albo zasada lokalu bez zatwierdzania), a władza łamania wymogu należy tylko do kierownika.

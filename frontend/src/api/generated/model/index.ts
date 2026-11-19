@@ -6,6 +6,7 @@
  */
 
 export * from './agreedRuleOut';
+export * from './arrangedOut';
 export * from './askAvailabilityIn';
 export * from './askAvailabilityOut';
 export * from './assistantCommandOut';
@@ -33,8 +34,10 @@ export * from './commandIn';
 export * from './companyIn';
 export * from './companyOut';
 export * from './copyAgreementsIn';
+export * from './dayCellIn';
 export * from './dayIn';
 export * from './dayInState';
+export * from './dayStaffingIn';
 export * from './dismissAllNotificationsParams';
 export * from './dropCheckOut';
 export * from './employeeHoursOut';
@@ -163,6 +166,7 @@ export * from './rulesOutScope';
 export * from './ruleValueOut';
 export * from './ruleValueOutParams';
 export * from './scoresOut';
+export * from './seatIn';
 export * from './shiftExplanationOut';
 export * from './shiftTypeIn';
 export * from './shiftTypeInKind';
@@ -172,7 +176,6 @@ export * from './slotEventOut';
 export * from './slotEventOutReason';
 export * from './staffingCellIn';
 export * from './staffingCellOut';
-export * from './staffingExceptionIn';
 export * from './staffingExceptionOut';
 export * from './staffingIn';
 export * from './subscriptionOut';
