@@ -29,6 +29,7 @@ def prior_requests(row: TextRequest) -> list[TextRequest]:
         TextRequest.objects.for_company(row.company_id)
         .filter(employee_id=row.employee_id, period_id=row.period_id, month=row.month, created_at__lt=row.created_at)
         .exclude(status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED, TextRequest.Status.NEW])
+        .exclude(interpretation__type="out_of_scope", interpretation__type__isnull=False)
         .order_by("-created_at", "-pk")[:10]
     )
 
@@ -71,6 +72,7 @@ def command_history(command: AssistantCommand) -> str:
         AssistantCommand.objects.for_company(command.company_id)
         .filter(
             location_id=command.location_id,
+            rule_set_id=command.rule_set_id,
             created_by_id=command.created_by_id,
             created_at__lt=command.created_at,
             created_at__gte=command.created_at - timedelta(hours=24),

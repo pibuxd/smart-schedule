@@ -155,7 +155,7 @@ class TestSettings:
         assert api.patch(f"/api/positions/{position_id}", {"name": "Piekarz nocny"}).json()["name"] == "Piekarz nocny"
         assert api.client.delete(f"/api/positions/{position_id}").status_code == 204
 
-    def test_position_used_in_a_schedule_cannot_be_deleted(self, api, shop):
+    def test_position_used_in_a_schedule_is_hidden_instead_of_deleted(self, api, shop):
         version = ScheduleVersion.objects.create(period=shop["period"], number=1)
         start = datetime.combine(shop["period"].start, time(6), WARSAW)
         Shift.objects.create(
@@ -167,8 +167,21 @@ class TestSettings:
             end_at=start + timedelta(hours=8),
             slot_key="x",
         )
+        StaffingRule.objects.create(
+            location=shop["location"], weekday=0, shift_type=shop["shift_type"], position=shop["position"], count=1
+        )
+        setup = f"/api/locations/{shop['location'].pk}/setup"
         response = as_manager(api, shop).client.delete(f"/api/positions/{shop['position'].pk}")
-        assert response.status_code == 409 and "w ułożonym grafiku" in response.json()["detail"]
+        assert response.status_code == 204
+        # The schedule keeps the position; settings, staffing and people no longer have it.
+        assert Shift.objects.filter(position=shop["position"]).exists()
+        body = api.get(setup).json()
+        assert body["positions"] == [] and body["staffing"] == []
+        assert not shop["employee"].positions.exists()
+        assert api.patch(f"/api/positions/{shop['position'].pk}", {"name": "Inna"}).status_code == 404
+        # The name is free again.
+        created = api.post(f"/api/locations/{shop['location'].pk}/positions", {"name": "Sprzedawca"})
+        assert created.status_code == 201
 
     def test_shift_types_fixed_need_hours_overnight_allowed(self, api, shop):
         as_manager(api, shop)

@@ -254,6 +254,27 @@ def update_period(request, period_id: UUID, payload: PeriodUpdateIn):
     return _period_out(period)
 
 
+@router.delete(
+    "/periods/{uuid:period_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
+)
+def delete_period(request, period_id: UUID):
+    """Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+    published stays: employees saw it and hours are counted from it."""
+    ctx, period = context_for(request, SchedulePeriod, period_id)
+    ctx.require_manager_of(period.location)
+    ctx.require_writable()
+    with transaction.atomic():
+        period = ctx.qs(SchedulePeriod).select_for_update().get(pk=period.pk)
+        versions = ctx.qs(ScheduleVersion).filter(period=period)
+        if versions.filter(published_at__isnull=False).exists():
+            raise HttpError(409, "Ten grafik był już opublikowany, więc okresu nie można usunąć.")
+        if period.generation_runs.filter(status__in=ACTIVE).exists():
+            raise HttpError(409, "Grafik na ten okres właśnie się układa. Poczekaj albo przerwij układanie.")
+        versions.delete()
+        period.delete()
+    return Status(204, None)
+
+
 @router.post(
     "/periods/{period_id}/ask-availability",
     response={200: AskAvailabilityOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
@@ -283,6 +304,13 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
         "deadline": period.deadline.isoformat(),
     }
     with transaction.atomic():
+        from apps.assistant import agreements
+
+        agreements.lock_location(period.location)
+        period = ctx.qs(SchedulePeriod).select_for_update().get(pk=period.pk)
+        if period.status != SchedulePeriod.Status.COLLECTING:
+            raise HttpError(409, "Grafik na ten okres jest już ułożony.")
+        agreements.bind_pending(period)
         Notification.objects.for_company(ctx.company).bulk_create(
             Notification(company=ctx.company, user_id=user_id, kind="availability_requested", payload=note)
             for user_id in user_ids
@@ -647,6 +675,10 @@ class CheckOut(Schema):
     after: ScoresOut
 
 
+class DropCheckOut(CheckOut):
+    shift_id: str  # the shift the person would be dropped on
+
+
 class PinIn(Schema):
     pinned: bool
 
@@ -929,6 +961,21 @@ def check_schedule_changes(request, version_id: UUID, payload: ChangesIn):
     ctx, version = _version_context(request, version_id)
     result, _ = check_changes(load_version(version), _changes(ctx, payload))
     return _check_out(result)
+
+
+@router.get(
+    "/versions/{version_id}/shifts/{shift_id}/drops",
+    response={200: list[DropCheckOut], 403: ErrorOut, 404: ErrorOut},
+)
+def shift_drop_checks(request, version_id: UUID, shift_id: UUID):
+    """What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+    Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it."""
+    from apps.scheduling.editing import check_drops, load_version
+
+    ctx, version = _version_context(request, version_id)
+    shift = ctx.get(Shift, pk=shift_id, version=version)
+    results = check_drops(load_version(version), str(shift.pk))
+    return [DropCheckOut(shift_id=target, **_check_out(result).dict()) for target, result in results.items()]
 
 
 @router.patch(

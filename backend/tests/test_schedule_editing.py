@@ -150,6 +150,48 @@ def test_swap_two_people_in_one_change(api, shop, draft):
     assert (first.employee_id, second.employee_id) == (people[1], people[0])
 
 
+def test_drop_checks_answer_every_drop_of_a_drag_at_once(api, shop, draft):
+    api.login(shop["manager"])
+    rows = list(Assignment.objects.filter(shift__version=draft).select_related("shift").order_by("shift__slot_key"))
+    dragged = next(r for r in rows if r.employee_id)
+    Assignment.objects.filter(pk__in=[dragged.pk, rows[-1].pk]).update(pinned=True)  # pins move with the person
+
+    response = api.get(url(draft, f"/shifts/{dragged.shift_id}/drops"))
+
+    assert response.status_code == 200, response.json()
+    drops = {d["shift_id"]: d for d in response.json()}
+    others = [r for r in rows if r.employee_id != dragged.employee_id]
+    assert set(drops) == {str(r.shift_id) for r in others}  # not the shift itself, nor the person's other shifts
+    assert {d["ok"] for d in drops.values()} == {True, False}
+    for target in others:  # each answer is what checking that one swap says
+        swap = [
+            {"shift_id": str(target.shift_id), "employee_id": str(dragged.employee_id)},
+            {"shift_id": str(dragged.shift_id), "employee_id": str(target.employee_id) if target.employee_id else None},
+        ]
+        single = api.post(url(draft, "/check"), {"changes": swap}).json()
+        assert drops[str(target.shift_id)] == {**single, "shift_id": str(target.shift_id)}
+    dragged.refresh_from_db()
+    assert dragged.manual is False  # nothing is saved
+
+
+def test_drop_checks_skip_days_that_have_passed_and_empty_shifts(api, shop, draft, monkeypatch):
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    later = shift_of(draft, MON + timedelta(days=3))
+    Assignment.objects.filter(pk=later.pk).update(employee=None)
+
+    assert api.get(url(draft, f"/shifts/{later.shift_id}/drops")).json() == []  # nobody to drag
+    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: MON + timedelta(days=2))
+    assert api.get(url(draft, f"/shifts/{taken.shift_id}/drops")).json() == []  # the day has passed
+    days = Shift.objects.filter(version=draft).values_list("pk", "date")
+    past = {str(pk) for pk, day in days if day < MON + timedelta(days=2)}
+    other = Assignment.objects.filter(shift__version=draft, shift__date__gte=MON + timedelta(days=2)).exclude(
+        employee=None
+    )
+    drops = api.get(url(draft, f"/shifts/{other.first().shift_id}/drops")).json()
+    assert drops and not past & {d["shift_id"] for d in drops}
+
+
 def test_leaving_a_shift_empty_makes_a_hole(api, shop, draft):
     api.login(shop["manager"])
     taken = shift_of(draft, MON)
@@ -269,6 +311,7 @@ def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
     assert api.get(url(draft)).status_code == 404
     assert api.get(url(draft, f"/shifts/{taken.shift_id}/explain")).status_code == 404
     assert api.post(url(draft, "/check"), change).status_code == 404
+    assert api.get(url(draft, f"/shifts/{taken.shift_id}/drops")).status_code == 404
     assert api.patch(url(draft, "/assignments"), change).status_code == 404
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 404
     assert api.post(url(draft, "/draft")).status_code == 404

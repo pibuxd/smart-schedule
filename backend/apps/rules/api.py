@@ -201,7 +201,10 @@ def _rules_out(sc: _Scope) -> RulesOut:
         scope_id=sc.obj.pk,
         name=sc.obj.name,
         group=NamedOut(id=group.pk, name=group.name) if location is not None and group is not None else None,
-        positions=[NamedOut(id=p.pk, name=p.name) for p in sc.ctx.qs(Position).filter(location=location)]
+        positions=[
+            NamedOut(id=p.pk, name=p.name)
+            for p in sc.ctx.qs(Position).filter(location=location, removed_at__isnull=True)
+        ]
         if location
         else [],
         shift_types=[NamedOut(id=s.pk, name=s.name) for s in sc.ctx.qs(ShiftType).filter(location=location)]
@@ -255,7 +258,8 @@ def _clean_params(sc: _Scope, code: str, given: dict[str, Any], enabled: bool) -
                 object_id = UUID(str(value))
             except ValueError:
                 raise HttpError(400, f"„{rule.label}”: wybierz z listy tego lokalu.") from None
-            if location is None or not sc.ctx.qs(model).filter(pk=object_id, location=location).exists():
+            live = {"removed_at__isnull": True} if model is Position else {}
+            if location is None or not sc.ctx.qs(model).filter(pk=object_id, location=location, **live).exists():
                 if not enabled and location is not None:
                     # A disabled legacy rule may still point to a position that no longer exists.
                     params[name] = None

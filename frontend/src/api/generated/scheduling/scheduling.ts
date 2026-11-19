@@ -28,6 +28,7 @@ import type {
   AskAvailabilityOut,
   ChangesIn,
   CheckOut,
+  DropCheckOut,
   ErrorOut,
   GenerateIn,
   GenerationRunOut,
@@ -443,6 +444,117 @@ export const useUpdatePeriod = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getUpdatePeriodMutationOptions(options), queryClient);
+    }
+    export type deletePeriodResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deletePeriodResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type deletePeriodResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type deletePeriodResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type deletePeriodResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type deletePeriodResponseSuccess = (deletePeriodResponse204) & {
+  headers: Headers;
+};
+export type deletePeriodResponseError = (deletePeriodResponse402 | deletePeriodResponse403 | deletePeriodResponse404 | deletePeriodResponse409) & {
+  headers: Headers;
+};
+
+export type deletePeriodResponse = (deletePeriodResponseSuccess | deletePeriodResponseError)
+
+export const getDeletePeriodUrl = (periodId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}`
+}
+
+/**
+ * Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+ * published stays: employees saw it and hours are counted from it.
+ * @summary Delete Period
+ */
+export const deletePeriod = async (periodId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deletePeriodResponse> => {
+
+  return apiFetch<deletePeriodResponse>(getDeletePeriodUrl(periodId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePeriodMutationKey = () => ['deletePeriod'] as const;
+
+export const getDeletePeriodMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext> => {
+
+const mutationKey = getDeletePeriodMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePeriod>>, DeletePeriodMutationVariables> = (props) => {
+          const {periodId} = props ?? {};
+
+          return  deletePeriod(periodId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePeriodMutationResult = NonNullable<Awaited<ReturnType<typeof deletePeriod>>>
+
+    export type DeletePeriodMutationError = ErrorOut
+    export type DeletePeriodMutationVariables = {periodId: string}
+
+    /**
+ * Delete a period added by mistake (e.g. wrong dates), with its drafts. A period whose schedule was ever
+ * published stays: employees saw it and hours are counted from it.
+ * @summary Delete Period
+ */
+export const useDeletePeriod = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePeriod>>, TError,DeletePeriodMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deletePeriod>>,
+        TError,
+        DeletePeriodMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeletePeriodMutationOptions(options), queryClient);
     }
     export type askForAvailabilityResponse200 = {
   data: AskAvailabilityOut
@@ -1478,7 +1590,157 @@ export const useCheckScheduleChanges = <TError = ErrorOut,
       > => {
       return useMutation(getCheckScheduleChangesMutationOptions(options), queryClient);
     }
-    export type changeAssignmentsResponse200 = {
+    export type shiftDropChecksResponse200 = {
+  data: DropCheckOut[]
+  status: 200
+}
+
+export type shiftDropChecksResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type shiftDropChecksResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type shiftDropChecksResponseSuccess = (shiftDropChecksResponse200) & {
+  headers: Headers;
+};
+export type shiftDropChecksResponseError = (shiftDropChecksResponse403 | shiftDropChecksResponse404) & {
+  headers: Headers;
+};
+
+export type shiftDropChecksResponse = (shiftDropChecksResponseSuccess | shiftDropChecksResponseError)
+
+export const getShiftDropChecksUrl = (versionId: string,
+    shiftId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/shifts/${shiftId}/drops`
+}
+
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export const shiftDropChecks = async (versionId: string,
+    shiftId: string, options?: Parameters<typeof apiFetch>[1]): Promise<shiftDropChecksResponse> => {
+
+  return apiFetch<shiftDropChecksResponse>(getShiftDropChecksUrl(versionId,shiftId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getShiftDropChecksQueryKey = (versionId: string,
+    shiftId: string,) => {
+    return [
+    `/api/versions/${versionId}/shifts/${shiftId}/drops`
+    ] as const;
+    }
+
+
+export const getShiftDropChecksQueryOptions = <TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getShiftDropChecksQueryKey(versionId,shiftId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof shiftDropChecks>>> = ({ signal }) => shiftDropChecks(versionId,shiftId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: versionId !== null && versionId !== undefined && shiftId !== null && shiftId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ShiftDropChecksQueryResult = NonNullable<Awaited<ReturnType<typeof shiftDropChecks>>>
+export type ShiftDropChecksQueryError = ErrorOut
+
+
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof shiftDropChecks>>,
+          TError,
+          Awaited<ReturnType<typeof shiftDropChecks>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof shiftDropChecks>>,
+          TError,
+          Awaited<ReturnType<typeof shiftDropChecks>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getShiftDropChecksQueryOptions(versionId,shiftId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type changeAssignmentsResponse200 = {
   data: CheckOut
   status: 200
 }

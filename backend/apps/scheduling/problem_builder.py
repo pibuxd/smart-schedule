@@ -24,7 +24,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.assistant import readings
-from apps.assistant.models import ManagerInstruction
+from apps.assistant.models import AssistantRuleSet, ManagerInstruction
 from apps.availability.models import AvailabilityDay, TextRequest
 from apps.rules.models import RuleSetting
 from apps.rules.models import WeightProfile as WeightProfileModel
@@ -447,6 +447,12 @@ class _Reader:
         for location in self.locations:
             group_rows = self.qs(RuleSetting).filter(group_id=location.group_id) if location.group_id else []
             rows = merge(group_rows, self.qs(RuleSetting).filter(location=location))
+            from apps.assistant.agreements import rule_rows
+
+            agreement = self.qs(AssistantRuleSet).filter(location=location, period__in=self.periods).first()
+            snapshot = rule_rows(agreement)
+            if snapshot is not None:
+                rows = snapshot
             result += rule_configs(str(location.id), rows)
         return result
 
@@ -497,6 +503,7 @@ class _Reader:
         rows = (
             self.qs(ManagerInstruction)
             .filter(location__in=self.locations)
+            .filter(Q(rule_set__period__in=self.periods) | Q(rule_set__isnull=True))
             .select_related("employee__membership__user")
             .order_by("location_id", "position", "created_at")
         )
