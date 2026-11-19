@@ -10,6 +10,7 @@ import type { OfferShiftOut } from './offerShiftOut';
 
 export interface ManagerOfferOut {
   id: string;
+  assignment_id: string;
   status: ManagerOfferOutStatus;
   shift: OfferShiftOut;
   offered_by_name: string;

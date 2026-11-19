@@ -712,3 +712,34 @@ Prośba Piotra: zasada lokalu, przy której "Weź zmianę" od razu przenosi odda
   czy osoba z innego lokalu też bierze od razu (dziś tak, a jej kierownik dostaje powiadomienie). Do sprawdzenia
   w pilocie: czy kierownicy chcą tego ustawienia dla całej grupy lokali i czy "kto pierwszy, ten lepszy" jest
   sprawiedliwe (np. osoba blisko limitu godzin).
+
+## Ręczne zarządzanie oddawaniem i zamianami przez kierownika (18.11.2026)
+
+Prośba Piotra: oddawanie zmian jest ważne, a kierownik może chcieć zrobić to ręcznie.
+
+- Logika: `apps/marketplace/services.py`, sekcja "the manager's own changes": `manager_reassign` (inna osoba na
+  opublikowanej zmianie, także pustej), `manager_swap` (dwie osoby zamieniają się zmianami, historia z powodem
+  "zamiana"), `offer_shift(by_manager=...)` (kierownik szuka chętnych w imieniu pracownika), `manager_close_offer`
+  (koniec oddawania, zmiana zostaje u oddającego; status oddania "rejected").
+- Endpointy: `GET /locations/{id}/handover-shifts` (opublikowane zmiany lokalu: 14 dni wstecz, 62 dni naprzód),
+  `GET /assignments/{id}/handover-candidates`, `POST /assignments/{id}/reassign`, `POST /shift-swaps/check`,
+  `POST /shift-swaps`, `POST /assignments/{id}/offer`, `POST /offers/{id}/close`. Wszystkie tylko dla kierownika lokalu.
+- Ekran: w "Oddane zmiany" przy aktywnym oddaniu "Wybierz osobę sam" i "Zakończ oddawanie"; pod listą sekcja
+  "Zmień obsadę sam" (lokal, dzień, zmiana, potem arkusz z osobami, "Zamień z inną zmianą" i "Poszukaj chętnych").
+
+Decyzje i założenia:
+
+1. Kierownik może pominąć zastrzeżenia walidatora (`force`). Na liście osób najpierw są ci, którzy mogą przyjść
+   (chętni z "Weź zmianę" na początku), potem osoby z zastrzeżeniami i przyciskiem "Wpisz mimo to".
+2. Zmiana zgodna z zasadami jest przypięta (jak zatwierdzone oddanie). Zmiana wbrew zasadom nie jest przypinana,
+   bo przypięcie łamiące twardą zasadę uniemożliwia ponowne ułożenie okresu (solver zgłasza sprzeczność).
+3. Na liście są osoby z tym stanowiskiem z całej firmy oraz wszyscy z lokalu zmiany (brak stanowiska to zastrzeżenie).
+4. Zmiany, które już się zaczęły albo minęły, też można poprawić (ale nie wystawić do wzięcia). Powiadomienie ma
+   wtedy treść "Kierownik poprawił grafik".
+5. Zamiana dotyczy dwóch zmian z tego samego opublikowanego grafiku (lokal i okres). Zamiana między okresami albo
+   lokalami: dwa razy "Wpisz".
+6. Gdy kierownik wpisze kogoś na oddawaną zmianę, oddanie kończy się jako zatwierdzone, a pozostali chętni dostają
+   odmowę. Po zamianie aktywne oddanie tej zmiany wygasa.
+7. Zmiana przechodzi w opublikowanej wersji w miejscu i w najnowszym szkicu, jeśli ma tam tę samą osobę (jak przy
+   zatwierdzonym oddaniu). Historia: powód "ręczna zmiana" albo "zamiana", z kierownikiem jako autorem.
+8. Zamiany proponowane przez pracowników (pracownik prosi konkretną osobę) nadal na później.
