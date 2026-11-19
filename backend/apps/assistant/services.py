@@ -872,9 +872,11 @@ def check_plan(
             "Kolejność możesz zmienić na liście poleceń."
         )
     if new_instructions:
-        notes.append(
+        # First, so the assistant's own words above can never read as a promise of a shift.
+        notes.insert(
+            0,
             "Polecenia o osobach są preferencjami. Generator spróbuje je spełnić, ale nie gwarantują przydziału. "
-            "Zatwierdzenie nie zmienia dyspozycji ani gotowego grafiku i nie uruchamia układania."
+            "Zatwierdzenie nie zmienia dyspozycji ani gotowego grafiku i nie uruchamia układania.",
         )
     if already and not rejected:
         notes.insert(0, f"To już jest ustawione: {'; '.join(already)}.")

@@ -533,10 +533,10 @@ class TestCommands:
         assert f"od {shop['period'].start.isoformat()} do {shop['period'].end.isoformat()}" in seen["context"]
         assert "Ustalenia na okres: czekają na prośbę o dyspozycje" in seen["context"]
         body = api.get(f"/api/assistant-commands/{created['id']}").json()
-        assert body["notes"][:1] == [
+        assert (
             "Polecenie o osobie „Anna” zadziała, gdy poprosisz o dyspozycje na te dni. "
             "Do tego czasu nie zmienia żadnego grafiku."
-        ]
+        ) in body["notes"]
         assert api.post(f"/api/assistant-commands/{created['id']}/apply").status_code == 200
 
         assert not build_problem([shop["period"]]).problem.requests  # not this period

@@ -47,6 +47,7 @@ def test_work_on_a_specific_shift_survives_approval_and_reaches_engine(api, shop
     )
     assert "Ranna" in body["lines"][0]
     assert body["reply"] == "Dopisuję Annie poranną zmianę w tym dniu."  # the assistant's own words
+    assert "nie gwarantują przydziału" in body["notes"][0]  # ... never read as a promise of a shift
     assert any("nie mogę" in n for n in body["notes"])
     assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200
     [saved] = build_problem([shop["period"]]).problem.requests

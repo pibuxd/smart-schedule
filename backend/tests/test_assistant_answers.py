@@ -13,6 +13,7 @@ from django.urls import resolve
 from django.utils import timezone
 
 from apps.assistant import llm, readings, services, tools
+from apps.assistant.management.commands.assistant_misses import misses
 from apps.assistant.models import AssistantCommand
 from apps.availability.models import AvailabilityDay, TextRequest
 from apps.notifications.models import Notification
@@ -303,6 +304,9 @@ class TestEmployee:
         [note] = Notification.objects.filter(kind="request_for_manager")
         assert note.user == shop["manager"]
         assert "Kiedy mam następną zmianę?" in notification_text(note.kind, note.payload)
+        # The pilot counts forwarded plain questions against real requests.
+        [miss] = [m for m in misses(timezone.now() - timedelta(days=1)) if m[1] == "request"]
+        assert miss[5] == "forwarded_answer"
 
     def test_a_message_never_stays_being_read(self, api, shop, with_key):
         api.login(shop["worker"])

@@ -238,6 +238,7 @@ Plan ma dwa rodzaje zmian:
    z dni, shifts_per_day = ile zmian danego dnia, opcjonalne shift_type).
 Polecenia o osobach są preferencjami, nie twardymi zakazami ani gwarancją przydziału. Zatwierdzenie planu zapisuje
 ustawienia do następnego układania grafiku; nie uruchamia generatora, nie zmienia dyspozycji ani publikacji.
+W reply nie obiecuj przydziału: pisz „proponuję preferencję: Anna rano 3.12”, nie „Anna będzie rano”.
 Ustalenia dotyczą okresu z linii „Ustalenia na okres”. Polecenie o dniach spoza tego okresu nie zmieni żadnego
 grafiku: nie dodawaj go, tylko powiedz, jak to zrobić (opublikowany grafik: „Grafik” → „Popraw grafik”).
 Okres złożony rozbij na części, np. „na L4 do 10 grudnia, potem tylko popołudnia” to wolne_dni na dni do 10.12
