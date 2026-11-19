@@ -116,6 +116,10 @@ class TextRequest(CompanyOwnedModel):
         ANSWERED = "answered", "odpowiedź informacyjna"
         SUPERSEDED = "superseded", "zastąpiona"
 
+    # Statuses that take a place in the limit per period (`TEXT_REQUESTS_PER_PERIOD`). Questions the assistant
+    # answered, refused messages and replaced requests do not.
+    COUNTED = (Status.NEW, Status.INTERPRETED, Status.NEEDS_MANAGER)
+
     class ManagerPriority(models.TextChoices):
         LOWER = "lower", "mniej ważna"
         NORMAL = "normal", "zwykła"
@@ -155,6 +159,8 @@ class TextRequest(CompanyOwnedModel):
     # For the superadmin's list of misses: what the assistant answered when its reading could not be used, with
     # "why", or {"error": ...} when the call failed. Empty when the request was understood.
     assistant_answer = models.JSONField("odpowiedź asystenta (nieużyta)", null=True, blank=True)
+    # What the assistant said to the person (an answer to a question, or a word about the saved request).
+    reply = models.TextField("odpowiedź asystenta dla pracownika", max_length=2000, blank=True, default="")
     employee_corrected = models.BooleanField("poprawiona przez pracownika", default=False)
     supersedes = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="corrections")
     manager_priority = models.CharField(

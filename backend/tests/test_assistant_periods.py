@@ -168,11 +168,11 @@ def test_off_topic_employee_correction_does_not_replace_a_valid_request(api, sho
     assert row.supersedes_id is None and row.interpretation["summary"] == services.OUT_OF_SCOPE_REQUEST_REPLY
 
 
-def test_scope_classification_is_required():
-    raw = plan().model_dump()
-    raw.pop("scope")
-    with pytest.raises(ValidationError):
-        llm.CommandPlan.model_validate(raw)
+def test_topic_classification_is_required():
+    for model, raw in ((llm.CommandPlan, plan().model_dump()), (llm.EmployeeReply, reading().model_dump())):
+        raw.pop("topic")
+        with pytest.raises(ValidationError):
+            model.model_validate(raw)
 
 
 def test_legacy_migration_preserves_history_and_marks_used_instructions(shop):

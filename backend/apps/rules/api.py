@@ -25,7 +25,7 @@ from apps.rules.services import (
     rule_configs,
     same_setting,
 )
-from apps.scheduling.models import ScheduleVersion
+from apps.scheduling.models import SchedulePeriod, ScheduleVersion
 from apps.scheduling.problem_builder import build_problem_for_version
 from apps.staffing.models import Position, ShiftType
 from apps.tenancy.context import TenantContext, context_for
@@ -378,25 +378,32 @@ def _period_words(start: date, end: date) -> str:
     return f"{start:%d.%m}–{end:%d.%m.%Y}"
 
 
-def preview_version(sc: _Scope, location: Location) -> ScheduleVersion | None:
-    version = (
-        sc.ctx.qs(ScheduleVersion)
-        .filter(period__location=location)
-        .select_related("period")
-        .order_by("-period__start", "-number")
-        .first()
-    )
+def preview_version(sc: _Scope, location: Location, period: SchedulePeriod | None = None) -> ScheduleVersion | None:
+    """The schedule a change is compared on: the one of `period` (published, else its newest draft) when it has
+    one, otherwise the newest published schedule of the location (the newest draft when nothing is published)."""
+    versions = sc.ctx.qs(ScheduleVersion).filter(period__location=location).select_related("period")
+    if period is not None:
+        own = versions.filter(period=period)
+        found = own.filter(status=ScheduleVersion.Status.PUBLISHED).first() or own.order_by("-number").first()
+        if found is not None:
+            return found
+        published = (
+            versions.filter(status=ScheduleVersion.Status.PUBLISHED).order_by("-period__start", "-number").first()
+        )
+        if published is not None:
+            return published
+    version = versions.order_by("-period__start", "-number").first()
     if version is None or version.status == ScheduleVersion.Status.PUBLISHED:
         return version
-    published = (
-        sc.ctx.qs(ScheduleVersion).filter(period=version.period, status=ScheduleVersion.Status.PUBLISHED).first()
-    )
+    published = versions.filter(period=version.period, status=ScheduleVersion.Status.PUBLISHED).first()
     return published or version
 
 
-def _location_preview(sc: _Scope, location: Location, proposed: list[Row]) -> tuple[list[str], tuple | None]:
-    """Check the latest schedule of a location against its rules now and with the proposed change."""
-    version = preview_version(sc, location)
+def _location_preview(
+    sc: _Scope, location: Location, proposed: list[Row], period: SchedulePeriod | None = None
+) -> tuple[list[str], tuple | None]:
+    """Check a schedule of a location (`preview_version`) against its rules now and with the proposed change."""
+    version = preview_version(sc, location, period)
     if version is None:
         return [], None
     built, schedule = build_problem_for_version(version)

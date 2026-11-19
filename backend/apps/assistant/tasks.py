@@ -21,3 +21,13 @@ def plan_assistant_command(command_id: str) -> str:
     status = services.run_command(command_id)
     logger.info("assistant command %s: %s", command_id, status)
     return status
+
+
+@app.periodic(cron="*/10 * * * *")
+@app.task(queue="default", name="assistant.fail_stale_messages")
+def fail_stale_messages(timestamp: int) -> int:
+    """Messages whose job was lost (worker down, deploy) never stay "being read": see `services.fail_stale_messages`."""
+    count = services.fail_stale_messages()
+    if count:
+        logger.warning("assistant: %s stale messages failed", count)
+    return count

@@ -11186,6 +11186,32 @@
             ],
             "title": "Summary"
           },
+          "reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply"
+          },
+          "unmarked_days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Unmarked Days",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -11197,6 +11223,9 @@
           "text",
           "status",
           "summary",
+          "reply",
+          "unmarked_days",
+          "notes",
           "created_at"
         ],
         "title": "MyRequestOut",

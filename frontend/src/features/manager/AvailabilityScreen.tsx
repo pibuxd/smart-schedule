@@ -424,20 +424,22 @@ function requestNote(request: ManagerRequestOut): string {
   if (request.summary) return `Jak to zrozumiał asystent: ${request.summary} Generator weźmie to pod uwagę.`
   if (request.status === 'new') return 'Asystent właśnie czyta tę prośbę.'
   const yourself =
-    'przeczytaj ją sam i, jeśli chcesz ją spełnić, popraw grafik ręcznie albo napisz polecenie asystentowi w „Zasadach”.'
+    'przeczytaj ją sam i, jeśli chcesz ją spełnić, popraw grafik ręcznie albo napisz polecenie asystentowi.'
+  const canYourself =
+    'Możesz przeczytać ją sam i, jeśli chcesz ją spełnić, poprawić grafik ręcznie albo napisać polecenie asystentowi.'
   if (request.unread_reason === 'off') {
     return request.can_reread
       ? `Ta prośba przyszła, kiedy asystent był wyłączony, więc jeszcze jej nie czytał. Daj mu ją albo ${yourself}`
-      : `Asystent jest wyłączony, więc generator nie bierze tej prośby pod uwagę. Możesz ${yourself}`
+      : `Asystent jest wyłączony, więc generator nie bierze tej prośby pod uwagę. ${canYourself}`
   }
   if (request.unread_reason === 'failed') {
     return `Asystent nie zdołał przeczytać tej prośby (błąd połączenia). Spróbuj jeszcze raz albo ${yourself}`
   }
   if (request.unread_reason === 'rejected') {
-    return `Asystent odrzucił tę wiadomość jako niezwiązaną z grafikiem. Pracownik przekazał ją Tobie do oceny. Generator jej nie bierze pod uwagę. Możesz ${yourself}`
+    return `Asystent odrzucił tę wiadomość jako niezwiązaną z grafikiem. Pracownik przekazał ją Tobie do oceny. Generator jej nie bierze pod uwagę. ${canYourself}`
   }
-  if (request.employee_corrected) return `Pracownik napisał, że asystent źle to zrozumiał. Możesz ${yourself}`
-  return `Asystent przeczytał tę prośbę, ale nie umiał zamienić jej na coś, co generator sprawdzi sam. Możesz ${yourself}`
+  if (request.employee_corrected) return `Pracownik napisał, że asystent źle to zrozumiał. ${canYourself}`
+  return `Asystent przeczytał tę prośbę, ale nie umiał zamienić jej na coś, co generator sprawdzi sam. ${canYourself}`
 }
 
 export function RequestCard({ request }: { request: ManagerRequestOut }) {

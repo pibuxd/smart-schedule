@@ -16,6 +16,9 @@ const request = (over = {}) => ({
   text: "Wolałabym nie pracować w piątki.",
   status: "interpreted",
   summary: "Wolne w piątki, jeśli się da.",
+  reply: null,
+  unmarked_days: [],
+  notes: [],
   created_at: "2026-11-01T10:00:00Z",
   ...over,
 });
@@ -41,12 +44,84 @@ describe("RequestsSection", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Nie o to mi chodziło" }),
     );
+    // First a chance to write it again; handing it to the manager is the second choice.
+    expect(screen.getByLabelText("Napisz to inaczej")).toHaveValue(
+      "Wolałabym nie pracować w piątki.",
+    );
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Niech przeczyta kierownik" }),
+    );
     expect(
-      await screen.findByText("Kierownik przeczyta tę prośbę sam."),
+      await screen.findByText(/Kierownik przeczyta tę prośbę sam/),
     ).toBeInTheDocument();
     expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
       understood: false,
     });
+  });
+
+  it("lets the person write a misunderstood request again", async () => {
+    const calls = mockApi((method) =>
+      method === "PATCH"
+        ? [200, request({ status: "new", summary: null })]
+        : [200, [request()]],
+    );
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    await openChat();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Nie o to mi chodziło" }),
+    );
+    fireEvent.change(screen.getByLabelText("Napisz to inaczej"), {
+      target: { value: "Wolne tylko w piątki po południu." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Wyślij poprawioną" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
+        text: "Wolne tylko w piątki po południu.",
+      }),
+    );
+  });
+
+  it("offers to mark the days the person cannot work and shows calendar notes", async () => {
+    const calls = mockApi((method) =>
+      method === "PUT"
+        ? [204, null]
+        : [
+            200,
+            [
+              request({
+                reply: "Powodzenia na sesji.",
+                summary: "Wolne 14.12–16.12 („nie mogę”).",
+                unmarked_days: ["2026-12-14", "2026-12-15"],
+                notes: [
+                  "W kalendarzu masz „Chętnie” w dni, w które prośba mówi o wolnym: 15.12.",
+                ],
+              }),
+            ],
+          ],
+    );
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    await openChat();
+    expect(await screen.findByText("Powodzenia na sesji.")).toBeInTheDocument();
+    expect(screen.getByText(/masz „Chętnie”/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/nadal do pracy: 14.12, 15.12/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Zaznacz „nie mogę”" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PUT")!.body).toEqual({
+        company_id: "c1",
+        days: [
+          { date: "2026-12-14", state: "cannot" },
+          { date: "2026-12-15", state: "cannot" },
+        ],
+      }),
+    );
+    expect(calls.find((c) => c.method === "PUT")!.url).toBe("/api/me/calendar");
   });
 
   it("a request nobody interpreted simply goes to the manager", async () => {
@@ -56,7 +131,7 @@ describe("RequestsSection", () => {
     );
     await openChat();
     expect(
-      await screen.findByText("Kierownik przeczyta tę prośbę sam."),
+      await screen.findByText(/Kierownik przeczyta tę prośbę sam/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Tak to zrozumieliśmy/)).not.toBeInTheDocument();
   });
@@ -68,9 +143,7 @@ describe("RequestsSection", () => {
     );
     await openChat();
     expect(
-      await screen.findByText(
-        /Twoje wcześniejsze prośby oraz nazwy osób i zmian/,
-      ),
+      await screen.findByText(/sprawdza to, co widzisz w aplikacji/),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Przeczyta to tylko kierownik/),
@@ -99,26 +172,33 @@ describe("RequestsSection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows an informational answer without claiming it was sent to the manager", async () => {
+  it("shows an answer without claiming it was sent to the manager", async () => {
     mockApi(() => [
       200,
       [
         request({
           status: "answered",
-          summary: "W publikacji masz 120 godzin.",
+          summary: null,
+          reply: "W listopadzie masz 120 godzin.",
+        }),
+        request({
+          id: "old",
+          status: "answered",
+          summary: "Starsza odpowiedź zapisana jako opis.",
         }),
       ],
     ]);
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
     await openChat();
     expect(
-      await screen.findByText("W publikacji masz 120 godzin."),
+      await screen.findByText("W listopadzie masz 120 godzin."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /Przekaż wiadomość, aby dodać ją do listy próśb kierownika/,
-      ),
+      screen.getByText("Starsza odpowiedź zapisana jako opis."),
     ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Niech przeczyta kierownik" }),
+    ).toHaveLength(2);
     expect(
       screen.queryByText("Zapisane w Twoich prośbach"),
     ).not.toBeInTheDocument();
@@ -136,10 +216,10 @@ describe("RequestsSection", () => {
     renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
     await openChat();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Przekaż kierownikowi" }),
+      await screen.findByRole("button", { name: "Niech przeczyta kierownik" }),
     );
     expect(
-      await screen.findByText("Kierownik przeczyta tę prośbę sam."),
+      await screen.findByText(/Kierownik przeczyta tę prośbę sam/),
     ).toBeInTheDocument();
     expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
       understood: false,
@@ -153,12 +233,12 @@ it("does not send an employee request on Enter", async () => {
     <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
   );
   await openChat();
-  const field = await screen.findByLabelText("Twoja prośba");
+  const field = await screen.findByLabelText("Twoja wiadomość");
   await waitFor(() => expect(field).toBeEnabled());
   fireEvent.change(field, { target: { value: "Wolę piątki rano" } });
   fireEvent.keyDown(field, { key: "Enter" });
   expect(calls.some((c) => c.method === "POST")).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Wyślij prośbę" }));
+  fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
   await waitFor(() =>
     expect(calls.some((c) => c.method === "POST")).toBe(true),
   );

@@ -150,9 +150,11 @@ ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_MODEL = env("ANTHROPIC_MODEL", "claude-opus-5-5")
 # Below this confidence a request is left to the manager instead of the generator.
 ASSISTANT_MIN_CONFIDENCE = float(env("ASSISTANT_MIN_CONFIDENCE", "0.6"))
-# Limits on calls to the assistant: commands of one company per month, text requests of one person per period.
-ASSISTANT_COMMANDS_MONTHLY_LIMIT = int(env("ASSISTANT_COMMANDS_MONTHLY_LIMIT", "200"))
+# Limits: messages to the assistant from one company's managers per month (questions included), saved requests
+# of one person per period (questions and refused messages do not count), and messages of one person per day.
+ASSISTANT_COMMANDS_MONTHLY_LIMIT = int(env("ASSISTANT_COMMANDS_MONTHLY_LIMIT", "400"))
 TEXT_REQUESTS_PER_PERIOD = int(env("TEXT_REQUESTS_PER_PERIOD", "10"))
+ASSISTANT_MESSAGES_PER_DAY = int(env("ASSISTANT_MESSAGES_PER_DAY", "40"))
 
 LOGGING = {
     "version": 1,

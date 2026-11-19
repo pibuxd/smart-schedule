@@ -11,5 +11,8 @@ export interface MyRequestOut {
   text: string;
   status: MyRequestOutStatus;
   summary: string | null;
+  reply: string | null;
+  unmarked_days: string[];
+  notes: string[];
   created_at: string;
 }

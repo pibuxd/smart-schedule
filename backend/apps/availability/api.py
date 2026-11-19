@@ -23,6 +23,7 @@ from apps.assistant.services import queue_request
 from apps.availability.models import (
     AvailabilityDay,
     AvailabilityPattern,
+    AvailabilityState,
     AvailabilitySubmission,
     TextRequest,
 )
@@ -150,6 +151,14 @@ class MyRequestOut(Schema):
     status: RequestStatusName
     # How the assistant understood the request (only when it was sure enough); the person can say it is wrong.
     summary: str | None
+    # What the assistant said to the person: an answer to a question, or a word about the request.
+    reply: str | None
+    # Days the request says the person cannot work that the calendar still shows as "mogę"/"chętnie" (and that can
+    # still change): the screen offers to mark them "nie mogę" through `PUT /me/calendar`.
+    unmarked_days: list[date]
+    # Things to know: the calendar says the opposite of the request, or the request is about a shift the person's
+    # position never has.
+    notes: list[str]
     created_at: datetime
 
 
@@ -458,14 +467,64 @@ def submit_my_availability(request, payload: PeriodRefIn):
     return _availability_out(ctx, profile, period)
 
 
-def _request_out(text_request: TextRequest) -> MyRequestOut:
+class _Calendar:
+    """My marked days and the days I cannot change any more, read once for a list of requests."""
+
+    def __init__(self, ctx: TenantContext, profile: EmployeeProfile, start: date, end: date) -> None:
+        rows = ctx.qs(AvailabilityDay).filter(employee=profile, date__gte=start, date__lte=end)
+        self.states = dict(rows.values_list("date", "state"))
+        self.locked = _locked_days(ctx, profile, start, end)
+
+
+def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -> MyRequestOut:
+    unmarked, notes = _calendar_facts(text_request, calendar) if calendar is not None else ([], [])
+    interpreted = text_request.status == TextRequest.Status.INTERPRETED
     return MyRequestOut(
         id=text_request.id,
         text=text_request.text,
         status=text_request.status,
         summary=_summary(text_request),
+        reply=text_request.reply or None,
+        unmarked_days=unmarked,
+        notes=[*((text_request.interpretation or {}).get("notes") or [] if interpreted else []), *notes],
         created_at=text_request.created_at,
     )
+
+
+def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[date], list[str]]:
+    from apps.assistant.readings import dates_in
+    from apps.assistant.services import request_span
+
+    if row.status != TextRequest.Status.INTERPRETED or not row.interpretation:
+        return [], []
+    start, end = request_span(row)
+    unmarked: set[date] = set()
+    notes = []
+    for part in [row.interpretation, *(row.interpretation.get("more") or [])]:
+        days = sorted(dates_in(part, start, end))
+        if part.get("type") == "wolne_dni":
+            if part.get("cannot"):
+                unmarked |= {
+                    d for d in days if calendar.states.get(d) != AvailabilityState.CANNOT and d not in calendar.locked
+                }
+            eager = [d for d in days if calendar.states.get(d) == AvailabilityState.PREFER]
+            if eager:
+                notes.append(
+                    f"W kalendarzu masz „Chętnie” w dni, w które prośba mówi o wolnym: {_dates_words(eager)}. "
+                    "Popraw kalendarz, jeśli prośba jest aktualna."
+                )
+        elif part.get("type") == "chce_pracowac":
+            blocked = [d for d in days if calendar.states.get(d) == AvailabilityState.CANNOT]
+            if blocked:
+                notes.append(
+                    f"W kalendarzu masz „Nie mogę” w dni, w które prośba mówi o pracy: {_dates_words(blocked)}. "
+                    "Tych dni generator Ci nie da."
+                )
+    return sorted(unmarked), notes
+
+
+def _dates_words(days: list[date]) -> str:
+    return ", ".join(f"{d.day}.{d.month:02d}" for d in days[:8]) + (" i inne" if len(days) > 8 else "")
 
 
 def _summary(row: TextRequest) -> str | None:
@@ -501,8 +560,40 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
         scope = Q(period=None, month=month.replace(day=1))
     else:
         raise HttpError(400, "Wybierz miesiąc.")
-    requests = ctx.qs(TextRequest).filter(scope, employee=profile).order_by("created_at")
-    return [_request_out(r) for r in requests]
+    requests = list(ctx.qs(TextRequest).filter(scope, employee=profile).select_related("period").order_by("created_at"))
+    calendar = None
+    if requests:
+        from apps.assistant.services import request_span
+
+        spans = [request_span(r) for r in requests]
+        calendar = _Calendar(ctx, profile, min(s for s, _ in spans), max(e for _, e in spans))
+    return [_request_out(r, calendar) for r in requests]
+
+
+LIMIT_FULL = "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń albo popraw którąś."
+
+
+def _saved_count(ctx: TenantContext, profile: EmployeeProfile, scope: dict, exclude=None) -> int:
+    """Requests that take a place in the limit per period (questions and refused messages do not)."""
+    rows = ctx.qs(TextRequest).filter(employee=profile, status__in=TextRequest.COUNTED, **scope)
+    return rows.exclude(pk=exclude).count() if exclude else rows.count()
+
+
+def _tell_managers(ctx: TenantContext, text_request: TextRequest) -> None:
+    """A message handed to the manager to read: the managers of its location get a notification."""
+    from apps.notifications.services import location_manager_ids
+
+    location = text_request.location
+    notify(
+        ctx.company.pk,
+        location_manager_ids(location),
+        "request_for_manager",
+        {
+            "employee_name": text_request.employee.membership.user.full_name or "Pracownik",
+            "text": text_request.text[:80],
+            "location_name": location.name,
+        },
+    )
 
 
 def _require_request_open(text_request: TextRequest) -> None:
@@ -530,10 +621,16 @@ def create_my_request(request, payload: RequestIn):
     text = payload.text.strip()
     if not text:
         raise HttpError(400, "Napisz, o co chodzi.")
-    if ctx.qs(TextRequest).filter(employee=profile, **scope).count() >= settings.TEXT_REQUESTS_PER_PERIOD:
-        raise HttpError(
-            400, "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń którąś albo powiedz kierownikowi."
-        )
+    if llm.is_enabled():
+        # Questions are free: the worker checks the limit of requests once it knows the message is a request.
+        # This only bounds the cost of messages.
+        since = timezone.now() - timedelta(days=1)
+        if ctx.qs(TextRequest).filter(employee=profile, created_at__gte=since).count() >= (
+            settings.ASSISTANT_MESSAGES_PER_DAY
+        ):
+            raise HttpError(429, "To już dużo wiadomości jak na jeden dzień. Napisz jutro albo powiedz kierownikowi.")
+    elif _saved_count(ctx, profile, scope) >= settings.TEXT_REQUESTS_PER_PERIOD:
+        raise HttpError(400, LIMIT_FULL)
     with transaction.atomic():
         text_request = TextRequest.objects.for_company(ctx.company).create(
             company=ctx.company, employee=profile, period=period, month=month, text=text
@@ -572,20 +669,30 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
         elif payload.understood is False and text_request.status in (
             TextRequest.Status.INTERPRETED,
             TextRequest.Status.ANSWERED,
+            TextRequest.Status.REJECTED,
         ):
+            if text_request.status != TextRequest.Status.INTERPRETED:
+                # An answer or a refusal becomes a request the manager reads: it takes a place in the limit.
+                scope = (
+                    {"period_id": text_request.period_id}
+                    if text_request.period_id
+                    else {"period__isnull": True, "month": text_request.month}
+                )
+                if _saved_count(ctx, text_request.employee, scope, exclude=text_request.pk) >= (
+                    settings.TEXT_REQUESTS_PER_PERIOD
+                ):
+                    raise HttpError(409, LIMIT_FULL)
+            if text_request.status == TextRequest.Status.REJECTED:
+                # The person thinks the refusal was wrong: the manager reads the text as written and decides by
+                # hand. Without an interpretation the request is never scored by the generator.
+                text_request.interpretation = None
+                text_request.unread_reason = TextRequest.UnreadReason.REJECTED
             text_request.status = TextRequest.Status.NEEDS_MANAGER
-            text_request.employee_corrected = True
-            text_request.save(update_fields=["status", "employee_corrected", "updated_at"])
-        elif payload.understood is False and text_request.status == TextRequest.Status.REJECTED:
-            # The person thinks the refusal was wrong: the manager reads the text as written and decides by hand.
-            # Without an interpretation the request is never scored by the generator.
-            text_request.status = TextRequest.Status.NEEDS_MANAGER
-            text_request.interpretation = None
-            text_request.unread_reason = TextRequest.UnreadReason.REJECTED
             text_request.employee_corrected = True
             text_request.save(
                 update_fields=["status", "interpretation", "unread_reason", "employee_corrected", "updated_at"]
             )
+            _tell_managers(ctx, text_request)
     return _request_out(text_request)
 
 
@@ -719,13 +826,16 @@ def availability_grid(request, period_id: UUID):
 
 
 def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
+    summary = _summary(row)
+    if summary and row.status == TextRequest.Status.INTERPRETED and (row.interpretation or {}).get("partial"):
+        summary += " Resztę wiadomości asystent zostawił Tobie do przeczytania."
     return ManagerRequestOut(
         id=row.pk,
         employee_id=row.employee_id,
         employee_name=row.employee.membership.user.full_name or "Bez imienia",
         text=row.text,
         status=row.status,
-        summary=_summary(row),
+        summary=summary,
         employee_corrected=row.employee_corrected,
         unread_reason=row.unread_reason,
         can_reread=_can_reread(row),

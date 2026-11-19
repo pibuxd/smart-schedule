@@ -2,8 +2,9 @@
 
 Used for an employee's text request (`TextRequest.interpretation`) and for a manager's instruction
 (`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, wolne_dni,
-chce_pracowac, inne), subject_employee (id), shift_type (id), avoid, max_hours, min_days, shifts_per_day,
-dates (ISO), weekdays (0 = Monday).
+chce_pracowac, inne), subject_employee (id), shift_type (id), avoid, max_hours, hours_period (day, week, period),
+min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot (wolne_dni the person cannot work at all).
+An employee's message with several wishes keeps the others in `more` (a list of readings like this one).
 
 What the assistant returns is never trusted as is: names are matched against the location's own lists and
 anything that cannot be checked makes the reading unusable (`clean` returns None).
@@ -20,6 +21,8 @@ TYPES = ("unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_
 LEVELS = ("bardzo_wazne", "wazne", "mile_widziane")
 
 _WEEKDAYS = ("w poniedziałki", "we wtorki", "w środy", "w czwartki", "w piątki", "w soboty", "w niedziele")
+_WEEKDAY_OF = ("poniedziałku", "wtorku", "środy", "czwartku", "piątku", "soboty", "niedzieli")
+HOURS_PERIODS = ("day", "week", "period")
 
 
 def labels(people: Iterable[tuple[str, str, str]]) -> dict[str, str]:
@@ -51,12 +54,16 @@ def _lookup(name: str | None, by_label: Mapping[str, str]) -> str | None:
 
 
 def hour_scope(scope: str | None, text: str, max_hours: float | None) -> str:
-    """Recognise an explicit per-week limit if the model dropped its unit on a single request."""
+    """Recognise an explicit per-day or per-week limit if the model dropped its unit on a single request."""
     amount = r"\b(\d+(?:[,.]\d+)?)\s*(?:godzin(?:y|ę)?|godz\.?|h)\b"
-    week = r"(?:w każdym tygodniu|na każdy tydzień|tygodniowo|na tydzień)"
-    match = re.search(rf"{amount}\s+{week}\b", text, re.I)
-    if match and len(re.findall(amount, text, re.I)) == 1 and float(match[1].replace(",", ".")) == max_hours:
-        return "week"
+    if scope in (None, "period") and len(re.findall(amount, text, re.I)) == 1:
+        for unit, words in (
+            ("week", r"(?:w każdym tygodniu|na każdy tydzień|tygodniowo|na tydzień|w tygodniu)"),
+            ("day", r"(?:dziennie|na dzień|każdego dnia|w ciągu dnia|na zmianę)"),
+        ):
+            match = re.search(rf"{amount}\s+{words}(?!\w)", text, re.I)
+            if match and float(match[1].replace(",", ".")) == max_hours:
+                return unit
     return scope or "period"
 
 
@@ -108,6 +115,8 @@ def clean(
         return None
     dates, weekdays = list(dates), list(weekdays)
     if any(_parse_date(v) is None for v in dates) or any(not isinstance(w, int) or not 1 <= w <= 7 for w in weekdays):
+        return None
+    if hours_period not in HOURS_PERIODS:
         return None
     days = sorted({d for d in (_parse_date(v) for v in dates) if d is not None})
     week = sorted({int(w) - 1 for w in weekdays if isinstance(w, int) and 1 <= w <= 7})
@@ -180,11 +189,52 @@ def is_over(data: Mapping[str, Any], today: date) -> bool:
     return bool(days) and max(days) < today
 
 
+def _weekday_words(week: list[int]) -> str:
+    week = sorted({w for w in week if isinstance(w, int) and 0 <= w <= 6})
+    if week == [5, 6]:
+        return "w weekendy"
+    parts, run = [], []
+    for w in [*week, None]:
+        if w is not None and run and w == run[-1] + 1:
+            run.append(w)
+            continue
+        if len(run) >= 3:
+            parts.append(f"od {_WEEKDAY_OF[run[0]]} do {_WEEKDAY_OF[run[-1]]}")
+        else:
+            parts += [_WEEKDAYS[d] for d in run]
+        run = [w] if w is not None else []
+    return " i ".join(parts)
+
+
+def _date_words(days: list[date]) -> str:
+    """14.12–18.12, 24.12: runs of three or more days in a row as a range, at most six groups."""
+    groups: list[list[date]] = []
+    for d in sorted(set(days)):
+        if groups and d == groups[-1][-1] + timedelta(days=1):
+            groups[-1].append(d)
+        else:
+            groups.append([d])
+
+    def short(d: date) -> str:
+        return f"{d.day}.{d.month:02d}"
+
+    words = []
+    for group in groups[:6]:
+        if len(group) >= 3:
+            words.append(f"{short(group[0])}–{short(group[-1])}")
+        else:
+            words += [short(d) for d in group]
+    return ", ".join(words) + (" i inne dni" if len(groups) > 6 else "")
+
+
 def _when(data: Mapping[str, Any]) -> str:
-    parts = [_WEEKDAYS[w] for w in data.get("weekdays") or [] if isinstance(w, int) and 0 <= w <= 6]
+    parts = []
+    week = _weekday_words(data.get("weekdays") or [])
+    if week:
+        parts.append(week)
     days = [d for d in (_parse_date(v) for v in data.get("dates") or []) if d is not None]
     if days:
-        parts.append(", ".join(f"{d.day}.{d.month:02d}" for d in days[:6]) + (" i inne dni" if len(days) > 6 else ""))
+        parts.append(_date_words(days))
     return " " + " i ".join(parts) if parts else ""
 
 
@@ -206,8 +256,14 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             shown = int(hours) if float(hours).is_integer() else hours
             if data.get("hours_period") == "week":
                 return f"{who}: najwyżej {shown} godz. w każdym tygodniu{when}"
+            if data.get("hours_period") == "day":
+                return f"{who}: najwyżej {shown} godz. dziennie{when}"
             return f"{who}: najwyżej {shown} godz.{when or ' w okresie grafiku'}"
         case "wolne_dni":
+            if sorted(data.get("weekdays") or []) == [0, 1, 2, 3, 4] and not data.get("dates"):
+                return f"{who}: tylko weekendy (wolne od poniedziałku do piątku)"
+            if data.get("cannot"):
+                return f"{who}: wolne{when} („nie mogę”)"
             return f"{who}: wolne{when}"
         case "chce_pracowac":
             shifts = data.get("shifts_per_day") or 1
