@@ -26,6 +26,7 @@ export function renderScreen(ui: ReactNode) {
     '/kierownik/lokal/$locationId/pracownicy',
     '/kierownik/lokal/$locationId/ustawienia',
     '/kierownik/lokal/$locationId/zasady',
+    '/kierownik/lokal/$locationId/asystent',
     '/kierownik/lokal/$locationId/grafik',
     '/kierownik/godziny',
     '/kierownik/oddane-zmiany',

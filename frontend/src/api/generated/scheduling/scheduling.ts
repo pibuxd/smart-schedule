@@ -28,6 +28,7 @@ import type {
   AskAvailabilityOut,
   ChangesIn,
   CheckOut,
+  DropCheckOut,
   ErrorOut,
   GenerateIn,
   GenerationRunOut,
@@ -1477,7 +1478,157 @@ export const useCheckScheduleChanges = <TError = ErrorOut,
       > => {
       return useMutation(getCheckScheduleChangesMutationOptions(options), queryClient);
     }
-    export type changeAssignmentsResponse200 = {
+    export type shiftDropChecksResponse200 = {
+  data: DropCheckOut[]
+  status: 200
+}
+
+export type shiftDropChecksResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type shiftDropChecksResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type shiftDropChecksResponseSuccess = (shiftDropChecksResponse200) & {
+  headers: Headers;
+};
+export type shiftDropChecksResponseError = (shiftDropChecksResponse403 | shiftDropChecksResponse404) & {
+  headers: Headers;
+};
+
+export type shiftDropChecksResponse = (shiftDropChecksResponseSuccess | shiftDropChecksResponseError)
+
+export const getShiftDropChecksUrl = (versionId: string,
+    shiftId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/shifts/${shiftId}/drops`
+}
+
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export const shiftDropChecks = async (versionId: string,
+    shiftId: string, options?: Parameters<typeof apiFetch>[1]): Promise<shiftDropChecksResponse> => {
+
+  return apiFetch<shiftDropChecksResponse>(getShiftDropChecksUrl(versionId,shiftId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getShiftDropChecksQueryKey = (versionId: string,
+    shiftId: string,) => {
+    return [
+    `/api/versions/${versionId}/shifts/${shiftId}/drops`
+    ] as const;
+    }
+
+
+export const getShiftDropChecksQueryOptions = <TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getShiftDropChecksQueryKey(versionId,shiftId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof shiftDropChecks>>> = ({ signal }) => shiftDropChecks(versionId,shiftId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: versionId !== null && versionId !== undefined && shiftId !== null && shiftId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ShiftDropChecksQueryResult = NonNullable<Awaited<ReturnType<typeof shiftDropChecks>>>
+export type ShiftDropChecksQueryError = ErrorOut
+
+
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof shiftDropChecks>>,
+          TError,
+          Awaited<ReturnType<typeof shiftDropChecks>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof shiftDropChecks>>,
+          TError,
+          Awaited<ReturnType<typeof shiftDropChecks>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * What dropping this shift's person on each other shift would do (swap or move): new problems and scores.
+ * Asked once when a drag starts, so the answer for every shift is there before the manager hovers over it.
+ * @summary Shift Drop Checks
+ */
+export function useShiftDropChecks<TData = Awaited<ReturnType<typeof shiftDropChecks>>, TError = ErrorOut>(
+ versionId: string,
+    shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof shiftDropChecks>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getShiftDropChecksQueryOptions(versionId,shiftId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type changeAssignmentsResponse200 = {
   data: CheckOut
   status: 200
 }

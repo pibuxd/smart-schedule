@@ -4,9 +4,17 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { AgreedRuleOut } from './agreedRuleOut';
 import type { InstructionOut } from './instructionOut';
 
 export interface InstructionsOut {
   assistant_enabled: boolean;
   items: InstructionOut[];
+  rule_set_id: string | null;
+  period_id: string | null;
+  period_label: string;
+  period_requested: boolean;
+  consumed_at: string | null;
+  closed: boolean;
+  rules: AgreedRuleOut[];
 }

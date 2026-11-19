@@ -44,8 +44,8 @@ export function OffersScreen() {
       <div className="grid gap-1">
         <h1 className="m-0 text-2xl font-extrabold">Oddane zmiany</h1>
         <p className="m-0 max-w-[62ch] text-ink-muted">
-          Tu decydujesz, kto bierze oddaną zmianę. Możesz też sam wpisać inną osobę albo zamienić dwie osoby. Grafik
-          zmienia się od razu.
+          Gdy ktoś zgłosi się po oddaną zmianę, decydujesz tutaj. Możesz też sam wpisać inną osobę albo zamienić
+          dwie osoby.
         </p>
       </div>
       {offers.isPending ? (

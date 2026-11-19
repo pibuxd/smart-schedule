@@ -5,7 +5,7 @@ import { cn } from '../../lib/cn'
 
 // shadcn/ui-style button, styled only with the Grafikomat tokens.
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-md border-2 px-5 text-base font-semibold ' +
+  'inline-flex items-center justify-center gap-2 rounded-md border-2 px-4 text-base font-semibold ' +
     'cursor-pointer select-none active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60',
   {
     variants: {

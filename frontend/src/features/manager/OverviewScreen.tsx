@@ -52,8 +52,7 @@ export function OverviewScreen({ today = new Date() }: { today?: Date }) {
         <div className="grid gap-1">
           <h1 className="m-0 text-2xl font-extrabold">Lokale</h1>
           <p className="m-0 max-w-[62ch] text-ink-muted">
-            Każdy lokal ma swój termin dyspozycji. Grafik układasz sam, gdy termin minie albo gdy wszyscy wpiszą
-            dyspozycje.
+            Grafik układasz, gdy minie termin albo wszyscy wyślą dyspozycje.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -325,8 +324,7 @@ function ArchivedList({ data }: { data: ManagerOverviewOut }) {
     <section className="grid gap-2">
       <h2 className="m-0 text-lg font-extrabold">Archiwum</h2>
       <p className="m-0 text-sm text-ink-muted">
-        Lokale w archiwum zachowują dawne grafiki, ale nie ma ich na liście i nie ułożysz dla nich nowego
-        grafiku.
+        Dawne grafiki zostają. Nowego grafiku tu nie ułożysz.
       </p>
       <ul className="m-0 grid list-none gap-2 p-0">
         {data.archived.map((location) => (
@@ -360,7 +358,7 @@ function NewGroupSheet({ companyId, onClose }: { companyId: string; onClose: () 
   const queryClient = useQueryClient()
   return (
     <Sheet open onOpenChange={(open) => { if (!open) onClose() }} title="Nowa grupa lokali"
-      description="Po utworzeniu grupy wybierz ją w ustawieniach lokali, które mają dzielić zasady.">
+      description="Potem wybierz grupę w ustawieniach lokali.">
       <form className="grid gap-4" onSubmit={(event) => {
         event.preventDefault()
         create.mutate({ data: { company_id: companyId, name: name.trim() } }, {
