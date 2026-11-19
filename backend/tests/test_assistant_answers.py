@@ -337,11 +337,12 @@ class TestManager:
         body = api.get(f"/api/assistant-commands/{created['id']}").json()
         assert body["reply"] == "Dyspozycji nie wysłała jeszcze Kasia." and not body["can_apply"]
         assert AssistantCommand.objects.get(pk=created["id"]).plan["informational"] is True
+        assert body["informational"] is True
 
     def test_an_unrelated_message_gets_app_copy(self, api, shop, with_key, monkeypatch):
         api.login(shop["manager"])
         body = run(api, shop, monkeypatch, plan(scope="out_of_scope", reply="Słonecznie."))
-        assert body["reply"] == services.UNRELATED_REPLY and not body["can_apply"]
+        assert body["reply"] == services.UNRELATED_REPLY and not body["can_apply"] and not body["informational"]
 
     def test_a_rule_already_set_is_said_so(self, api, shop, with_key, monkeypatch):
         api.login(shop["manager"])

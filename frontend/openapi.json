@@ -13602,6 +13602,10 @@
             "title": "Can Apply",
             "type": "boolean"
           },
+          "informational": {
+            "title": "Informational",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -13651,6 +13655,7 @@
           "effects",
           "notes",
           "can_apply",
+          "informational",
           "created_at",
           "expires_at",
           "rule_set_id",

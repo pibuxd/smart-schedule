@@ -40,6 +40,8 @@ class AssistantCommandOut(Schema):
     effects: list[str]
     notes: list[str]
     can_apply: bool
+    # An answer to a question (data or how-to) with nothing to approve: the screen adds a note to check the data.
+    informational: bool
     created_at: datetime
     expires_at: datetime
     rule_set_id: UUID | None
@@ -116,6 +118,7 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
             and timezone.now() < expires_at
             and consumed_at is None
         ),
+        informational=command.status == AssistantCommand.Status.READY and plan.get("informational") is True,
         created_at=command.created_at,
         expires_at=expires_at,
         rule_set_id=command.rule_set_id,
