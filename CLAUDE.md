@@ -145,15 +145,19 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   `manual`). In-app notifications are written with
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
 - Assistant (Claude): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
-  Its action plan is a proposal: `apps/assistant/services.py` checks names against the location's data and builds
-  action descriptions itself. The assistant handles only scheduling rules and person preferences. Off-topic or mixed requests are
-  rejected as a whole with application-owned copy; only explanations of rules are allowed. Without `ANTHROPIC_API_KEY` requests go uninterpreted. Tests replace
-  `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
+  Its main power is unchanged: a manager's command becomes a proposal (`apps/assistant/services.py` checks names
+  against the location's data and builds action descriptions itself), an employee's message becomes preferences. Beyond
+  that it answers anything about Grafikomat and the location, reading data only through `apps/assistant/tools.py`:
+  existing `GET /api/...` endpoints run as the person who wrote (same permissions as the app, phones stripped). Never
+  give it write tools; it says where in the app to do things. Off-topic messages get application-owned copy; mixed
+  messages are answered and their preferences saved. Without `ANTHROPIC_API_KEY` requests go uninterpreted. Tests
+  replace `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
-  `apps/assistant/context.py` supplies bounded history for corrections. Current schedules, hours and availability
-  are not sent to the model. Both structured outputs require a rules/out-of-scope classification. A correction may supersede one earlier request in the
-  same employee/scope, atomically and only against an unchanged snapshot. `answered` and `superseded` requests
-  never reach the solver. An invalid part blocks the entire manager plan; informational replies are not misses.
+  `apps/assistant/context.py` supplies bounded history for corrections. Both structured outputs require a
+  topic classification (`app|unrelated`). A correction may supersede one earlier request in the same employee/scope,
+  atomically and only against an unchanged snapshot. `answered` and `superseded` requests never reach the solver; extra
+  preferences of one message live in `interpretation["more"]`. An invalid part blocks the entire manager plan;
+  informational replies are not misses. The request limit per period counts only `new`/`interpreted`/`needs_manager`.
   The chat UI slides in from the right (`components/ui/drawer.tsx`): managers open it with
   `useAssistantDrawer().openChat()` (`features/manager/AssistantDrawer.tsx`, one per location), employees from
   "Twoje prośby". Approved results live in a separate editable window: `AssistantRulesTable` ("Ustalenia") for

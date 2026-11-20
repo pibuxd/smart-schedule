@@ -19,6 +19,7 @@ const command: AssistantCommandOut = {
   effects: [],
   notes: [],
   can_apply: true,
+  informational: false,
   created_at: new Date().toISOString(),
   expires_at: new Date(Date.now() + 86_400_000).toISOString(),
   rule_set_id: "set1",
@@ -96,7 +97,9 @@ describe("Assistant chat", () => {
     expect(await screen.findByText(command.lines[0])).toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith("/apply"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Zatwierdź zmiany" }));
-    expect(await screen.findByText(/Zapisane w ustaleniach/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Zapisane w ustaleniach/),
+    ).toBeInTheDocument();
     expect(screen.getByText(command.text)).toBeInTheDocument();
     expect(screen.getByText(command.lines[0])).toBeInTheDocument();
     expect(
@@ -109,6 +112,7 @@ describe("Assistant chat", () => {
       {
         ...command,
         can_apply: false,
+        informational: true,
         lines: [],
         reply: "Odpoczynek między zmianami określa minimalną przerwę.",
       },
@@ -119,6 +123,7 @@ describe("Assistant chat", () => {
         "Odpoczynek między zmianami określa minimalną przerwę.",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Asystent może się pomylić/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Twoja wiadomość"), {
       target: { value: "A Kasia?" },
     });
@@ -271,11 +276,13 @@ it("marks only the last six messages from the current period as remembered", asy
     ...Array.from({ length: 7 }, (_, i) => ({ ...command, id: `recent-${i}` })),
   ]);
   panel();
+  // One line above the older messages, and the period said once instead of above every message.
   await waitFor(() =>
     expect(
-      screen.getAllByText("Archiwum — poza pamięcią asystenta"),
-    ).toHaveLength(2),
+      screen.getAllByText("Starsze wiadomości. Asystent ich nie pamięta."),
+    ).toHaveLength(1),
   );
+  expect(screen.getAllByText("Grudzień 2026")).toHaveLength(1);
 });
 
 it("sends the explicitly selected period with a new command", async () => {

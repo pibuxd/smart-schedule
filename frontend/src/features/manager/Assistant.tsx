@@ -5,7 +5,7 @@ import {
   ChevronDown,
   Users,
   Info,
-  SlidersHorizontal,
+  CalendarSearch,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -44,9 +44,9 @@ const STARTERS = [
     text: "Chcę ustalić, kto powinien pracować razem, a kto osobno.",
   },
   {
-    icon: SlidersHorizontal,
-    title: "Wyjaśnij zasady",
-    text: "Jakie zasady układania grafiku mogę tutaj ustawić?",
+    icon: CalendarSearch,
+    title: "Sprawdź dyspozycje",
+    text: "Kto jeszcze nie wysłał dyspozycji?",
   },
 ];
 
@@ -134,8 +134,18 @@ export function AssistantPanel({
     return () => clearTimeout(timer);
   }, [pendingUntil]);
   useEffect(() => {
-    const feed = feedRef.current;
-    if (feed && follow.current) feed.scrollTop = feed.scrollHeight;
+    // Open at the newest message, also when the drawer is still sliding in.
+    const scroll = () => {
+      const feed = feedRef.current;
+      if (feed && follow.current) feed.scrollTop = feed.scrollHeight;
+    };
+    scroll();
+    const frame = requestAnimationFrame(scroll);
+    const timer = setTimeout(scroll, 300);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
   }, [changeKey, send.isPending]);
 
   const remember = async (row: AssistantCommandOut) => {
@@ -218,8 +228,8 @@ export function AssistantPanel({
                   W czym mogę pomóc?
                 </h3>
                 <p className="mt-2 mb-0 text-sm leading-relaxed text-ink-muted">
-                  Opisz zasadę lub preferencję układania grafiku. Wspólnie
-                  doprecyzujemy ją przed zapisaniem.
+                  Zapytaj o grafik, dyspozycje i godziny albo opisz zasadę
+                  układania grafiku.
                 </p>
               </div>
               <div className="grid gap-2">
@@ -259,17 +269,22 @@ export function AssistantPanel({
                   })}
                 </p>
               )}
-              {row.status !== "queued" && !remembered.has(row.id) && (
-                <p className="m-0 text-center text-xs text-ink-muted">
-                  Archiwum — poza pamięcią asystenta
-                </p>
-              )}
-              {row.period_label && (
-                <p className="m-0 text-center text-xs text-ink-muted">
-                  {row.period_label}
-                  {row.consumed_at ? " · wykorzystane" : ""}
-                </p>
-              )}
+              {row.status !== "queued" &&
+                !remembered.has(row.id) &&
+                (i === 0 || remembered.has(rows[i - 1].id)) && (
+                  <p className="m-0 text-center text-xs text-ink-muted">
+                    Starsze wiadomości. Asystent ich nie pamięta.
+                  </p>
+                )}
+              {row.period_label &&
+                (i === 0 ||
+                  rows[i - 1].period_label !== row.period_label ||
+                  !!rows[i - 1].consumed_at !== !!row.consumed_at) && (
+                  <p className="m-0 text-center text-xs text-ink-muted">
+                    {row.period_label}
+                    {row.consumed_at ? " · wykorzystane" : ""}
+                  </p>
+                )}
               <ChatMessage from="user" date={row.created_at}>
                 <p className="m-0 whitespace-pre-wrap">{row.text}</p>
               </ChatMessage>
@@ -349,8 +364,8 @@ export function AssistantPanel({
           disabled={
             readOnly || !enabled || history.isPending || history.isError
           }
-          placeholder="Opisz zasadę…"
-          footer="Zapis dopiero po zatwierdzeniu."
+          placeholder="Zapytaj albo opisz zasadę…"
+          footer="Zmiany zapiszę dopiero, gdy je zatwierdzisz."
         />
         <p className="mt-2 mb-0 text-xs text-ink-muted">
           Claude (AI) czyta Twoje wiadomości. Pamięta do 6 zakończonych z tego
@@ -366,8 +381,12 @@ export function AssistantPanel({
             przydziału.
           </p>
           <p className="mt-0 mb-2">
-            Claude czyta też listy zasad, osób i zmian tego lokalu. Starszą
-            sprawę opisz ponownie. W historii widzisz ostatnie 50 wiadomości.
+            Claude czyta też listy zasad, osób i zmian tego lokalu, a żeby
+            odpowiedzieć na pytanie, sprawdza w aplikacji to, co Ty widzisz:
+            grafik, godziny, oddane zmiany oraz dyspozycje i prośby pracowników.
+            Nie dostaje numerów telefonów i niczego nie zmienia sam. Może się
+            pomylić, więc ważne dane sprawdź na ekranie. Starszą sprawę opisz
+            ponownie. W historii widzisz ostatnie 50 wiadomości.
           </p>
         </details>
       </div>
@@ -445,6 +464,12 @@ function CommandReply({
   return (
     <>
       {data.reply && <p className="m-0 whitespace-pre-wrap">{data.reply}</p>}
+      {data.informational && (
+        <p className="m-0 text-sm text-ink-muted">
+          Asystent może się pomylić. Ważne dane sprawdź w aplikacji, na przykład
+          w zakładkach „Grafik” i „Dyspozycje” albo w „Godzinach”.
+        </p>
+      )}
       {data.question && <p className="m-0 font-semibold">{data.question}</p>}
       {data.lines.length > 0 && (
         <div className="overflow-hidden rounded-md border border-grid">

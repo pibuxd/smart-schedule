@@ -7,6 +7,7 @@ import {
   useCreateMyRequest,
   useDeleteMyRequest,
   useMyRequests,
+  useSaveMyCalendar,
   useUpdateMyRequest,
 } from "../../api/generated/availability/availability";
 import type { MyRequestOut } from "../../api/generated/model";
@@ -27,17 +28,124 @@ const isSaved = (request: MyRequestOut) =>
 // How long a fresh request is shown as "being read" before we stop asking the server.
 const READING_MS = 60_000;
 
+/** "14.12" for "2026-12-14". */
+const shortDate = (iso: string) =>
+  `${Number(iso.slice(8, 10))}.${iso.slice(5, 7)}`;
+
+/** The assistant's own words to the person: an answer, or a word about the request. */
+function Reply({ request }: { request: MyRequestOut }) {
+  return request.reply ? (
+    <p className="m-0 whitespace-pre-wrap">{request.reply}</p>
+  ) : null;
+}
+
+/** Notes from the app: the calendar says the opposite, or the shift is not on the person's position. */
+function Notes({ notes }: { notes: string[] }) {
+  return notes.length > 0 ? (
+    <ul className="m-0 grid list-none gap-1 rounded-md bg-prefer-not-soft p-3 text-sm text-prefer-not">
+      {notes.map((note, i) => (
+        <li key={i}>{note}</li>
+      ))}
+    </ul>
+  ) : null;
+}
+
+/**
+ * "Nie o to mi chodziło": first a way to write the request again (the assistant reads it anew), and only as a
+ * second choice handing it to the manager as written.
+ */
+function WrongChoice({
+  request,
+  busy,
+  onRewrite,
+  onToManager,
+}: {
+  request: MyRequestOut;
+  busy: boolean;
+  onRewrite: (text: string) => void;
+  onToManager: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(request.text);
+  if (!open)
+    return (
+      <div>
+        <Button
+          variant="quiet"
+          size="normal"
+          disabled={busy}
+          onClick={() => setOpen(true)}
+        >
+          Nie o to mi chodziło
+        </Button>
+      </div>
+    );
+  return (
+    <form
+      className="grid gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (text.trim() && text.trim() !== request.text) onRewrite(text.trim());
+      }}
+    >
+      <label className="grid gap-1 text-sm">
+        Napisz to inaczej
+        <textarea
+          className="rounded-md border-2 border-ink p-2 text-base"
+          maxLength={1000}
+          rows={3}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          size="normal"
+          disabled={busy || !text.trim() || text.trim() === request.text}
+        >
+          Wyślij poprawioną
+        </Button>
+        <Button
+          type="button"
+          variant="quiet"
+          size="normal"
+          disabled={busy}
+          onClick={onToManager}
+        >
+          Niech przeczyta kierownik
+        </Button>
+        <Button
+          type="button"
+          variant="quiet"
+          size="normal"
+          disabled={busy}
+          onClick={() => setOpen(false)}
+        >
+          Anuluj
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 /** How the request was understood, in plain words, with a way to say "that is not what I meant". */
 function RequestStatus({
   request,
   editable,
   busy,
-  onWrong,
+  marking,
+  onRewrite,
+  onToManager,
+  onMarkCannot,
 }: {
   request: MyRequestOut;
   editable: boolean;
   busy: boolean;
-  onWrong: () => void;
+  marking: boolean;
+  onRewrite: (text: string) => void;
+  onToManager: () => void;
+  onMarkCannot: (days: string[]) => void;
 }) {
   if (request.status === "rejected")
     return (
@@ -46,22 +154,16 @@ function RequestStatus({
           {request.summary ?? "Ta prośba została odrzucona."}
         </p>
         {editable && (
-          <>
-            <p className="m-0 text-sm">
-              Asystent się pomylił? Przekaż tę wiadomość kierownikowi. Oceni ją
-              sam. Generator jej nie użyje.
-            </p>
-            <div>
-              <Button
-                variant="quiet"
-                size="normal"
-                disabled={busy}
-                onClick={onWrong}
-              >
-                Przekaż kierownikowi
-              </Button>
-            </div>
-          </>
+          <div>
+            <Button
+              variant="quiet"
+              size="normal"
+              disabled={busy}
+              onClick={onToManager}
+            >
+              Przekaż kierownikowi
+            </Button>
+          </div>
         )}
       </div>
     );
@@ -73,13 +175,17 @@ function RequestStatus({
       </p>
     );
   }
-  if (request.status === "answered" && request.summary) {
+  if (request.status === "answered" && (request.reply || request.summary)) {
     return (
       <div className="grid gap-2">
-        <p className="m-0">{request.summary}</p>
-        <p className="m-0 text-sm">
-          To odpowiedź asystenta. Przekaż wiadomość, aby dodać ją do listy próśb
-          kierownika.
+        {request.reply ? (
+          <Reply request={request} />
+        ) : (
+          <p className="m-0">{request.summary}</p>
+        )}
+        <p className="m-0 text-sm text-ink-muted">
+          Asystent może się pomylić. Ważne daty i godziny sprawdź w „Mój
+          grafik”.
         </p>
         {editable && (
           <div>
@@ -87,9 +193,9 @@ function RequestStatus({
               variant="quiet"
               size="normal"
               disabled={busy}
-              onClick={onWrong}
+              onClick={onToManager}
             >
-              Przekaż kierownikowi
+              Niech przeczyta kierownik
             </Button>
           </div>
         )}
@@ -97,38 +203,57 @@ function RequestStatus({
     );
   }
   if (request.status === "interpreted" && request.summary) {
+    const days = request.unmarked_days;
     return (
       <div className="grid gap-2">
+        <Reply request={request} />
         <p className="m-0">
           <span className="font-semibold">Tak to zrozumieliśmy: </span>
           {request.summary}
         </p>
-        <p className="m-0 text-sm">
-          To preferencja: grafik ułożony automatycznie spróbuje ją spełnić. Nie
-          zmienia kalendarza dyspozycji. Jeśli nie możesz pracować, zaznacz „nie
-          mogę” w kalendarzu.
+        <p className="m-0 text-sm text-ink-muted">
+          Generator grafiku spróbuje to spełnić. Kalendarz się nie zmienia.
         </p>
-        {editable && (
-          <div>
-            <Button
-              variant="quiet"
-              size="normal"
-              disabled={busy}
-              onClick={onWrong}
-            >
-              Nie o to mi chodziło
-            </Button>
+        <Notes notes={request.notes} />
+        {editable && days.length > 0 && (
+          <div className="grid gap-2 rounded-md border border-line p-3">
+            <p className="m-0 text-sm">
+              W kalendarzu te dni są nadal do pracy:{" "}
+              {days.map(shortDate).join(", ")}.
+            </p>
+            <div>
+              <Button
+                variant="secondary"
+                size="normal"
+                disabled={busy || marking}
+                onClick={() => onMarkCannot(days)}
+              >
+                {marking ? "Zapisuję…" : "Zaznacz „nie mogę”"}
+              </Button>
+            </div>
           </div>
+        )}
+        {editable && (
+          <WrongChoice
+            request={request}
+            busy={busy}
+            onRewrite={onRewrite}
+            onToManager={onToManager}
+          />
         )}
       </div>
     );
   }
   if (request.status === "new")
-    return <ChatTyping>Czytamy Twoją prośbę…</ChatTyping>;
+    return <ChatTyping>Czytamy Twoją wiadomość…</ChatTyping>;
   return (
-    <p className="m-0 text-sm text-ink-muted">
-      Kierownik przeczyta tę prośbę sam.
-    </p>
+    <div className="grid gap-2">
+      <Reply request={request} />
+      <p className="m-0 text-sm text-ink-muted">
+        Kierownik przeczyta tę prośbę sam. Generator nie użyje jej
+        automatycznie.
+      </p>
+    </div>
   );
 }
 
@@ -179,6 +304,16 @@ function RequestsChat({
   const remove = useDeleteMyRequest({ mutation: { onSuccess: refresh } });
   const [removing, setRemoving] = useState<string | null>(null);
   const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } });
+  // "Zaznacz „nie mogę”": the same save as a tap in the calendar, so the calendar screens refresh too.
+  const markCannot = useSaveMyCalendar({
+    mutation: {
+      onSuccess: () =>
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            String(query.queryKey[0]).startsWith("/api/me/"),
+        }),
+    },
+  });
   const [text, setText] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(
@@ -197,9 +332,23 @@ function RequestsChat({
   const feedRef = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const changeKey = list.map((r) => `${r.id}:${r.status}`).join(",");
+  const wasOpen = useRef(false);
   useEffect(() => {
-    const feed = feedRef.current;
-    if (feed && follow.current) feed.scrollTop = feed.scrollHeight;
+    // The chat opens at the newest message, also while the drawer is still sliding in.
+    if (chatOpen && !wasOpen.current) follow.current = true;
+    wasOpen.current = chatOpen;
+    if (!chatOpen) return;
+    const scroll = () => {
+      const feed = feedRef.current;
+      if (feed && follow.current) feed.scrollTop = feed.scrollHeight;
+    };
+    scroll();
+    const frame = requestAnimationFrame(scroll);
+    const timer = setTimeout(scroll, 300);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
   }, [changeKey, chatOpen]);
 
   const removeControl = (request: MyRequestOut) =>
@@ -235,7 +384,8 @@ function RequestsChat({
         <Trash2 size={18} aria-hidden="true" />
       </Button>
     );
-  const failure = update.error ?? remove.error ?? create.error;
+  const failure =
+    update.error ?? remove.error ?? create.error ?? markCannot.error;
 
   return (
     <section
@@ -399,7 +549,7 @@ function RequestsChat({
         <p className="m-0 text-sm text-ink-muted">
           {notSaved.status === "rejected"
             ? "Twoja ostatnia wiadomość została odrzucona i nie jest prośbą."
-            : "Na ostatnią wiadomość asystent odpowiedział. Nie zapisał jej jako prośby."}{" "}
+            : "Asystent odpowiedział na Twoją ostatnią wiadomość."}{" "}
           <button
             type="button"
             className="min-h-(--touch) cursor-pointer font-semibold text-accent underline"
@@ -419,7 +569,7 @@ function RequestsChat({
         title={assistantReads ? "Asystent" : "Prośby do kierownika"}
         description={
           assistantReads
-            ? "Opisz jedną preferencję układania grafiku."
+            ? "Zapytaj o swój grafik albo napisz prośbę."
             : "Napisz prośbę do kierownika."
         }
       >
@@ -440,13 +590,14 @@ function RequestsChat({
           {list.length === 0 && (
             <div className="py-4">
               <h3 className="m-0 mb-2 text-lg font-semibold">
-                Co warto uwzględnić w Twoim grafiku?
+                {assistantReads
+                  ? "W czym pomóc?"
+                  : "Co warto uwzględnić w Twoim grafiku?"}
               </h3>
               <p className="m-0 text-sm text-ink-muted">
-                Na przykład: „W piątki wolę pracować rano”.{" "}
                 {assistantReads
-                  ? "Asystent czyta jedną prośbę naraz i nie dopytuje. Gdy ją zrozumie, zapisze ją w „Twoich prośbach”."
-                  : "Prośba trafi do „Twoich próśb” i do kierownika."}
+                  ? "Zapytaj, na przykład: „Kiedy mam następną zmianę?”. Albo napisz prośbę: „W piątki wolę pracować rano”. Prośby zapiszę w „Twoich prośbach”."
+                  : "Na przykład: „W piątki wolę pracować rano”. Prośba trafi do „Twoich próśb” i do kierownika."}
               </p>
             </div>
           )}
@@ -475,10 +626,29 @@ function RequestsChat({
                     request={request}
                     editable={editable && request.status !== "superseded"}
                     busy={update.isPending}
-                    onWrong={() =>
+                    marking={markCannot.isPending}
+                    onRewrite={(newText) => {
+                      follow.current = true;
+                      update.mutate({
+                        requestId: request.id,
+                        data: { text: newText },
+                      });
+                    }}
+                    onToManager={() =>
                       update.mutate({
                         requestId: request.id,
                         data: { understood: false },
+                      })
+                    }
+                    onMarkCannot={(days) =>
+                      markCannot.mutate({
+                        data: {
+                          company_id: companyId,
+                          days: days.map((date) => ({
+                            date,
+                            state: "cannot",
+                          })),
+                        },
                       })
                     }
                   />
@@ -495,10 +665,14 @@ function RequestsChat({
             <ChatComposer
               text={text}
               onChange={setText}
-              label="Twoja prośba"
-              sendLabel="Wyślij prośbę"
+              label={assistantReads ? "Twoja wiadomość" : "Twoja prośba"}
+              sendLabel={assistantReads ? "Wyślij" : "Wyślij prośbę"}
               enterSends={false}
-              placeholder="Opisz swoją prośbę…"
+              placeholder={
+                assistantReads
+                  ? "Zapytaj albo opisz prośbę…"
+                  : "Opisz swoją prośbę…"
+              }
               disabled={requests.isPending || requests.isError}
               sending={create.isPending}
               onSend={() => {
@@ -511,7 +685,7 @@ function RequestsChat({
               }}
               footer={
                 assistantReads
-                  ? "Prośbę przeczyta też kierownik."
+                  ? "Czyta to asystent AI (Claude), kierownik i jego asystent."
                   : "Wiadomość dla kierownika."
               }
             />
@@ -526,12 +700,13 @@ function RequestsChat({
               O prośbach i Twoich danych
             </summary>
             <p className="mt-0 mb-2 leading-relaxed">
-              Jedna prośba, jedna sprawa. Napisz też powód, jeśli jest ważny.
-              Dyspozycje zaznacz w kalendarzu.{" "}
+              W jednej wiadomości możesz zapytać o coś i napisać do trzech
+              próśb. Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w
+              kalendarzu.{" "}
               {!periodId &&
                 "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
               {assistantReads
-                ? "Asystent AI (zewnętrzna usługa Claude) czyta tę prośbę, Twoje wcześniejsze prośby oraz nazwy osób i zmian w lokalu. Obsługuje tylko preferencje układania grafiku. Nie układa grafiku ani nie zmienia kalendarza. Prośby czyta też kierownik. Nie wpisuj tu nic, czego nie chcesz mu przekazać."
+                ? "Asystent AI (zewnętrzna usługa Claude) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Prośby czyta też kierownik, a gdy kierownik pyta swojego asystenta, ten też może przeczytać Twoje prośby i dyspozycje. Nie wpisuj tu nic, czego nie chcesz przekazać kierownikowi."
                 : "Przeczyta to tylko kierownik."}
             </p>
           </details>

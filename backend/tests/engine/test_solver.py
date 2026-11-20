@@ -804,6 +804,24 @@ def test_weekly_personal_hours_reset_on_monday_and_include_published_week_hours(
     assert validate(monthly, {"tue": "anna", "next_mon": "anna"}).requests[0].degree == 1
 
 
+def test_daily_personal_hours_count_each_day_on_its_own():
+    slots = [
+        slot("mon_a", MON, "06:00", "12:00"),
+        slot("mon_b", MON, "12:00", "18:00"),
+        slot("tue", day(1), "06:00", "12:00"),
+    ]
+    cap = Request("cap", "anna", "hours_limit", max_hours=6, daily_hours=True, by_manager=True)
+    p = problem([employee("anna"), employee("ewa")], slots, requests=[cap])
+    windows = cap.hour_windows(p)
+    assert [(start, end) for start, end, _ in windows] == [(MON, MON), (day(1), day(1))]
+    # Twelve hours on Monday break the daily limit, although the period total (twelve) would be allowed per day.
+    assert validate(p, {"mon_a": "anna", "mon_b": "anna", "tue": "ewa"}).requests[0].degree > 0
+    assert validate(p, {"mon_a": "anna", "mon_b": "ewa", "tue": "anna"}).requests[0].degree == 0
+    result, report = solved(p)
+    assert report.requests[0].degree == 0
+    assert [result.schedule["mon_a"], result.schedule["mon_b"]].count("anna") <= 1
+
+
 def test_together_requires_identical_shift_even_when_opening_and_closing_overlap():
     slots = [
         slot("opening", MON, "07:00", "15:00", position=BAKER),

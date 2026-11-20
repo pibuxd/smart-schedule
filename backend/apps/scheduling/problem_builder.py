@@ -113,6 +113,7 @@ def instruction_request(data, employee_id, instruction_id, rank, start, end, nam
         avoid=bool(data.get("avoid", False)),
         max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
         weekly_hours=data.get("hours_period") == "week",
+        daily_hours=data.get("hours_period") == "day",
         min_days=_min_days(data),
         shifts_per_day=_shifts_per_day(data),
         summary=readings.describe(data, names[employee_id], names, shift_names),
@@ -512,39 +513,48 @@ class _Reader:
             if employee_id not in employee_ids:
                 continue
             data = readings.saved_reading(row.interpretation, row.text)
-            kind = RequestType.OTHER
-            if row.status == TextRequest.Status.INTERPRETED:
-                kind = REQUEST_TYPES.get(str(data.get("type")), RequestType.OTHER)
-            subject = data.get("subject_employee")
-            subject = str(subject) if subject and str(subject) in employee_ids else None
-            if kind in (RequestType.AVOID_PERSON, RequestType.PREFER_PERSON) and subject is None:
-                kind = RequestType.OTHER
-            level = data.get("level")
-            dates = request_dates(data, self.start, self.end)
-            if readings.has_days(data) and not dates:
-                continue  # about days outside this period: nothing to keep here
-            max_hours = data.get("max_hours")
-            result.append(
-                Request(
-                    id=str(row.pk),
-                    employee=employee_id,
-                    type=kind,
-                    level=level if level in RequestLevel._value2member_map_ else RequestLevel.IMPORTANT,
-                    manager_priority=row.manager_priority,
-                    dates=frozenset(dates),
-                    subject_employee=subject,
-                    shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
-                    avoid=bool(data.get("avoid", False)),
-                    max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
-                    weekly_hours=data.get("hours_period") == "week",
-                    min_days=_min_days(data),
-                    shifts_per_day=_shifts_per_day(data),
-                    summary=str(data.get("summary") or row.text[:200]),
-                    # A request for a month (no period) is about the person: it counts where they work.
-                    location=str(row.period.location_id) if row.period_id else None,
-                )
-            )
+            interpreted = row.status == TextRequest.Status.INTERPRETED
+            # One message may hold several wishes: the first at the top, the others in `more` (ids "<pk>:2", …).
+            parts = [data, *(data.get("more") or [])] if interpreted else [data]
+            for number, part in enumerate(parts, start=1):
+                request = self._text_request(row, part, interpreted, employee_ids)
+                if request is not None:
+                    if number > 1:
+                        request = replace(request, id=f"{row.pk}:{number}")
+                    result.append(request)
         return result + self.instructions(employee_ids)
+
+    def _text_request(self, row: TextRequest, data: dict, interpreted: bool, employee_ids: set[str]) -> Request | None:
+        employee_id = str(row.employee_id)
+        kind = REQUEST_TYPES.get(str(data.get("type")), RequestType.OTHER) if interpreted else RequestType.OTHER
+        subject = data.get("subject_employee")
+        subject = str(subject) if subject and str(subject) in employee_ids else None
+        if kind in (RequestType.AVOID_PERSON, RequestType.PREFER_PERSON) and subject is None:
+            kind = RequestType.OTHER
+        level = data.get("level")
+        dates = request_dates(data, self.start, self.end)
+        if readings.has_days(data) and not dates:
+            return None  # about days outside this period: nothing to keep here
+        max_hours = data.get("max_hours")
+        return Request(
+            id=str(row.pk),
+            employee=employee_id,
+            type=kind,
+            level=level if level in RequestLevel._value2member_map_ else RequestLevel.IMPORTANT,
+            manager_priority=row.manager_priority,
+            dates=frozenset(dates),
+            subject_employee=subject,
+            shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
+            avoid=bool(data.get("avoid", False)),
+            max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+            weekly_hours=data.get("hours_period") == "week",
+            daily_hours=data.get("hours_period") == "day",
+            min_days=_min_days(data),
+            shifts_per_day=_shifts_per_day(data),
+            summary=str(data.get("part_summary") or data.get("summary") or row.text[:200]),
+            # A request for a month (no period) is about the person: it counts where they work.
+            location=str(row.period.location_id) if row.period_id else None,
+        )
 
     def instructions(self, employee_ids: set[str]) -> list[Request]:
         """The manager's instructions about people: scored with the manager's rules, ranked by their place."""

@@ -1,6 +1,5 @@
 """Regressions from the independent QA: preserved intent, factual reads and conversational corrections."""
 
-import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -9,8 +8,8 @@ from django.utils import timezone
 from apps.assistant import context, llm, services
 from apps.assistant.management.commands.assistant_misses import _command_reason, misses
 from apps.assistant.models import AssistantCommand, AssistantRuleSet, ManagerInstruction
-from apps.availability.models import AvailabilityDay, AvailabilitySubmission, TextRequest
-from apps.scheduling.models import Assignment, ScheduleVersion, Shift
+from apps.availability.models import AvailabilityDay, TextRequest
+from apps.scheduling.models import Assignment, Shift
 from apps.scheduling.problem_builder import build_problem
 from engine.problem import RequestType
 from tests.test_assistant import instruction, plan, reading, rule_change, run, send_request
@@ -20,7 +19,7 @@ from tests.test_assistant import with_key as with_key
 
 def submit_and_read(api, shop, monkeypatch, answer, text="Prośba"):
     api.login(shop["worker"])
-    monkeypatch.setattr(llm, "read_request", lambda text, context: answer)
+    monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: answer)
     pk = send_request(api, shop, text).json()["id"]
     services.interpret_request(pk)
     return TextRequest.objects.get(pk=pk)
@@ -35,7 +34,7 @@ def test_work_on_a_specific_shift_survives_approval_and_reaches_engine(api, shop
         shop,
         monkeypatch,
         plan(
-            reply="Anna na pewno będzie rano.",
+            reply="Dopisuję Annie poranną zmianę w tym dniu.",
             new_instructions=[
                 instruction(
                     type="chce_pracowac",
@@ -47,7 +46,8 @@ def test_work_on_a_specific_shift_survives_approval_and_reaches_engine(api, shop
         ),
     )
     assert "Ranna" in body["lines"][0]
-    assert "na pewno" not in body["reply"]
+    assert body["reply"] == "Dopisuję Annie poranną zmianę w tym dniu."  # the assistant's own words
+    assert "nie gwarantują przydziału" in body["notes"][0]  # ... never read as a promise of a shift
     assert any("nie mogę" in n for n in body["notes"])
     assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200
     [saved] = build_problem([shop["period"]]).problem.requests
@@ -138,12 +138,8 @@ def test_rejected_message_reaches_the_manager_only_when_forwarded_and_never_the_
         api,
         shop,
         monkeypatch,
-        reading(
-            type="informacja",
-            weekdays=[],
-            summary="Nie ma jeszcze opublikowanego grafiku na ten okres.",
-        ),
-        "Kiedy pracuję?",
+        reading(scope="out_of_scope"),
+        "Jaka będzie jutro pogoda?",
     )
     assert row.status == "rejected"
     assert not build_problem([shop["period"]]).problem.requests
@@ -156,7 +152,7 @@ def test_rejected_message_reaches_the_manager_only_when_forwarded_and_never_the_
     assert forwarded["status"] == "needs_manager" and forwarded["summary"] is None
     api.login(shop["manager"])
     (seen,) = api.get(f"/api/periods/{shop['period'].pk}/requests").json()
-    assert seen["text"] == "Kiedy pracuję?" and seen["unread_reason"] == "rejected"
+    assert seen["text"] == "Jaka będzie jutro pogoda?" and seen["unread_reason"] == "rejected"
     assert seen["summary"] is None and seen["employee_corrected"] and not seen["can_reread"]
     # Forwarding is only a note for the manager: the generator still scores nothing from it.
     (unscored,) = build_problem([shop["period"]]).problem.requests
@@ -171,7 +167,7 @@ def test_correction_replaces_old_days_and_preserves_audit_and_manager_priority(a
     old.save()
     seen = {}
 
-    def corrected(text, ctx):
+    def corrected(text, ctx, toolbox=None):
         seen["context"] = ctx
         return reading(dates=days[:2], weekdays=[], replaces_request=1)
 
@@ -195,7 +191,7 @@ def test_correction_replaces_old_days_and_preserves_audit_and_manager_priority(a
 def test_stale_correction_cannot_override_concurrent_change(api, shop, with_key, monkeypatch, change):
     old = submit_and_read(api, shop, monkeypatch, reading(), "Poprzednia prośba")
 
-    def answer(text, ctx):
+    def answer(text, ctx, toolbox=None):
         if change == "delete":
             old.delete()
         else:
@@ -230,7 +226,7 @@ def test_inflight_read_does_not_overwrite_employee_edit(api, shop, with_key, mon
     api.login(shop["worker"])
     pk = send_request(api, shop).json()["id"]
 
-    def answer(text, ctx):
+    def answer(text, ctx, toolbox=None):
         api.patch(f"/api/me/requests/{pk}", {"text": "Nowa treść"})
         return reading()
 
@@ -244,7 +240,7 @@ def test_manager_decision_during_read_is_preserved_without_leaving_request_queue
     api.login(shop["worker"])
     pk = send_request(api, shop).json()["id"]
 
-    def answer(text, ctx):
+    def answer(text, ctx, toolbox=None):
         api.login(shop["manager"])
         api.patch(f"/api/requests/{pk}", {"manager_rejected": True, "manager_priority": "higher"})
         return reading()
@@ -324,44 +320,28 @@ def add_shift(shop, version, employee, *, hours=8, day_offset=0):
     return shift
 
 
-def snapshot(shop, **kwargs):
-    return json.loads(context.location_snapshot(shop["location"], timezone.localdate(), **kwargs).split("\n", 1)[1])
-
-
-def test_read_context_separates_drafts_private_data_and_company(api, shop, make_company):
-    published = ScheduleVersion.objects.create(period=shop["period"], number=1, status="published")
-    draft = ScheduleVersion.objects.create(period=shop["period"], number=2)
-    add_shift(shop, published, shop["employee"])
-    add_shift(shop, published, shop["kasia"])
-    add_shift(shop, draft, shop["employee"], hours=10)
-    AvailabilityDay.objects.create(employee=shop["kasia"], date=shop["period"].start, state="cannot")
-    AvailabilitySubmission.objects.create(employee=shop["employee"], period=shop["period"])
+def test_employee_context_has_no_private_data_of_others(api, shop, make_company):
     other = make_company("SecretCompany")
-    AvailabilityDay.objects.create(employee=other["employee"], date=shop["period"].start, state="prefer")
+    TextRequest.objects.create(employee=other["employee"], month=shop["period"].start, text="Secret")
     private = TextRequest.objects.create(employee=shop["kasia"], period=shop["period"], text="Private medical reason")
     own = TextRequest.objects.create(employee=shop["employee"], period=shop["period"], text="Ile godzin?")
-    employee = snapshot(shop, employee=shop["employee"])
-    [p] = employee["periods"]
-    [schedule] = p["schedules"]
-    assert schedule["status"] == "published" and schedule["hours"] == {"Ty": 8}
-    assert schedule["shifts"][0]["coworkers"] == ["Kasia"]
-    assert p["availability"] == [] and p["submitted"] == {"Ty": True}
     sent, _, _ = services.request_context(own, timezone.localdate())
-    assert private.text not in sent and "SecretCompany" not in sent and "+48" not in sent
+    assert private.text not in sent and "SecretCompany" not in sent and "+48" not in sent and "Secret" not in sent
     assert "manager_priority" not in sent and "manager_rejected" not in sent and "experience" not in sent
-    manager = snapshot(shop)
-    assert [s["status"] for s in manager["periods"][0]["schedules"]] == ["published", "draft"]
-    assert manager["periods"][0]["schedules"][1]["hours"] == {"Anna": 10}
-    assert manager["periods"][0]["availability"][0]["person"] == "Kasia"
 
 
-def test_truncated_snapshot_does_not_present_partial_totals(shop, monkeypatch):
-    version = ScheduleVersion.objects.create(period=shop["period"], number=1, status="published")
-    add_shift(shop, version, shop["employee"])
-    add_shift(shop, version, shop["employee"], day_offset=1)
-    monkeypatch.setattr(context, "MAX_ROWS", 1)
-    data = snapshot(shop)["periods"][0]["schedules"][0]
-    assert data["hours"] is None and data["unfilled_slots"] is None and data["details_truncated"]
+def test_conversation_brings_the_last_replies_of_the_same_chat(shop):
+    now = timezone.now()
+    base = {"employee": shop["employee"], "period": shop["period"]}
+    TextRequest.objects.create(
+        **base, text="Kiedy pracuję?", status="answered", reply="W sobotę 21.11.", created_at=now - timedelta(hours=1)
+    )
+    TextRequest.objects.create(**base, text="Za stara", status="answered", created_at=now - timedelta(days=2))
+    TextRequest.objects.create(employee=shop["kasia"], period=shop["period"], text="Cudza", created_at=now)
+    current = TextRequest.objects.create(**base, text="A z kim?", created_at=now)
+    talk = context.conversation(current)
+    assert "Kiedy pracuję?" in talk and "W sobotę 21.11." in talk
+    assert all(text not in talk for text in ("Za stara", "Cudza", "A z kim?"))
 
 
 def test_command_history_is_only_same_author_location_and_recent(shop, make_company):

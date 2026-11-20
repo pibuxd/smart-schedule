@@ -3,9 +3,11 @@ are missing from the closed lists (and to improve the prompts).
 
     python manage.py assistant_misses [--days 30] > misses.csv
 
-Rows: employee requests left to the manager (assistant off, unsure, failed, or "not what I meant") and manager
-commands that failed, asked a question, dropped something (notes) or proposed nothing. The text is what people
-wrote, so the file is for the superadmin only.
+Rows: employee requests left to the manager (assistant off, unsure, failed, "not what I meant", or an answer
+the person forwarded: `forwarded_answer`, to see how often plain questions reach the manager), messages it
+refused as unrelated to work, and manager commands that failed, asked a question, dropped something (notes) or
+proposed nothing. Answers to questions are not misses. `assistant_answer` also lists the tools it read. The text
+is what people wrote, so the file is for the superadmin only.
 """
 
 import csv
@@ -38,12 +40,21 @@ class Command(BaseCommand):
 def misses(since):
     rows = []
     requests = (
-        TextRequest.objects.filter(created_at__gte=since, status=TextRequest.Status.NEEDS_MANAGER)  # superadmin
+        TextRequest.objects.filter(  # superadmin
+            created_at__gte=since, status__in=[TextRequest.Status.NEEDS_MANAGER, TextRequest.Status.REJECTED]
+        )
         .select_related("company", "period__location", "employee__home_location")
         .order_by("created_at")
     )
     for r in requests:
-        reason = "employee_said_wrong" if r.employee_corrected and not r.unread_reason else r.unread_reason
+        if r.status == TextRequest.Status.REJECTED:
+            reason = "unrelated"
+        elif r.employee_corrected and not r.unread_reason and r.interpretation is None:
+            reason = "forwarded_answer"  # an answered question the person handed to the manager
+        elif r.employee_corrected and not r.unread_reason:
+            reason = "employee_said_wrong"
+        else:
+            reason = r.unread_reason
         rows.append(
             (
                 r.created_at.isoformat(timespec="seconds"),

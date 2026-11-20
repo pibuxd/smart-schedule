@@ -135,6 +135,12 @@ def notification_text(kind: str, payload: dict) -> str:
             )
         case "offer_cancelled":
             return f"{giver} jednak zostaje na zmianie {shift}. Nie musisz jej brać."
+        case "request_for_manager":
+            where = f" lokalu {p['location_name']}" if p.get("location_name") else ""
+            return (
+                f"Nowa prośba do przeczytania. {p.get('employee_name') or 'Pracownik'} pisze: „{p.get('text', '')}”. "
+                f"Znajdziesz ją w zakładce „Dyspozycje”{where}."
+            )
         case "request_to_assistant":
             return (
                 f"Kierownik dał Twoją prośbę „{p.get('text', '')}” do przeczytania asystentowi AI (Claude, "

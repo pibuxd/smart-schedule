@@ -53,28 +53,49 @@ def with_key(settings):
     settings.ANTHROPIC_API_KEY = "test-key"
 
 
-def reading(**changes) -> llm.RequestReading:
+def reading(**changes) -> llm.EmployeeReply:
+    """The assistant's answer to one employee message with one preference (old-style keywords still work:
+    scope="out_of_scope" is an unrelated message, type="inne" is left to the manager)."""
+    reply = {
+        "topic": "unrelated" if changes.pop("scope", "rules") == "out_of_scope" else "app",
+        "answer": changes.pop("answer", ""),
+        "leave_to_manager": changes.pop("leave_to_manager", False),
+        "replaces_request": changes.pop("replaces_request", None),
+    }
+    changes.pop("summary", None)  # the app writes the summary itself
     values = {
-        "scope": "rules",
         "type": "wolne_dni",
         "person": None,
         "shift_type": None,
         "avoid_shift_type": False,
         "max_hours": None,
+        "hours_period": None,
         "min_days": None,
         "shifts_per_day": None,
         "dates": [],
         "weekdays": [5],
+        "cannot": False,
         "level": "wazne",
         "confidence": 0.9,
-        "summary": "Wolne w piątki, jeśli się da.",
     }
-    return llm.RequestReading(**{**values, **changes})
+    values.update(changes)
+    if reply["topic"] == "unrelated":
+        preferences = []
+    elif values["type"] == "inne":
+        preferences, reply["leave_to_manager"] = [], True
+    else:
+        preferences = [llm.Preference(**values)]
+    return llm.EmployeeReply(preferences=preferences, **reply)
+
+
+def question(answer: str = "Masz zmianę w sobotę 21.11, 6:00–14:00.") -> llm.EmployeeReply:
+    return llm.EmployeeReply(topic="app", answer=answer, preferences=[], leave_to_manager=False, replaces_request=None)
 
 
 def plan(**changes) -> llm.CommandPlan:
+    changes.pop("informational", None)
     values = {
-        "scope": "rules",
+        "topic": "unrelated" if changes.pop("scope", "rules") == "out_of_scope" else "app",
         "reply": "Gotowe.",
         "question": None,
         "rule_changes": [],
@@ -94,6 +115,7 @@ def instruction(**changes) -> llm.NewInstruction:
         "max_hours": None,
         "min_days": None,
         "shifts_per_day": None,
+        "hours_period": None,
         "dates": [],
         "weekdays": [],
         "place": 1,
@@ -149,7 +171,7 @@ class TestRequests:
     def test_understood_request_reaches_the_generator(self, api, shop, with_key, monkeypatch):
         seen = {}
 
-        def fake(text, context):
+        def fake(text, context, toolbox=None):
             seen.update(text=text, context=context)
             return reading()
 
@@ -162,18 +184,18 @@ class TestRequests:
         assert seen["text"] == "Wolałabym nie pracować w piątki."
         assert "Kasia" in seen["context"] and "Anna" not in seen["context"] and "+48" not in seen["context"]
         [mine] = api.get(f"/api/me/requests?company_id={shop['company'].pk}&period_id={shop['period'].pk}").json()
-        assert mine["status"] == "interpreted" and mine["summary"] == "Preferencja: wolne w piątki."
+        assert mine["status"] == "interpreted" and mine["summary"] == "Wolne w piątki."
         [request] = build_problem([shop["period"]]).problem.requests
         assert request.type == "days_off" and request.level == "wazne"
         assert request.dates and all(d.weekday() == 4 for d in request.dates)
         api.login(shop["manager"])
         [listed] = api.get(f"/api/periods/{shop['period'].pk}/requests").json()
-        assert listed["summary"] == "Preferencja: wolne w piątki."
+        assert listed["summary"] == "Wolne w piątki."
 
     def test_a_request_for_a_month_without_a_period_is_read_for_that_month(self, api, shop, with_key, monkeypatch):
         seen = {}
 
-        def fake(text, context):
+        def fake(text, context, toolbox=None):
             seen["context"] = context
             return reading()
 
@@ -200,7 +222,7 @@ class TestRequests:
     def test_unsure_or_unusable_reading_goes_to_the_manager_without_interpretation(
         self, api, shop, with_key, monkeypatch, answer
     ):
-        monkeypatch.setattr(llm, "read_request", lambda text, context: answer)
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: answer)
         api.login(shop["worker"])
         request_id = send_request(api, shop).json()["id"]
         assert services.interpret_request(request_id) == "needs_manager"
@@ -211,7 +233,7 @@ class TestRequests:
         start = shop["period"].start
         days = [(start + timedelta(days=11)).isoformat(), (start + timedelta(days=12)).isoformat()]
         answer = reading(type="chce_pracowac", weekdays=[], dates=days, min_days=1, summary="Praca 12 albo 13.")
-        monkeypatch.setattr(llm, "read_request", lambda text, context: answer)
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: answer)
         api.login(shop["worker"])
         request_id = send_request(api, shop, "chce albo 12stego albo 13stego").json()["id"]
         assert services.interpret_request(request_id) == "interpreted"
@@ -220,7 +242,7 @@ class TestRequests:
         assert sorted(d.isoformat() for d in request.dates) == days
 
         two = reading(type="chce_pracowac", weekdays=[], dates=days[:1], shifts_per_day=2, summary="Dwie zmiany.")
-        monkeypatch.setattr(llm, "read_request", lambda text, context: two)
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: two)
         request_id = send_request(api, shop, "21 stycznia dwie zmiany pod rząd").json()["id"]
         assert services.interpret_request(request_id) == "interpreted"
         wish = next(r for r in build_problem([shop["period"]]).problem.requests if r.id == request_id)
@@ -244,7 +266,7 @@ class TestRequests:
         told = Notification.objects.get(user=shop["worker"], kind="request_to_assistant")
         assert "asystentowi AI" in notification_text(told.kind, told.payload)
         assert ProcrastinateJob.objects.filter(task_name="assistant.interpret_text_request").count() == 1
-        monkeypatch.setattr(llm, "read_request", lambda text, context: reading(confidence=0.2))
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading(confidence=0.2))
         assert services.interpret_request(request_id) == "needs_manager"
         [listed] = api.get(url).json()
         assert (listed["unread_reason"], listed["can_reread"]) == ("unsure", False)  # it did read it
@@ -258,7 +280,7 @@ class TestRequests:
         assert api.post(f"/api/requests/{request_id}/reread").status_code == 404
 
     def test_a_failed_call_leaves_the_request_to_the_manager(self, api, shop, with_key, monkeypatch):
-        def broken(text, context):
+        def broken(text, context, toolbox=None):
             raise llm.AssistantError("connection")
 
         monkeypatch.setattr(llm, "read_request", broken)
@@ -269,7 +291,7 @@ class TestRequests:
 
     def test_person_and_shift_names_become_ids(self, api, shop, with_key, monkeypatch):
         answer = reading(type="unikaj_osoby", person="kasia", weekdays=[], summary="Bez zmian z Kasią.")
-        monkeypatch.setattr(llm, "read_request", lambda text, context: answer)
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: answer)
         api.login(shop["worker"])
         request_id = send_request(api, shop, "Nie chcę zmian z Kasią").json()["id"]
         services.interpret_request(request_id)
@@ -277,7 +299,7 @@ class TestRequests:
         assert data["subject_employee"] == str(shop["kasia"].pk) and data["type"] == "unikaj_osoby"
 
     def test_employee_says_it_was_misunderstood_or_rewrites(self, api, shop, with_key, monkeypatch):
-        monkeypatch.setattr(llm, "read_request", lambda text, context: reading())
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading())
         api.login(shop["worker"])
         request_id = send_request(api, shop).json()["id"]
         services.interpret_request(request_id)
@@ -318,7 +340,7 @@ def command(api, shop, text="Anna i Kasia nie mogą pracować razem."):
 
 
 def run(api, shop, monkeypatch, answer, text="Anna i Kasia nie mogą pracować razem."):
-    monkeypatch.setattr(llm, "plan_command", lambda text, context: answer)
+    monkeypatch.setattr(llm, "plan_command", lambda text, context, toolbox=None: answer)
     created = command(api, shop, text).json()
     assert services.run_command(created["id"]) == "ready"
     return api.get(f"/api/assistant-commands/{created['id']}").json()
@@ -499,7 +521,7 @@ class TestCommands:
         later = (shop["period"].end + timedelta(days=1) + timedelta(days=40)).replace(day=1)
         seen = {}
 
-        def answer(text, context):
+        def answer(text, context, toolbox=None):
             seen["context"] = context
             day = later.replace(day=12).isoformat()
             return plan(new_instructions=[instruction(type="wolne_dni", other_person=None, dates=[day])])
@@ -509,12 +531,12 @@ class TestCommands:
         created = command(api, shop, "Anna ma wolne 12 dnia tamtego miesiąca.").json()
         assert services.run_command(created["id"]) == "ready"
         assert f"od {shop['period'].start.isoformat()} do {shop['period'].end.isoformat()}" in seen["context"]
-        assert "także w miesiącach, na które nie ma jeszcze okresu" in seen["context"]
+        assert "Ustalenia na okres: czekają na prośbę o dyspozycje" in seen["context"]
         body = api.get(f"/api/assistant-commands/{created['id']}").json()
-        assert body["notes"][:1] == [
+        assert (
             "Polecenie o osobie „Anna” zadziała, gdy poprosisz o dyspozycje na te dni. "
             "Do tego czasu nie zmienia żadnego grafiku."
-        ]
+        ) in body["notes"]
         assert api.post(f"/api/assistant-commands/{created['id']}/apply").status_code == 200
 
         assert not build_problem([shop["period"]]).problem.requests  # not this period
@@ -525,13 +547,25 @@ class TestCommands:
         [request] = build_problem([new_period]).problem.requests
         assert request.by_manager and request.dates == {later.replace(day=12)}
 
-    def test_a_command_more_than_a_year_ahead_is_dropped(self, api, shop, with_key, monkeypatch):
+    def test_a_command_about_days_outside_the_agreements_period_is_blocked(self, api, shop, with_key, monkeypatch):
         far = (timezone.localdate() + timedelta(days=400)).isoformat()
         api.login(shop["manager"])
         answer = plan(new_instructions=[instruction(type="wolne_dni", other_person=None, dates=[far])])
         body = run(api, shop, monkeypatch, answer)
         assert body["lines"] == [] and body["can_apply"] is False
-        assert body["notes"] == ["Pominąłem polecenie o osobie „Anna”: dotyczy dni ponad rok naprzód."]
+        [note] = body["notes"]
+        assert note.startswith("Polecenie o osobie „Anna” dotyczy dni spoza okresu ustaleń")
+        assert "Nie zmieniłoby żadnego grafiku" in note and body["reply"] == services.BLOCKED_REPLY
+
+    def test_days_partly_outside_the_agreements_period_are_trimmed(self, api, shop, with_key, monkeypatch):
+        start = shop["period"].start
+        api.login(shop["manager"])
+        days = [(start - timedelta(days=1)).isoformat(), start.isoformat()]
+        answer = plan(new_instructions=[instruction(type="wolne_dni", other_person=None, dates=days)])
+        body = run(api, shop, monkeypatch, answer)
+        assert body["can_apply"] is True and body["reply"] == "Gotowe."
+        assert any("pominąłem dni spoza okresu ustaleń" in note for note in body["notes"])
+        assert body["lines"] == [f"Nowe polecenie: Anna: wolne {start.day}.{start.month:02d}."]
 
     def test_a_question_is_shown_when_the_command_is_unclear(self, api, shop, with_key, monkeypatch):
         api.login(shop["manager"])
@@ -539,7 +573,7 @@ class TestCommands:
         assert body["question"] == "Która Anna?" and body["can_apply"] is False
 
     def test_a_failed_call_is_reported(self, api, shop, with_key, monkeypatch):
-        def broken(text, context):
+        def broken(text, context, toolbox=None):
             raise llm.AssistantError("rate limit")
 
         monkeypatch.setattr(llm, "plan_command", broken)
@@ -590,7 +624,7 @@ class TestCommands:
         ShiftType.objects.create(location=shop["location"], name="Dostawy", kind=ShiftType.Kind.FLEXIBLE)
         seen = {}
 
-        def fake(text, context):
+        def fake(text, context, toolbox=None):
             seen["context"] = context
             return plan()
 
@@ -599,7 +633,7 @@ class TestCommands:
         assert services.run_command(command(api, shop).json()["id"]) == "ready"
         assert "Dostawy (dowolne godziny)" in seen["context"]
 
-        def crash(text, context):
+        def crash(text, context, toolbox=None):
             raise ValueError("boom")
 
         monkeypatch.setattr(llm, "plan_command", crash)
@@ -731,13 +765,13 @@ class TestMisses:
 
         api.login(shop["worker"])
         unsure = send_request(api, shop, "coś niejasnego").json()["id"]
-        monkeypatch.setattr(llm, "read_request", lambda text, context: reading(confidence=0.2))
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading(confidence=0.2))
         services.interpret_request(unsure)
         row = TextRequest.objects.get(pk=unsure)
         assert row.unread_reason == "unsure" and row.assistant_answer["why"] == "pewność 0.20"
-        assert row.assistant_answer["type"] == "wolne_dni"
+        assert row.assistant_answer["preferences"][0]["type"] == "wolne_dni"
 
-        def broken(text, context):
+        def broken(text, context, toolbox=None):
             raise llm.AssistantError("rate limit")
 
         failed = send_request(api, shop, "prośba przy błędzie").json()["id"]
@@ -746,13 +780,13 @@ class TestMisses:
         assert TextRequest.objects.get(pk=failed).assistant_answer == {"error": "rate limit"}
 
         understood = send_request(api, shop, "Wolałabym nie pracować w piątki.").json()["id"]
-        monkeypatch.setattr(llm, "read_request", lambda text, context: reading())
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading())
         services.interpret_request(understood)
         assert TextRequest.objects.get(pk=understood).assistant_answer is None
 
         api.login(shop["manager"])
         asked = command(api, shop, "zrób coś").json()["id"]
-        monkeypatch.setattr(llm, "plan_command", lambda text, context: plan(question="Co dokładnie?"))
+        monkeypatch.setattr(llm, "plan_command", lambda text, context, toolbox=None: plan(question="Co dokładnie?"))
         services.run_command(asked)
         assert AssistantCommand.objects.get(pk=asked).assistant_answer["question"] == "Co dokładnie?"
 

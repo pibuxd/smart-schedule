@@ -262,7 +262,8 @@ class Request:
     # rules, not with employee requests; `rank` is its place on the manager's list (1 = most important).
     by_manager: bool = False
     rank: int = 1
-    weekly_hours: bool = False
+    weekly_hours: bool = False  # hours_limit counted in each week (Monday–Sunday)
+    daily_hours: bool = False  # hours_limit counted on each day (wins over weekly_hours)
     # The location the request belongs to (its period's, or the instruction's). None: a request for a month, about
     # the person wherever they work; it counts in their main location in this problem.
     location: str | None = None
@@ -278,6 +279,14 @@ class Request:
                 if shift.employee == self.employee and first <= shift.date <= last and self.covers(shift.date)
             )
 
+        if self.daily_hours:
+            result = []
+            day = problem.period_start
+            while day <= problem.period_end:
+                if self.covers(day):
+                    result.append((day, day, elsewhere(day, day)))
+                day += timedelta(days=1)
+            return result
         if not self.weekly_hours:
             return [(problem.period_start, problem.period_end, elsewhere(problem.period_start, problem.period_end))]
         monday = problem.period_start - timedelta(days=problem.period_start.weekday())

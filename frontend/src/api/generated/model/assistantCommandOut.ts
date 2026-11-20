@@ -16,6 +16,7 @@ export interface AssistantCommandOut {
   effects: string[];
   notes: string[];
   can_apply: boolean;
+  informational: boolean;
   created_at: string;
   expires_at: string;
   rule_set_id: string | null;
