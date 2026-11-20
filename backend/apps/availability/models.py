@@ -168,7 +168,15 @@ class TextRequest(CompanyOwnedModel):
     )
     manager_rejected = models.BooleanField("odrzucona przez menedżera", default=False)
     created_at = models.DateTimeField(default=timezone.now)
+    # When the person last wrote the text again ("Popraw"); empty when it is as first sent. `updated_at` also moves
+    # when the assistant or the manager handles the request, so it cannot say when the words were written.
+    text_edited_at = models.DateTimeField("treść poprawiona", null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def written_at(self):
+        """When the current text was written: "jutro" in it counts from this moment."""
+        return self.text_edited_at or self.created_at
 
     class Meta:
         verbose_name = "prośba"

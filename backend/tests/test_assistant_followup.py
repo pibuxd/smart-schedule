@@ -352,6 +352,28 @@ def test_conversation_brings_the_last_replies_of_the_same_chat(shop):
     assert all(text not in talk for text in ("Cudza", "A z kim?"))
 
 
+def test_a_corrected_request_counts_from_its_correction_in_later_context(api, shop, with_key, monkeypatch):
+    """Codex on #48: a request from 13.11 rewritten on 20.11 as "Jutro jednak mogę przyjść" kept the 13.11 date, so
+    "jutro" pointed a week too early. The correction's time is kept apart from `updated_at`, which also moves when
+    the assistant or the manager handles the request."""
+    week_ago = timezone.now() - timedelta(days=7)
+    row = submit_and_read(api, shop, monkeypatch, reading())
+    TextRequest.objects.filter(pk=row.pk).update(created_at=week_ago)
+    assert api.patch(f"/api/me/requests/{row.pk}", {"text": "Jutro jednak mogę przyjść"}).status_code == 200
+    services.interpret_request(row.pk)
+    row.refresh_from_db()
+    assert row.created_at == week_ago and row.text_edited_at > week_ago + timedelta(days=6)
+    current = TextRequest.objects.create(employee=shop["employee"], period=shop["period"], text="A w sobotę?")
+    written = f"{timezone.localtime(row.text_edited_at):%d.%m.%Y %H:%M}"
+    assert f'"sent_at": "{written}", "text": "Jutro jednak mogę przyjść"' in context.conversation(current)
+    assert f'"sent_at": "{written}"' in context.request_history(context.prior_requests(current))
+    # A manager's decision moves `updated_at` but not the date of the words.
+    api.login(shop["manager"])
+    api.patch(f"/api/requests/{row.pk}", {"manager_priority": "higher"})
+    row.refresh_from_db()
+    assert row.written_at == row.text_edited_at < row.updated_at
+
+
 def test_command_history_is_only_same_author_location_and_the_last_ten(shop, make_company):
     now = timezone.now()
     base = {"location": shop["location"], "created_by": shop["manager"], "status": "ready"}

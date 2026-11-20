@@ -141,6 +141,20 @@ class TestTools:
         text, error = box.run("availability_grid", {"period_id": str(shop["period"].pk)})
         assert not error and "Kasia" in text and "+48" not in text
 
+    def test_a_wrong_argument_is_an_error_the_model_can_correct(self, shop):
+        """Codex on #48: tools are not strict, and `hours_report` with `employee_name` instead of `person` answered
+        about everyone. The call never reaches the endpoint now."""
+        api_month = f"{shop['period'].start:%Y-%m}"
+        box = tools.manager_toolbox(shop["manager"], shop["company"].pk, shop["location"].pk)
+        text, error = box.run("hours_report", {"month": api_month, "employee_name": "Kasia"})
+        assert error and text == ("Błąd: nieznany parametr employee_name. To narzędzie przyjmuje: month, person.")
+        assert box.run("hours_report", {"person": "Kasia"}) == ("Błąd: brakuje parametru month.", True)
+        assert box.run("hours_report", {"month": 11}) == ("Błąd: parametr month musi być typu string.", True)
+        assert box.run("hours_report", ["2026-11"])[1]
+        assert box.calls == [{"tool": "hours_report", "status": 400}] * 4
+        text, error = box.run("hours_report", {"month": api_month, "person": "Kasia"})
+        assert not error and box.calls[-1] == {"tool": "hours_report", "status": 200}
+
     def test_every_date_gets_its_weekday(self):
         cleaned = tools.clean({"date": "2026-11-21", "shift": {"date": "2026-11-23"}, "start": "2026-11-21T06:00"})
         assert cleaned["weekday"] == "sobota" and cleaned["shift"]["weekday"] == "poniedziałek"

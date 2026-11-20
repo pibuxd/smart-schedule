@@ -20,8 +20,9 @@ def as_json(value) -> str:
 
 
 def sent_at(row) -> str:
-    """When a message was written, in local time: memory has no time limit, so the model judges what is current."""
-    return f"{timezone.localtime(row.created_at):%d.%m.%Y %H:%M}"
+    """When a message was written, in local time: memory has no time limit, so the model judges what is current.
+    An employee's corrected request counts from the correction ("jutro" in it means the day after that)."""
+    return f"{timezone.localtime(getattr(row, 'written_at', row.created_at)):%d.%m.%Y %H:%M}"
 
 
 def prior_requests(row: TextRequest) -> list[TextRequest]:
@@ -39,6 +40,7 @@ def request_history(rows: list[TextRequest]) -> str:
         [
             {
                 "number": n,
+                "sent_at": sent_at(row),
                 "text": row.text,
                 "status": row.status,
                 "summary": (row.interpretation or {}).get("summary"),

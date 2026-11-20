@@ -661,10 +661,13 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
             raise HttpError(409, "Ta prośba została zastąpiona. Edytuj jej nowszą wersję.")
         if text and text != text_request.text:
             text_request.text = text
+            text_request.text_edited_at = timezone.now()
             text_request.status = TextRequest.Status.NEW
             text_request.interpretation = None
             text_request.employee_corrected = True
-            text_request.save(update_fields=["text", "status", "interpretation", "employee_corrected", "updated_at"])
+            text_request.save(
+                update_fields=["text", "text_edited_at", "status", "interpretation", "employee_corrected", "updated_at"]
+            )
             queue_request(text_request)
         elif payload.understood is False and text_request.status in (
             TextRequest.Status.INTERPRETED,
