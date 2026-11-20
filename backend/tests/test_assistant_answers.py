@@ -228,6 +228,33 @@ class TestConversation:
         assert len(sent) == llm.MAX_TOOL_ROUNDS + 1
         assert sent[-1]["tool_choice"] == {"type": "none"}
 
+    def test_every_call_asks_for_low_effort_and_the_answer_logs_its_time(self, settings, monkeypatch, caplog):
+        """Thinking is always on in the default model and each tool round is a full call: at the default effort
+        an answer with tool rounds took about 40 s on 20.11.2026."""
+        settings.ANTHROPIC_API_KEY, settings.ANTHROPIC_EFFORT = "test-key", "low"
+        sent = []
+        use = {"type": "tool_use", "id": "toolu_1", "name": "my_schedule", "input": {}}
+        final = question().model_dump()
+        fake_client(
+            monkeypatch,
+            [([use], "tool_use"), ([{"type": "text", "text": json.dumps(final)}], "end_turn")],
+            sent,
+        )
+        with caplog.at_level("INFO", logger="apps.assistant.llm"):
+            llm.read_request("Kiedy pracuję?", "Dzisiaj: …", StubBox())
+        assert [request["output_config"]["effort"] for request in sent] == ["low", "low"]
+        assert sent[0]["output_config"]["format"]["type"] == "json_schema"
+        [line] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("assistant EmployeeReply")]
+        assert "2 calls, tools my_schedule, 20 output tokens, effort low" in line
+
+    @pytest.mark.parametrize("value", ["", "fast"])
+    def test_an_empty_or_unknown_effort_leaves_the_model_default(self, settings, value, caplog):
+        settings.ANTHROPIC_EFFORT = value
+        with caplog.at_level("WARNING", logger="apps.assistant.llm"):
+            config = llm.output_config(llm.EmployeeReply)
+        assert "effort" not in config and "format" in config
+        assert bool(caplog.records) == bool(value)
+
 
 # ----------------------------------------------------------------- employee: answers and requests
 

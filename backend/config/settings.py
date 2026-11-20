@@ -148,6 +148,8 @@ GENERATION_MONTHLY_LIMIT = int(env("GENERATION_MONTHLY_LIMIT", "30"))
 # requests go to the manager as written and the manager sets rules by hand.
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_MODEL = env("ANTHROPIC_MODEL", "claude-opus-5-5")
+# output_config.effort: how much the model thinks on each call (low|medium|high|xhigh|max). Empty = model default.
+ANTHROPIC_EFFORT = env("ANTHROPIC_EFFORT", "low").strip().lower()
 # Below this confidence a request is left to the manager instead of the generator.
 ASSISTANT_MIN_CONFIDENCE = float(env("ASSISTANT_MIN_CONFIDENCE", "0.6"))
 # Limits: messages to the assistant from one company's managers per month (questions included), saved requests
