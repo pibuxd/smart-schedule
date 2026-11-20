@@ -346,6 +346,8 @@ def test_conversation_brings_the_last_replies_of_the_same_chat(shop):
     talk = context.conversation(current)
     assert "Kiedy pracuję?" in talk and "W sobotę 21.11." in talk
     assert "Sprzed tygodnia" in talk  # no time limit, only the last MAX_CONVERSATION messages
+    week_ago = timezone.localtime(now - timedelta(days=7))
+    assert f'"sent_at": "{week_ago:%d.%m.%Y %H:%M}", "text": "Sprzed tygodnia"' in talk  # the model sees its age
     assert "Bardzo dawno 7" in talk and "Bardzo dawno 8" not in talk
     assert all(text not in talk for text in ("Cudza", "A z kim?"))
 
