@@ -573,10 +573,14 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
 LIMIT_FULL = "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń albo popraw którąś."
 
 
-def _saved_count(ctx: TenantContext, profile: EmployeeProfile, scope: dict, exclude=None) -> int:
-    """Requests that take a place in the limit per period (questions and refused messages do not)."""
+def _limit_full(ctx: TenantContext, profile: EmployeeProfile, scope: dict, exclude=None) -> bool:
+    """Whether the requests that take a place in the limit per period (questions and refused messages do not) fill
+    it. `TEXT_REQUESTS_PER_PERIOD = 0` (the default) means no limit."""
+    limit = settings.TEXT_REQUESTS_PER_PERIOD
+    if not limit:
+        return False
     rows = ctx.qs(TextRequest).filter(employee=profile, status__in=TextRequest.COUNTED, **scope)
-    return rows.exclude(pk=exclude).count() if exclude else rows.count()
+    return (rows.exclude(pk=exclude) if exclude else rows).count() >= limit
 
 
 def _tell_managers(ctx: TenantContext, text_request: TextRequest) -> None:
@@ -623,13 +627,12 @@ def create_my_request(request, payload: RequestIn):
         raise HttpError(400, "Napisz, o co chodzi.")
     if llm.is_enabled():
         # Questions are free: the worker checks the limit of requests once it knows the message is a request.
-        # This only bounds the cost of messages.
+        # This only bounds the cost of messages (0 = no limit).
+        per_day = settings.ASSISTANT_MESSAGES_PER_DAY
         since = timezone.now() - timedelta(days=1)
-        if ctx.qs(TextRequest).filter(employee=profile, created_at__gte=since).count() >= (
-            settings.ASSISTANT_MESSAGES_PER_DAY
-        ):
+        if per_day and ctx.qs(TextRequest).filter(employee=profile, created_at__gte=since).count() >= per_day:
             raise HttpError(429, "To już dużo wiadomości jak na jeden dzień. Napisz jutro albo powiedz kierownikowi.")
-    elif _saved_count(ctx, profile, scope) >= settings.TEXT_REQUESTS_PER_PERIOD:
+    elif _limit_full(ctx, profile, scope):
         raise HttpError(400, LIMIT_FULL)
     with transaction.atomic():
         text_request = TextRequest.objects.for_company(ctx.company).create(
@@ -681,9 +684,7 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
                     if text_request.period_id
                     else {"period__isnull": True, "month": text_request.month}
                 )
-                if _saved_count(ctx, text_request.employee, scope, exclude=text_request.pk) >= (
-                    settings.TEXT_REQUESTS_PER_PERIOD
-                ):
+                if _limit_full(ctx, text_request.employee, scope, exclude=text_request.pk):
                     raise HttpError(409, LIMIT_FULL)
             if text_request.status == TextRequest.Status.REJECTED:
                 # The person thinks the refusal was wrong: the manager reads the text as written and decides by

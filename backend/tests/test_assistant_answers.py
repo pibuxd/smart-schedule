@@ -305,6 +305,25 @@ class TestEmployee:
         assert send_request(api, shop).status_code == 201
         assert send_request(api, shop).status_code == 400
 
+    def test_writing_has_no_limits_by_default(self, api, shop, with_key, monkeypatch, settings):
+        # Piotr, 20.11.2026: the limits are off unless a number is set in the environment.
+        assert settings.TEXT_REQUESTS_PER_PERIOD == settings.ASSISTANT_MESSAGES_PER_DAY == 0
+        for n in range(12):
+            TextRequest.objects.create(
+                employee=shop["employee"], period=shop["period"], text=f"{n}", status="interpreted"
+            )
+        refused = TextRequest.objects.create(
+            employee=shop["employee"], period=shop["period"], text="pogoda", status="rejected"
+        )
+        for n in range(45):
+            TextRequest.objects.create(
+                employee=shop["employee"], period=shop["period"], text=f"q{n}", status="answered"
+            )
+        status, row, _ = read(api, shop, monkeypatch, reading(), "Wolne w piątki")
+        assert status == "interpreted" and row.interpretation is not None
+        assert str(row.pk) in {r.id for r in build_problem([shop["period"]]).problem.requests}
+        assert api.patch(f"/api/me/requests/{refused.pk}", {"understood": False}).status_code == 200
+
     def test_messages_per_day_are_capped(self, api, shop, with_key, settings):
         settings.ASSISTANT_MESSAGES_PER_DAY = 2
         api.login(shop["worker"])

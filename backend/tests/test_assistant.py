@@ -324,6 +324,11 @@ class TestRequests:
         api.login(other["worker"])
         assert api.patch(f"/api/me/requests/{theirs.pk}", {"understood": False}).status_code == 404
 
+    def test_no_limit_of_requests_by_default(self, api, shop, settings):
+        assert settings.TEXT_REQUESTS_PER_PERIOD == 0
+        api.login(shop["worker"])
+        assert {send_request(api, shop, f"Prośba {n}").status_code for n in range(12)} == {201}
+
     def test_limit_of_requests_per_period(self, api, shop, settings):
         settings.TEXT_REQUESTS_PER_PERIOD = 2
         api.login(shop["worker"])
@@ -641,6 +646,11 @@ class TestCommands:
         monkeypatch.setattr(llm, "read_request", crash)
         api.login(shop["worker"])
         assert services.interpret_request(send_request(api, shop).json()["id"]) == "needs_manager"
+
+    def test_no_monthly_limit_by_default(self, api, shop, with_key, settings):
+        assert settings.ASSISTANT_COMMANDS_MONTHLY_LIMIT == 0
+        api.login(shop["manager"])
+        assert {command(api, shop).status_code for _ in range(3)} == {201}
 
     def test_monthly_limit(self, api, shop, with_key, settings):
         settings.ASSISTANT_COMMANDS_MONTHLY_LIMIT = 1

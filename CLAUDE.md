@@ -159,7 +159,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   topic classification (`app|unrelated`). A correction may supersede one earlier request in the same employee/scope,
   atomically and only against an unchanged snapshot. `answered` and `superseded` requests never reach the solver; extra
   preferences of one message live in `interpretation["more"]`. An invalid part blocks the entire manager plan;
-  informational replies are not misses. The request limit per period counts only `new`/`interpreted`/`needs_manager`.
+  informational replies are not misses. Limits on writing to the assistant are off by default (0 = no limit):
+  `ASSISTANT_COMMANDS_MONTHLY_LIMIT`, `TEXT_REQUESTS_PER_PERIOD`, `ASSISTANT_MESSAGES_PER_DAY`; when set, the request
+  limit per period counts only `new`/`interpreted`/`needs_manager`.
   The chat UI slides in from the right (`components/ui/drawer.tsx`): managers open it with
   `useAssistantDrawer().openChat()` (`features/manager/AssistantDrawer.tsx`, one per location), employees from
   "Twoje prośby". Approved results live in a separate editable window: `AssistantRulesTable` ("Ustalenia") for

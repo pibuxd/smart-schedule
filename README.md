@@ -72,6 +72,10 @@ ANTHROPIC_MODEL=claude-opus-5-5     # tańszy wariant do krótkich próśb: clau
 ANTHROPIC_EFFORT=low                # jak długo model myśli: low (najszybciej), medium, high
 ```
 
+Pisanie z asystentem nie ma limitów. Limit można włączyć liczbą w `.env`: `ASSISTANT_COMMANDS_MONTHLY_LIMIT`
+(wiadomości kierowników firmy w miesiącu), `TEXT_REQUESTS_PER_PERIOD` (zapisane prośby osoby na okres, pytania się
+nie liczą), `ASSISTANT_MESSAGES_PER_DAY` (wiadomości osoby na dobę). 0 = bez limitu.
+
 Po zmianie `.env` uruchom ponownie `docker compose up`. Klucz czytają tylko kontenery `api` i `worker`; nie trafia
 do przeglądarki ani do repozytorium.
 
@@ -152,5 +156,5 @@ Asystent
   bez obsady. „Bez wyjątków” mają tylko zasady z listy.
 - Polecenia o osobach mają własną kolejność, osobną od listy zasad.
 - Asystent nie prowadzi rozmowy: każde polecenie jest czytane osobno, razem z aktualną listą zasad i poleceń.
-- Nie mierzymy jeszcze trafności interpretacji na prawdziwych prośbach; próg pewności (0,6) i limity (200 poleceń
-  na firmę w miesiącu, 10 próśb na osobę w okresie) są ustawione na oko i do zmiany w `.env`.
+- Nie mierzymy jeszcze trafności interpretacji na prawdziwych prośbach; próg pewności (0,6) jest ustawiony na oko.
+  Limitów pisania z asystentem domyślnie nie ma; włącza je liczba w `.env`.

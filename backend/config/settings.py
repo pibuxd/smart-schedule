@@ -152,11 +152,12 @@ ANTHROPIC_MODEL = env("ANTHROPIC_MODEL", "claude-opus-5-5")
 ANTHROPIC_EFFORT = env("ANTHROPIC_EFFORT", "low").strip().lower()
 # Below this confidence a request is left to the manager instead of the generator.
 ASSISTANT_MIN_CONFIDENCE = float(env("ASSISTANT_MIN_CONFIDENCE", "0.6"))
-# Limits: messages to the assistant from one company's managers per month (questions included), saved requests
-# of one person per period (questions and refused messages do not count), and messages of one person per day.
-ASSISTANT_COMMANDS_MONTHLY_LIMIT = int(env("ASSISTANT_COMMANDS_MONTHLY_LIMIT", "400"))
-TEXT_REQUESTS_PER_PERIOD = int(env("TEXT_REQUESTS_PER_PERIOD", "10"))
-ASSISTANT_MESSAGES_PER_DAY = int(env("ASSISTANT_MESSAGES_PER_DAY", "40"))
+# Limits on writing to the assistant, off by default since 20.11.2026 (0 = no limit; Piotr's decision). A number
+# turns one back on: messages from one company's managers per month (questions included), saved requests of one
+# person per period (questions and refused messages do not count), and messages of one person per day.
+ASSISTANT_COMMANDS_MONTHLY_LIMIT = int(env("ASSISTANT_COMMANDS_MONTHLY_LIMIT", "0"))
+TEXT_REQUESTS_PER_PERIOD = int(env("TEXT_REQUESTS_PER_PERIOD", "0"))
+ASSISTANT_MESSAGES_PER_DAY = int(env("ASSISTANT_MESSAGES_PER_DAY", "0"))
 
 LOGGING = {
     "version": 1,
