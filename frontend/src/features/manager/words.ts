@@ -40,6 +40,14 @@ export function namesList(names: string[], shown = 3): string {
   return `${names.slice(0, shown).join(', ')} i ${rest} ${rest === 1 ? 'inna osoba' : rest < 5 ? 'inne osoby' : 'innych osób'}`
 }
 
+/** Polish count: `countWords(3, ['prośba', 'prośby', 'próśb'])` is "3 prośby" (1, 2–4 except 12–14, the rest). */
+export function countWords(n: number, [one, few, many]: [string, string, string]): string {
+  if (n === 1) return `1 ${one}`
+  const last = n % 10
+  const teen = n % 100 >= 12 && n % 100 <= 14
+  return `${n} ${last >= 2 && last <= 4 && !teen ? few : many}`
+}
+
 /** 1 osoba, 2 osoby, 5 osób */
 export function people(n: number): string {
   if (n === 1) return '1 osoba'

@@ -55,7 +55,7 @@ import { type DropCheck, dropWords, isDropTarget } from './drop-preview'
 import { buildGrid, type GridColumn, percent, swapChanges } from './schedule-grid'
 import { ShiftSheet } from './ShiftSheet'
 import { verdict } from './verdict'
-import { daysUntil, PERIOD_STATUS, periodTitle, shifts as shiftsWord } from './words'
+import { countWords, daysUntil, PERIOD_STATUS, periodTitle, shifts as shiftsWord } from './words'
 
 const VERSION_STATUS: Record<VersionOut['status'], string> = {
   draft: 'Szkic',
@@ -914,7 +914,7 @@ function RulesList({ data }: { data: VersionOut }) {
       collapsible
       status={
         broken > 0 ? (
-          <span className="font-semibold text-prefer-not">{brokenRules(broken)}</span>
+          <span className="font-semibold text-prefer-not">{countWords(broken, ['złamana', 'złamane', 'złamanych'])}</span>
         ) : (
           <span className="text-ink-muted">wszystkie spełnione</span>
         )
@@ -959,14 +959,6 @@ function RulesList({ data }: { data: VersionOut }) {
   )
 }
 
-/** "1 złamana", "3 złamane", "5 złamanych" (zasady) */
-function brokenRules(n: number): string {
-  if (n === 1) return '1 złamana'
-  const last = n % 10
-  const teen = n % 100 >= 12 && n % 100 <= 14
-  return `${n} ${last >= 2 && last <= 4 && !teen ? 'złamane' : 'złamanych'}`
-}
-
 /** The manager's own orders come first and stay in view: they matter more than any employee's request. */
 function UnmetOrders({ data }: { data: VersionOut }) {
   const orders = data.unmet_requests.filter((r) => r.kind === 'instruction')
@@ -990,9 +982,18 @@ function UnmetRequests({ data }: { data: VersionOut }) {
   const yours = data.unmet_requests.filter((r) => r.kind === 'unscored')
   return (
     <Section
-      title={`Niespełnione prośby (${scored.length})`}
+      title="Niespełnione prośby"
       collapsible
-      status={yours.length > 0 && <span className="text-ink-muted">{yours.length} do Twojej oceny</span>}
+      status={
+        <>
+          {scored.length > 0 ? (
+            <span className="font-semibold text-prefer-not">{countWords(scored.length, ['prośba', 'prośby', 'próśb'])}</span>
+          ) : (
+            <span className="text-ink-muted">wszystkie spełnione</span>
+          )}
+          {yours.length > 0 && <span className="text-ink-muted"> · {yours.length} do Twojej oceny</span>}
+        </>
+      }
     >
       {scored.length === 0 ? (
         <p className="m-0 text-ink-muted">Wszystkie prośby, które umiemy sprawdzić, są spełnione.</p>

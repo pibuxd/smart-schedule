@@ -901,8 +901,11 @@ Prośby Piotra z 20.11.2026: "niech »Niespełnione prośby« i »Jak grafik trz
    ramkę (cała sekcja ekranu); bez niej zwijany napis stoi w tekście. Zwijane miejsca w zwijanych miejscach mają
    własne strzałki. `Section collapsible` korzysta z niego i ma `status`: kilka słów na końcu nagłówka, żeby kierownik
    bez rozwijania wiedział, czy warto zajrzeć. Nowe zwijane miejsca używają `Disclosure`, nie gołego `<details>`.
-2. Karta "Grafik": "Jak grafik trzyma się zasad" i "Niespełnione prośby (N)" są zwinięte na start. Przy zasadach status
-   "N złamanych" (kolor "woli nie") albo "wszystkie spełnione"; przy prośbach "N do Twojej oceny", gdy są prośby, których
-   nie umiemy sprawdzić (są w środku, pod "Do Twojej oceny"). Wiersz zasady rozwija się tylko wtedy, gdy ma przykłady
+2. Karta "Grafik": "Jak grafik trzyma się zasad" i "Niespełnione prośby" są zwinięte na start. Przy zasadach status
+   "N złamanych" (kolor "woli nie") albo "wszystkie spełnione"; przy prośbach tak samo "N próśb" albo "wszystkie
+   spełnione", a do tego "· N do Twojej oceny", gdy są prośby, których nie umiemy sprawdzić (są w środku, pod "Do Twojej
+   oceny"). Po uwadze Prelinta (#51) liczba niespełnionych próśb stoi w kolorze w statusie, nie w nawiasie w tytule.
+   Do sprawdzenia w pilotażu: czy kierownicy otwierają zasady przed publikacją; jeśli nie, zasady mogą startować
+   otwarte, gdy coś jest złamane (dziś prawie każdy grafik ma jakąś złamaną zasadę miękką, więc byłyby otwarte zawsze). Wiersz zasady rozwija się tylko wtedy, gdy ma przykłady
    złamań (wtedy ma strzałkę). Polecenia kierownika, których nie udało się spełnić, zostają widoczne nad zwiniętymi
    sekcjami, a zdanie "Chcesz coś zmienić…" pod nimi.
