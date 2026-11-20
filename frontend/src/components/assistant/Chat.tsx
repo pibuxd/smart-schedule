@@ -124,6 +124,8 @@ export function ChatComposer({
   const ownRef = useRef<HTMLTextAreaElement>(null)
   const ref = inputRef ?? ownRef
   const canSend = !!text.trim() && !disabled && !sending && !waiting
+  // No hints under the field (Piotr, 20.11.2026): only an optional footer and the length near the limit.
+  const nearLimit = text.length > 800
   useEffect(() => {
     const field = ref.current
     if (field) {
@@ -176,20 +178,12 @@ export function ChatComposer({
           <ArrowUp size={enterSends ? 24 : 18} aria-hidden="true" />
         </button>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 text-xs text-ink-muted">
-        <span>
-          {sending
-            ? 'Wysyłam…'
-            : waiting
-              ? 'Możesz pisać. Wyślesz kolejną wiadomość po otrzymaniu odpowiedzi.'
-              : footer}
-        </span>
-        {text.length > 800 ? (
-          <span>{text.length}/1000</span>
-        ) : (
-          enterSends && <span className="hidden sm:inline">Enter — wyślij · Shift+Enter — nowy wiersz</span>
-        )}
-      </div>
+      {(footer || nearLimit) && (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 text-xs text-ink-muted">
+          {footer && <span>{sending ? 'Wysyłam…' : footer}</span>}
+          {nearLimit && <span className="ml-auto">{text.length}/1000</span>}
+        </div>
+      )}
     </form>
   )
 }

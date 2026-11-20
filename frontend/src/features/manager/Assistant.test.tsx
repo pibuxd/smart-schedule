@@ -288,9 +288,13 @@ it("marks only the last ten messages from the current period as remembered", asy
     ).toHaveLength(1),
   );
   expect(screen.getAllByText("Grudzień 2026")).toHaveLength(1);
+  // The limit is explained only in the fold, not under the field.
   expect(
-    screen.getByText(/Asystent czyta Twoje wiadomości i pamięta 10 ostatnich/),
+    screen.getByText(/Pamięta 10 ostatnich\s+wiadomości z tego okresu/),
   ).toBeInTheDocument();
+  expect(
+    screen.queryByText(/Shift\+Enter|Możesz pisać/),
+  ).not.toBeInTheDocument();
 });
 
 it("sends the explicitly selected period with a new command", async () => {
