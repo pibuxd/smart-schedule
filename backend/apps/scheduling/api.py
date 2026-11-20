@@ -598,7 +598,10 @@ class VersionOut(Schema):
     # Hard rules the manager broke by hand and may keep (e.g. fewer experienced people than the staffing asks).
     accepted_problems: list[str]
     rules: list[RuleResultOut]
+    # The manager's unmet instructions in full, then at most UNMET_LISTED employee requests, then the unscored ones.
     unmet_requests: list[UnmetRequestOut]
+    # Employee requests checked and found not (fully) kept, counted before the list above is cut.
+    unmet_request_count: int
     notes: list[str]
     history: list[VersionSummaryOut]
     today: date  # days before it have passed: their shifts and places cannot be changed
@@ -826,15 +829,23 @@ def _rule_results(loaded) -> list[RuleResultOut]:
     return results
 
 
-def _unmet_requests(loaded) -> list[UnmetRequestOut]:
+UNMET_LISTED = 30  # employee requests listed on the schedule card; the count covers all of them
+
+
+def _unmet_requests(loaded) -> tuple[list[UnmetRequestOut], int]:
+    """Unmet requests to list, and how many employee requests are unmet in total.
+    The manager's own instructions are never cut: there are few and they matter most."""
     from engine.scoring import unmet_requests
     from engine.validator import RequestKind
 
     problem = loaded.problem
     names = {e.id: e.name for e in problem.employees}
     requests = {r.id: r for r in problem.requests}
+    measures = unmet_requests(loaded.report, location=loaded.location_id)
+    orders = [m for m in measures if m.by_manager]
+    asked = [m for m in measures if not m.by_manager]
     result = []
-    for measure in unmet_requests(loaded.report, location=loaded.location_id)[:30]:
+    for measure in orders + asked[:UNMET_LISTED]:
         kept = round(100 * (1 - measure.degree), 1)
         if measure.kind == RequestKind.TEXT:
             text = requests[measure.request_id].summary
@@ -852,7 +863,7 @@ def _unmet_requests(loaded) -> list[UnmetRequestOut]:
                 employee_name=names[request.employee], text=request.summary, kind="unscored", percent_kept=None
             )
         )
-    return result
+    return result, len(asked)
 
 
 def _history(version: ScheduleVersion) -> list[VersionSummaryOut]:
@@ -910,6 +921,7 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
     ]
     notes = list((version.scores or {}).get("notes", []))
     position_ids = {str(s.position) for s in problem.slots}
+    unmet, unmet_count = _unmet_requests(loaded)
     return VersionOut(
         id=version.id,
         number=version.number,
@@ -930,7 +942,8 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
         hard_problems=[v.message for v in blocking(loaded.report.hard)],
         accepted_problems=[v.message for v in accepted(loaded.report.hard)],
         rules=_rule_results(loaded),
-        unmet_requests=_unmet_requests(loaded),
+        unmet_requests=unmet,
+        unmet_request_count=unmet_count,
         notes=notes,
         history=_history(version),
         today=today,

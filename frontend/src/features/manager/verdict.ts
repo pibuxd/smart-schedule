@@ -17,8 +17,11 @@ export function verdict(data: VersionOut): string {
   if (scores.holes > 0) {
     return `Brakuje ludzi: ${shifts(scores.holes)} bez obsady. Sprawdź je w tabeli poniżej.`
   }
-  const broken = data.rules.filter((r) => !r.hard && r.broken > 0).length
-  const unmet = data.unmet_requests.filter((r) => r.kind !== 'unscored').length
+  // A soft rule kept only in part (an hours target at 95 %) is not "spełniona", even without a counted break.
+  const broken = data.rules.filter((r) => !r.hard && (r.broken > 0 || (r.percent != null && r.percent < 100))).length
+  // The list of employee requests is cut on the server; the count is not. The manager's instructions are all listed.
+  const orders = data.unmet_requests.filter((r) => r.kind === 'instruction').length
+  const unmet = orders + (data.unmet_request_count ?? data.unmet_requests.filter((r) => r.kind !== 'unscored').length - orders)
   const toCheck = broken + unmet + scores.unscored_requests
   if (toCheck === 0) return 'Wszystkie zmiany obsadzone, zasady i prośby spełnione.'
   return `Wszystkie zmiany obsadzone. Do sprawdzenia: ${things(toCheck)}, opisane niżej.`

@@ -907,19 +907,8 @@ function PeopleHours({ data }: { data: VersionOut }) {
 
 function RulesList({ data }: { data: VersionOut }) {
   if (data.rules.length === 0) return null
-  const broken = data.rules.filter((rule) => rule.broken > 0).length
   return (
-    <Section
-      title="Jak grafik trzyma się zasad"
-      collapsible
-      status={
-        broken > 0 ? (
-          <span className="font-semibold text-prefer-not">{countWords(broken, ['złamana', 'złamane', 'złamanych'])}</span>
-        ) : (
-          <span className="text-ink-muted">wszystkie spełnione</span>
-        )
-      }
-    >
+    <Section title="Jak grafik trzyma się zasad" collapsible status={<RulesStatus rules={data.rules} />}>
       <ul className="m-0 grid list-none gap-1 p-0">
         {data.rules.map((rule) => {
           const head = (
@@ -977,29 +966,48 @@ function UnmetOrders({ data }: { data: VersionOut }) {
   )
 }
 
+/**
+ * What the folded rules heading says. It claims "wszystkie spełnione" only when every rule is at 100 %:
+ * a rule can be partly kept without a counted break (a soft hours target), and "nic do oceny" is not "spełniona".
+ */
+function RulesStatus({ rules }: { rules: VersionOut['rules'] }) {
+  const broken = rules.filter((rule) => rule.broken > 0).length
+  const partly = rules.filter((rule) => rule.broken === 0 && rule.percent !== null && rule.percent < 100).length
+  const warn = [
+    broken > 0 && countWords(broken, ['złamana', 'złamane', 'złamanych']),
+    partly > 0 && countWords(partly, ['spełniona częściowo', 'spełnione częściowo', 'spełnionych częściowo']),
+  ].filter(Boolean)
+  if (warn.length > 0) return <span className="font-semibold text-prefer-not">{warn.join(' · ')}</span>
+  const all = rules.every((rule) => rule.percent === 100)
+  return <span className="text-ink-muted">{all ? 'wszystkie spełnione' : 'żadna nie jest złamana'}</span>
+}
+
 function UnmetRequests({ data }: { data: VersionOut }) {
   const scored = data.unmet_requests.filter((r) => r.kind !== 'unscored' && r.kind !== 'instruction')
   const yours = data.unmet_requests.filter((r) => r.kind === 'unscored')
+  // The list is cut on the server; the count is not.
+  const unmet = Math.max(data.unmet_request_count, scored.length)
+  const shown = scored.slice(0, 12)
   return (
     <Section
       title="Niespełnione prośby"
       collapsible
       status={
         <>
-          {scored.length > 0 ? (
-            <span className="font-semibold text-prefer-not">{countWords(scored.length, ['prośba', 'prośby', 'próśb'])}</span>
-          ) : (
-            <span className="text-ink-muted">wszystkie spełnione</span>
+          {unmet > 0 && (
+            <span className="font-semibold text-prefer-not">{countWords(unmet, ['prośba', 'prośby', 'próśb'])}</span>
           )}
-          {yours.length > 0 && <span className="text-ink-muted"> · {yours.length} do Twojej oceny</span>}
+          {unmet > 0 && yours.length > 0 && <span className="text-ink-muted"> · </span>}
+          {yours.length > 0 && <span className="text-ink-muted">{yours.length} do Twojej oceny</span>}
+          {unmet === 0 && yours.length === 0 && <span className="text-ink-muted">wszystkie spełnione</span>}
         </>
       }
     >
-      {scored.length === 0 ? (
+      {unmet === 0 ? (
         <p className="m-0 text-ink-muted">Wszystkie prośby, które umiemy sprawdzić, są spełnione.</p>
       ) : (
         <ul className="m-0 grid list-none gap-1 p-0">
-          {scored.slice(0, 12).map((r, i) => (
+          {shown.map((r, i) => (
             <li key={`${r.employee_name}-${i}`} className="rounded-sm border border-line bg-paper px-3 py-2">
               <span className="font-semibold">{r.employee_name}: </span>
               {r.text}
@@ -1007,7 +1015,9 @@ function UnmetRequests({ data }: { data: VersionOut }) {
           ))}
         </ul>
       )}
-      {scored.length > 12 && <p className="m-0 text-sm text-ink-muted">I jeszcze {scored.length - 12} innych.</p>}
+      {unmet > shown.length && (
+        <p className="m-0 text-sm text-ink-muted">I jeszcze {unmet - shown.length} innych.</p>
+      )}
       {yours.length > 0 && (
         <>
           <h3 className="m-0 mt-2 text-base font-extrabold">Do Twojej oceny</h3>

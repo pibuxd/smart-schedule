@@ -92,6 +92,7 @@ const version = {
     { employee_name: 'Marek Zając', text: 'Prosi o wolne 1 grudnia.', kind: 'text', percent_kept: 0 },
     { employee_name: 'Anna Wróbel', text: 'Nie chcę zamykać w piątki.', kind: 'unscored', percent_kept: null },
   ],
+  unmet_request_count: 1,
   notes: ['Grafik ułożony w 12 s.'],
   changed_people: [] as string[],
   today: '2026-11-26',
@@ -227,13 +228,43 @@ describe('ScheduleScreen', () => {
     show()
     const rules = (await screen.findByRole('heading', { name: 'Jak grafik trzyma się zasad' })).closest('details')
     expect(rules).not.toHaveAttribute('open')
-    expect(rules?.querySelector('summary')).toHaveTextContent('wszystkie spełnione')
+    // One rule has nothing to measure, so the heading does not claim all are kept.
+    expect(rules?.querySelector('summary')).toHaveTextContent('żadna nie jest złamana')
     const requests = screen.getByRole('heading', { name: 'Niespełnione prośby' }).closest('details')
     expect(requests).not.toHaveAttribute('open')
     expect(requests?.querySelector('summary')).toHaveTextContent('1 prośba · 1 do Twojej oceny')
     fireEvent.click(screen.getByRole('heading', { name: 'Niespełnione prośby' }))
     expect(requests).toHaveAttribute('open')
     expect(screen.getByText('Prosi o wolne 1 grudnia.')).toBeVisible()
+  })
+
+  it('says a rule kept in part is not fully kept, even with no counted break', async () => {
+    const rules = [
+      { code: 'hours_target', label: 'Cel godzin', hard: false, percent: 95, broken: 0, examples: [] },
+      { code: 'fair_closings', label: 'Równy podział zamknięć', hard: false, percent: null, broken: 0, examples: [] },
+    ]
+    api({ version: { ...version, rules } })
+    show()
+    const heading = await screen.findByRole('heading', { name: 'Jak grafik trzyma się zasad' })
+    expect(heading.closest('summary')).toHaveTextContent('1 spełniona częściowo')
+    expect(heading.closest('summary')).not.toHaveTextContent('wszystkie spełnione')
+  })
+
+  it('shows only "do Twojej oceny" when the app could not check the requests itself', async () => {
+    const unmet_requests = [{ employee_name: 'Anna Wróbel', text: 'Nie chcę zamykać w piątki.', kind: 'unscored', percent_kept: null }]
+    api({ version: { ...version, unmet_requests, unmet_request_count: 0 } })
+    show()
+    const heading = await screen.findByRole('heading', { name: 'Niespełnione prośby' })
+    expect(heading.closest('summary')?.textContent).toMatch(/1 do Twojej oceny$/)
+    expect(heading.closest('summary')).not.toHaveTextContent('wszystkie spełnione')
+  })
+
+  it('counts every unmet request from the server, not only the listed ones', async () => {
+    api({ version: { ...version, unmet_request_count: 31 } })
+    show()
+    const heading = await screen.findByRole('heading', { name: 'Niespełnione prośby' })
+    expect(heading.closest('summary')).toHaveTextContent('31 próśb · 1 do Twojej oceny')
+    expect(screen.getByText('I jeszcze 30 innych.')).toBeInTheDocument()
   })
 
   it('shows what a replacement would change when the manager opens an assigned shift', async () => {

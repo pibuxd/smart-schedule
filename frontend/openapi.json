@@ -9958,6 +9958,10 @@
             "title": "Unmet Requests",
             "type": "array"
           },
+          "unmet_request_count": {
+            "title": "Unmet Request Count",
+            "type": "integer"
+          },
           "notes": {
             "items": {
               "type": "string"
@@ -10003,6 +10007,7 @@
           "accepted_problems",
           "rules",
           "unmet_requests",
+          "unmet_request_count",
           "notes",
           "history",
           "today",
