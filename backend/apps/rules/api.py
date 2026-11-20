@@ -56,6 +56,7 @@ class RuleItemOut(Schema):
     code: str
     label: str
     description: str
+    # On by default in a new location. The rules screen does not show it; the assistant reads it (location_rules).
     good_practice: bool
     enabled: bool
     is_hard: bool
