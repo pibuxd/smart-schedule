@@ -51,12 +51,17 @@ export function AskAvailabilityButton({
         <BellRing aria-hidden="true" size={20} />
         {remind ? `Przypomnij (${missing})` : 'Poproś o dyspozycje'}
       </Button>
-      {done && (
-        <p role="status" className="m-0 text-sm text-ink-muted">
-          {done}
-        </p>
+      {/* The reply wraps to the button's width: a long sentence must not widen the column and squeeze the card. */}
+      {(done || ask.isError) && (
+        <div className="grid gap-2 [contain:inline-size]">
+          {done && (
+            <p role="status" className="m-0 text-sm text-ink-muted">
+              {done}
+            </p>
+          )}
+          {ask.isError && <InlineError>{errorMessage(ask.error, NETWORK_PROBLEM)}</InlineError>}
+        </div>
       )}
-      {ask.isError && <InlineError>{errorMessage(ask.error, NETWORK_PROBLEM)}</InlineError>}
     </div>
   )
 }
