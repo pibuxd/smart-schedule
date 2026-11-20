@@ -34,7 +34,7 @@ Technicznie `AssistantRuleSet` przechowuje migawkę zasad katalogowych, zmienion
 
 ## Widok rozmowy z asystentem (18.11.2026)
 
-Asystent kierownika ma własną zakładkę „Asystent” w lokalu. Wiadomości i odpowiedzi tworzą rozmowę, pole pisania jest pod nią, a propozycje zawierają osobne przyciski zatwierdzenia i odrzucenia. Przyjęte lub odrzucone propozycje pozostają w historii. Ostatnie 50 wiadomości danego kierownika w lokalu wraca po odświeżeniu; nie oznacza to rozszerzenia pamięci LLM poza istniejące 6 wiadomości z 24 godzin. Zapisane polecenia są w bocznym panelu, dostępnym również na telefonie. Ekran zasad prowadzi do rozmowy linkiem.
+Asystent kierownika ma własną zakładkę „Asystent” w lokalu. Wiadomości i odpowiedzi tworzą rozmowę, pole pisania jest pod nią, a propozycje zawierają osobne przyciski zatwierdzenia i odrzucenia. Przyjęte lub odrzucone propozycje pozostają w historii. Ostatnie 50 wiadomości danego kierownika w lokalu wraca po odświeżeniu; nie oznacza to rozszerzenia pamięci LLM poza 10 ostatnich wiadomości z tego okresu (od 20.11.2026; wcześniej 6 z 24 godzin). Zapisane polecenia są w bocznym panelu, dostępnym również na telefonie. Ekran zasad prowadzi do rozmowy linkiem.
 
 Wiadomości pracownika w kalendarzu korzystają z tego samego stylu rozmowy i pola pisania. Zachowują dotychczasowy zakres miesiąca/okresu, możliwość edycji i usunięcia oraz przekazania prośby kierownikowi. U kierownika Enter wysyła, Shift+Enter dodaje wiersz. U pracownika Enter zawsze dodaje wiersz, a prośbę wysyła wyłącznie przycisk. Podczas wysyłania nie można wysłać duplikatu. Pracownik pisze prośby dotyczące swoich preferencji, po jednej sprawie. Błędy pozostawiają tekst do poprawy, a nieaktualne odpowiedzi nigdy nie zatwierdzają się same.
 

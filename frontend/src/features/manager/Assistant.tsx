@@ -380,12 +380,13 @@ export function AssistantPanel({
             przydziału.
           </p>
           <p className="mt-0 mb-2">
-            Claude czyta też listy zasad, osób i zmian tego lokalu, a żeby
-            odpowiedzieć na pytanie, sprawdza w aplikacji to, co Ty widzisz:
-            grafik, godziny, oddane zmiany oraz dyspozycje i prośby pracowników.
-            Nie dostaje numerów telefonów i niczego nie zmienia sam. Może się
-            pomylić, więc ważne dane sprawdź na ekranie. Starszą sprawę opisz
-            ponownie. W historii widzisz ostatnie 50 wiadomości.
+            Asystent to Claude, zewnętrzna usługa AI. Czyta Twoje wiadomości,
+            listy zasad, osób i zmian tego lokalu, a żeby odpowiedzieć na
+            pytanie, sprawdza w aplikacji to, co Ty widzisz: grafik, godziny,
+            oddane zmiany oraz dyspozycje i prośby pracowników. Nie dostaje
+            numerów telefonów i niczego nie zmienia sam. Może się pomylić, więc
+            ważne dane sprawdź na ekranie. Starszą sprawę opisz ponownie. W
+            historii widzisz ostatnie 50 wiadomości.
           </p>
         </details>
       </div>
