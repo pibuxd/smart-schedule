@@ -177,6 +177,7 @@ function PersonPicker({ target, onSwap, onDone }: { target: ShiftTarget; onSwap:
   const here = all.filter((c) => c.here)
   const away = all.filter((c) => !c.here)
   const wantingAway = away.filter((c) => c.wants).length
+  const freeAway = away.filter((c) => c.problems.length === 0).length
   const put = (c: HandoverCandidateOut) =>
     reassign.mutate(
       { assignmentId: target.id, data: { employee_id: c.employee_id, force: c.problems.length > 0 } },
@@ -209,6 +210,13 @@ function PersonPicker({ target, onSwap, onDone }: { target: ShiftTarget; onSwap:
                   <>
                     {' '}
                     <Tag tone="accent">chce wziąć: {wantingAway}</Tag>
+                  </>
+                )}
+                {/* Says whether opening is worth it: people here may all have problems while someone there has none. */}
+                {freeAway > 0 && (
+                  <>
+                    {' '}
+                    <Tag>mogą przyjść: {freeAway}</Tag>
                   </>
                 )}
               </summary>

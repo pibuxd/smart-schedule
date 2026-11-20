@@ -747,8 +747,10 @@ Decyzje i założenia:
 1. Kierownik może pominąć zastrzeżenia walidatora (`force`). Na liście osób najpierw są ci, którzy mogą przyjść
    (chętni z "Weź zmianę" na początku), potem osoby z zastrzeżeniami i przyciskiem "Wpisz mimo to". Osoby, które
    nie pracują w lokalu zmiany, są w zwiniętej sekcji "Z innych lokali" pod listą, w tej samej kolejności (prośba
-   Piotra z 20.11.2026); jej nagłówek mówi, ile osób jest w środku i ile z nich chce wziąć zmianę. Gdy z lokalu
-   zmiany nie ma kogo wpisać, sekcja jest od razu otwarta.
+   Piotra z 20.11.2026); jej nagłówek mówi, ile osób jest w środku, ile z nich chce wziąć zmianę i ile może przyjść
+   bez zastrzeżeń (uwaga Prelinta do #50: osoby z lokalu z zastrzeżeniami stoją teraz nad osobami z innych lokali,
+   które mogą przyjść, więc nagłówek mówi, czy warto otworzyć). Gdy z lokalu zmiany nie ma kogo wpisać, sekcja jest
+   od razu otwarta.
 2. Zmiana zgodna z zasadami jest przypięta (jak zatwierdzone oddanie). Zmiana wbrew zasadom nie jest przypinana,
    bo przypięcie łamiące twardą zasadę uniemożliwia ponowne ułożenie okresu (solver zgłasza sprzeczność).
 3. Na liście są osoby z tym stanowiskiem z całej firmy oraz wszyscy z lokalu zmiany (brak stanowiska to zastrzeżenie).

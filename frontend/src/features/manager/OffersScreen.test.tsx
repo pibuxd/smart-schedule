@@ -113,6 +113,7 @@ describe('OffersScreen', () => {
     const folded = (await within(sheet).findByText('Z innych lokali (1)')).closest('details')!
     expect(folded).not.toHaveAttribute('open')
     expect(within(folded).getByText('chce wziąć: 1')).toBeInTheDocument()
+    expect(within(folded).getByText('mogą przyjść: 1')).toBeInTheDocument()
     expect(within(folded).getByText('Bochnia')).toBeInTheDocument()
     expect(folded).toContainElement(within(sheet).getByRole('button', { name: 'Wpisz: Ala Nowak' }))
     expect(folded).not.toContainElement(within(sheet).getByRole('button', { name: 'Wpisz mimo to: Jan Wrona' }))
