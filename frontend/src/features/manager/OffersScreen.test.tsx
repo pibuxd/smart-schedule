@@ -105,6 +105,30 @@ describe('OffersScreen', () => {
     )
   })
 
+  it('folds people from other locations under "Z innych lokali"', async () => {
+    mockApi(api)
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Wybierz osobę sam' }))
+    const sheet = await screen.findByRole('dialog')
+    const folded = (await within(sheet).findByText('Z innych lokali (1)')).closest('details')!
+    expect(folded).not.toHaveAttribute('open')
+    expect(within(folded).getByText('chce wziąć: 1')).toBeInTheDocument()
+    expect(within(folded).getByText('Bochnia')).toBeInTheDocument()
+    expect(folded).toContainElement(within(sheet).getByRole('button', { name: 'Wpisz: Ala Nowak' }))
+    expect(folded).not.toContainElement(within(sheet).getByRole('button', { name: 'Wpisz mimo to: Jan Wrona' }))
+  })
+
+  it('opens "Z innych lokali" at once when nobody from the location can be put there', async () => {
+    mockApi((method, path) =>
+      path.endsWith('/handover-candidates') ? [200, [candidates[0]]] : api(method, path),
+    )
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Wybierz osobę sam' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(await within(sheet).findByText('Z tego lokalu nie ma kogo tu wpisać.')).toBeInTheDocument()
+    expect(within(sheet).getByText('Z innych lokali (1)').closest('details')).toHaveAttribute('open')
+  })
+
   it('ends an offer for the employee', async () => {
     const calls = mockApi(api)
     show()
