@@ -336,19 +336,51 @@ def test_conversation_brings_the_last_replies_of_the_same_chat(shop):
     TextRequest.objects.create(
         **base, text="Kiedy pracuję?", status="answered", reply="W sobotę 21.11.", created_at=now - timedelta(hours=1)
     )
-    TextRequest.objects.create(**base, text="Za stara", status="answered", created_at=now - timedelta(days=2))
+    TextRequest.objects.create(**base, text="Sprzed tygodnia", status="answered", created_at=now - timedelta(days=7))
+    for n in range(context.MAX_CONVERSATION):
+        TextRequest.objects.create(
+            **base, text=f"Bardzo dawno {n}", status="answered", created_at=now - timedelta(days=30 + n)
+        )
     TextRequest.objects.create(employee=shop["kasia"], period=shop["period"], text="Cudza", created_at=now)
     current = TextRequest.objects.create(**base, text="A z kim?", created_at=now)
     talk = context.conversation(current)
     assert "Kiedy pracuję?" in talk and "W sobotę 21.11." in talk
-    assert all(text not in talk for text in ("Za stara", "Cudza", "A z kim?"))
+    assert "Sprzed tygodnia" in talk  # no time limit, only the last MAX_CONVERSATION messages
+    week_ago = timezone.localtime(now - timedelta(days=7))
+    assert f'"sent_at": "{week_ago:%d.%m.%Y %H:%M}", "text": "Sprzed tygodnia"' in talk  # the model sees its age
+    assert "Bardzo dawno 7" in talk and "Bardzo dawno 8" not in talk
+    assert all(text not in talk for text in ("Cudza", "A z kim?"))
 
 
-def test_command_history_is_only_same_author_location_and_recent(shop, make_company):
+def test_a_corrected_request_counts_from_its_correction_in_later_context(api, shop, with_key, monkeypatch):
+    """Codex on #48: a request from 13.11 rewritten on 20.11 as "Jutro jednak mogę przyjść" kept the 13.11 date, so
+    "jutro" pointed a week too early. The correction's time is kept apart from `updated_at`, which also moves when
+    the assistant or the manager handles the request."""
+    week_ago = timezone.now() - timedelta(days=7)
+    row = submit_and_read(api, shop, monkeypatch, reading())
+    TextRequest.objects.filter(pk=row.pk).update(created_at=week_ago)
+    assert api.patch(f"/api/me/requests/{row.pk}", {"text": "Jutro jednak mogę przyjść"}).status_code == 200
+    services.interpret_request(row.pk)
+    row.refresh_from_db()
+    assert row.created_at == week_ago and row.text_edited_at > week_ago + timedelta(days=6)
+    current = TextRequest.objects.create(employee=shop["employee"], period=shop["period"], text="A w sobotę?")
+    written = f"{timezone.localtime(row.text_edited_at):%d.%m.%Y %H:%M}"
+    assert f'"sent_at": "{written}", "text": "Jutro jednak mogę przyjść"' in context.conversation(current)
+    assert f'"sent_at": "{written}"' in context.request_history(context.prior_requests(current))
+    # A manager's decision moves `updated_at` but not the date of the words.
+    api.login(shop["manager"])
+    api.patch(f"/api/requests/{row.pk}", {"manager_priority": "higher"})
+    row.refresh_from_db()
+    assert row.written_at == row.text_edited_at < row.updated_at
+
+
+def test_command_history_is_only_same_author_location_and_the_last_ten(shop, make_company):
     now = timezone.now()
     base = {"location": shop["location"], "created_by": shop["manager"], "status": "ready"}
     AssistantCommand.objects.create(**base, text="Moja poprzednia", created_at=now - timedelta(minutes=1))
-    AssistantCommand.objects.create(**base, text="Zbyt stara", created_at=now - timedelta(days=2))
+    AssistantCommand.objects.create(**base, text="Sprzed tygodnia", created_at=now - timedelta(days=7))
+    for n in range(context.MAX_CONVERSATION - 1):
+        AssistantCommand.objects.create(**base, text=f"Dawna {n}", created_at=now - timedelta(days=30 + n))
     AssistantCommand.objects.create(**{**base, "created_by": shop["worker"]}, text="Cudza")
     other = make_company("Inna")
     AssistantCommand.objects.create(
@@ -356,5 +388,5 @@ def test_command_history_is_only_same_author_location_and_recent(shop, make_comp
     )
     current = AssistantCommand.objects.create(**base, text="Teraz", created_at=now)
     history = context.command_history(current)
-    assert "Moja poprzednia" in history
-    assert all(text not in history for text in ("Zbyt stara", "Cudza", "Inny lokal", "Teraz"))
+    assert "Moja poprzednia" in history and "Sprzed tygodnia" in history and "Dawna 7" in history
+    assert all(text not in history for text in ("Dawna 8", "Cudza", "Inny lokal", "Teraz"))

@@ -5,6 +5,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import anthropic
 import httpx2
 import pytest
 from anthropic import Anthropic, DefaultHttpxClient
@@ -60,16 +61,48 @@ def add_shift(shop, version, employee, day, hours=8):
     return shift
 
 
+def schema_counts(schema: dict) -> tuple[int, int]:
+    """(union-typed parameters, optional parameters) of a JSON schema, $defs included, as the API counts them."""
+    unions = optional = 0
+    stack = [schema, *(schema.get("$defs") or {}).values()]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        required = set(node.get("required", []))
+        for name, sub in (node.get("properties") or {}).items():
+            unions += "anyOf" in sub or isinstance(sub.get("type"), list)
+            optional += name not in required
+            stack.append(sub)
+        stack.extend([node.get("items"), *node.get("anyOf", [])])
+    return unions, optional
+
+
 # ----------------------------------------------------------------- tools: the app's own GET endpoints
 
 
 class TestTools:
-    def test_every_tool_is_an_existing_endpoint_with_a_strict_schema(self):
+    def test_every_tool_is_an_existing_endpoint_with_a_closed_schema(self):
         for tool in (*tools.EMPLOYEE_TOOLS, *tools.MANAGER_TOOLS):
             resolve(re.sub(r"\{[a-z_]+\}", str(uuid4()), tool.path))  # raises when there is no such endpoint
             schema = tool.schema()["input_schema"]
             assert schema["additionalProperties"] is False and schema["required"] == list(schema["properties"])
             assert not set(schema["properties"]) & {"company_id", "location_id"}  # filled by the server only
+
+    @pytest.mark.parametrize(
+        "toolset, output", [(tools.MANAGER_TOOLS, llm.CommandPlan), (tools.EMPLOYEE_TOOLS, llm.EmployeeReply)]
+    )
+    def test_each_request_stays_within_the_structured_output_limits(self, toolset, output):
+        """The API refuses a request whose strict schemas together have more than 16 union-typed parameters,
+        24 optional ones or 20 strict tools ("Schema is too complex for compilation"), and then every message
+        fails. Strict schemas here are the answer schema plus any tool marked strict."""
+        definitions = [tool.schema() for tool in toolset]
+        strict = [d["input_schema"] for d in definitions if d.get("strict")]
+        unions, optional = 0, 0
+        for schema in [anthropic.transform_schema(output.model_json_schema()), *strict]:
+            u, o = schema_counts(schema)
+            unions, optional = unions + u, optional + o
+        assert len(strict) <= 20 and unions <= 16 and optional <= 24, (len(strict), unions, optional)
 
     def test_an_employee_reads_only_their_published_schedule_without_phones(self, shop):
         day = shop["period"].start
@@ -107,6 +140,20 @@ class TestTools:
         assert error and text.startswith("Błąd 404")
         text, error = box.run("availability_grid", {"period_id": str(shop["period"].pk)})
         assert not error and "Kasia" in text and "+48" not in text
+
+    def test_a_wrong_argument_is_an_error_the_model_can_correct(self, shop):
+        """Codex on #48: tools are not strict, and `hours_report` with `employee_name` instead of `person` answered
+        about everyone. The call never reaches the endpoint now."""
+        api_month = f"{shop['period'].start:%Y-%m}"
+        box = tools.manager_toolbox(shop["manager"], shop["company"].pk, shop["location"].pk)
+        text, error = box.run("hours_report", {"month": api_month, "employee_name": "Kasia"})
+        assert error and text == ("Błąd: nieznany parametr employee_name. To narzędzie przyjmuje: month, person.")
+        assert box.run("hours_report", {"person": "Kasia"}) == ("Błąd: brakuje parametru month.", True)
+        assert box.run("hours_report", {"month": 11}) == ("Błąd: parametr month musi być typu string.", True)
+        assert box.run("hours_report", ["2026-11"])[1]
+        assert box.calls == [{"tool": "hours_report", "status": 400}] * 4
+        text, error = box.run("hours_report", {"month": api_month, "person": "Kasia"})
+        assert not error and box.calls[-1] == {"tool": "hours_report", "status": 200}
 
     def test_every_date_gets_its_weekday(self):
         cleaned = tools.clean({"date": "2026-11-21", "shift": {"date": "2026-11-23"}, "start": "2026-11-21T06:00"})
@@ -194,6 +241,33 @@ class TestConversation:
         llm.read_request("Kiedy pracuję?", "Dzisiaj: …", StubBox())
         assert len(sent) == llm.MAX_TOOL_ROUNDS + 1
         assert sent[-1]["tool_choice"] == {"type": "none"}
+
+    def test_every_call_asks_for_low_effort_and_the_answer_logs_its_time(self, settings, monkeypatch, caplog):
+        """Thinking is always on in the default model and each tool round is a full call: at the default effort
+        an answer with tool rounds took about 40 s on 20.11.2026."""
+        settings.ANTHROPIC_API_KEY, settings.ANTHROPIC_EFFORT = "test-key", "low"
+        sent = []
+        use = {"type": "tool_use", "id": "toolu_1", "name": "my_schedule", "input": {}}
+        final = question().model_dump()
+        fake_client(
+            monkeypatch,
+            [([use], "tool_use"), ([{"type": "text", "text": json.dumps(final)}], "end_turn")],
+            sent,
+        )
+        with caplog.at_level("INFO", logger="apps.assistant.llm"):
+            llm.read_request("Kiedy pracuję?", "Dzisiaj: …", StubBox())
+        assert [request["output_config"]["effort"] for request in sent] == ["low", "low"]
+        assert sent[0]["output_config"]["format"]["type"] == "json_schema"
+        [line] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("assistant EmployeeReply")]
+        assert "2 calls, tools my_schedule, 20 output tokens, effort low" in line
+
+    @pytest.mark.parametrize("value", ["", "fast"])
+    def test_an_empty_or_unknown_effort_leaves_the_model_default(self, settings, value, caplog):
+        settings.ANTHROPIC_EFFORT = value
+        with caplog.at_level("WARNING", logger="apps.assistant.llm"):
+            config = llm.output_config(llm.EmployeeReply)
+        assert "effort" not in config and "format" in config
+        assert bool(caplog.records) == bool(value)
 
 
 # ----------------------------------------------------------------- employee: answers and requests

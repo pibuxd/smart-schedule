@@ -63,10 +63,12 @@ class ApiTool:
                 "anyOf": [{"type": "string"}, {"type": "null"}],
                 "description": "Tylko pozycje osoby, której imię lub nazwisko zawiera ten tekst.",
             }
+        # Not `strict`: the API allows at most 16 union-typed parameters across all strict schemas of a request,
+        # and the answer schema (`output_config.format`) already uses most of them. `argument_error` checks each
+        # call against this schema instead, and a wrong argument comes back to the model as a tool error.
         return {
             "name": self.name,
             "description": self.description,
-            "strict": True,
             "input_schema": {
                 "type": "object",
                 "properties": properties,
@@ -249,6 +251,31 @@ MANAGER_TOOLS = (
 )
 
 
+JSON_TYPES = {"string": str, "null": type(None)}
+
+
+def argument_error(tool: ApiTool, arguments: Any) -> str | None:
+    """Why these arguments do not fit the tool's schema, or None. Tools are not `strict`, so the model may send a key
+    the tool does not have (`employee_name` instead of `person`): the endpoint would ignore it and answer about
+    everyone. Such a call is an error result the model can correct instead."""
+    if not isinstance(arguments, dict):
+        return "Błąd: argumenty muszą być obiektem JSON."
+    properties = tool.schema()["input_schema"]["properties"]
+    unknown = sorted(set(arguments) - set(properties))
+    if unknown:
+        accepted = ", ".join(properties) or "żadnych parametrów"
+        return f"Błąd: nieznany parametr {', '.join(unknown)}. To narzędzie przyjmuje: {accepted}."
+    for name, schema in properties.items():
+        kinds = [option.get("type") for option in schema.get("anyOf", [schema])]
+        if name not in arguments:
+            if "null" not in kinds:
+                return f"Błąd: brakuje parametru {name}."
+            continue
+        if not isinstance(arguments[name], tuple(JSON_TYPES[kind] for kind in kinds if kind in JSON_TYPES)):
+            return f"Błąd: parametr {name} musi być typu {' albo '.join(kinds)}."
+    return None
+
+
 @dataclass
 class Toolbox:
     """The tools of one role, run as `user`. `ids` fills the fixed parameters (company_id, location_id)."""
@@ -266,6 +293,10 @@ class Toolbox:
         tool = next((t for t in self.tools if t.name == name), None)
         if tool is None:
             return "Nie ma takiego narzędzia.", True
+        problem = argument_error(tool, arguments)
+        if problem:
+            self.calls.append({"tool": name, "status": 400})
+            return problem, True
         arguments = dict(arguments or {})
         status, body = self._get(tool, arguments)
         self.calls.append({"tool": name, "status": status})

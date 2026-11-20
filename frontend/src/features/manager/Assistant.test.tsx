@@ -270,10 +270,15 @@ it("expires an old proposal and prefills its text without posting", async () => 
   expect(calls.some((c) => c.method === "POST")).toBe(false);
 });
 
-it("marks only the last six messages from the current period as remembered", async () => {
+it("marks only the last ten messages from the current period as remembered", async () => {
   chatApi([
     { ...command, id: "other", rule_set_id: "older-set" },
-    ...Array.from({ length: 7 }, (_, i) => ({ ...command, id: `recent-${i}` })),
+    // Older than a day: still remembered when among the last ten.
+    ...Array.from({ length: 11 }, (_, i) => ({
+      ...command,
+      id: `recent-${i}`,
+      created_at: new Date(Date.now() - (11 - i) * 86_400_000).toISOString(),
+    })),
   ]);
   panel();
   // One line above the older messages, and the period said once instead of above every message.
@@ -283,6 +288,9 @@ it("marks only the last six messages from the current period as remembered", asy
     ).toHaveLength(1),
   );
   expect(screen.getAllByText("Grudzień 2026")).toHaveLength(1);
+  expect(
+    screen.getByText(/Asystent czyta Twoje wiadomości i pamięta 10 ostatnich/),
+  ).toBeInTheDocument();
 });
 
 it("sends the explicitly selected period with a new command", async () => {

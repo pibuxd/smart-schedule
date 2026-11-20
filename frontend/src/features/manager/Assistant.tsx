@@ -31,7 +31,8 @@ import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
 import { useManager } from "./ManagerContext";
 
 const WAIT_MS = 90_000;
-const MEMORY_MS = 24 * 60 * 60 * 1000;
+// The assistant reads this many earlier messages of the chat (backend `context.MAX_CONVERSATION`).
+const MEMORY_COUNT = 10;
 const STARTERS = [
   {
     icon: ListChecks,
@@ -107,11 +108,9 @@ export function AssistantPanel({
     rows
       .filter(
         (row) =>
-          row.status !== "queued" &&
-          row.rule_set_id === data?.rule_set_id &&
-          Date.parse(row.created_at) >= now - MEMORY_MS,
+          row.status !== "queued" && row.rule_set_id === data?.rule_set_id,
       )
-      .slice(-6)
+      .slice(-MEMORY_COUNT)
       .map((row) => row.id),
   );
   const changeKey = rows.map((r) => `${r.id}:${r.status}`).join(",");
@@ -368,8 +367,8 @@ export function AssistantPanel({
           footer="Zmiany zapiszę dopiero, gdy je zatwierdzisz."
         />
         <p className="mt-2 mb-0 text-xs text-ink-muted">
-          Claude (AI) czyta Twoje wiadomości. Pamięta do 6 zakończonych z tego
-          okresu z ostatnich 24 godzin.
+          Asystent czyta Twoje wiadomości i pamięta {MEMORY_COUNT} ostatnich z
+          tego okresu.
         </p>
         <details className="text-xs text-ink-muted">
           <summary className="flex min-h-(--touch) cursor-pointer items-center gap-1.5">
@@ -381,12 +380,13 @@ export function AssistantPanel({
             przydziału.
           </p>
           <p className="mt-0 mb-2">
-            Claude czyta też listy zasad, osób i zmian tego lokalu, a żeby
-            odpowiedzieć na pytanie, sprawdza w aplikacji to, co Ty widzisz:
-            grafik, godziny, oddane zmiany oraz dyspozycje i prośby pracowników.
-            Nie dostaje numerów telefonów i niczego nie zmienia sam. Może się
-            pomylić, więc ważne dane sprawdź na ekranie. Starszą sprawę opisz
-            ponownie. W historii widzisz ostatnie 50 wiadomości.
+            Asystent to Claude, zewnętrzna usługa AI. Czyta Twoje wiadomości,
+            listy zasad, osób i zmian tego lokalu, a żeby odpowiedzieć na
+            pytanie, sprawdza w aplikacji to, co Ty widzisz: grafik, godziny,
+            oddane zmiany oraz dyspozycje i prośby pracowników. Nie dostaje
+            numerów telefonów i niczego nie zmienia sam. Może się pomylić, więc
+            ważne dane sprawdź na ekranie. Starszą sprawę opisz ponownie. W
+            historii widzisz ostatnie 50 wiadomości.
           </p>
         </details>
       </div>
