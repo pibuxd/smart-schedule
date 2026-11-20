@@ -5,6 +5,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import anthropic
 import httpx2
 import pytest
 from anthropic import Anthropic, DefaultHttpxClient
@@ -60,16 +61,48 @@ def add_shift(shop, version, employee, day, hours=8):
     return shift
 
 
+def schema_counts(schema: dict) -> tuple[int, int]:
+    """(union-typed parameters, optional parameters) of a JSON schema, $defs included, as the API counts them."""
+    unions = optional = 0
+    stack = [schema, *(schema.get("$defs") or {}).values()]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        required = set(node.get("required", []))
+        for name, sub in (node.get("properties") or {}).items():
+            unions += "anyOf" in sub or isinstance(sub.get("type"), list)
+            optional += name not in required
+            stack.append(sub)
+        stack.extend([node.get("items"), *node.get("anyOf", [])])
+    return unions, optional
+
+
 # ----------------------------------------------------------------- tools: the app's own GET endpoints
 
 
 class TestTools:
-    def test_every_tool_is_an_existing_endpoint_with_a_strict_schema(self):
+    def test_every_tool_is_an_existing_endpoint_with_a_closed_schema(self):
         for tool in (*tools.EMPLOYEE_TOOLS, *tools.MANAGER_TOOLS):
             resolve(re.sub(r"\{[a-z_]+\}", str(uuid4()), tool.path))  # raises when there is no such endpoint
             schema = tool.schema()["input_schema"]
             assert schema["additionalProperties"] is False and schema["required"] == list(schema["properties"])
             assert not set(schema["properties"]) & {"company_id", "location_id"}  # filled by the server only
+
+    @pytest.mark.parametrize(
+        "toolset, output", [(tools.MANAGER_TOOLS, llm.CommandPlan), (tools.EMPLOYEE_TOOLS, llm.EmployeeReply)]
+    )
+    def test_each_request_stays_within_the_structured_output_limits(self, toolset, output):
+        """The API refuses a request whose strict schemas together have more than 16 union-typed parameters,
+        24 optional ones or 20 strict tools ("Schema is too complex for compilation"), and then every message
+        fails. Strict schemas here are the answer schema plus any tool marked strict."""
+        definitions = [tool.schema() for tool in toolset]
+        strict = [d["input_schema"] for d in definitions if d.get("strict")]
+        unions, optional = 0, 0
+        for schema in [anthropic.transform_schema(output.model_json_schema()), *strict]:
+            u, o = schema_counts(schema)
+            unions, optional = unions + u, optional + o
+        assert len(strict) <= 20 and unions <= 16 and optional <= 24, (len(strict), unions, optional)
 
     def test_an_employee_reads_only_their_published_schedule_without_phones(self, shop):
         day = shop["period"].start

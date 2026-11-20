@@ -63,10 +63,12 @@ class ApiTool:
                 "anyOf": [{"type": "string"}, {"type": "null"}],
                 "description": "Tylko pozycje osoby, której imię lub nazwisko zawiera ten tekst.",
             }
+        # Not `strict`: the API allows at most 16 union-typed parameters across all strict schemas of a request,
+        # and the answer schema (`output_config.format`) already uses most of them. A wrong argument is harmless:
+        # the endpoint answers 404/422 and the model reads that as a tool error.
         return {
             "name": self.name,
             "description": self.description,
-            "strict": True,
             "input_schema": {
                 "type": "object",
                 "properties": properties,
