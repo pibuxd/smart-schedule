@@ -145,6 +145,25 @@ class RequestChangeIn(Schema):
     understood: bool | None = None
 
 
+class HoursProposalOut(Schema):
+    """A report of other hours of my published shift, prepared by the assistant (nothing is sent by itself)."""
+
+    # My published shift now (None: the schedule changed and I no longer have it: nothing to send).
+    assignment_id: UUID | None
+    date: date
+    start_time: str
+    end_time: str
+    planned_start_time: str
+    planned_end_time: str
+    # Minutes more (+) or less (−) than the schedule.
+    difference_minutes: int
+    location_name: str
+    position_name: str
+    reason: str
+    # The report sent from this message: its status; None = not sent yet.
+    sent_status: Literal["pending", "approved", "rejected", "cancelled", "replaced"] | None
+
+
 class MyRequestOut(Schema):
     id: UUID
     text: str
@@ -160,6 +179,8 @@ class MyRequestOut(Schema):
     # position never has.
     notes: list[str]
     created_at: datetime
+    # Reports of other hours the assistant prepared from this message, to send with "Wyślij kierownikowi".
+    hours_reports: list[HoursProposalOut] = Field(default_factory=list)
 
 
 def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
@@ -488,7 +509,50 @@ def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -
         unmarked_days=unmarked,
         notes=[*((text_request.interpretation or {}).get("notes") or [] if interpreted else []), *notes],
         created_at=text_request.created_at,
+        hours_reports=_hours_proposals(text_request),
     )
+
+
+def _hours_proposals(row: TextRequest) -> list[HoursProposalOut]:
+    """The assistant's reports of other hours in this message, with what became of the one sent from it."""
+    if not row.hours_reports:
+        return []
+    from apps.scheduling.models import Assignment, ScheduleVersion
+
+    sent = {
+        (str(change.period_id), change.slot_key): change.status
+        for change in row.hours_changes.order_by("created_at")  # the newest wins
+    }
+    result = []
+    for item in row.hours_reports:
+        key = (item.get("period_id"), item.get("slot_key"))
+        current = (
+            Assignment.objects.for_company(row.company_id)
+            .filter(
+                employee_id=row.employee_id,
+                shift__slot_key=item.get("slot_key"),
+                shift__version__period_id=item.get("period_id"),
+                shift__version__status=ScheduleVersion.Status.PUBLISHED,
+            )
+            .values_list("pk", flat=True)
+            .first()
+        )
+        result.append(
+            HoursProposalOut(
+                assignment_id=current,
+                date=item["date"],
+                start_time=item["start_time"],
+                end_time=item["end_time"],
+                planned_start_time=item["planned_start_time"],
+                planned_end_time=item["planned_end_time"],
+                difference_minutes=item.get("difference", 0),
+                location_name=item.get("location_name", ""),
+                position_name=item.get("position_name", ""),
+                reason=item.get("reason", ""),
+                sent_status=sent.get(key),
+            )
+        )
+    return result
 
 
 def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[date], list[str]]:

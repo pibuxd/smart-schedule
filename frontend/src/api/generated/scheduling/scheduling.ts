@@ -1082,7 +1082,8 @@ export const getMyScheduleUrl = (params: MyScheduleParams,) => {
 }
 
 /**
- * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month
+ * (approved other hours count instead of the schedule's). Works in read-only mode.
  * @summary My Schedule
  */
 export const mySchedule = async (params: MyScheduleParams, options?: Parameters<typeof apiFetch>[1]): Promise<myScheduleResponse> => {
@@ -1130,7 +1131,8 @@ export type MyScheduleQueryError = ErrorOut
 
 
 /**
- * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month
+ * (approved other hours count instead of the schedule's). Works in read-only mode.
  * @summary My Schedule
  */
 export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(
@@ -1144,7 +1146,8 @@ export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TE
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month
+ * (approved other hours count instead of the schedule's). Works in read-only mode.
  * @summary My Schedule
  */
 export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(
@@ -1158,7 +1161,8 @@ export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month
+ * (approved other hours count instead of the schedule's). Works in read-only mode.
  * @summary My Schedule
  */
 export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(
@@ -1166,7 +1170,8 @@ export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.
+ * My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month
+ * (approved other hours count instead of the schedule's). Works in read-only mode.
  * @summary My Schedule
  */
 export function useMySchedule<TData = Awaited<ReturnType<typeof mySchedule>>, TError = ErrorOut>(

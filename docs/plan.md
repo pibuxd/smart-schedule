@@ -943,3 +943,52 @@ w tygodniu” asystent nie umiał zapisać.
   (`ReadingRobot` w `components/assistant/Chat.tsx`, własny rysunek SVG): oczy przesuwają się wzdłuż wiersza, głowa
   lekko kiwa (animacja CSS w `tokens.css`, bez emoji; przy `prefers-reduced-motion` stoi w miejscu).
 
+
+## 30. Nadgodziny i krótsza zmiana (20.11.2026)
+
+Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
+
+- Nowa aplikacja `apps/worktime`. Model `HoursChange` (firma, lokal, okres, `slot_key`, pracownik, `date`, godziny z
+  grafiku w chwili zapisu `planned_start_at`/`planned_end_at`, godziny naprawdę `start_at`/`end_at`, `reason`,
+  `status` pending/approved/rejected/cancelled/replaced, `by_manager`, `requested_by`, `decided_by`, `decided_at`,
+  `source_request` = wiadomość czatu, z której przyszło zgłoszenie). Klucz (okres, `slot_key`, osoba) jest stały
+  między wersjami, tak jak w `AssignmentEvent`, więc poprawka grafiku niczego nie kopiuje. Na klucz najwyżej jedno
+  zgłoszenie `pending` i jedno `approved` (indeksy częściowe); nowe zatwierdzone godziny zmieniają poprzednie na
+  `replaced`.
+- Opublikowany grafik się nie zmienia: `Shift.start_at/end_at` to dalej plan, który czytają generator, walidator i
+  oceny. Zatwierdzone godziny nakłada `worktime.services.worked_hours(assignments)`: raport godzin (+ kolumny
+  `longer`/`shorter` i dwie kolumny CSV), „Mój grafik” (`worked_*` przy zmianie, sumy miesięcy, nowa lista `recent`
+  zmian z 14 dni), siatka wersji (`VersionShiftOut.worked_*`, `hours_report`, `assignment_id`) i „Zmień obsadę”
+  (`ManagerShiftOut.worked_*`). Liczy się tylko zmiana, którą ta osoba ma teraz w opublikowanym grafiku.
+- Godziny w API to „HH:MM” w czasie lokalu: początek to najbliższy dzień z tą godziną wokół początku z grafiku
+  (−1/0/+1 dzień), koniec to pierwsza taka godzina po początku. Odmowy 400/409 z polskim zdaniem: te same godziny
+  co teraz, ponad 24 h, nachodzi na inną opublikowaną zmianę tej osoby (w każdym lokalu firmy, z jej zatwierdzonymi
+  godzinami), szkic zamiast grafiku opublikowanego, pracownik: zmiana sprzed ponad 14 dni albo nie jego.
+- Endpointy: `POST /me/hours-changes` (`report_my_hours`: assignment_id, start_time, end_time, reason, opcjonalnie
+  request_id wiadomości czatu), `POST /hours-changes/{id}/cancel` (`cancel_my_hours_change`),
+  `GET /manager/hours-changes?company_id=` (`manager_hours_changes`: czekające we wszystkich moich lokalach i
+  rozstrzygnięte z 14 dni, `waiting` do licznika w menu), `POST /hours-changes/{id}/approve` i `/reject`,
+  `POST /assignments/{assignment_id}/hours` (`set_shift_hours`: kierownik sam; godziny jak w grafiku wracają do
+  planu). Kierownik musi prowadzić lokal zmiany (403), firma tylko do odczytu daje 402, obca firma 404.
+- Powiadomienia: `hours_reported` (kierownicy lokalu, link „Godziny”), `hours_approved`, `hours_rejected`,
+  `hours_set` (pracownik, link „Mój grafik”). `editing.publish` woła `worktime.services.refresh_after_publish`:
+  czekające zgłoszenia osób, które nie mają już tej zmiany, dostają `cancelled`.
+- Asystent pracownika: `EmployeeReply.hours_changes` (0–3: data, od, do, powód; same napisy, bez typów „albo”).
+  Serwer znajduje opublikowaną zmianę osoby tego dnia (przy dwóch – tę, która nachodzi na podane godziny) i
+  sprawdza ją tak jak endpoint; propozycja trafia do `TextRequest.hours_reports`, a czego nie da się zgłosić,
+  dopisuje zdanie do odpowiedzi. `MyRequestOut.hours_reports` ma `sent_status` (stan zgłoszenia utworzonego z tej
+  wiadomości); czat pokazuje przycisk „Wyślij kierownikowi”, który woła `POST /me/hours-changes` z `request_id`.
+  Wiadomość tylko o godzinach kończy się statusem `answered` i nie jest prośbą do generatora. Narzędzie
+  `my_schedule` ma też `recent` i godziny naprawdę.
+- Asystent kierownika: `CommandPlan.hours_changes` (osoba, data, od, do) i `hours_decisions` (numer zgłoszenia z
+  listy w kontekście, approve). `check_plan` zapisuje sprawdzone akcje z opisami aplikacji („Godziny: Anna, pt
+  20.11: 6:00–12:00 zamiast 6:00–14:00 (krócej o 2 h)”), a `apply_command` wykonuje je przez `worktime.services` w
+  tej samej transakcji. Plan, który zmienia tylko godziny, nie wymaga otwartego zestawu ustaleń (działa też po
+  publikacji okresu). Nowe narzędzie `manager_hours_changes`. Schematy odpowiedzi zostają w limicie API (test).
+- UI pracownika: „Zgłoś inne godziny” (`features/schedule/HoursSheet.tsx`, rachunek godzin w `hours.ts`), status
+  zgłoszenia przy zmianie, zwijana sekcja „Minione zmiany”. UI kierownika: ekran „Godziny” ma „Zgłoszone godziny”
+  (Zatwierdź / Odrzuć), kolumnę zmian godzin i „Zmień godziny sam” (`features/manager/WorkedHours.tsx`), licznik
+  czekających w menu; karta zmiany opublikowanego grafiku ma „Zmień godziny”.
+- Założenia: okno 14 dni wstecz dla pracownika (jak „Zmień obsadę”); zgłoszenie przyszłej zmiany jest dozwolone
+  (np. wiadomo, że trzeba wyjść wcześniej), ale zmienia tylko liczenie godzin, nie plan; nadgodziny to po prostu
+  godziny ponad grafik (bez Kodeksu pracy, jak w sekcji 17).

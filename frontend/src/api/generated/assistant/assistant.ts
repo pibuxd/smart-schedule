@@ -514,7 +514,7 @@ export const getApplyAssistantCommandUrl = (commandId: string,) => {
 }
 
 /**
- * Accept the plan: the rule list and the instructions change as the plan's lines say.
+ * Accept the plan: the rule list, the instructions and the hours change as the plan's lines say.
  * @summary Apply Assistant Command
  */
 export const applyAssistantCommand = async (commandId: string, options?: Parameters<typeof apiFetch>[1]): Promise<applyAssistantCommandResponse> => {
@@ -567,7 +567,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ApplyAssistantCommandMutationVariables = {commandId: string}
 
     /**
- * Accept the plan: the rule list and the instructions change as the plan's lines say.
+ * Accept the plan: the rule list, the instructions and the hours change as the plan's lines say.
  * @summary Apply Assistant Command
  */
 export const useApplyAssistantCommand = <TError = ErrorOut,

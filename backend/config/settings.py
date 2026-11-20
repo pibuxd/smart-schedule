@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "apps.reports",
     "apps.notifications",
     "apps.assistant",
+    "apps.worktime",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

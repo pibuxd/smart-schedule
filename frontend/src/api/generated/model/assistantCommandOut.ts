@@ -22,4 +22,6 @@ export interface AssistantCommandOut {
   rule_set_id: string | null;
   period_label: string;
   consumed_at: string | null;
+  has_hours: boolean;
+  hours_only: boolean;
 }

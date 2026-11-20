@@ -32,6 +32,10 @@ LINKS = {
     "shift_assigned": "schedule",
     "shift_unassigned": "schedule",
     "shift_swapped": "schedule",
+    "hours_reported": "hours",
+    "hours_approved": "schedule",
+    "hours_rejected": "schedule",
+    "hours_set": "schedule",
 }
 
 
@@ -71,6 +75,32 @@ def shift_words(payload: dict) -> str:
     parts = [f"{_day(payload.get('date'))}, {payload.get('start_time', '')}–{payload.get('end_time', '')}"]
     parts += [str(payload[key]) for key in ("position_name", "location_name") if payload.get(key)]
     return ", ".join(parts)
+
+
+def length_words(minutes: int) -> str:
+    """90 -> "1 h 30 min", 120 -> "2 h", 45 -> "45 min" (the sign is dropped)."""
+    hours, rest = divmod(abs(minutes), 60)
+    if hours and rest:
+        return f"{hours} h {rest} min"
+    return f"{hours} h" if hours else f"{rest} min"
+
+
+def difference_words(minutes: int) -> str:
+    """+60 -> "nadgodziny: +1 h", -120 -> "krócej o 2 h", 0 -> "tyle samo godzin"."""
+    if minutes > 0:
+        return f"nadgodziny: +{length_words(minutes)}"
+    if minutes < 0:
+        return f"krócej o {length_words(minutes)}"
+    return "tyle samo godzin"
+
+
+def hours_words(payload: dict) -> str:
+    """'pt. 20.11, 06:00–15:00 zamiast 06:00–14:00 (nadgodziny: +1 h)'"""
+    what = difference_words(int(payload.get("difference") or 0))
+    return (
+        f"{_day(payload.get('date'))}, {payload.get('start_time', '')}–{payload.get('end_time', '')} zamiast "
+        f"{payload.get('planned_start_time', '')}–{payload.get('planned_end_time', '')} ({what})"
+    )
 
 
 def _people_dative(count: int) -> str:
@@ -178,6 +208,27 @@ def notification_text(kind: str, payload: dict) -> str:
                 f"Kierownik zdjął Cię ze zmiany {shift}, bo w tym czasie pracujesz w lokalu {p.get('moved_to', '')}. "
                 "Sprawdź „Mój grafik”."
             )
+        case "hours_reported":
+            reason = f" Powód: „{p['reason']}”." if p.get("reason") else ""
+            where = f" ({p['location_name']})" if p.get("location_name") else ""
+            return (
+                f"{p.get('employee_name') or 'Pracownik'} zgłasza inne godziny{where}: {hours_words(p)}.{reason} "
+                "Zatwierdź albo odrzuć w „Godziny”."
+            )
+        case "hours_approved":
+            return f"Kierownik zatwierdził Twoje godziny: {hours_words(p)}. Tak liczymy tę zmianę."
+        case "hours_rejected":
+            return (
+                f"Kierownik nie zatwierdził zgłoszonych godzin: {hours_words(p)}. "
+                "Ta zmiana liczy się tak, jak przed zgłoszeniem."
+            )
+        case "hours_set":
+            if p.get("start_time") == p.get("planned_start_time") and p.get("end_time") == p.get("planned_end_time"):
+                return (
+                    f"Kierownik przywrócił godziny z grafiku dla Twojej zmiany {_day(p.get('date'))}: "
+                    f"{p.get('start_time', '')}–{p.get('end_time', '')}."
+                )
+            return f"Kierownik zmienił godziny Twojej zmiany: {hours_words(p)}. Tak liczymy tę zmianę."
         case "shift_emptied":
             return (
                 f"{p.get('employee_name') or 'Ktoś'} pracuje w tym czasie w lokalu {p.get('moved_to', '')}, "

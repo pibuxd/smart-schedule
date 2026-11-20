@@ -93,7 +93,8 @@ export const getHoursReportUrl = (params: HoursReportParams,) => {
 }
 
 /**
- * Hours of published shifts in a month, per person and location (the locations this manager runs).
+ * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
+ * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
  * @summary Hours Report
  */
 export const hoursReport = async (params: HoursReportParams, options?: Parameters<typeof apiFetch>[1]): Promise<hoursReportResponse> => {
@@ -141,7 +142,8 @@ export type HoursReportQueryError = ErrorOut
 
 
 /**
- * Hours of published shifts in a month, per person and location (the locations this manager runs).
+ * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
+ * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(
@@ -155,7 +157,8 @@ export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, 
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * Hours of published shifts in a month, per person and location (the locations this manager runs).
+ * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
+ * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(
@@ -169,7 +172,8 @@ export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, 
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * Hours of published shifts in a month, per person and location (the locations this manager runs).
+ * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
+ * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(
@@ -177,7 +181,8 @@ export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, 
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * Hours of published shifts in a month, per person and location (the locations this manager runs).
+ * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
+ * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(

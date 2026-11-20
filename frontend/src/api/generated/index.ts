@@ -10,3 +10,4 @@ export * from './scheduling/scheduling';
 export * from './staffing/staffing';
 export * from './system/system';
 export * from './tenancy/tenancy';
+export * from './worktime/worktime';

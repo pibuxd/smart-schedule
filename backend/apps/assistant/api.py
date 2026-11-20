@@ -47,6 +47,10 @@ class AssistantCommandOut(Schema):
     rule_set_id: UUID | None
     period_label: str
     consumed_at: datetime | None
+    # The plan changes hours of published shifts (saved at once on acceptance).
+    has_hours: bool
+    # Only hours: the plan does not depend on the period's agreements, so a published period does not close it.
+    hours_only: bool
 
 
 class InstructionOut(Schema):
@@ -102,6 +106,7 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
     plan = command.plan or {}
     expires_at = command.created_at + services.COMMAND_MAX_AGE
     consumed_at = command.rule_set.consumed_at if command.rule_set_id else None
+    hours_only = services.has_hours(plan) and not services.needs_rule_set(plan)
     return AssistantCommandOut(
         id=command.pk,
         text=command.text,
@@ -113,10 +118,9 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
         notes=plan.get("notes") or [],
         can_apply=(
             command.status == AssistantCommand.Status.READY
-            and command.rule_set_id is not None
             and services.has_changes(plan)
             and timezone.now() < expires_at
-            and consumed_at is None
+            and (hours_only or (command.rule_set_id is not None and consumed_at is None))
         ),
         informational=command.status == AssistantCommand.Status.READY and plan.get("informational") is True,
         created_at=command.created_at,
@@ -124,6 +128,8 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
         rule_set_id=command.rule_set_id,
         period_label=agreements.label(command.rule_set),
         consumed_at=consumed_at,
+        has_hours=services.has_hours(plan),
+        hours_only=hours_only,
     )
 
 
@@ -273,7 +279,7 @@ def assistant_command(request, command_id: UUID):
     response={200: AssistantCommandOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def apply_assistant_command(request, command_id: UUID):
-    """Accept the plan: the rule list and the instructions change as the plan's lines say."""
+    """Accept the plan: the rule list, the instructions and the hours change as the plan's lines say."""
     ctx, command = _managed_command(request, command_id)
     ctx.require_writable()
     services.apply_command(ctx, command)

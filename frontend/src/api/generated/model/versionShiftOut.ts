@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { VersionShiftOutWish } from './versionShiftOutWish';
+import type { WaitingHoursOut } from './waitingHoursOut';
+import type { WorkedOut } from './workedOut';
 
 export interface VersionShiftOut {
   id: string;
@@ -26,4 +28,7 @@ export interface VersionShiftOut {
   past: boolean;
   forced: boolean;
   overridden: string[];
+  assignment_id?: string | null;
+  worked?: WorkedOut | null;
+  hours_report?: WaitingHoursOut | null;
 }

@@ -22,6 +22,7 @@ from apps.staffing.models import EmployeeProfile, Position, ShiftType, works_in_
 from apps.staffing.shortage import ExperiencedShortOut, experienced_shortage
 from apps.tenancy.context import context_for
 from apps.tenancy.models import Location
+from apps.worktime.schemas import WaitingHoursOut, WorkedOut, report_out, worked_out
 
 router = Router(tags=["scheduling"])
 
@@ -384,6 +385,12 @@ class MyShiftOut(Schema):
     offer_status: Literal["open", "claimed"] | None = None
     # The location hands given-away shifts over without the manager ("Weź zmianę" moves it at once).
     handover_at_once: bool = False
+    # Hours that count instead of the schedule's (approved overtime or a shorter shift); None: as planned.
+    worked: WorkedOut | None = None
+    # My report of other hours, waiting for the manager.
+    report: WaitingHoursOut | None = None
+    # I may report other hours of this shift ("Zgłoś inne godziny"): published, at most 14 days back.
+    can_report: bool = False
 
 
 class MonthHoursOut(Schema):
@@ -393,7 +400,10 @@ class MonthHoursOut(Schema):
 
 class MyScheduleOut(Schema):
     home_location_name: str
+    # From now on: shifts that have not ended (with the hours that count).
     shifts: list[MyShiftOut]
+    # My shifts that ended in the last 14 days, newest first (to report overtime after the fact).
+    recent: list[MyShiftOut] = Field(default_factory=list)
     # Last day covered by a published schedule of my location (days off up to it are shown too); None = none.
     published_until: date | None = None
     # Hours of published shifts in each month that the list touches (and the current month).
@@ -406,16 +416,27 @@ def _hours(shift: Shift) -> float:
 
 @router.get("/me/schedule", response={200: MyScheduleOut, 404: ErrorOut})
 def my_schedule(request, company_id: UUID):
-    """My published shifts from today on, who works with me, and my hours per month. Works in read-only mode."""
+    """My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month
+    (approved other hours count instead of the schedule's). Works in read-only mode."""
+    from apps.worktime.services import PAST_DAYS, pending_reports, worked_hours
+
     ctx, profile = employee_context(request, company_id)
     today = timezone.localdate()
+    now = timezone.now()
     published = ctx.qs(Assignment).filter(employee=profile, shift__version__status=ScheduleVersion.Status.PUBLISHED)
-    published = published.select_related("shift__location", "shift__position", "shift__shift_type")
-    upcoming = list(
+    published = published.select_related("shift__location", "shift__position", "shift__shift_type", "shift__version")
+    near = list(
         published.filter(
-            shift__end_at__gt=timezone.now(), shift__date__lte=today + timedelta(days=MY_SCHEDULE_DAYS)
+            shift__date__gte=today - timedelta(days=PAST_DAYS + 1),
+            shift__date__lte=today + timedelta(days=MY_SCHEDULE_DAYS),
         ).order_by("shift__start_at")
     )
+    worked = worked_hours(near)
+    upcoming = [a for a in near if worked[a.pk].end_at > now]
+    recent = [
+        a for a in reversed(near) if worked[a.pk].end_at <= now and a.shift.date >= today - timedelta(days=PAST_DAYS)
+    ]
+    waiting = pending_reports(near)
 
     others: dict = defaultdict(list)
     if upcoming:
@@ -442,8 +463,8 @@ def my_schedule(request, company_id: UUID):
         .filter(assignment__in=[a.pk for a in upcoming], status__in=ACTIVE)
         .values_list("pk", "assignment_id", "status")
     }
-    shifts = []
-    for assignment in upcoming:
+
+    def shift_out(assignment: Assignment) -> MyShiftOut:
         shift = assignment.shift
         tz = ZoneInfo(shift.location.timezone)
         start, end = shift.start_at.astimezone(tz), shift.end_at.astimezone(tz)
@@ -453,33 +474,37 @@ def my_schedule(request, company_id: UUID):
             if o.shift.start_at < shift.end_at and o.shift.end_at > shift.start_at
         ]
         names = sorted({o.employee.membership.user.full_name for o in overlapping})
-        shifts.append(
-            MyShiftOut(
-                id=assignment.id,
-                date=shift.date,
-                start_at=start,
-                end_at=end,
-                start_time=f"{start:%H:%M}",
-                end_time=f"{end:%H:%M}",
-                hours=_hours(shift),
-                location_name=shift.location.name,
-                position_name=shift.position.name,
-                shift_type_name=shift.shift_type.name if shift.shift_type else "",
-                away=shift.location_id != profile.home_location_id,
-                coworkers=names,
-                offer_id=offers.get(assignment.pk, (None, None))[0],
-                offer_status=offers.get(assignment.pk, (None, None))[1],
-                handover_at_once=shift.location.handover_without_approval,
-            )
+        return MyShiftOut(
+            id=assignment.id,
+            date=shift.date,
+            start_at=start,
+            end_at=end,
+            start_time=f"{start:%H:%M}",
+            end_time=f"{end:%H:%M}",
+            hours=_hours(shift),
+            location_name=shift.location.name,
+            position_name=shift.position.name,
+            shift_type_name=shift.shift_type.name if shift.shift_type else "",
+            away=shift.location_id != profile.home_location_id,
+            coworkers=names,
+            offer_id=offers.get(assignment.pk, (None, None))[0],
+            offer_status=offers.get(assignment.pk, (None, None))[1],
+            handover_at_once=shift.location.handover_without_approval,
+            worked=worked_out(worked[assignment.pk], shift),
+            report=report_out(waiting.get(assignment.pk), shift),
+            can_report=shift.date >= today - timedelta(days=PAST_DAYS),
         )
 
+    shifts = [shift_out(a) for a in upcoming]
     months = sorted({today.strftime("%Y-%m")} | {s.date.strftime("%Y-%m") for s in shifts})
     totals = dict.fromkeys(months, 0.0)
     first = date.fromisoformat(months[0] + "-01")
-    for assignment in published.filter(shift__date__gte=first):
+    in_months = list(published.filter(shift__date__gte=first))
+    counted = worked_hours(in_months)
+    for assignment in in_months:
         key = assignment.shift.date.strftime("%Y-%m")
         if key in totals:
-            totals[key] += _hours(assignment.shift)
+            totals[key] += counted[assignment.pk].hours
     published_until = (
         ctx.qs(SchedulePeriod)
         .filter(
@@ -495,6 +520,7 @@ def my_schedule(request, company_id: UUID):
     return MyScheduleOut(
         home_location_name=profile.home_location.name,
         shifts=shifts,
+        recent=[shift_out(a) for a in recent],
         published_until=published_until,
         months=[MonthHoursOut(month=m, hours=round(h, 2)) for m, h in totals.items()],
     )
@@ -529,6 +555,12 @@ class VersionShiftOut(Schema):
     # The manager put this person here against a hard rule; `overridden` are the problems they accepted.
     forced: bool
     overridden: list[str]
+    # The person's assignment on this shift (for "Zmień godziny" in a published schedule).
+    assignment_id: UUID | None = None
+    # Hours that count for the person instead of the schedule's; None: as planned.
+    worked: WorkedOut | None = None
+    # The person reported other hours that wait for the manager ("Godziny").
+    hours_report: WaitingHoursOut | None = None
 
 
 class VersionEmployeeOut(Schema):
@@ -767,12 +799,16 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
             if slot_id in problem.forced:
                 overridden_by_slot[slot_id].append(violation.message)
     rows = {}
-    shifts = (
+    shifts = list(
         Shift.objects.for_company(loaded.version.company_id)
         .filter(version=loaded.version)
-        .select_related("assignment", "position", "shift_type")
+        .select_related("assignment", "position", "shift_type", "version", "location")
         .order_by("date", "start_at", "position__name", "slot_key")
     )
+    from apps.worktime.services import pending_reports, worked_hours
+
+    assignments = [shift.assignment for shift in shifts]
+    worked, waiting = worked_hours(assignments), pending_reports(assignments)
     for shift in shifts:
         assignment = shift.assignment
         employee_id = str(assignment.employee_id) if assignment.employee_id else None
@@ -801,6 +837,9 @@ def _shift_rows(loaded, today: date) -> dict[str, VersionShiftOut]:
             past=shift.date < today,
             forced=assignment.forced and employee_id is not None,
             overridden=overridden_by_slot.get(shift.slot_key, []),
+            assignment_id=assignment.pk,
+            worked=worked_out(worked.get(assignment.pk), shift),
+            hours_report=report_out(waiting.get(assignment.pk), shift),
         )
     return rows
 

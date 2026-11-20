@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MyShiftOutOfferStatus } from './myShiftOutOfferStatus';
+import type { WaitingHoursOut } from './waitingHoursOut';
+import type { WorkedOut } from './workedOut';
 
 export interface MyShiftOut {
   id: string;
@@ -22,4 +24,7 @@ export interface MyShiftOut {
   offer_id?: string | null;
   offer_status?: MyShiftOutOfferStatus;
   handover_at_once?: boolean;
+  worked?: WorkedOut | null;
+  report?: WaitingHoursOut | null;
+  can_report?: boolean;
 }

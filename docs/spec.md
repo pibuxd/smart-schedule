@@ -4,6 +4,18 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Nadgodziny i krótsza zmiana (prośba Piotra z 20.11.2026)
+
+Pracownik zgłasza w aplikacji, że pracuje dłużej niż w grafiku (nadgodziny) albo krócej (np. źle się czuje i wychodzi wcześniej). Kierownik zatwierdza albo odrzuca zgłoszenie i może sam zmienić godziny. Liczą się godziny zatwierdzone.
+
+- Pracownik: przycisk „Zgłoś inne godziny” jest przy dzisiejszej albo trwającej zmianie w „Mój grafik” i przy zmianach z ostatnich 14 dni (zwijana sekcja „Minione zmiany”). Pracownik wpisuje godziny od–do, w których naprawdę pracował albo będzie pracował; przy trwającej zmianie „Wychodzę teraz” wpisuje bieżącą godzinę. Może dopisać powód. Ekran od razu mówi, co to znaczy („Nadgodziny: +1 h”, „Krócej o 2 h”). Zgłoszenie czeka na kierownika. Nowe zgłoszenie tej samej zmiany zastępuje poprzednie, a czekające zgłoszenie pracownik może wycofać.
+- Kierownik dostaje powiadomienie i decyduje na ekranie „Godziny” (zgłoszenia czekające na decyzję są na górze, liczba czekających jest w menu): „Zatwierdź” albo „Odrzuć”. Pracownik dostaje powiadomienie o decyzji.
+- Kierownik może sam zmienić godziny osoby na dowolnej opublikowanej zmianie swojego lokalu, także po fakcie („Zmień godziny sam” na ekranie „Godziny” i „Zmień godziny” w karcie zmiany opublikowanego grafiku). Zmiana działa od razu, zastępuje czekające zgłoszenie tej zmiany, a pracownik dostaje powiadomienie. Godziny takie jak w grafiku przywracają plan.
+- Liczą się tylko zatwierdzone godziny: ekran „Godziny” i plik CSV (z kolumnami nadgodzin i krótszych zmian), suma godzin w „Mój grafik” i odpowiedzi asystenta. Grafik jako plan się nie zmienia: generator, walidator i oceny liczą godziny z grafiku. Przy zmianie widać godziny naprawdę i godziny z grafiku. Zgłoszenie czekające na decyzję niczego nie liczy.
+- Granice: tylko opublikowana zmiana tej osoby; pracownik zgłasza najwyżej 14 dni wstecz (kierownik zmienia godziny bez tej granicy); zmiana trwa najdłużej 24 godziny; godziny nie mogą nachodzić na inną zmianę tej osoby. Koniec przed początkiem to koniec następnego dnia, jak w ustawieniach zmian.
+- Gdy po poprawce grafiku zmianę ma inna osoba, czekające zgłoszenie poprzedniej osoby wygasa, a jej zatwierdzone godziny przestają się liczyć.
+- Asystent: pracownik może napisać w czacie „zostałem godzinę dłużej” albo „źle się czuję, wyjdę o 13”. Asystent sprawdza jego zmianę i pokazuje gotowe zgłoszenie z przyciskiem „Wyślij kierownikowi”; nic nie wysyła się samo, tak jak przy „Zaznacz „nie mogę””. Kierownik może napisać „Ania wyszła dziś o 12” albo „zatwierdź nadgodziny Kasi”: asystent przygotowuje plan (inne godziny, zatwierdzenie albo odrzucenie zgłoszenia), który działa dopiero po „Zatwierdź zmiany”, także po publikacji grafiku okresu. Zgłoszenia asystent czyta przez API tak jak ekran „Godziny”.
+
 ## Asystent odpowiada na wszystko o Grafikomacie i lokalu (decyzja Piotra z 19.11.2026)
 
 Zastępuje decyzję „Zakres asystenta: wyłącznie zasady” z 18.11.2026. Powód: test z 19.11.2026 (pliki `testy-asystenta/` w projekcie) pokazał, że ludzie pytają asystenta o grafik, godziny, dyspozycje i oddane zmiany, a odmowa za każdym razem zniechęca.
@@ -11,7 +23,7 @@ Zastępuje decyzję „Zakres asystenta: wyłącznie zasady” z 18.11.2026. Pow
 - Główna sprawczość asystenta się nie zmienia: kierownikowi zamienia polecenia na zasady z katalogu i polecenia o osobach (nic się nie zapisuje bez „Zatwierdź zmiany”), a pracownikowi zamienia prośby na preferencje dla generatora.
 - Poza tym asystent odpowiada na każde pytanie o Grafikomat i lokal (odpowiedź z datami, godzinami lub liczbami mówi, na którym ekranie to sprawdzić, a czat pracownika przypomina, że asystent może się pomylić): kiedy i z kim jest zmiana, ile jest godzin, do kiedy zaznaczyć dyspozycje, kto ich jeszcze nie wysłał, jakie są prośby, oddane zmiany, dlaczego zmiana jest bez obsady, jak coś zrobić w aplikacji i gdzie to jest.
 - Dane bierze z tego samego API co aplikacja, wyłącznie do odczytu i z prawami osoby, która pisze: pracownik widzi przez asystenta tylko to, co widzi w swoich ekranach (swój grafik z osobami na tej samej zmianie, swoje dyspozycje i prośby, zmiany do wzięcia, swoje powiadomienia); kierownik to, co widzi w swoich lokalach. Numery telefonów nie trafiają do modelu. Notka o danych w czacie pracownika mówi, że asystent kierownika też może czytać jego prośby i dyspozycje; odpowiedź kierownika na pytanie ma stałą notkę aplikacji, żeby ważne dane sprawdzić na ekranie.
-- Asystent niczego nie zmienia sam poza ścieżkami wyżej. Grafiku nie układa, nie publikuje, nie zamienia ludzi, nie wysyła wiadomości i nie zmienia kalendarza: mówi, gdzie w aplikacji to zrobić. Wyjątek dla wygody: gdy pracownik pisze, że w podane dni nie może pracować, a kalendarz tego nie mówi, czat pokazuje przycisk „Zaznacz „nie mogę””; dni zmieniają się dopiero po naciśnięciu, tą samą drogą co w kalendarzu.
+- Asystent niczego nie zmienia sam poza ścieżkami wyżej (od 20.11.2026 także zgłoszenia godzin, sekcja „Nadgodziny i krótsza zmiana”). Grafiku nie układa, nie publikuje, nie zamienia ludzi, nie wysyła wiadomości i nie zmienia kalendarza: mówi, gdzie w aplikacji to zrobić. Wyjątek dla wygody: gdy pracownik pisze, że w podane dni nie może pracować, a kalendarz tego nie mówi, czat pokazuje przycisk „Zaznacz „nie mogę””; dni zmieniają się dopiero po naciśnięciu, tą samą drogą co w kalendarzu.
 - Jedna wiadomość może łączyć pytanie i prośbę albo kilka próśb (do trzech): asystent odpowiada na pytanie i zapisuje prośby, zamiast odrzucać całość. Gdy części prośby nie umie zamienić na ustawienie, mówi to wprost i zostawia ją kierownikowi do przeczytania.
 - Pytania niezwiązane z pracą (pogoda, ogólne tematy) dostają krótką, stałą odmowę aplikacji. Polecenia dla asystenta w treści wiadomości lub w danych nie rozszerzają jego uprawnień.
 - Pisanie z asystentem nie ma limitów (decyzja Piotra z 20.11.2026): pracownik i kierownik piszą, ile chcą. Nie ma limitu próśb na okres, dziennego limitu wiadomości osoby ani miesięcznego limitu poleceń firmy. Każdy z nich można włączyć z powrotem zmienną środowiskową, bez zmian w kodzie (plan.md). Włączony limit próśb liczy tylko prośby, które się liczą (zrozumiane i zostawione kierownikowi); pytania, odpowiedzi i odrzucone wiadomości go nie zużywają, a przy pełnym limicie asystent dalej odpowiada na pytania i pozwala poprawić istniejącą prośbę.
@@ -183,7 +195,7 @@ Firma z 4 piekarniami w jednej grupie i jednym menedżerem, 15-25 pracowników n
 
 ## Poza pierwszą wersją
 
-Trzy warianty grafiku, zamiany zmian proponowane przez pracowników, wnioski urlopowe, zadania na zmianie, koszt pracy, rejestracja czasu pracy, miesięczne zestawienie przepracowanych godzin zleceniobiorców, płatności, aplikacje iOS i Android, wysyłka SMS przez bramkę.
+Trzy warianty grafiku, zamiany zmian proponowane przez pracowników, wnioski urlopowe, zadania na zmianie, koszt pracy, rejestracja czasu pracy (poza zgłaszaniem innych godzin zmiany, od 20.11.2026), miesięczne zestawienie przepracowanych godzin zleceniobiorców, płatności, aplikacje iOS i Android, wysyłka SMS przez bramkę.
 
 ## Sposób pracy
 

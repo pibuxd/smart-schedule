@@ -20,6 +20,7 @@ const LINKS = {
   schedule: { to: '/grafik', label: 'Zobacz „Mój grafik”' },
   availability: { to: '/kiedy-moge', label: 'Zaznacz, kiedy możesz' },
   offers: { to: '/kierownik/oddane-zmiany', label: 'Otwórz „Oddane zmiany”' },
+  hours: { to: '/kierownik/godziny', label: 'Otwórz „Godziny”' },
 } as const
 
 /** In-app notifications, newest first. Opening the screen marks them as seen; new ones stay highlighted once. */

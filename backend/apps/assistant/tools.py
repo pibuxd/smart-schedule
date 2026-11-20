@@ -86,10 +86,12 @@ EMPLOYEE_TOOLS = (
     ApiTool(
         "my_schedule",
         "/api/me/schedule",
-        "Ekran „Mój grafik”: moje opublikowane zmiany od dziś (data, godziny, lokal, stanowisko, kto jest ze mną "
-        "na zmianie, czy oddaję zmianę) i suma moich godzin w każdym miesiącu.",
+        "Ekran „Mój grafik”: moje opublikowane zmiany, które się nie skończyły (shifts: data, godziny z grafiku, "
+        "lokal, stanowisko, kto jest ze mną, czy oddaję zmianę), moje zmiany z ostatnich 14 dni (recent), przy "
+        "zmianie godziny naprawdę zatwierdzone przez kierownika (worked) i moje zgłoszenie czekające na kierownika "
+        "(report), oraz suma moich godzin w każdym miesiącu (liczy zatwierdzone godziny).",
         fixed=_company(),
-        narrow=(Narrow("shifts", date="date"),),
+        narrow=(Narrow("shifts", date="date"), Narrow("recent", date="date")),
     ),
     ApiTool(
         "my_availability",
@@ -210,7 +212,8 @@ MANAGER_TOOLS = (
     ApiTool(
         "hours_report",
         "/api/reports/hours",
-        "Ekran „Godziny”: godziny z opublikowanych grafików w miesiącu na osobę i lokal.",
+        "Ekran „Godziny”: godziny z opublikowanych grafików w miesiącu na osobę i lokal (zatwierdzone inne godziny "
+        "liczą się zamiast grafiku; longer = nadgodziny, shorter = krótsze zmiany, w godzinach).",
         params={"month": {"type": "string", "description": "RRRR-MM"}},
         fixed=_company(),
         narrow=(Narrow("rows", person=("name",)),),
@@ -223,9 +226,21 @@ MANAGER_TOOLS = (
         narrow=(Narrow("offers", date="shift.date", person=("offered_by_name",)),),
     ),
     ApiTool(
+        "manager_hours_changes",
+        "/api/manager/hours-changes",
+        "Ekran „Godziny”: zgłoszenia innych godzin (nadgodziny, wcześniejsze wyjście) czekające na decyzję "
+        "(pending) i rozstrzygnięte w ostatnich 14 dniach (recent), z godzinami z grafiku i naprawdę.",
+        fixed=_company(),
+        narrow=(
+            Narrow("pending", date="date", person=("employee_name",)),
+            Narrow("recent", date="date", person=("employee_name",)),
+        ),
+    ),
+    ApiTool(
         "handover_shifts",
         "/api/locations/{location_id}/handover-shifts",
-        "Opublikowane zmiany lokalu (dwa tygodnie wstecz, dwa miesiące naprzód) z osobami.",
+        "Opublikowane zmiany lokalu (dwa tygodnie wstecz, dwa miesiące naprzód) z osobami, godzinami naprawdę "
+        "(worked) i czekającym zgłoszeniem innych godzin (hours_report).",
         fixed={"location_id": "location_id"},
         narrow=(Narrow("", date="shift.date", person=("employee_name",)),),
     ),

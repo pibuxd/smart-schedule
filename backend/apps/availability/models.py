@@ -161,6 +161,11 @@ class TextRequest(CompanyOwnedModel):
     assistant_answer = models.JSONField("odpowiedź asystenta (nieużyta)", null=True, blank=True)
     # What the assistant said to the person (an answer to a question, or a word about the saved request).
     reply = models.TextField("odpowiedź asystenta dla pracownika", max_length=2000, blank=True, default="")
+    # Reports of other hours the assistant prepared from this message ("zostałem godzinę dłużej"): checked against
+    # the person's published shifts, shown under the answer with "Wyślij kierownikowi" (nothing is sent by itself).
+    # Each: assignment_id, date, start_time, end_time, planned_start_time, planned_end_time, location_name,
+    # position_name, reason.
+    hours_reports = models.JSONField("zgłoszenia godzin do wysłania", null=True, blank=True)
     employee_corrected = models.BooleanField("poprawiona przez pracownika", default=False)
     supersedes = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="corrections")
     manager_priority = models.CharField(

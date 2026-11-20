@@ -12,6 +12,8 @@ export interface EmployeeHoursOut {
   home_location_name: string;
   shifts: number;
   total: number;
+  longer?: number;
+  shorter?: number;
   by_location: LocationHoursOut[];
   elsewhere: boolean;
 }

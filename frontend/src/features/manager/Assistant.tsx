@@ -290,7 +290,7 @@ export function AssistantPanel({
                 <CommandReply
                   data={row}
                   late={now - Date.parse(row.created_at) >= WAIT_MS}
-                  readOnly={readOnly || !!row.consumed_at}
+                  readOnly={readOnly || (!!row.consumed_at && !row.hours_only)}
                   expired={now >= Date.parse(row.expires_at)}
                   onChanged={remember}
                   onRetry={() => void history.refetch()}
@@ -443,7 +443,9 @@ function CommandReply({
     );
   const applied = data.status === "applied";
   const dismissed = data.status === "dismissed";
-  const closedProposal = data.status === "ready" && !!data.consumed_at;
+  // Hours of published shifts do not depend on the period's agreements: publishing does not close such a plan.
+  const closedProposal =
+    data.status === "ready" && !!data.consumed_at && !data.hours_only;
   const needsRefresh =
     data.status === "ready" &&
     data.lines.length > 0 &&
@@ -550,12 +552,18 @@ function CommandReply({
       )}
       {applied && (
         <p role="status" className="m-0 text-sm text-prefer">
-          Zapisane w ustaleniach. Tam możesz je zmienić albo usunąć.
+          {data.hours_only
+            ? "Zapisane. Godziny liczą się od razu, zobaczysz je w „Godzinach”."
+            : data.has_hours
+              ? "Zapisane. Ustalenia zmienisz w „Ustaleniach”, a godziny w „Godzinach”."
+              : "Zapisane w ustaleniach. Tam możesz je zmienić albo usunąć."}
         </p>
       )}
       {dismissed && (
         <p role="status" className="m-0 text-sm text-ink-muted">
-          Propozycja odrzucona. Ustawienia pozostały bez zmian.
+          {data.has_hours
+            ? "Propozycja odrzucona. Nic się nie zmieniło."
+            : "Propozycja odrzucona. Ustawienia pozostały bez zmian."}
         </p>
       )}
       {data.notes.length > 0 && (

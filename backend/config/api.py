@@ -15,6 +15,7 @@ from apps.rules.api import router as rules_router
 from apps.scheduling.api import router as scheduling_router
 from apps.staffing.api import router as staffing_router
 from apps.tenancy.api import router as tenancy_router
+from apps.worktime.api import router as worktime_router
 
 
 class GrafikomatAPI(NinjaAPI):
@@ -45,6 +46,7 @@ api.add_router("/", reports_router)
 api.add_router("/", marketplace_router)
 api.add_router("/", notifications_router)
 api.add_router("/", assistant_router)
+api.add_router("/", worktime_router)
 
 
 @api.exception_handler(AuthenticationError)

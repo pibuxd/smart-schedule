@@ -18,6 +18,8 @@ from apps.staffing.me import employee_context
 from apps.staffing.models import EmployeeProfile
 from apps.tenancy.context import TenantContext, context_for, tenant_context
 from apps.tenancy.models import Location
+from apps.worktime.schemas import WaitingHoursOut, WorkedOut, report_out, worked_out
+from apps.worktime.services import pending_reports, worked_hours
 
 router = Router(tags=["marketplace"])
 
@@ -304,6 +306,10 @@ class ManagerShiftOut(Schema):
     started: bool
     # An active offer of this shift ("Oddane zmiany").
     offer_id: UUID | None = None
+    # Hours that count for the person instead of the schedule's ("Zmień godziny sam"); None: as planned.
+    worked: WorkedOut | None = None
+    # The person's report of other hours, waiting for a decision.
+    hours_report: WaitingHoursOut | None = None
 
 
 class HandoverCandidateOut(Schema):
@@ -355,9 +361,12 @@ def handover_shifts(request, location_id: UUID):
             shift__version__status=ScheduleVersion.Status.PUBLISHED,
             shift__date__range=(today - timedelta(days=PAST_DAYS), today + timedelta(days=AHEAD_DAYS)),
         )
-        .select_related("shift__location", "shift__position", "shift__shift_type", "employee__membership__user")
+        .select_related(
+            "shift__location", "shift__position", "shift__shift_type", "shift__version", "employee__membership__user"
+        )
         .order_by("shift__start_at", "shift__position__name", "shift__slot_key")
     )
+    worked, waiting = worked_hours(rows), pending_reports(rows)
     offers = dict(
         ctx.qs(ShiftOffer)
         .filter(assignment__in=[a.pk for a in rows], status__in=services.ACTIVE)
@@ -373,6 +382,8 @@ def handover_shifts(request, location_id: UUID):
             employee_name=services.person_name(a.employee) if a.employee else "",
             started=a.shift.start_at <= now,
             offer_id=offers.get(a.pk),
+            worked=worked_out(worked.get(a.pk), a.shift),
+            hours_report=report_out(waiting.get(a.pk), a.shift),
         )
         for a in rows
     ]

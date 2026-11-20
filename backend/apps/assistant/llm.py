@@ -71,6 +71,15 @@ class Preference(BaseModel):
     confidence: float = Field(description="0–1: how sure you are that this is what the person meant.")
 
 
+class HoursReport(BaseModel):
+    """Other hours of one of the employee's own published shifts: longer (overtime) or shorter (leaving early)."""
+
+    date: str = Field(description="Day the shift starts, YYYY-MM-DD, from my_schedule (shifts or recent).")
+    start_time: str = Field(description="HH:MM the person really starts (or started), local time; '' if unchanged.")
+    end_time: str = Field(description="HH:MM the person really ends (or leaves), local time; '' if unchanged.")
+    reason: str = Field(description="The reason in a few words if the person gave one (e.g. źle się czuje); else ''.")
+
+
 class EmployeeReply(BaseModel):
     """The answer to one employee message: words for the person and preferences to save."""
 
@@ -83,6 +92,10 @@ class EmployeeReply(BaseModel):
     replaces_request: int | None = Field(
         default=None,
         description="Number of ONE own earlier request this message explicitly corrects or replaces; else null.",
+    )
+    hours_changes: list[HoursReport] = Field(
+        default_factory=list,
+        description="0–3 shifts the person works (worked) longer or shorter than the schedule says.",
     )
 
 
@@ -124,6 +137,23 @@ class NewInstruction(BaseModel):
     )
 
 
+class HoursSet(BaseModel):
+    """The hours one person really works (worked) on one published shift of this location, set by the manager."""
+
+    person: str = Field(description="Who, exactly as on the list of people.")
+    date: str = Field(description="Day the shift starts, YYYY-MM-DD.")
+    start_time: str = Field(description="HH:MM the person really starts (started), local time; '' if unchanged.")
+    end_time: str = Field(description="HH:MM the person really ends (ended), local time; '' if unchanged.")
+    reason: str = Field(description="The reason in a few words if the manager gave one (e.g. źle się czuła); else ''.")
+
+
+class HoursDecision(BaseModel):
+    """Approve or reject one employee report of other hours from the list of reports waiting for a decision."""
+
+    report: int = Field(description="Number of the report on the list of reports waiting for a decision.")
+    approve: bool
+
+
 class CommandPlan(BaseModel):
     """The answer to one manager message: words for the manager and, if asked for, a plan of changes."""
 
@@ -133,6 +163,12 @@ class CommandPlan(BaseModel):
     rule_changes: list[RuleChange]
     new_instructions: list[NewInstruction]
     remove_instructions: list[int] = Field(description="Numbers of existing instructions to remove.")
+    hours_changes: list[HoursSet] = Field(
+        default_factory=list, description="Other hours of people's published shifts (overtime, leaving early)."
+    )
+    hours_decisions: list[HoursDecision] = Field(
+        default_factory=list, description="Decisions on waiting reports of other hours, by their numbers."
+    )
 
 
 EMPLOYEE_GUIDE = """\
@@ -142,6 +178,8 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
   Twoja, dopóki kierownik nie zatwierdzi chętnego (w niektórych lokalach pierwsza osoba dostaje ją od razu).
   Niżej „Zmiany do wzięcia” z przyciskiem „Weź zmianę”. Zamiany z wybraną osobą nie ma: oddaj zmianę i poproś tę
   osobę, żeby ją wzięła, albo poproś kierownika (może zamienić ludzi sam w „Oddane zmiany”).
+  „Zgłoś inne godziny” przy dzisiejszej zmianie i w „Minione zmiany” (14 dni wstecz): nadgodziny albo wcześniejsze
+  wyjście; liczy się dopiero to, co kierownik zatwierdzi. Suma godzin liczy zatwierdzone godziny.
 - „Kiedy mogę”: kalendarz dyspozycji. Na dole wybierasz „Nie mogę”, „Mogę” albo „Chętnie” i stukasz lub
   przeciągasz po dniach; każdy dzień jest od początku „Mogę”; zapis jest automatyczny. Stuknięcie w zaznaczony
   dzień albo „Godziny dnia” ustawia godziny („mogę tylko w tych godzinach”). Gdy kierownik prosi o dyspozycje,
@@ -154,8 +192,9 @@ Przewodnik po aplikacji kierownika:
 - Menu górne: „Lokale” (start: lokale, bieżący okres, ile osób wysłało dyspozycje, „Ułóż grafik” dla kilku
   lokali), „Pracownicy” (wszyscy w firmie), „Oddane zmiany” (chętni do wzięcia oddanych zmian, zatwierdzanie;
   „Zmień obsadę sam”: wpisanie innej osoby na dowolną opublikowaną zmianę albo zamiana dwóch osób, także dla zmian,
-  które minęły), „Powiadomienia”, „Godziny” (godziny w miesiącu na osobę i lokal, plik CSV), „Dostęp” (kod
-  dostępu, liczba ułożeń w miesiącu).
+  które minęły), „Powiadomienia”, „Godziny” (zgłoszone przez pracowników inne godziny do zatwierdzenia lub
+  odrzucenia, „Zmień godziny sam”, godziny w miesiącu na osobę i lokal z nadgodzinami i krótszymi zmianami, plik
+  CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i
   „Przypomnij”, prośby pracowników: ważniejsza, mniej ważna, odrzuć), „Grafik” („Ułóż grafik”, „Ułóż od nowa”,
   oceny, przeciąganie osób, przypinanie, „Dodaj miejsce”/„Usuń miejsce” przy zmianie, wyjaśnienie po kliknięciu
@@ -195,6 +234,13 @@ pracownikiem. Robisz dwie rzeczy:
    spróbuje je spełnić, ale to nie gwarancja. Aplikacja sama pokaże, co zapisała, więc nie powtarzaj tego w answer.
 2. Odpowiadasz w answer na pytania o jego grafik, godziny, dyspozycje, prośby, oddawanie i branie zmian,
    powiadomienia i o to, jak działa aplikacja. Najwyżej 4 krótkie zdania.
+3. Gdy pisze, że pracuje albo pracował dłużej lub krócej niż w grafiku (został dłużej, nadgodziny, wyszedł albo
+   wyjdzie wcześniej, bo źle się czuje), najpierw sprawdź jego zmianę narzędziem my_schedule (shifts i recent),
+   a w hours_changes podaj datę tej zmiany i godziny od–do, w których naprawdę pracuje (czas lokalu; pusty
+   początek albo koniec = bez zmian; „godzinę dłużej” = koniec z grafiku plus godzina; „wychodzę teraz” = godzina
+   z linii „Teraz”). Aplikacja pokaże mu gotowe zgłoszenie z przyciskiem „Wyślij kierownikowi”, więc nie pisz, że
+   je wysłałeś, i nie powtarzaj godzin w answer. To nie jest preferencja. Zgłosić można tylko własną opublikowaną
+   zmianę z ostatnich 14 dni albo przyszłą.
 Nie zmieniasz niczego w aplikacji: nie układasz grafiku, nie zamieniasz ludzi, nie oddajesz zmian, nie zmieniasz
 kalendarza dyspozycji i nie wysyłasz wiadomości.
 
@@ -238,6 +284,11 @@ dwie rzeczy:
 2. Odpowiadasz na pytania o Grafikomat i ten lokal: grafik, obsada, braki, godziny, dyspozycje, prośby
    pracowników, oddane zmiany, zasady, ustalenia, pracownicy, dostęp i to, jak coś zrobić w aplikacji.
 Jedna wiadomość może zawierać pytanie i polecenie: odpowiedz i przygotuj plan.
+3. Godziny pracy: gdy kierownik pisze, że ktoś pracował lub pracuje dłużej albo krócej niż w grafiku („Ania
+   wyszła dziś o 12”, „Kasia została do 16”), dodaj hours_changes (osoba, data zmiany, godziny od–do naprawdę,
+   czas lokalu; pusty początek albo koniec = bez zmian; „teraz” = godzina z linii „Teraz”; „godzinę dłużej” sprawdź
+   narzędziem w grafiku). Gdy każe zatwierdzić albo odrzucić zgłoszenie z listy „Zgłoszenia innych godzin”, dodaj
+   hours_decisions z jego numerem. Działa to od razu po „Zatwierdź zmiany”, także w opublikowanym grafiku.
 Nie układasz ani nie publikujesz grafiku, nie przypisujesz ludzi do zmian, nie zmieniasz obsady dnia, dyspozycji,
 pracowników ani ustawień lokalu i nie wysyłasz wiadomości: powiedz, gdzie kierownik zrobi to sam.
 
@@ -246,7 +297,7 @@ pracowników ani ustawień lokalu i nie wysyłasz wiadomości: powiedz, gdzie ki
 reply: najwyżej 6 krótkich zdań albo krótka lista z myślnikami. Gdy proponujesz zmiany, powiedz jednym zdaniem,
 co zmieniasz i dlaczego; dokładną listę zmian aplikacja pokaże sama.
 
-Plan ma dwa rodzaje zmian:
+Plan ma dwa rodzaje zmian ustawień (i godziny pracy z punktu 3):
 1. Zasady z katalogu (lista poniżej, z kodami): można je włączyć, wyłączyć, zmienić liczbę, stanowisko lub
    zmianę, oznaczyć „bez wyjątków” i przesunąć na liście. Jeśli da się użyć zasady z katalogu, użyj zasady.
    Gdy zasada już jest tak ustawiona, nie dodawaj zmiany i powiedz, że tak już jest.

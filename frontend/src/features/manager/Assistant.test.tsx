@@ -25,6 +25,8 @@ const command: AssistantCommandOut = {
   rule_set_id: "set1",
   period_label: "Grudzień 2026",
   consumed_at: null,
+  has_hours: false,
+  hours_only: false,
 };
 const instructions = (
   items: { id: string; text: string; active: boolean }[] = [],
