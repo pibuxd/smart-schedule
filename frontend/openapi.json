@@ -12567,10 +12567,6 @@
             "title": "Description",
             "type": "string"
           },
-          "good_practice": {
-            "title": "Good Practice",
-            "type": "boolean"
-          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -12620,7 +12616,6 @@
           "code",
           "label",
           "description",
-          "good_practice",
           "enabled",
           "is_hard",
           "params",

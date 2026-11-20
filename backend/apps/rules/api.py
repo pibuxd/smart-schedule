@@ -56,7 +56,6 @@ class RuleItemOut(Schema):
     code: str
     label: str
     description: str
-    good_practice: bool
     enabled: bool
     is_hard: bool
     params: dict[str, Any]
@@ -177,7 +176,6 @@ def _rules_out(sc: _Scope) -> RulesOut:
                 code=rule.code,
                 label=rule.label,
                 description=rule.description,
-                good_practice=rule.good_practice,
                 enabled=row.enabled,
                 is_hard=row.is_hard,
                 params=_params_of(rule.code, row.params),
