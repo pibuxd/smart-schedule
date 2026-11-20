@@ -69,7 +69,8 @@ def reading(**changes) -> llm.EmployeeReply:
         "shift_type": None,
         "avoid_shift_type": False,
         "max_hours": None,
-        "hours_period": None,
+        "max_shifts": None,
+        "hours_period": "period",
         "min_days": None,
         "shifts_per_day": None,
         "dates": [],
@@ -115,7 +116,8 @@ def instruction(**changes) -> llm.NewInstruction:
         "max_hours": None,
         "min_days": None,
         "shifts_per_day": None,
-        "hours_period": None,
+        "max_shifts": None,
+        "hours_period": "period",
         "dates": [],
         "weekdays": [],
         "place": 1,
@@ -247,6 +249,45 @@ class TestRequests:
         assert services.interpret_request(request_id) == "interpreted"
         wish = next(r for r in build_problem([shop["period"]]).problem.requests if r.id == request_id)
         assert (wish.type, wish.min_days, wish.shifts_per_day) == ("want_work", None, 2)
+
+    def test_not_together_on_closing_and_three_nights_a_week_reach_the_generator(
+        self, api, shop, with_key, monkeypatch
+    ):
+        """Piotr's test, 20.11: Natalia's "Nie stawiajcie mnie z Zuzanną na zamknięciu" read as a general ban, and
+        Roman's "nie więcej niż trzy nocki w tygodniu" was not understood at all."""
+        closing = ShiftType.objects.create(
+            location=shop["location"], name="Zamknięcie", start_time=time(14), end_time=time(22), is_closing=True
+        )
+        night = ShiftType.objects.create(location=shop["location"], name="Nocna", start_time=time(22), end_time=time(6))
+        api.login(shop["worker"])
+        not_on_closing = reading(type="unikaj_osoby", person="Kasia", shift_type="Zamknięcie", weekdays=[])
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: not_on_closing)
+        first = send_request(api, shop, "Nie stawiajcie mnie z Kasią na zamknięciu, obie jesteśmy nowe").json()["id"]
+        assert services.interpret_request(first) == "interpreted"
+        assert TextRequest.objects.get(pk=first).interpretation["summary"] == (
+            "Ty i Kasia: nie razem na zmianie „Zamknięcie”."
+        )
+        nights = reading(type="limit_zmian", shift_type="Nocna", max_shifts=3, hours_period="week", weekdays=[])
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: nights)
+        second = send_request(api, shop, "Mogę brać nocki, ale nie więcej niż trzy w tygodniu.").json()["id"]
+        assert services.interpret_request(second) == "interpreted"
+        assert TextRequest.objects.get(pk=second).interpretation["summary"] == (
+            "Najwyżej 3 zmiany „Nocna” w każdym tygodniu."
+        )
+        requests = {r.id: r for r in build_problem([shop["period"]]).problem.requests}
+        avoid = requests[first]
+        assert (avoid.type, avoid.subject_employee, avoid.shift_type) == (
+            "avoid_person",
+            str(shop["kasia"].pk),
+            str(closing.pk),
+        )
+        cap = requests[second]
+        assert (cap.type, cap.max_shifts, cap.shift_type, cap.weekly_hours) == (
+            "shifts_limit",
+            3,
+            str(night.pk),
+            True,
+        )
 
     def test_manager_sees_why_a_request_was_not_read_and_can_hand_it_over_again(self, api, shop, settings, monkeypatch):
         api.login(shop["worker"])
@@ -582,6 +623,41 @@ class TestCommands:
         assert services.run_command(created["id"]) == "failed"
         assert services.run_command(created["id"]) == "skipped"
         assert api.get(f"/api/assistant-commands/{created['id']}").json()["status"] == "failed"
+
+    def test_not_together_on_one_shift_and_a_shift_count_limit_become_instructions(
+        self, api, shop, with_key, monkeypatch
+    ):
+        api.login(shop["manager"])
+        morning = ShiftType.objects.get(location=shop["location"])
+        answer = plan(
+            new_instructions=[
+                instruction(shift_type=morning.name),
+                instruction(
+                    person="Kasia",
+                    type="limit_zmian",
+                    other_person=None,
+                    shift_type=morning.name,
+                    max_shifts=2,
+                    hours_period="week",
+                    place=2,
+                ),
+            ]
+        )
+        body = run(api, shop, monkeypatch, answer, "Anna i Kasia nie razem rano; Kasia najwyżej 2 ranne w tygodniu.")
+        api.post(f"/api/assistant-commands/{body['id']}/apply")
+        items = api.get(f"/api/locations/{shop['location'].pk}/instructions").json()["items"]
+        assert [i["text"] for i in items] == [
+            "Anna i Kasia: nie razem na zmianie „Ranna”",
+            "Kasia: najwyżej 2 zmiany „Ranna” w każdym tygodniu",
+        ]
+        avoid, cap = build_problem([shop["period"]]).problem.requests
+        assert (avoid.type, avoid.shift_type, avoid.by_manager) == ("avoid_person", str(morning.pk), True)
+        assert (cap.type, cap.max_shifts, cap.weekly_hours, cap.shift_type) == (
+            "shifts_limit",
+            2,
+            True,
+            str(morning.pk),
+        )
 
     def test_instructions_have_an_order_and_can_be_removed(self, api, shop, with_key, monkeypatch):
         api.login(shop["manager"])

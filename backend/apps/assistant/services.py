@@ -83,7 +83,10 @@ def _shift_lines(shift_types: list[ShiftType]) -> str:
             return "dowolne godziny"
         return f"{shift.start_time:%H:%M}–{shift.end_time:%H:%M}"
 
-    return ", ".join(f"{s.name} ({hours(s)})" for s in shift_types) or "(brak)"
+    def label(shift: ShiftType) -> str:
+        return f"{shift.name} ({hours(shift)}{', zamyka lokal' if shift.is_closing else ''})"
+
+    return ", ".join(label(s) for s in shift_types) or "(brak)"
 
 
 def _today_line(today: date) -> str:
@@ -340,6 +343,7 @@ def _checked_preference(
         shift_type=preference.shift_type,
         avoid=preference.avoid_shift_type,
         max_hours=preference.max_hours,
+        max_shifts=preference.max_shifts,
         hours_period=readings.hour_scope(preference.hours_period, text, preference.max_hours),
         dates=preference.dates,
         weekdays=preference.weekdays,
@@ -389,7 +393,11 @@ def _combined(parts: list[dict[str, Any]], row: TextRequest) -> dict[str, Any]:
 
 def shift_notes(parts: list[dict[str, Any]], row: TextRequest) -> list[str]:
     """A shift preference about a shift the person's positions never staff changes nothing: say so."""
-    shift_ids = {part["shift_type"] for part in parts if part.get("type") == "typ_zmiany" and part.get("shift_type")}
+    shift_ids = {
+        part["shift_type"]
+        for part in parts
+        if part.get("type") in ("typ_zmiany", "limit_zmian") and part.get("shift_type")
+    }
     if not shift_ids:
         return []
     staffed = {
@@ -778,6 +786,7 @@ def check_plan(
             shift_type=new.shift_type,
             avoid=new.avoid_shift_type,
             max_hours=new.max_hours,
+            max_shifts=new.max_shifts,
             hours_period=readings.hour_scope(
                 new.hours_period, text if len(answer.new_instructions) == 1 else "", new.max_hours
             ),

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 PreferenceTypeName = Literal[
-    "unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni", "chce_pracowac"
+    "unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "limit_zmian", "wolne_dni", "chce_pracowac"
 ]
 LevelName = Literal["bardzo_wazne", "wazne", "mile_widziane"]
 HoursPeriodName = Literal["day", "week", "period"]
@@ -46,12 +46,16 @@ class Preference(BaseModel):
 
     type: PreferenceTypeName
     person: str | None = Field(description="Co-worker it is about, exactly as on the list of co-workers; else null.")
-    shift_type: str | None = Field(description="Shift name for typ_zmiany, or optional in chce_pracowac; else null.")
+    shift_type: str | None = Field(
+        description="Shift name: the shift of typ_zmiany; optional in chce_pracowac, limit_zmian, and in "
+        "unikaj_osoby / preferuj_osobe when only that shift counts; else null."
+    )
     avoid_shift_type: bool = Field(description="typ_zmiany: true = does NOT want this shift, false = wants only it.")
     max_hours: float | None = Field(description="limit_godzin: most hours per day, per week or in the whole period.")
-    hours_period: HoursPeriodName | None = Field(
-        default=None,
-        description="limit_godzin: day = each day, week = each Monday–Sunday week, period = the whole period.",
+    max_shifts: int | None = Field(description="limit_zmian: most shifts (of shift_type, if given) per window.")
+    hours_period: HoursPeriodName = Field(
+        description="Window of limit_godzin / limit_zmian: day = each day, week = each Monday–Sunday week, "
+        "period = the whole period. Other types: period.",
     )
     min_days: int | None = Field(
         description='chce_pracowac: on how many of the given days ("albo 12, albo 13" = 1); null = all of them.'
@@ -100,12 +104,16 @@ class NewInstruction(BaseModel):
     type: PreferenceTypeName
     person: str = Field(description="Who it is about, exactly as on the list of people.")
     other_person: str | None = Field(description="unikaj_osoby / preferuj_osobe: the second person.")
-    shift_type: str | None
+    shift_type: str | None = Field(
+        description="Shift name: the shift of typ_zmiany; optional in chce_pracowac, limit_zmian, and in "
+        "unikaj_osoby / preferuj_osobe when only that shift counts."
+    )
     avoid_shift_type: bool
     max_hours: float | None
-    hours_period: HoursPeriodName | None = Field(
-        default=None,
-        description="limit_godzin: day = each day, week = each Monday–Sunday week, period = the whole period.",
+    max_shifts: int | None = Field(description="limit_zmian: most shifts (of shift_type, if given) per window.")
+    hours_period: HoursPeriodName = Field(
+        description="Window of limit_godzin / limit_zmian: day = each day, week = each Monday–Sunday week, "
+        "period = the whole period. Other types: period.",
     )
     min_days: int | None
     shifts_per_day: int | None
@@ -194,10 +202,15 @@ kalendarza dyspozycji i nie wysyłasz wiadomości.
 
 Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
 - unikaj_osoby: nie chce zmian z osobą z listy współpracowników; preferuj_osobe: chce zmian z tą osobą.
+  Gdy chodzi tylko o jedną zmianę („nie stawiajcie mnie z Zuzanną na zamknięciu”), podaj ją w shift_type
+  (zamknięcie = zmiana oznaczona „zamyka lokal”).
 - typ_zmiany: chce tylko danej zmiany z listy (avoid_shift_type=false) albo nie chce jej (true); daty lub dni
   tygodnia zawężają, kiedy to obowiązuje.
 - limit_godzin: najwyżej tyle godzin; hours_period=day dla każdego dnia („nie dłużej niż 6 godzin dziennie”),
   week dla każdego tygodnia, period dla całego okresu.
+- limit_zmian: najwyżej tyle zmian (max_shifts), opcjonalnie tylko danej zmiany (shift_type); hours_period jak
+  wyżej. „Mogę brać nocki, ale nie więcej niż trzy w tygodniu” = limit_zmian, max_shifts=3, shift_type=nocna
+  zmiana, hours_period=week. „Najwyżej 3 dni w tygodniu” = limit_zmian bez shift_type.
 - wolne_dni: woli nie pracować w podane dni lub dni tygodnia. Gdy pisze, że NIE MOŻE (egzamin, sesja, lekarz,
   wyjazd), ustaw cannot=true: aplikacja zaproponuje mu zaznaczenie „nie mogę” w kalendarzu.
 - chce_pracowac: chce pracować w podane dni; „albo 12, albo 13” to min_days=1; kilka zmian jednego dnia to
@@ -237,9 +250,12 @@ Plan ma dwa rodzaje zmian:
 1. Zasady z katalogu (lista poniżej, z kodami): można je włączyć, wyłączyć, zmienić liczbę, stanowisko lub
    zmianę, oznaczyć „bez wyjątków” i przesunąć na liście. Jeśli da się użyć zasady z katalogu, użyj zasady.
    Gdy zasada już jest tak ustawiona, nie dodawaj zmiany i powiedz, że tak już jest.
-2. Polecenia o konkretnych osobach, gdy żadna zasada tego nie wyrazi: unikaj_osoby (dwie osoby osobno),
-   preferuj_osobe (razem), typ_zmiany (osoba tylko na danej zmianie albo bez niej; daty zawężają, kiedy),
+2. Polecenia o konkretnych osobach, gdy żadna zasada tego nie wyrazi: unikaj_osoby (dwie osoby osobno; z
+   shift_type tylko na tej zmianie, np. „nie razem na zamknięciu”), preferuj_osobe (razem; shift_type jak wyżej),
+   typ_zmiany (osoba tylko na danej zmianie albo bez niej; daty zawężają, kiedy),
    limit_godzin (hours_period: day = każdego dnia, week = w każdym tygodniu, period = w całym okresie),
+   limit_zmian (max_shifts zmian, opcjonalnie tylko danej zmiany; hours_period jak wyżej; „najwyżej 3 nocki
+   w tygodniu” = max_shifts=3, shift_type nocnej zmiany, week),
    wolne_dni (daty lub dni tygodnia; „tylko w weekendy” = wolne_dni w dni 1–5), chce_pracowac (min_days = w ilu
    z dni, shifts_per_day = ile zmian danego dnia, opcjonalne shift_type).
 Polecenia o osobach są preferencjami, nie twardymi zakazami ani gwarancją przydziału. Zatwierdzenie planu zapisuje

@@ -840,3 +840,60 @@ def test_together_requires_identical_shift_even_when_opening_and_closing_overlap
     overlap = {"opening": "roza", "closing": "ewa", "counter": "jan"}
     assert validate(p, overlap).requests[0].degree == 1
     assert validate(replace(p, requests=(replace(pair, type="avoid_person"),)), overlap).requests[0].degree == 1
+
+
+def test_avoiding_a_person_on_one_shift_type_counts_only_that_shift():
+    """ "Nie stawiajcie mnie z Zuzanną na zamknięciu": together in the morning is fine, together at closing is not."""
+    slots = [
+        slot("mon_open_a", MON, "06:00", "14:00", shift_type="open"),
+        slot("mon_open_b", MON, "06:00", "14:00", shift_type="open"),
+        slot("tue_close_a", day(1), "14:00", "22:00", shift_type="close", closing=True),
+        slot("tue_close_b", day(1), "14:00", "22:00", shift_type="close", closing=True),
+    ]
+    apart = Request("apart", "natalia", "avoid_person", subject_employee="zuzanna", shift_type="close")
+    people = [employee("natalia"), employee("zuzanna"), employee("ewa")]
+    p = problem(people, slots, requests=[apart])
+    morning_together = {
+        "mon_open_a": "natalia",
+        "mon_open_b": "zuzanna",
+        "tue_close_a": "natalia",
+        "tue_close_b": "ewa",
+    }
+    assert validate(p, morning_together).requests[0].degree == 0
+    closing_together = {**morning_together, "tue_close_b": "zuzanna", "mon_open_b": "ewa"}
+    assert validate(p, closing_together).requests[0].degree == 1
+    result, report = solved(p)
+    assert report.requests[0].degree == 0
+    assert {result.schedule["tue_close_a"], result.schedule["tue_close_b"]} != {"natalia", "zuzanna"}
+
+
+def test_shifts_limit_counts_shifts_of_one_type_in_each_week():
+    """ "Mogę brać nocki, ale nie więcej niż trzy w tygodniu": a fourth night in a week breaks it, mornings do not."""
+    nights = [slot(f"night{n}", day(n), "22:00", "06:00", shift_type="night") for n in range(5)]
+    mornings = [slot(f"morning{n}", day(n), "06:00", "14:00", shift_type="morning") for n in range(5)]
+    cap = Request("cap", "roman", "shifts_limit", max_shifts=3, shift_type="night", weekly_hours=True)
+    p = problem([employee("roman"), employee("ewa")], nights + mornings, requests=[cap])
+    assert [(start, end) for start, end, _ in cap.shift_windows(p)] == [(MON, day(6))]
+    four = {f"night{n}": "roman" for n in range(4)} | {"night4": "ewa"}
+    four |= {f"morning{n}": "ewa" if n < 4 else "roman" for n in range(5)}
+    assert validate(p, four).requests[0].degree == pytest.approx(1 / 3)
+    three = {**four, "night3": "ewa", "morning3": "roman"}
+    assert validate(p, three).requests[0].degree == 0
+    # Roman likes nights and Ewa does not: without the limit he takes every night, with it three of them.
+    likes = Request("likes", "roman", "shift_type", level="mile_widziane", shift_type="night")
+    dislikes = Request("dislikes", "ewa", "shift_type", level="mile_widziane", shift_type="night", avoid=True)
+    eager = replace(p, requests=(replace(cap, level="bardzo_wazne"), likes, dislikes))
+    nights_of_roman = [
+        solved(q)[0].schedule[f"night{n}"]
+        for q in (eager, replace(eager, requests=(likes, dislikes)))
+        for n in range(5)
+    ]
+    assert nights_of_roman[:5].count("roman") == 3 and nights_of_roman[5:].count("roman") == 5
+
+
+def test_shifts_limit_without_a_shift_type_counts_every_shift_and_shifts_elsewhere():
+    slots = [slot(f"s{n}", day(n)) for n in range(3)]
+    cap = Request("cap", "roman", "shifts_limit", max_shifts=1)
+    p = problem([employee("roman"), employee("ewa")], slots, requests=[cap])
+    assert validate(p, {"s0": "roman", "s1": "roman", "s2": "ewa"}).requests[0].degree == 1
+    assert validate(p, {"s0": "roman", "s1": "ewa", "s2": "ewa"}).requests[0].degree == 0

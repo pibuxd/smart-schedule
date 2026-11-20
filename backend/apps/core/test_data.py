@@ -734,6 +734,7 @@ def _ask(company, period, people, *, read_by: set[str], profiles) -> None:
 def _requests_a(built: Built, r1: SchedulePeriod, d1: SchedulePeriod, w2: SchedulePeriod) -> None:
     pr = built.profiles
     shift = {s.name: s for s in ShiftType.objects.filter(location=r1.location)}
+    dworcowa_shift = {s.name: s for s in ShiftType.objects.filter(location=d1.location)}
     day12, day13 = r1.start + timedelta(days=11), r1.start + timedelta(days=12)
     st, rs = TextRequest.Status, TextRequest.UnreadReason
     rows = [
@@ -848,8 +849,12 @@ def _requests_a(built: Built, r1: SchedulePeriod, d1: SchedulePeriod, w2: Schedu
             None,
             "Nie stawiajcie mnie z Zuzanną na zamknięciu, obie jesteśmy nowe na kasie.",
             st.INTERPRETED,
+            # Only the closing shift: elsewhere they may work together.
             _interpretation(
-                "unikaj_osoby", "Natalia nie chce pracować z Zuzanną.", subject_employee=str(pr["zuzanna"].id)
+                "unikaj_osoby",
+                "Natalia i Zuzanna: nie razem na zmianie „Popołudniowa”.",
+                subject_employee=str(pr["zuzanna"].id),
+                shift_type=str(dworcowa_shift["Popołudniowa"].id),
             ),
             {},
         ),
@@ -858,9 +863,15 @@ def _requests_a(built: Built, r1: SchedulePeriod, d1: SchedulePeriod, w2: Schedu
             d1,
             None,
             "Mogę brać nocki, ale nie więcej niż trzy w tygodniu.",
-            st.NEEDS_MANAGER,
-            None,
-            {"unread_reason": rs.FAILED},
+            st.INTERPRETED,
+            _interpretation(
+                "limit_zmian",
+                "Roman: najwyżej 3 zmiany „Nocna” w każdym tygodniu.",
+                max_shifts=3,
+                shift_type=str(dworcowa_shift["Nocna"].id),
+                hours_period="week",
+            ),
+            {},
         ),
         (
             pr["magda"],

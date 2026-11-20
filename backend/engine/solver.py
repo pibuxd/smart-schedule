@@ -681,6 +681,8 @@ class _Builder:
             case RequestType.AVOID_PERSON | RequestType.PREFER_PERSON:
                 theirs = self.x_of_emp.get(request.subject_employee, ())
                 for slot, var in own:
+                    if not request.counts_slot(slot):
+                        continue  # "nie razem na zamknięciu": only shifts of that type count
                     overlapping = [
                         v for o, v in theirs if slot.matches_pair(o, avoid=request.type == RequestType.AVOID_PERSON)
                     ]
@@ -716,6 +718,25 @@ class _Builder:
                     )
                     self.m.add(over >= hours - limit)
                     capped = self.m.new_int_var(0, limit, f"capped[{request.id},{start}]")
+                    self.m.add_min_equality(capped, [over, limit])
+                    self.add_penalty(cost / limit, capped)
+            case RequestType.SHIFTS_LIMIT:
+                if request.max_shifts is None:
+                    return
+                windows = request.shift_windows(self.p)
+                limit = request.max_shifts
+                counted = [(s, v) for s, v in own if request.counts_slot(s)]
+                for start, end, fixed in windows:
+                    slots = [v for s, v in counted if start <= s.date <= end]
+                    if not slots or (limit <= 0 and fixed > 0):
+                        continue
+                    cost = weight / len(windows)
+                    if limit <= 0:
+                        self.add_penalty(cost, self._or(slots, f"any_shift[{request.id},{start}]"))
+                        continue
+                    over = self.m.new_int_var(0, fixed + len(slots), f"shifts_over[{request.id},{start}]")
+                    self.m.add(over >= fixed + sum(slots) - limit)
+                    capped = self.m.new_int_var(0, limit, f"shifts_capped[{request.id},{start}]")
                     self.m.add_min_equality(capped, [over, limit])
                     self.add_penalty(cost / limit, capped)
             case RequestType.DAYS_OFF:
