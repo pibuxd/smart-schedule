@@ -13,6 +13,7 @@ import {
   useRemoveScheduleSeat,
 } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
+import { Disclosure } from '../../components/ui/disclosure'
 import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { StateIcon } from '../availability/StateIcon'
@@ -279,10 +280,7 @@ function ShiftDetails({
       )}
 
       {blocked.length > 0 && (
-        <details className="grid gap-2">
-          <summary className="min-h-(--touch) cursor-pointer content-center font-semibold text-accent">
-            Nie mogą wziąć tej zmiany ({blocked.length})
-          </summary>
+        <Disclosure summary={`Nie mogą wziąć tej zmiany (${blocked.length})`} summaryClassName="font-semibold text-accent">
           <ul className="m-0 mt-2 grid list-none gap-2 p-0">
             {blocked.map((candidate) => (
               <li key={candidate.employee_id} className="grid gap-1 rounded-md border border-dashed border-line bg-surface p-3">
@@ -316,7 +314,7 @@ function ShiftDetails({
               </li>
             ))}
           </ul>
-        </details>
+        </Disclosure>
       )}
       {editable && (
         <section className="grid gap-2 rounded-md border border-line bg-surface p-3">
@@ -359,11 +357,8 @@ const REASON_LABEL: Record<SlotEventOut['reason'], string> = {
 function SlotHistory({ events }: { events: SlotEventOut[] }) {
   if (events.length === 0) return null
   return (
-    <details className="rounded-md border border-line bg-surface px-3 py-2">
-      <summary className="min-h-(--touch) cursor-pointer content-center font-semibold">
-        Historia tej zmiany ({events.length})
-      </summary>
-      <ol className="m-0 mt-2 grid list-none gap-2 p-0">
+    <Disclosure boxed summary={`Historia tej zmiany (${events.length})`} summaryClassName="font-semibold">
+      <ol className="m-0 grid list-none gap-2 p-0">
         {events.map((event) => (
           <li key={`${event.at}-${event.to_name}`} className="grid gap-0.5 border-t border-grid pt-2 first:border-t-0">
             <span>
@@ -376,7 +371,7 @@ function SlotHistory({ events }: { events: SlotEventOut[] }) {
           </li>
         ))}
       </ol>
-    </details>
+    </Disclosure>
   )
 }
 

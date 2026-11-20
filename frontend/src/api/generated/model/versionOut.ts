@@ -32,6 +32,7 @@ export interface VersionOut {
   accepted_problems: string[];
   rules: RuleResultOut[];
   unmet_requests: UnmetRequestOut[];
+  unmet_request_count: number;
   notes: string[];
   history: VersionSummaryOut[];
   today: string;

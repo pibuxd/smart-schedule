@@ -36,4 +36,14 @@ describe('verdict', () => {
     })
     expect(verdict(data)).toBe('Wszystkie zmiany obsadzone. Do sprawdzenia: 3 rzeczy, opisane niżej.')
   })
+
+  it('does not call a partly kept rule "spełniona"', () => {
+    const data = make({ rules: [{ hard: false, broken: 0, percent: 95 }, { hard: false, broken: 0, percent: null }] })
+    expect(verdict(data)).toBe('Wszystkie zmiany obsadzone. Do sprawdzenia: 1 rzecz, opisane niżej.')
+  })
+
+  it('counts every unmet request, not only the listed ones', () => {
+    const data = make({ unmet_requests: [{ kind: 'text' }, { kind: 'instruction' }], unmet_request_count: 31 })
+    expect(verdict(data)).toBe('Wszystkie zmiany obsadzone. Do sprawdzenia: 32 rzeczy, opisane niżej.')
+  })
 })

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { ClosureOut, LocationSetupOut, ShiftTypeOut, StaffingExceptionOut } from '../../api/generated/model'
 import { useCreateClosure, useDeleteClosure, useSaveDayStaffing } from '../../api/generated/staffing/staffing'
 import { Button } from '../../components/ui/button'
+import { Disclosure } from '../../components/ui/disclosure'
 import { Section, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
@@ -212,15 +213,18 @@ function DayForm({ locationId, setup, date, closure, arranged, exceptions, onDon
                   </span>
                 </div>
                 {cell.count > 0 && (
-                  <details open={cell.experienced > 0 || cell.start !== '' || (st.kind === 'flexible' && !st.start_time)}>
-                    <summary className="min-h-(--touch) cursor-pointer content-center text-sm font-semibold text-accent">Doświadczeni i inne godziny</summary>
+                  <Disclosure
+                    open={cell.experienced > 0 || cell.start !== '' || (st.kind === 'flexible' && !st.start_time)}
+                    summary="Doświadczeni i inne godziny"
+                    summaryClassName="w-fit text-sm font-semibold text-accent"
+                  >
                     <div className="grid grid-cols-3 gap-2">
                       <TextField label="Doświadczeni" aria-label={`W tym doświadczonych: ${name}`} type="number" inputMode="numeric" min={0} max={cell.count}
                         value={Math.min(cell.experienced, cell.count)} onChange={(e) => set(key, { experienced: Number(e.target.value) || 0 })} />
                       <TextField label="Od" aria-label={`Od: ${name}`} type="time" value={cell.start} onChange={(e) => set(key, { start: e.target.value })} />
                       <TextField label="Do" aria-label={`Do: ${name}`} type="time" value={cell.end} onChange={(e) => set(key, { end: e.target.value })} />
                     </div>
-                  </details>
+                  </Disclosure>
                 )}
               </div>
             )

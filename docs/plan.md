@@ -895,3 +895,27 @@ wspólna dyspozycyjność.
   odwrotnie); czy kierownicy potrzebują jednodniowego pożyczenia osoby spoza listy bez zaproszenia; czy lista
   niespełnionych próśb ma pokazywać, z którego lokalu jest prośba miesięczna.
 
+
+## 28. Zwijane miejsca (20.11.2026)
+
+Prośby Piotra z 20.11.2026: "niech »Niespełnione prośby« i »Jak grafik trzyma się zasad« będzie zwijane też" oraz
+"jak coś jest zwijane, to niech będzie jakiś znacznik, i najechanie na to niech daje jakiś efekt".
+
+1. Każde zwijane miejsce w aplikacji to `components/ui/disclosure.tsx` (`Disclosure`): strzałka przed napisem, która
+   obraca się w dół po rozwinięciu, i jasnoniebieskie tło pod kursorem (jak przy przyciskach "quiet"). `boxed` rysuje
+   ramkę (cała sekcja ekranu); bez niej zwijany napis stoi w tekście. Zwijane miejsca w zwijanych miejscach mają
+   własne strzałki. `Section collapsible` korzysta z niego i ma `status`: kilka słów na końcu nagłówka, żeby kierownik
+   bez rozwijania wiedział, czy warto zajrzeć. Nowe zwijane miejsca używają `Disclosure`, nie gołego `<details>`.
+2. Karta "Grafik": "Jak grafik trzyma się zasad" i "Niespełnione prośby" są zwinięte na start. Przy zasadach status
+   "N złamanych" i "N spełnionych częściowo" (kolor "woli nie"; częściowo = procent poniżej 100 bez policzonego
+   złamania, np. cel godzin 95 %), a gdy nic takiego nie ma: "wszystkie spełnione" tylko wtedy, gdy każda zasada ma
+   100 %, inaczej "żadna nie jest złamana" (zasady z "nic do oceny" nie są spełnione). Przy prośbach "N próśb" (kolor)
+   i "N do Twojej oceny" dla próśb, których nie umiemy sprawdzić (są w środku, pod "Do Twojej oceny"); "wszystkie
+   spełnione" tylko wtedy, gdy nie ma ani jednych, ani drugich. Po uwadze Prelinta (#51) liczba niespełnionych próśb
+   stoi w kolorze w statusie, nie w nawiasie w tytule. Liczba pochodzi z API (`VersionOut.unmet_request_count`, przed
+   ucięciem listy do 30 próśb pracowników); polecenia kierownika są na liście zawsze w całości. Tak samo liczy zdanie
+   nad wynikami (`verdict`), które też nie nazywa zasady spełnionej częściowo "spełnioną" (uwagi Codexa do #51).
+   Do sprawdzenia w pilotażu: czy kierownicy otwierają zasady przed publikacją; jeśli nie, zasady mogą startować
+   otwarte, gdy coś jest złamane (dziś prawie każdy grafik ma jakąś złamaną zasadę miękką, więc byłyby otwarte zawsze). Wiersz zasady rozwija się tylko wtedy, gdy ma przykłady
+   złamań (wtedy ma strzałkę). Polecenia kierownika, których nie udało się spełnić, zostają widoczne nad zwiniętymi
+   sekcjami, a zdanie "Chcesz coś zmienić…" pod nimi.

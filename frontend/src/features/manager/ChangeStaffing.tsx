@@ -13,6 +13,7 @@ import type { HandoverCandidateOut, ManagerShiftOut, OfferShiftOut, SwapCheckOut
 import { useManagerOverview } from '../../api/generated/tenancy/tenancy'
 import type { ManagerOverviewOut } from '../../api/generated/model'
 import { Button } from '../../components/ui/button'
+import { Disclosure } from '../../components/ui/disclosure'
 import { SelectField, Tag } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
@@ -203,27 +204,21 @@ function PersonPicker({ target, onSwap, onDone }: { target: ShiftTarget; onSwap:
           {away.length > 0 && (
             // People who do not work in the shift's location: folded, so the location's own people come first.
             // Open at once when there is nobody else to pick.
-            <details className="grid gap-2" open={here.length === 0 || undefined}>
-              <summary className="min-h-(--touch) cursor-pointer content-center font-semibold text-accent">
-                Z innych lokali ({away.length})
-                {wantingAway > 0 && (
-                  <>
-                    {' '}
-                    <Tag tone="accent">chce wziąć: {wantingAway}</Tag>
-                  </>
-                )}
-                {/* Says whether opening is worth it: people here may all have problems while someone there has none. */}
-                {freeAway > 0 && (
-                  <>
-                    {' '}
-                    <Tag>mogą przyjść: {freeAway}</Tag>
-                  </>
-                )}
-              </summary>
+            <Disclosure
+              open={here.length === 0 || undefined}
+              summaryClassName="font-semibold text-accent"
+              summary={
+                <span className="flex flex-wrap items-center gap-2">
+                  Z innych lokali ({away.length})
+                  {wantingAway > 0 && <Tag tone="accent">chce wziąć: {wantingAway}</Tag>}
+                  {freeAway > 0 && <Tag>mogą przyjść: {freeAway}</Tag>}
+                </span>
+              }
+            >
               <div className="mt-2">
                 <CandidateList candidates={away} busy={busy} onPut={put} />
               </div>
-            </details>
+            </Disclosure>
           )}
         </>
       )}

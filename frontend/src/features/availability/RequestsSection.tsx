@@ -17,6 +17,7 @@ import {
   ChatTyping,
 } from "../../components/assistant/Chat";
 import { Button } from "../../components/ui/button";
+import { Disclosure } from "../../components/ui/disclosure";
 import { Drawer } from "../../components/ui/drawer";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
@@ -695,10 +696,10 @@ function RequestsChat({
               porozmawiaj z kierownikiem.
             </p>
           )}
-          <details className="text-xs text-ink-muted">
-            <summary className="flex min-h-(--touch) cursor-pointer items-center">
-              O prośbach i Twoich danych
-            </summary>
+          <Disclosure
+            className="text-xs text-ink-muted"
+            summary="O prośbach i Twoich danych"
+          >
             <p className="mt-0 mb-2 leading-relaxed">
               W jednej wiadomości możesz zapytać o coś i napisać do trzech
               próśb. Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w
@@ -709,7 +710,7 @@ function RequestsChat({
                 ? "Asystent AI (zewnętrzna usługa Claude) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Prośby czyta też kierownik, a gdy kierownik pyta swojego asystenta, ten też może przeczytać Twoje prośby i dyspozycje. Nie wpisuj tu nic, czego nie chcesz przekazać kierownikowi."
                 : "Przeczyta to tylko kierownik."}
             </p>
-          </details>
+          </Disclosure>
         </div>
       </Drawer>
     </section>

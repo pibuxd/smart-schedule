@@ -2,9 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ListChecks,
   Check,
-  ChevronDown,
   Users,
-  Info,
   CalendarSearch,
   X,
 } from "lucide-react";
@@ -26,6 +24,7 @@ import {
   ChatTyping,
 } from "../../components/assistant/Chat";
 import { Button } from "../../components/ui/button";
+import { Disclosure } from "../../components/ui/disclosure";
 import { InlineError, Loading } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
 import { useManager } from "./ManagerContext";
@@ -370,10 +369,10 @@ export function AssistantPanel({
           Asystent czyta Twoje wiadomości i pamięta {MEMORY_COUNT} ostatnich z
           tego okresu.
         </p>
-        <details className="text-xs text-ink-muted">
-          <summary className="flex min-h-(--touch) cursor-pointer items-center gap-1.5">
-            <Info size={16} aria-hidden="true" /> Jak działa asystent
-          </summary>
+        <Disclosure
+          className="text-xs text-ink-muted"
+          summary="Jak działa asystent"
+        >
           <p className="mt-0 mb-2">
             Ty decydujesz: zasada trafia do ustaleń dopiero, gdy ją
             zatwierdzisz. Polecenia o osobach są preferencjami, bez gwarancji
@@ -388,7 +387,7 @@ export function AssistantPanel({
             ważne dane sprawdź na ekranie. Starszą sprawę opisz ponownie. W
             historii widzisz ostatnie 50 wiadomości.
           </p>
-        </details>
+        </Disclosure>
       </div>
     </section>
   );
@@ -571,17 +570,16 @@ function CommandReply({
         </ul>
       )}
       {data.effects.length > 0 && (
-        <details className="text-sm text-ink-muted">
-          <summary className="flex min-h-(--touch) cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-            <ChevronDown size={16} aria-hidden="true" /> Porównanie z chwili
-            przygotowania propozycji
-          </summary>
+        <Disclosure
+          className="text-sm text-ink-muted"
+          summary="Porównanie z chwili przygotowania propozycji"
+        >
           <ul className="mt-0 grid gap-2 pl-5">
             {data.effects.map((effect, i) => (
               <li key={i}>{effect}</li>
             ))}
           </ul>
-        </details>
+        </Disclosure>
       )}
       {!data.reply &&
         !data.question &&
