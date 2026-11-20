@@ -883,12 +883,10 @@ def test_shifts_limit_counts_shifts_of_one_type_in_each_week():
     likes = Request("likes", "roman", "shift_type", level="mile_widziane", shift_type="night")
     dislikes = Request("dislikes", "ewa", "shift_type", level="mile_widziane", shift_type="night", avoid=True)
     eager = replace(p, requests=(replace(cap, level="bardzo_wazne"), likes, dislikes))
-    nights_of_roman = [
-        solved(q)[0].schedule[f"night{n}"]
-        for q in (eager, replace(eager, requests=(likes, dislikes)))
-        for n in range(5)
-    ]
-    assert nights_of_roman[:5].count("roman") == 3 and nights_of_roman[5:].count("roman") == 5
+    for q, nights_of_roman in ((eager, 3), (replace(eager, requests=(likes, dislikes)), 5)):
+        result, _ = solved(q, workers=1)  # one worker: the same search every run
+        schedule = [result.schedule[f"night{n}"] for n in range(5)]
+        assert result.status == SolveStatus.OPTIMAL and schedule.count("roman") == nights_of_roman, (result, schedule)
 
 
 def test_shifts_limit_without_a_shift_type_counts_every_shift_and_shifts_elsewhere():

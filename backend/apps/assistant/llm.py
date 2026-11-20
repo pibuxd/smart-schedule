@@ -203,7 +203,7 @@ kalendarza dyspozycji i nie wysyłasz wiadomości.
 Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
 - unikaj_osoby: nie chce zmian z osobą z listy współpracowników; preferuj_osobe: chce zmian z tą osobą.
   Gdy chodzi tylko o jedną zmianę („nie stawiajcie mnie z Zuzanną na zamknięciu”), podaj ją w shift_type
-  (zamknięcie = zmiana oznaczona „zamyka lokal”).
+  (zamknięcie = zmiana oznaczona „zamyka lokal”; gdy nie ma takiej albo jest ich kilka, nie zgaduj, jak niżej).
 - typ_zmiany: chce tylko danej zmiany z listy (avoid_shift_type=false) albo nie chce jej (true); daty lub dni
   tygodnia zawężają, kiedy to obowiązuje.
 - limit_godzin: najwyżej tyle godzin; hours_period=day dla każdego dnia („nie dłużej niż 6 godzin dziennie”),
@@ -251,7 +251,8 @@ Plan ma dwa rodzaje zmian:
    zmianę, oznaczyć „bez wyjątków” i przesunąć na liście. Jeśli da się użyć zasady z katalogu, użyj zasady.
    Gdy zasada już jest tak ustawiona, nie dodawaj zmiany i powiedz, że tak już jest.
 2. Polecenia o konkretnych osobach, gdy żadna zasada tego nie wyrazi: unikaj_osoby (dwie osoby osobno; z
-   shift_type tylko na tej zmianie, np. „nie razem na zamknięciu”), preferuj_osobe (razem; shift_type jak wyżej),
+   shift_type tylko na tej zmianie, np. „nie razem na zamknięciu” = zmiana oznaczona „zamyka lokal”; gdy nie ma
+   takiej albo jest ich kilka, zapytaj, o którą chodzi), preferuj_osobe (razem; shift_type jak wyżej),
    typ_zmiany (osoba tylko na danej zmianie albo bez niej; daty zawężają, kiedy),
    limit_godzin (hours_period: day = każdego dnia, week = w każdym tygodniu, period = w całym okresie),
    limit_zmian (max_shifts zmian, opcjonalnie tylko danej zmiany; hours_period jak wyżej; „najwyżej 3 nocki
