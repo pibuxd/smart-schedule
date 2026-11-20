@@ -224,7 +224,8 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
                 old.save(update_fields=["status", "updated_at"])
         limit = settings.TEXT_REQUESTS_PER_PERIOD
         if (
-            outcome.status in TextRequest.COUNTED
+            limit
+            and outcome.status in TextRequest.COUNTED
             and replacement is None
             and llm.is_enabled()
             and saved_requests(row).count() >= limit
@@ -440,8 +441,8 @@ def submit_command(ctx: TenantContext, location: Location, text: str, period_id=
     text = text.strip()
     if not text:
         raise HttpError(400, "Napisz, co ma się zmienić.")
-    used = ctx.qs(AssistantCommand).filter(created_at__gte=_month_start()).count()
-    if used >= settings.ASSISTANT_COMMANDS_MONTHLY_LIMIT:
+    limit = settings.ASSISTANT_COMMANDS_MONTHLY_LIMIT  # 0 = no limit
+    if limit and ctx.qs(AssistantCommand).filter(created_at__gte=_month_start()).count() >= limit:
         raise HttpError(429, "Wykorzystano miesięczny limit poleceń dla asystenta. Zasady możesz zmienić ręcznie.")
     with transaction.atomic():
         agreements.lock_location(location)
