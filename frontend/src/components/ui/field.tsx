@@ -1,8 +1,9 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
-import { ChevronRight, Info } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { useId, useState } from 'react'
 
 import { cn } from '../../lib/cn'
+import { Disclosure } from './disclosure'
 
 // Form building blocks for the manager's screens, styled only with the Grafikomat tokens.
 
@@ -93,6 +94,7 @@ export function Tag({ children, tone = 'muted' }: { children: ReactNode; tone?: 
  * The description stays hidden until the "i" button next to the heading is pressed, so screens are not walls of text.
  * `alwaysExplain` keeps it in view: use it when the text states a consequence (hard to undo, a surprising empty value).
  * `collapsible` folds the whole section under its heading (closed at first), for things the manager rarely needs.
+ * `status` is a few words at the right end of a folded heading, so the manager knows without opening whether to look.
  */
 export function Section({
   title,
@@ -101,28 +103,33 @@ export function Section({
   description,
   collapsible = false,
   alwaysExplain = false,
+  status,
 }: {
   title: string
   action?: ReactNode
   description?: ReactNode
   collapsible?: boolean
   alwaysExplain?: boolean
+  status?: ReactNode
   children: ReactNode
 }) {
   const [explained, setExplained] = useState(false)
   const descriptionId = useId()
   if (collapsible) {
     return (
-      <details className="group rounded-md border border-line bg-surface">
-        <summary className="flex min-h-(--touch) cursor-pointer list-none items-center gap-2 px-3 [&::-webkit-details-marker]:hidden">
-          <ChevronRight aria-hidden="true" size={18} className="shrink-0 text-accent group-open:rotate-90" />
-          <h2 className="m-0 text-base font-extrabold">{title}</h2>
-        </summary>
-        <div className="grid gap-2 px-3 pb-3">
-          {description && <p className="m-0 text-sm text-ink-muted">{description}</p>}
-          {children}
-        </div>
-      </details>
+      <Disclosure
+        boxed
+        contentClassName="grid gap-2"
+        summary={
+          <span className="flex flex-1 flex-wrap items-baseline justify-between gap-x-3 py-1">
+            <h2 className="m-0 text-base font-extrabold">{title}</h2>
+            {status && <span className="text-sm">{status}</span>}
+          </span>
+        }
+      >
+        {description && <p className="m-0 text-sm text-ink-muted">{description}</p>}
+        {children}
+      </Disclosure>
     )
   }
   return (

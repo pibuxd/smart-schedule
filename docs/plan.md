@@ -890,3 +890,19 @@ wspólna dyspozycyjność.
   odwrotnie); czy kierownicy potrzebują jednodniowego pożyczenia osoby spoza listy bez zaproszenia; czy lista
   niespełnionych próśb ma pokazywać, z którego lokalu jest prośba miesięczna.
 
+
+## 28. Zwijane miejsca (20.11.2026)
+
+Prośby Piotra z 20.11.2026: "niech »Niespełnione prośby« i »Jak grafik trzyma się zasad« będzie zwijane też" oraz
+"jak coś jest zwijane, to niech będzie jakiś znacznik, i najechanie na to niech daje jakiś efekt".
+
+1. Każde zwijane miejsce w aplikacji to `components/ui/disclosure.tsx` (`Disclosure`): strzałka przed napisem, która
+   obraca się w dół po rozwinięciu, i jasnoniebieskie tło pod kursorem (jak przy przyciskach "quiet"). `boxed` rysuje
+   ramkę (cała sekcja ekranu); bez niej zwijany napis stoi w tekście. Zwijane miejsca w zwijanych miejscach mają
+   własne strzałki. `Section collapsible` korzysta z niego i ma `status`: kilka słów na końcu nagłówka, żeby kierownik
+   bez rozwijania wiedział, czy warto zajrzeć. Nowe zwijane miejsca używają `Disclosure`, nie gołego `<details>`.
+2. Karta "Grafik": "Jak grafik trzyma się zasad" i "Niespełnione prośby (N)" są zwinięte na start. Przy zasadach status
+   "N złamanych" (kolor "woli nie") albo "wszystkie spełnione"; przy prośbach "N do Twojej oceny", gdy są prośby, których
+   nie umiemy sprawdzić (są w środku, pod "Do Twojej oceny"). Wiersz zasady rozwija się tylko wtedy, gdy ma przykłady
+   złamań (wtedy ma strzałkę). Polecenia kierownika, których nie udało się spełnić, zostają widoczne nad zwiniętymi
+   sekcjami, a zdanie "Chcesz coś zmienić…" pod nimi.

@@ -10,6 +10,7 @@ import {
 } from '../../api/generated/assistant/assistant'
 import type { AgreedRuleOut } from '../../api/generated/model'
 import { Button } from '../../components/ui/button'
+import { Disclosure } from '../../components/ui/disclosure'
 import { Tag } from '../../components/ui/field'
 import { InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
@@ -263,10 +264,11 @@ export function AssistantRulesTable({
       {failure && <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>}
 
       {!compact && inherited.length > 0 && (
-        <details className="text-sm">
-          <summary className="flex min-h-(--touch) cursor-pointer items-center text-ink-muted">
-            Pozostałe zasady lokalu w tym okresie ({inherited.length})
-          </summary>
+        <Disclosure
+          className="text-sm"
+          summary={`Pozostałe zasady lokalu w tym okresie (${inherited.length})`}
+          summaryClassName="text-ink-muted"
+        >
           <ul className="mt-0 mb-1 grid list-none gap-1 p-0">
             {inherited.map((rule) => (
               <li key={rule.code}>
@@ -275,7 +277,7 @@ export function AssistantRulesTable({
               </li>
             ))}
           </ul>
-        </details>
+        </Disclosure>
       )}
     </section>
   )

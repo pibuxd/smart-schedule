@@ -6,6 +6,7 @@ import {
   usePreviousAgreements,
 } from "../../api/generated/assistant/assistant";
 import { Button } from "../../components/ui/button";
+import { Disclosure } from "../../components/ui/disclosure";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
 import { useManager } from "./ManagerContext";
@@ -38,15 +39,15 @@ export function CopyPreviousAgreements({
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
   const chosen = codes.length + ids.length;
   return (
-    <details
-      className="rounded-md border border-line px-3 text-sm"
+    <Disclosure
+      boxed
+      className="text-sm"
       open={defaultOpen || undefined}
+      summary={`Skopiuj z poprzedniego okresu (${rules.length + items.length})`}
+      summaryClassName="font-semibold"
     >
-      <summary className="flex min-h-(--touch) cursor-pointer items-center font-semibold">
-        Skopiuj z poprzedniego okresu ({rules.length + items.length})
-      </summary>
       <form
-        className="grid gap-2 pb-3"
+        className="grid gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           copy.mutate(
@@ -128,6 +129,6 @@ export function CopyPreviousAgreements({
           </Button>
         </div>
       </form>
-    </details>
+    </Disclosure>
   );
 }

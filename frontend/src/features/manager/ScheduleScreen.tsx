@@ -39,7 +39,8 @@ import {
   useStartCorrecting,
 } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
-import { SelectField, Tag } from '../../components/ui/field'
+import { Disclosure } from '../../components/ui/disclosure'
+import { Section, SelectField, Tag } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
@@ -215,8 +216,12 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
       <div className="grid gap-6 lg:grid-cols-2">
         <PeopleHours data={data} />
         <div className="grid content-start gap-6">
-          <RulesList data={data} />
-          <UnmetRequests data={data} locationId={data.location_id} />
+          <UnmetOrders data={data} />
+          <div className="grid gap-2">
+            <RulesList data={data} />
+            <UnmetRequests data={data} />
+            <ChangeRulesHint locationId={data.location_id} />
+          </div>
           {data.notes.length > 0 && (
             <section className="grid gap-2">
               <h2 className="m-0 text-lg font-extrabold">Uwagi</h2>
@@ -902,31 +907,77 @@ function PeopleHours({ data }: { data: VersionOut }) {
 
 function RulesList({ data }: { data: VersionOut }) {
   if (data.rules.length === 0) return null
+  const broken = data.rules.filter((rule) => rule.broken > 0).length
+  return (
+    <Section
+      title="Jak grafik trzyma się zasad"
+      collapsible
+      status={
+        broken > 0 ? (
+          <span className="font-semibold text-prefer-not">{brokenRules(broken)}</span>
+        ) : (
+          <span className="text-ink-muted">wszystkie spełnione</span>
+        )
+      }
+    >
+      <ul className="m-0 grid list-none gap-1 p-0">
+        {data.rules.map((rule) => {
+          const head = (
+            <span className="flex flex-1 flex-wrap justify-between gap-x-2 py-1">
+              <span className="font-semibold">
+                {rule.label}
+                {rule.hard && <span className="font-normal text-ink-muted"> (bez wyjątków)</span>}
+              </span>
+              <span className={cn(rule.broken > 0 ? 'text-prefer-not' : 'text-ink-muted')}>
+                {rule.percent === null ? 'nic do oceny' : rule.hard ? 'spełniona' : percent(rule.percent)}
+                {rule.broken > 0 && ` · złamana ${rule.broken}×`}
+              </span>
+            </span>
+          )
+          return (
+            <li key={rule.code} className="rounded-sm border border-line bg-paper px-3">
+              {rule.examples.length > 0 ? (
+                <Disclosure summary={head}>
+                  <ul className="mt-0 mb-2 grid gap-0.5 pl-5 text-sm text-ink-muted">
+                    {rule.examples.map((example) => (
+                      <li key={example}>{example}</li>
+                    ))}
+                  </ul>
+                </Disclosure>
+              ) : (
+                // Nothing to unfold: the same line without a chevron, the label still in line with the others.
+                <div className="flex min-h-(--touch) items-center gap-2">
+                  <span aria-hidden="true" className="size-[1.2em] shrink-0" />
+                  {head}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </Section>
+  )
+}
+
+/** "1 złamana", "3 złamane", "5 złamanych" (zasady) */
+function brokenRules(n: number): string {
+  if (n === 1) return '1 złamana'
+  const last = n % 10
+  const teen = n % 100 >= 12 && n % 100 <= 14
+  return `${n} ${last >= 2 && last <= 4 && !teen ? 'złamane' : 'złamanych'}`
+}
+
+/** The manager's own orders come first and stay in view: they matter more than any employee's request. */
+function UnmetOrders({ data }: { data: VersionOut }) {
+  const orders = data.unmet_requests.filter((r) => r.kind === 'instruction')
+  if (orders.length === 0) return null
   return (
     <section className="grid gap-2">
-      <h2 className="m-0 text-lg font-extrabold">Jak grafik trzyma się zasad</h2>
+      <h2 className="m-0 text-lg font-extrabold">Twoje polecenia, których nie udało się spełnić w całości</h2>
       <ul className="m-0 grid list-none gap-1 p-0">
-        {data.rules.map((rule) => (
-          <li key={rule.code} className="rounded-sm border border-line bg-surface px-3 py-2">
-            <details>
-              <summary className={cn('flex cursor-pointer flex-wrap justify-between gap-2', rule.broken === 0 && 'cursor-default')}>
-                <span className="font-semibold">
-                  {rule.label}
-                  {rule.hard && <span className="font-normal text-ink-muted"> (bez wyjątków)</span>}
-                </span>
-                <span className={cn(rule.broken > 0 ? 'text-prefer-not' : 'text-ink-muted')}>
-                  {rule.percent === null ? 'nic do oceny' : rule.hard ? 'spełniona' : percent(rule.percent)}
-                  {rule.broken > 0 && ` · złamana ${rule.broken}×`}
-                </span>
-              </summary>
-              {rule.examples.length > 0 && (
-                <ul className="mt-1 mb-0 grid gap-0.5 pl-5 text-sm text-ink-muted">
-                  {rule.examples.map((example) => (
-                    <li key={example}>{example}</li>
-                  ))}
-                </ul>
-              )}
-            </details>
+        {orders.map((r, i) => (
+          <li key={`o${i}`} className="rounded-sm border border-prefer-not bg-prefer-not-soft px-3 py-2">
+            {r.text}
           </li>
         ))}
       </ul>
@@ -934,40 +985,21 @@ function RulesList({ data }: { data: VersionOut }) {
   )
 }
 
-function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: string }) {
-  const instructions = useLocationInstructions(locationId)
-  const assistantOn = (instructions.data?.data as InstructionsOut | undefined)?.assistant_enabled ?? false
-  const orders = data.unmet_requests.filter((r) => r.kind === 'instruction')
+function UnmetRequests({ data }: { data: VersionOut }) {
   const scored = data.unmet_requests.filter((r) => r.kind !== 'unscored' && r.kind !== 'instruction')
   const yours = data.unmet_requests.filter((r) => r.kind === 'unscored')
   return (
-    <section className="grid gap-2">
-      <p className="m-0 rounded-sm border border-line bg-surface px-3 py-2">
-        Chcesz coś zmienić w tym, jak układa się grafik?{' '}
-        <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
-          {assistantOn ? 'Napisz polecenie asystentowi' : 'Zmień zasady lokalu'}
-        </Link>
-        , a potem ułóż grafik od nowa.
-      </p>
-      {orders.length > 0 && (
-        <>
-          <h2 className="m-0 text-lg font-extrabold">Twoje polecenia, których nie udało się spełnić w całości</h2>
-          <ul className="m-0 grid list-none gap-1 p-0">
-            {orders.map((r, i) => (
-              <li key={`o${i}`} className="rounded-sm border border-prefer-not bg-prefer-not-soft px-3 py-2">
-                {r.text}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      <h2 className="m-0 text-lg font-extrabold">Niespełnione prośby</h2>
+    <Section
+      title={`Niespełnione prośby (${scored.length})`}
+      collapsible
+      status={yours.length > 0 && <span className="text-ink-muted">{yours.length} do Twojej oceny</span>}
+    >
       {scored.length === 0 ? (
         <p className="m-0 text-ink-muted">Wszystkie prośby, które umiemy sprawdzić, są spełnione.</p>
       ) : (
         <ul className="m-0 grid list-none gap-1 p-0">
           {scored.slice(0, 12).map((r, i) => (
-            <li key={`${r.employee_name}-${i}`} className="rounded-sm border border-line bg-surface px-3 py-2">
+            <li key={`${r.employee_name}-${i}`} className="rounded-sm border border-line bg-paper px-3 py-2">
               <span className="font-semibold">{r.employee_name}: </span>
               {r.text}
             </li>
@@ -981,7 +1013,7 @@ function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: str
           <p className="m-0 text-sm text-ink-muted">Tych próśb nie umiemy sprawdzić. Zobacz sam, czy są spełnione.</p>
           <ul className="m-0 grid list-none gap-1 p-0">
             {yours.map((r, i) => (
-              <li key={`${r.employee_name}-u${i}`} className="rounded-sm border border-dashed border-line bg-surface px-3 py-2">
+              <li key={`${r.employee_name}-u${i}`} className="rounded-sm border border-dashed border-line bg-paper px-3 py-2">
                 <span className="font-semibold">{r.employee_name}: </span>
                 {r.text}
               </li>
@@ -989,6 +1021,20 @@ function UnmetRequests({ data, locationId }: { data: VersionOut; locationId: str
           </ul>
         </>
       )}
-    </section>
+    </Section>
+  )
+}
+
+function ChangeRulesHint({ locationId }: { locationId: string }) {
+  const instructions = useLocationInstructions(locationId)
+  const assistantOn = (instructions.data?.data as InstructionsOut | undefined)?.assistant_enabled ?? false
+  return (
+    <p className="m-0 rounded-sm border border-line bg-surface px-3 py-2">
+      Chcesz coś zmienić w tym, jak układa się grafik?{' '}
+      <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
+        {assistantOn ? 'Napisz polecenie asystentowi' : 'Zmień zasady lokalu'}
+      </Link>
+      , a potem ułóż grafik od nowa.
+    </p>
   )
 }

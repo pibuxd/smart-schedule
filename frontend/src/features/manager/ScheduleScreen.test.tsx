@@ -222,6 +222,20 @@ describe('ScheduleScreen', () => {
     expect(screen.getByText('Nie chcę zamykać w piątki.')).toBeInTheDocument()
   })
 
+  it('folds the rules and the unmet requests, with what is inside said in the heading', async () => {
+    api()
+    show()
+    const rules = (await screen.findByRole('heading', { name: 'Jak grafik trzyma się zasad' })).closest('details')
+    expect(rules).not.toHaveAttribute('open')
+    expect(rules?.querySelector('summary')).toHaveTextContent('wszystkie spełnione')
+    const requests = screen.getByRole('heading', { name: 'Niespełnione prośby (1)' }).closest('details')
+    expect(requests).not.toHaveAttribute('open')
+    expect(requests?.querySelector('summary')).toHaveTextContent('1 do Twojej oceny')
+    fireEvent.click(screen.getByRole('heading', { name: 'Niespełnione prośby (1)' }))
+    expect(requests).toHaveAttribute('open')
+    expect(screen.getByText('Prosi o wolne 1 grudnia.')).toBeVisible()
+  })
+
   it('shows what a replacement would change when the manager opens an assigned shift', async () => {
     const shift = version.shifts.find((item) => item.employee_id)!
     const reason = 'Po zamianie na osobę Ewa grafik gorzej spełnia polecenie kierownika „Praca 1 grudnia”.'

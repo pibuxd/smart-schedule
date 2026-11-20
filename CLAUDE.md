@@ -110,7 +110,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - Every screen has an empty, loading and error state with plain-language Polish text.
 - Keep screens light on text: one short sentence at most under a heading. Longer explanations go in `Section`'s
   `description` (hidden behind the "i" button; add `alwaysExplain` when the text states a consequence); rarely needed
-  lists use `<Section collapsible>`.
+  lists use `<Section collapsible>` (`status` = a few words at the end of the folded heading). Every fold uses
+  `components/ui/disclosure.tsx` (chevron that turns, tint on hover), never a bare `<details>`.
 - UI copy follows the plain-language rules in `docs/plan.md` 15a point 10: short sentences, "ty" form, active verbs, buttons as
   commands that say what happens ("Wyślij kierownikowi"), one word per concept (keep "dyspozycje", "kierownik", "lokal").
 - Visual tokens live in `frontend/src/styles/tokens.css` (Tailwind `@theme`; default colours, font sizes, radii and
