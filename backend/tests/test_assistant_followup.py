@@ -336,19 +336,27 @@ def test_conversation_brings_the_last_replies_of_the_same_chat(shop):
     TextRequest.objects.create(
         **base, text="Kiedy pracuję?", status="answered", reply="W sobotę 21.11.", created_at=now - timedelta(hours=1)
     )
-    TextRequest.objects.create(**base, text="Za stara", status="answered", created_at=now - timedelta(days=2))
+    TextRequest.objects.create(**base, text="Sprzed tygodnia", status="answered", created_at=now - timedelta(days=7))
+    for n in range(context.MAX_CONVERSATION):
+        TextRequest.objects.create(
+            **base, text=f"Bardzo dawno {n}", status="answered", created_at=now - timedelta(days=30 + n)
+        )
     TextRequest.objects.create(employee=shop["kasia"], period=shop["period"], text="Cudza", created_at=now)
     current = TextRequest.objects.create(**base, text="A z kim?", created_at=now)
     talk = context.conversation(current)
     assert "Kiedy pracuję?" in talk and "W sobotę 21.11." in talk
-    assert all(text not in talk for text in ("Za stara", "Cudza", "A z kim?"))
+    assert "Sprzed tygodnia" in talk  # no time limit, only the last MAX_CONVERSATION messages
+    assert "Bardzo dawno 7" in talk and "Bardzo dawno 8" not in talk
+    assert all(text not in talk for text in ("Cudza", "A z kim?"))
 
 
-def test_command_history_is_only_same_author_location_and_recent(shop, make_company):
+def test_command_history_is_only_same_author_location_and_the_last_ten(shop, make_company):
     now = timezone.now()
     base = {"location": shop["location"], "created_by": shop["manager"], "status": "ready"}
     AssistantCommand.objects.create(**base, text="Moja poprzednia", created_at=now - timedelta(minutes=1))
-    AssistantCommand.objects.create(**base, text="Zbyt stara", created_at=now - timedelta(days=2))
+    AssistantCommand.objects.create(**base, text="Sprzed tygodnia", created_at=now - timedelta(days=7))
+    for n in range(context.MAX_CONVERSATION - 1):
+        AssistantCommand.objects.create(**base, text=f"Dawna {n}", created_at=now - timedelta(days=30 + n))
     AssistantCommand.objects.create(**{**base, "created_by": shop["worker"]}, text="Cudza")
     other = make_company("Inna")
     AssistantCommand.objects.create(
@@ -356,5 +364,5 @@ def test_command_history_is_only_same_author_location_and_recent(shop, make_comp
     )
     current = AssistantCommand.objects.create(**base, text="Teraz", created_at=now)
     history = context.command_history(current)
-    assert "Moja poprzednia" in history
-    assert all(text not in history for text in ("Zbyt stara", "Cudza", "Inny lokal", "Teraz"))
+    assert "Moja poprzednia" in history and "Sprzed tygodnia" in history and "Dawna 7" in history
+    assert all(text not in history for text in ("Dawna 8", "Cudza", "Inny lokal", "Teraz"))
