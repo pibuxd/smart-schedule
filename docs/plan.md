@@ -919,3 +919,27 @@ Prośby Piotra z 20.11.2026: "niech »Niespełnione prośby« i »Jak grafik trz
    otwarte, gdy coś jest złamane (dziś prawie każdy grafik ma jakąś złamaną zasadę miękką, więc byłyby otwarte zawsze). Wiersz zasady rozwija się tylko wtedy, gdy ma przykłady
    złamań (wtedy ma strzałkę). Polecenia kierownika, których nie udało się spełnić, zostają widoczne nad zwiniętymi
    sekcjami, a zdanie "Chcesz coś zmienić…" pod nimi.
+
+## 29. Lepsze rozumienie próśb i robocik, który czyta (20.11.2026)
+
+Po teście Piotra z 20.11: prośba Natalii „Nie stawiajcie mnie z Zuzanną na zamknięciu, obie jesteśmy nowe na kasie”
+była opisana jako ogólne „nie chce pracować z Zuzanną”, a prośby Romana „Mogę brać nocki, ale nie więcej niż trzy
+w tygodniu” asystent nie umiał zapisać.
+
+- `unikaj_osoby` i `preferuj_osobe` (prośby i polecenia kierownika) mają opcjonalne `shift_type`: liczą się wtedy tylko
+  zmiany tego rodzaju (`Request.counts_slot`), w walidatorze i w solverze. Opis: „Natalia i Zuzanna: nie razem na
+  zmianie „Popołudniowa””. Kontekst asystenta dopisuje „zamyka lokal” przy zmianach z `is_closing`, więc „zamknięcie”
+  wskazuje właściwą zmianę.
+- Nowy typ `limit_zmian` (`RequestType.SHIFTS_LIMIT`): `max_shifts` (0–93), opcjonalne `shift_type` i `hours_period`
+  (`day` / `week` / `period`, te same okna co `limit_godzin`: `Request.windows`). W oknie liczą się zmiany tej osoby
+  w tym lokalu i, bez `shift_type`, jej zmiany w innych lokalach (`Request.shift_windows`). Stopień złamania w oknie:
+  przy limicie 0 – 1, gdy jest jakakolwiek zmiana; w pozostałych przypadkach `min(1, nadwyżka / limit)`; wynik
+  to średnia okien. Solver: kara za nadwyżkę w każdym oknie, w tej samej skali.
+- W schemacie odpowiedzi `hours_period` jest wymagane i nie przyjmuje null (dla innych typów `period`), żeby liczba
+  parametrów typu „albo” została w limicie API (test z #48).
+- Dane testowe (`seed_test_data`): Natalia ma „nie razem na zmianie „Popołudniowa””, Roman „najwyżej 3 zmiany
+  „Nocna” w każdym tygodniu”.
+- Gdy asystent czyta wiadomość (prośba `new`, polecenie w kolejce), czat pokazuje małego robota z książką
+  (`ReadingRobot` w `components/assistant/Chat.tsx`, własny rysunek SVG): oczy przesuwają się wzdłuż wiersza, głowa
+  lekko kiwa (animacja CSS w `tokens.css`, bez emoji; przy `prefers-reduced-motion` stoi w miejscu).
+

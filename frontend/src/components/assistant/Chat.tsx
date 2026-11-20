@@ -54,18 +54,41 @@ export function ChatMessage({
   )
 }
 
+/** A small robot reading a book: its eyes run along a line and jump back (still with reduced motion). */
+export function ReadingRobot() {
+  return (
+    <svg
+      aria-hidden="true"
+      data-testid="reading-robot"
+      viewBox="0 0 24 24"
+      width="28"
+      height="28"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 text-accent"
+    >
+      <g className="robot-head">
+        <path d="M12 2.8v2.2" />
+        <rect x="5" y="5" width="14" height="10" rx="3" />
+        <g className="robot-eyes" fill="currentColor" stroke="none">
+          <circle cx="9.5" cy="9.5" r="1.2" />
+          <circle cx="14.5" cy="9.5" r="1.2" />
+        </g>
+        <path d="M10 12.5h4" />
+      </g>
+      <path d="M4 18.5c2.7-1.3 5.3-1.3 8 0 2.7-1.3 5.3-1.3 8 0v3.5c-2.7-1.3-5.3-1.3-8 0-2.7-1.3-5.3-1.3-8 0z" />
+      <path d="M12 18.5V22" />
+    </svg>
+  )
+}
+
 export function ChatTyping({ children = 'Przygotowuję odpowiedź…' }: { children?: ReactNode }) {
   return (
-    <p role="status" className="m-0 flex items-center gap-3 py-1 text-sm text-ink-muted">
-      <span aria-hidden="true" className="flex gap-1">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent"
-            style={{ animationDelay: `${i * 180}ms` }}
-          />
-        ))}
-      </span>
+    <p role="status" className="m-0 flex items-center gap-2 py-1 text-sm text-ink-muted">
+      <ReadingRobot />
       {children}
     </p>
   )

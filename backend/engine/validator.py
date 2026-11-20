@@ -762,6 +762,7 @@ class _Checker:
             case RequestType.AVOID_PERSON | RequestType.PREFER_PERSON:
                 if request.subject_employee is None:
                     return None
+                own = [s for s in own if request.counts_slot(s)]  # "nie razem na zamknięciu": that shift only
                 if not own:
                     return 0.0
                 theirs = self.slots_of.get(request.subject_employee, ())
@@ -790,6 +791,18 @@ class _Checker:
                         degrees.append(float(hours > _EPS))
                     else:
                         degrees.append(min(1.0, max(0.0, hours / request.max_hours - 1)))
+                return sum(degrees) / len(degrees) if degrees else None
+            case RequestType.SHIFTS_LIMIT:
+                if request.max_shifts is None:
+                    return None
+                counted = [s for s in own if request.counts_slot(s)]
+                degrees = []
+                for start, end, elsewhere in request.shift_windows(self.p):
+                    shifts = elsewhere + sum(1 for s in counted if start <= s.date <= end)
+                    if request.max_shifts <= 0:
+                        degrees.append(float(shifts > 0))
+                    else:
+                        degrees.append(min(1.0, max(0.0, shifts / request.max_shifts - 1)))
                 return sum(degrees) / len(degrees) if degrees else None
             case RequestType.DAYS_OFF:
                 if not request.dates:

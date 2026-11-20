@@ -70,11 +70,17 @@ def _shifts_per_day(data) -> int:
     return value if isinstance(value, int) and 1 <= value <= 3 else 1
 
 
+def _max_shifts(data: dict) -> int | None:
+    value = data.get("max_shifts")
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
 REQUEST_TYPES = {
     "unikaj_osoby": RequestType.AVOID_PERSON,
     "preferuj_osobe": RequestType.PREFER_PERSON,
     "typ_zmiany": RequestType.SHIFT_TYPE,
     "limit_godzin": RequestType.HOURS_LIMIT,
+    "limit_zmian": RequestType.SHIFTS_LIMIT,
     "wolne_dni": RequestType.DAYS_OFF,
     "chce_pracowac": RequestType.WANT_WORK,
     "inne": RequestType.OTHER,
@@ -112,6 +118,7 @@ def instruction_request(data, employee_id, instruction_id, rank, start, end, nam
         shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
         avoid=bool(data.get("avoid", False)),
         max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+        max_shifts=_max_shifts(data),
         weekly_hours=data.get("hours_period") == "week",
         daily_hours=data.get("hours_period") == "day",
         min_days=_min_days(data),
@@ -547,6 +554,7 @@ class _Reader:
             shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
             avoid=bool(data.get("avoid", False)),
             max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
+            max_shifts=_max_shifts(data),
             weekly_hours=data.get("hours_period") == "week",
             daily_hours=data.get("hours_period") == "day",
             min_days=_min_days(data),

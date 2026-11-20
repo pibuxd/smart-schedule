@@ -1,9 +1,11 @@
 """The structure a sentence becomes: one wish about one person, of a type from a closed list.
 
 Used for an employee's text request (`TextRequest.interpretation`) and for a manager's instruction
-(`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, wolne_dni,
-chce_pracowac, inne), subject_employee (id), shift_type (id), avoid, max_hours, hours_period (day, week, period),
-min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot (wolne_dni the person cannot work at all).
+(`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, limit_zmian,
+wolne_dni, chce_pracowac, inne), subject_employee (id), shift_type (id; for unikaj_osoby / preferuj_osobe it narrows
+the pair to that shift: "nie razem na zamknięciu"), avoid, max_hours, max_shifts, hours_period (day, week, period:
+the window of limit_godzin and limit_zmian), min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot
+(wolne_dni the person cannot work at all).
 An employee's message with several wishes keeps the others in `more` (a list of readings like this one).
 
 What the assistant returns is never trusted as is: names are matched against the location's own lists and
@@ -17,7 +19,19 @@ from collections.abc import Iterable, Mapping
 from datetime import date, timedelta
 from typing import Any
 
-TYPES = ("unikaj_osoby", "preferuj_osobe", "typ_zmiany", "limit_godzin", "wolne_dni", "chce_pracowac", "inne")
+TYPES = (
+    "unikaj_osoby",
+    "preferuj_osobe",
+    "typ_zmiany",
+    "limit_godzin",
+    "limit_zmian",
+    "wolne_dni",
+    "chce_pracowac",
+    "inne",
+)
+LIMITS = ("limit_godzin", "limit_zmian")  # the types counted per day, week or period (`hours_period`)
+# Types where a shift name may narrow the wish (for typ_zmiany it is the wish itself).
+SHIFT_TYPED = ("typ_zmiany", "chce_pracowac", "unikaj_osoby", "preferuj_osobe", "limit_zmian")
 LEVELS = ("bardzo_wazne", "wazne", "mile_widziane")
 
 _WEEKDAYS = ("w poniedziałki", "we wtorki", "w środy", "w czwartki", "w piątki", "w soboty", "w niedziele")
@@ -88,6 +102,7 @@ def clean(
     shift_type: str | None = None,
     avoid: bool = False,
     max_hours: float | None = None,
+    max_shifts: int | None = None,
     hours_period: str = "period",
     dates: Iterable[str] = (),
     weekdays: Iterable[int] = (),
@@ -106,13 +121,15 @@ def clean(
     # Reject combinations we cannot preserve, instead of silently narrowing the user's intent.
     if (
         (person and type not in ("unikaj_osoby", "preferuj_osobe"))
-        or (shift_type and type not in ("typ_zmiany", "chce_pracowac"))
+        or (shift_type and type not in SHIFT_TYPED)
         or (avoid and type != "typ_zmiany")
         or (max_hours is not None and type != "limit_godzin")
-        or (hours_period != "period" and type != "limit_godzin")
+        or (max_shifts is not None and type != "limit_zmian")
         or ((min_days is not None or shifts_per_day is not None) and type != "chce_pracowac")
     ):
         return None
+    if type not in LIMITS:
+        hours_period = "period"  # the window means nothing for other types (the answer schema always fills it)
     dates, weekdays = list(dates), list(weekdays)
     if any(_parse_date(v) is None for v in dates) or any(not isinstance(w, int) or not 1 <= w <= 7 for w in weekdays):
         return None
@@ -126,6 +143,11 @@ def clean(
         if subject is None:
             return None
         data["subject_employee"] = subject
+        if shift_type:
+            found = _lookup(shift_type, shift_types)
+            if found is None:
+                return None
+            data["shift_type"] = found
     elif type == "typ_zmiany":
         found = _lookup(shift_type, shift_types)
         if found is None:
@@ -136,6 +158,16 @@ def clean(
         if max_hours is None or not 0 <= max_hours <= 744:
             return None
         data["max_hours"] = float(max_hours)
+        data["hours_period"] = hours_period
+    elif type == "limit_zmian":
+        if not isinstance(max_shifts, int) or isinstance(max_shifts, bool) or not 0 <= max_shifts <= 93:
+            return None
+        if shift_type:
+            found = _lookup(shift_type, shift_types)
+            if found is None:
+                return None
+            data["shift_type"] = found
+        data["max_shifts"] = max_shifts
         data["hours_period"] = hours_period
     elif type == "wolne_dni" and not days and not week:
         return None
@@ -238,15 +270,30 @@ def _when(data: Mapping[str, Any]) -> str:
     return " " + " i ".join(parts) if parts else ""
 
 
+def _shift_count(count: int) -> str:
+    """3 zmiany, 5 zmian, 1 zmiana (Polish plural)."""
+    if count == 1:
+        return "1 zmiana"
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return f"{count} zmiany"
+    return f"{count} zmian"
+
+
 def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift_types: Mapping[str, str]) -> str:
     """One plain Polish sentence for the manager. `people` and `shift_types` map ids to names here."""
     when = _when(data)
     match data.get("type"):
         case "unikaj_osoby":
             other = people.get(str(data.get("subject_employee")), "ktoś")
+            if data.get("shift_type"):
+                name = shift_types.get(str(data["shift_type"]), "?")
+                return f"{who} i {other}: nie razem na zmianie „{name}”{when}"
             return f"{who} i {other}: osobno, nie na tej samej zmianie{when}"
         case "preferuj_osobe":
             other = people.get(str(data.get("subject_employee")), "ktoś")
+            if data.get("shift_type"):
+                name = shift_types.get(str(data["shift_type"]), "?")
+                return f"{who} i {other}: razem na zmianie „{name}”{when}"
             return f"{who} i {other}: razem na zmianie{when}"
         case "typ_zmiany":
             name = shift_types.get(str(data.get("shift_type")), "?")
@@ -259,6 +306,15 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             if data.get("hours_period") == "day":
                 return f"{who}: najwyżej {shown} godz. dziennie{when}"
             return f"{who}: najwyżej {shown} godz.{when or ' w okresie grafiku'}"
+        case "limit_zmian":
+            count = int(data.get("max_shifts") or 0)
+            name = f" „{shift_types.get(str(data['shift_type']), '?')}”" if data.get("shift_type") else ""
+            limit = f"żadnej zmiany{name}" if count == 0 else f"najwyżej {_shift_count(count)}{name}"
+            if data.get("hours_period") == "week":
+                return f"{who}: {limit} w każdym tygodniu{when}"
+            if data.get("hours_period") == "day":
+                return f"{who}: {limit} dziennie{when}"
+            return f"{who}: {limit}{when or ' w okresie grafiku'}"
         case "wolne_dni":
             if sorted(data.get("weekdays") or []) == [0, 1, 2, 3, 4] and not data.get("dates"):
                 return f"{who}: tylko weekendy (wolne od poniedziałku do piątku)"

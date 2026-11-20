@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { mockApi, renderScreen } from "../../test/render";
@@ -82,6 +82,17 @@ describe("RequestsSection", () => {
         text: "Wolne tylko w piątki po południu.",
       }),
     );
+  });
+
+  it("shows a reading robot while the assistant reads a message", async () => {
+    mockApi(() => [200, [request({ status: "new", summary: null })]]);
+    renderScreen(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    await openChat();
+    const reading = (await screen.findByText("Czytamy Twoją wiadomość…"))
+      .closest("[role=status]") as HTMLElement;
+    expect(within(reading).getByTestId("reading-robot")).toBeInTheDocument();
   });
 
   it("offers to mark the days the person cannot work and shows calendar notes", async () => {

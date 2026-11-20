@@ -47,6 +47,8 @@ class RequestType(StrEnum):
     # "chcę pracować": on at least `min_days` of `dates`, with at least `shifts_per_day` shifts on each such day
     # ("albo 12, albo 13 stycznia" = min_days 1; "21 stycznia dwie zmiany pod rząd" = shifts_per_day 2).
     WANT_WORK = "want_work"
+    # "najwyżej trzy nocki w tygodniu": at most `max_shifts` shifts (of `shift_type`, if set) in each window.
+    SHIFTS_LIMIT = "shifts_limit"
     OTHER = "other"  # read by the manager, not scored
 
 
@@ -252,9 +254,12 @@ class Request:
     manager_priority: ManagerPriority = ManagerPriority.NORMAL
     dates: frozenset[date] = frozenset()  # empty = the whole period
     subject_employee: str | None = None  # avoid_person / prefer_person
-    shift_type: str | None = None  # shift_type, or optional restriction for want_work
+    # shift_type; optional restriction for want_work, shifts_limit and avoid_person / prefer_person ("nie razem
+    # na zamknięciu": only shifts of this type count)
+    shift_type: str | None = None
     avoid: bool = False  # shift_type: True = "not this shift type", False = "only this shift type"
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
+    max_shifts: int | None = None  # shifts_limit, in each window (same windows as hours_limit)
     min_days: int | None = None  # want_work: how many of `dates` (None = all of them)
     shifts_per_day: int = 1  # want_work: shifts wanted on each of those days
     summary: str = ""
@@ -262,41 +267,62 @@ class Request:
     # rules, not with employee requests; `rank` is its place on the manager's list (1 = most important).
     by_manager: bool = False
     rank: int = 1
-    weekly_hours: bool = False  # hours_limit counted in each week (Monday–Sunday)
-    daily_hours: bool = False  # hours_limit counted on each day (wins over weekly_hours)
+    weekly_hours: bool = False  # hours_limit / shifts_limit counted in each week (Monday–Sunday)
+    daily_hours: bool = False  # hours_limit / shifts_limit counted on each day (wins over weekly_hours)
     # The location the request belongs to (its period's, or the instruction's). None: a request for a month, about
     # the person wherever they work; it counts in their main location in this problem.
     location: str | None = None
 
-    def hour_windows(self, problem: Problem) -> list[tuple[date, date, int]]:
-        """Inclusive bounds and minutes already worked elsewhere (other locations, other periods) counted toward
-        this limit."""
-
-        def elsewhere(first: date, last: date) -> int:
-            return sum(
-                round((shift.end_utc - shift.start_utc).total_seconds() / 60)
-                for shift in problem.external_shifts
-                if shift.employee == self.employee and first <= shift.date <= last and self.covers(shift.date)
-            )
-
+    def windows(self, problem: Problem) -> list[tuple[date, date]]:
+        """Inclusive bounds a limit is counted in: each day, each Monday–Sunday week, or the whole period."""
         if self.daily_hours:
             result = []
             day = problem.period_start
             while day <= problem.period_end:
                 if self.covers(day):
-                    result.append((day, day, elsewhere(day, day)))
+                    result.append((day, day))
                 day += timedelta(days=1)
             return result
         if not self.weekly_hours:
-            return [(problem.period_start, problem.period_end, elsewhere(problem.period_start, problem.period_end))]
+            return [(problem.period_start, problem.period_end)]
         monday = problem.period_start - timedelta(days=problem.period_start.weekday())
         result = []
         while monday <= problem.period_end:
             sunday = monday + timedelta(days=6)
             if not self.dates or any(monday <= day <= sunday for day in self.dates):
-                result.append((monday, sunday, elsewhere(monday, sunday)))
+                result.append((monday, sunday))
             monday += timedelta(days=7)
         return result
+
+    def _external(self, problem: Problem, first: date, last: date) -> list[ExternalShift]:
+        return [
+            shift
+            for shift in problem.external_shifts
+            if shift.employee == self.employee and first <= shift.date <= last and self.covers(shift.date)
+        ]
+
+    def hour_windows(self, problem: Problem) -> list[tuple[date, date, int]]:
+        """Inclusive bounds and minutes already worked elsewhere (other locations, other periods) counted toward
+        this limit."""
+
+        def minutes(first: date, last: date) -> int:
+            return sum(
+                round((s.end_utc - s.start_utc).total_seconds() / 60) for s in self._external(problem, first, last)
+            )
+
+        return [(first, last, minutes(first, last)) for first, last in self.windows(problem)]
+
+    def shift_windows(self, problem: Problem) -> list[tuple[date, date, int]]:
+        """shifts_limit: inclusive bounds and shifts already worked elsewhere in them. Shift types belong to one
+        location, so with a `shift_type` shifts elsewhere never count."""
+        return [
+            (first, last, 0 if self.shift_type else len(self._external(problem, first, last)))
+            for first, last in self.windows(problem)
+        ]
+
+    def counts_slot(self, slot: Slot) -> bool:
+        """A shift this request is about: on its days and, when it names a shift type, of that type."""
+        return self.covers(slot.date) and (self.shift_type is None or slot.shift_type == self.shift_type)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", RequestType(self.type))

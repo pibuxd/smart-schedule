@@ -130,6 +130,36 @@
       transform: translateX(100%);
     }
   }
+  /* The robot that reads while the assistant works (`ReadingRobot`): eyes run along a line, the head nods. */
+  .robot-eyes {
+    animation: robot-read 1.4s ease-in-out infinite;
+  }
+  .robot-head {
+    transform-origin: 12px 15px;
+    animation: robot-nod 2.8s ease-in-out infinite;
+  }
+  @keyframes robot-read {
+    0%,
+    10% {
+      transform: translateX(-1.5px);
+    }
+    75%,
+    85% {
+      transform: translateX(1.5px);
+    }
+    100% {
+      transform: translateX(-1.5px);
+    }
+  }
+  @keyframes robot-nod {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    50% {
+      transform: rotate(-4deg);
+    }
+  }
   /* Availability states: colour + pattern (the icon is in the markup). */
   .avail-cannot {
     color: var(--color-cannot);

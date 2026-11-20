@@ -490,6 +490,24 @@ def test_plain_descriptions():
     assert readings.describe(hours, "Ania", {}, {}) == "Ania: najwyżej 6 godz. dziennie"
     assert readings.hour_scope(None, "Nie chcę pracować dłużej niż 6 godzin dziennie", 6) == "day"
     assert readings.clean(type="limit_godzin", max_hours=6, hours_period="month", people={}, shift_types={}) is None
+    nights = {"type": "limit_zmian", "max_shifts": 3, "hours_period": "week", "shift_type": "n1"}
+    assert (
+        readings.describe(nights, "Roman", {}, {"n1": "Nocna"}) == "Roman: najwyżej 3 zmiany „Nocna” w każdym tygodniu"
+    )
+    one = {"type": "limit_zmian", "max_shifts": 1, "hours_period": "day"}
+    assert readings.describe(one, "Ewa", {}, {}) == "Ewa: najwyżej 1 zmiana dziennie"
+    five = {"type": "limit_zmian", "max_shifts": 5, "hours_period": "period"}
+    assert readings.describe(five, "Ewa", {}, {}) == "Ewa: najwyżej 5 zmian w okresie grafiku"
+    closing = {"type": "unikaj_osoby", "subject_employee": "z1", "shift_type": "c1"}
+    assert (
+        readings.describe(closing, "Natalia", {"z1": "Zuzanna"}, {"c1": "Popołudniowa"})
+        == "Natalia i Zuzanna: nie razem na zmianie „Popołudniowa”"
+    )
+    shifts = {"Nocna": "n1"}
+    assert readings.clean(type="limit_zmian", max_shifts=None, people={}, shift_types=shifts) is None
+    assert readings.clean(type="limit_zmian", max_shifts=-1, people={}, shift_types=shifts) is None
+    assert readings.clean(type="limit_zmian", max_shifts=3, shift_type="Dzienna", people={}, shift_types=shifts) is None
+    assert readings.clean(type="limit_godzin", max_hours=6, max_shifts=3, people={}, shift_types={}) is None
 
 
 @pytest.mark.parametrize("kind", ["request_for_manager"])

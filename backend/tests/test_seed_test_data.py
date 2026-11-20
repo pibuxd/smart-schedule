@@ -10,7 +10,9 @@ from apps.core import test_data as td
 from apps.core.demo_data import BAKERY_COMPANY_ID, create_demo_data
 from apps.marketplace.models import ShiftOffer
 from apps.scheduling.models import SchedulePeriod
+from apps.scheduling.problem_builder import build_problem
 from apps.tenancy.models import Company, Invitation
+from engine.problem import RequestType
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -37,6 +39,14 @@ def test_seed_reset_and_delete_keep_other_data():
     assert TextRequest.objects.filter(company_id=td.COMPANY_A, period__isnull=True).exists()
     assert Invitation.objects.filter(phone_e164=td.INVITED_ONLY_PHONES[2], status="pending").count() == 2
     assert AccessCode.objects.filter(note__startswith="Dane testowe").count() == 4
+    # Natalia and Roman (Piotr's test, 20.11): "not with Zuzanna on closing" and "at most three nights a week".
+    natalia = TextRequest.objects.get(company_id=td.COMPANY_A, text__startswith="Nie stawiajcie mnie z Zuzanną")
+    roman = TextRequest.objects.get(company_id=td.COMPANY_A, text__startswith="Mogę brać nocki")
+    requests = {r.id: r for r in build_problem([natalia.period]).problem.requests}
+    closing = requests[str(natalia.pk)]
+    assert closing.type == RequestType.AVOID_PERSON and closing.shift_type is not None
+    nights = requests[str(roman.pk)]
+    assert nights.type == RequestType.SHIFTS_LIMIT and nights.max_shifts == 3 and nights.weekly_hours
 
     # A company the tester registered from a test number goes away with --reset; the demo stays.
     tester = User.objects.create_user(td.REGISTER_PHONES[0])
