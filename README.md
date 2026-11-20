@@ -69,6 +69,7 @@ Asystent działa, gdy w `.env` jest klucz:
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-opus-5-5     # tańszy wariant do krótkich próśb: claude-haiku-5-5
+ANTHROPIC_EFFORT=low                # jak długo model myśli: low (najszybciej), medium, high
 ```
 
 Po zmianie `.env` uruchom ponownie `docker compose up`. Klucz czytają tylko kontenery `api` i `worker`; nie trafia

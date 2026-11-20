@@ -10,6 +10,7 @@ callers fall back: a request goes to the manager as written, the manager sets ru
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Literal
 
 import anthropic
@@ -31,6 +32,9 @@ TopicName = Literal["app", "unrelated"]
 # Rounds of tool calls before the model must answer with what it has.
 MAX_TOOL_ROUNDS = 6
 MAX_TOKENS = 8000
+# output_config.effort levels. Thinking is always on in the default model and every tool round is a full call, so
+# the level multiplies: at the model's default (medium) an answer with two or three rounds took about 40 s.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 
 
 class AssistantError(Exception):
@@ -161,10 +165,11 @@ kierownik naciśnie „Ułóż grafik”."""
 COMMON_RULES = """\
 Dane o grafiku, godzinach, dyspozycjach, prośbach, oddanych zmianach i powiadomieniach bierzesz wyłącznie
 z narzędzi: to te same dane, które ta osoba widzi w aplikacji, więc możesz je jej podać. Sięgnij po narzędzie,
-zanim odpowiesz na pytanie o dane; nie zgaduj. Jeśli narzędzie nie ma odpowiedzi albo zwraca błąd, powiedz to
-wprost. Gdy podajesz dane (daty, godziny, liczby), zakończ odpowiedź krótką wskazówką, na którym ekranie można je
-sprawdzić (np. „Sprawdzisz to w „Mój grafik”.”). Gdy czegoś nie możesz zrobić, powiedz krótko, gdzie w aplikacji
-to zrobić (przewodnik niżej). Nie obiecuj,
+zanim odpowiesz na pytanie o dane; nie zgaduj. Gdy potrzebujesz kilku odczytów, wywołaj wszystkie potrzebne
+narzędzia naraz, w jednej odpowiedzi, a nie jedno po drugim. Tego, co jest już w kontekście, nie czytaj ponownie.
+Jeśli narzędzie nie ma odpowiedzi albo zwraca błąd, powiedz to wprost. Gdy podajesz dane (daty, godziny, liczby),
+zakończ odpowiedź krótką wskazówką, na którym ekranie można je sprawdzić (np. „Sprawdzisz to w „Mój grafik”.”).
+Gdy czegoś nie możesz zrobić, powiedz krótko, gdzie w aplikacji to zrobić (przewodnik niżej). Nie obiecuj,
 że coś się stanie, i nie twierdź, że coś zmieniłeś.
 Daty podawaj jak w Polsce (np. sob. 21.11), godziny jak 6:00–14:00. Wartości cannot/neutral/prefer to „nie mogę”,
 „mogę”, „chętnie”. Wyniki narzędzi pomijają puste pola: zmiana bez employee_name to zmiana bez obsady, a dzień bez
@@ -271,12 +276,24 @@ def get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=120.0, max_retries=2)
 
 
+def output_config(output: type[BaseModel]) -> dict:
+    """The answer's JSON schema, plus the effort level from `ANTHROPIC_EFFORT` when it names one."""
+    config: dict = {"format": {"type": "json_schema", "schema": anthropic.transform_schema(output.model_json_schema())}}
+    effort = settings.ANTHROPIC_EFFORT
+    if effort in EFFORT_LEVELS:
+        config["effort"] = effort
+    elif effort:
+        logger.warning("ANTHROPIC_EFFORT=%r is not one of %s; using the model's default", effort, EFFORT_LEVELS)
+    return config
+
+
 def _converse[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None = None) -> T:
     """One message, with up to `MAX_TOOL_ROUNDS` rounds of read-only tool calls, ending in a structured answer."""
     client = get_client()
-    output_format = {"type": "json_schema", "schema": anthropic.transform_schema(output.model_json_schema())}
+    config = output_config(output)
     tools = toolbox.definitions() if toolbox else []
     messages: list = [{"role": "user", "content": content}]
+    started, used, output_tokens = time.monotonic(), [], 0
     for round_ in range(MAX_TOOL_ROUNDS + 1):
         request: dict = {
             "model": settings.ANTHROPIC_MODEL,
@@ -284,7 +301,7 @@ def _converse[T: BaseModel](system: str, content: str, output: type[T], toolbox:
             # Stable for a role (tools render first, then this), so it is cached across messages and rounds.
             "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             "messages": messages,
-            "output_config": {"format": output_format},
+            "output_config": config,
         }
         if tools:
             request["tools"] = tools
@@ -299,16 +316,28 @@ def _converse[T: BaseModel](system: str, content: str, output: type[T], toolbox:
         except anthropic.APIStatusError as exc:
             logger.error("assistant call failed: %s %s", exc.status_code, exc.message)
             raise AssistantError(f"status {exc.status_code}") from exc
+        output_tokens += response.usage.output_tokens
         if response.stop_reason == "tool_use" and toolbox is not None:
             messages.append({"role": "assistant", "content": response.content})
             results = []
             for block in response.content:
                 if block.type != "tool_use":
                     continue
+                used.append(block.name)
                 text, is_error = toolbox.run(block.name, block.input if isinstance(block.input, dict) else {})
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": text, "is_error": is_error})
             messages.append({"role": "user", "content": results})
             continue
+        # One line per answer, so slow answers can be traced on the server: time, calls, tools, output tokens.
+        logger.info(
+            "assistant %s: %.1f s, %d calls, tools %s, %d output tokens, effort %s",
+            output.__name__,
+            time.monotonic() - started,
+            round_ + 1,
+            ",".join(used) or "-",
+            output_tokens,
+            config.get("effort", "default"),
+        )
         if response.stop_reason != "end_turn":
             raise AssistantError(f"stopped: {response.stop_reason}")
         texts = [block.text for block in response.content if block.type == "text" and block.text.strip()]

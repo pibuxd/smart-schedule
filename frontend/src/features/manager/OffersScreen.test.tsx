@@ -105,6 +105,41 @@ describe('OffersScreen', () => {
     )
   })
 
+  it('folds people from other locations under "Z innych lokali" and puts one of them on the shift', async () => {
+    const calls = mockApi(api)
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Wybierz osobę sam' }))
+    const sheet = await screen.findByRole('dialog')
+    const summary = await within(sheet).findByText('Z innych lokali (1)')
+    const folded = summary.closest('details')!
+    expect(folded).not.toHaveAttribute('open')
+    expect(within(summary).getByText('chce wziąć: 1')).toBeInTheDocument()
+    expect(within(summary).getByText('mogą przyjść: 1')).toBeInTheDocument()
+    expect(folded).not.toContainElement(within(sheet).getByRole('button', { name: 'Wpisz mimo to: Jan Wrona' }))
+    // Open it as the manager does, then pick the person from the other location.
+    fireEvent.click(summary)
+    expect(folded).toHaveAttribute('open')
+    expect(within(folded).getByText('Bochnia')).toBeInTheDocument()
+    fireEvent.click(within(folded).getByRole('button', { name: 'Wpisz: Ala Nowak' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === '/api/assignments/a1/reassign')?.body).toEqual({
+        employee_id: 'e1',
+        force: false,
+      }),
+    )
+  })
+
+  it('opens "Z innych lokali" at once when nobody from the location can be put there', async () => {
+    mockApi((method, path) =>
+      path.endsWith('/handover-candidates') ? [200, [candidates[0]]] : api(method, path),
+    )
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Wybierz osobę sam' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(await within(sheet).findByText('Z tego lokalu nie ma kogo tu wpisać.')).toBeInTheDocument()
+    expect(within(sheet).getByText('Z innych lokali (1)').closest('details')).toHaveAttribute('open')
+  })
+
   it('ends an offer for the employee', async () => {
     const calls = mockApi(api)
     show()

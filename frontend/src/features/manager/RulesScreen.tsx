@@ -415,7 +415,6 @@ function RuleCard({
             <span className="flex flex-wrap items-center gap-2">
               <b className="text-lg">{item.label}</b>
               {source && <Tag tone={source.tone}>{source.text}</Tag>}
-              {item.good_practice && <Tag>dobra praktyka</Tag>}
             </span>
             <span className="text-sm text-ink-muted">{item.description}</span>
           </div>

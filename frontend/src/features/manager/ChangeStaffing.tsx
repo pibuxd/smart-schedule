@@ -13,6 +13,7 @@ import type { HandoverCandidateOut, ManagerShiftOut, OfferShiftOut, SwapCheckOut
 import { useManagerOverview } from '../../api/generated/tenancy/tenancy'
 import type { ManagerOverviewOut } from '../../api/generated/model'
 import { Button } from '../../components/ui/button'
+import { Disclosure } from '../../components/ui/disclosure'
 import { SelectField, Tag } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
@@ -172,6 +173,17 @@ function PersonPicker({ target, onSwap, onDone }: { target: ShiftTarget; onSwap:
   const busy = reassign.isPending || offer.isPending
   const error = reassign.error ?? offer.error
   const canOffer = !!target.employee_name && !target.started && !target.offer_id
+  const all = candidates.isSuccess ? (candidates.data.data as HandoverCandidateOut[]) : []
+  // The server's order (can come, wants it, name) holds inside each group.
+  const here = all.filter((c) => c.here)
+  const away = all.filter((c) => !c.here)
+  const wantingAway = away.filter((c) => c.wants).length
+  const freeAway = away.filter((c) => c.problems.length === 0).length
+  const put = (c: HandoverCandidateOut) =>
+    reassign.mutate(
+      { assignmentId: target.id, data: { employee_id: c.employee_id, force: c.problems.length > 0 } },
+      { onSuccess: onDone },
+    )
   return (
     <div className="grid gap-4">
       {candidates.isPending ? (
@@ -180,44 +192,37 @@ function PersonPicker({ target, onSwap, onDone }: { target: ShiftTarget; onSwap:
         <ErrorState onRetry={() => void candidates.refetch()}>
           {errorMessage(candidates.error, 'Nie udało się sprawdzić osób. Spróbuj jeszcze raz.')}
         </ErrorState>
-      ) : (candidates.data.data as HandoverCandidateOut[]).length === 0 ? (
+      ) : all.length === 0 ? (
         <p className="m-0 text-ink-muted">Nie ma innej osoby, którą można tu wpisać.</p>
       ) : (
-        <ul className="m-0 grid list-none gap-2 p-0">
-          {(candidates.data.data as HandoverCandidateOut[]).map((c) => (
-            <li key={c.employee_id} className="grid gap-2 rounded-md border border-line bg-surface p-3">
-              <div className="grid gap-0.5">
-                <span className="flex flex-wrap items-center gap-2 font-semibold">
-                  {c.name}
-                  {c.wants && <Tag tone="accent">chce wziąć</Tag>}
-                  {!c.here && <Tag>{c.home_location_name}</Tag>}
+        <>
+          {here.length > 0 ? (
+            <CandidateList candidates={here} busy={busy} onPut={put} />
+          ) : (
+            <p className="m-0 text-ink-muted">Z tego lokalu nie ma kogo tu wpisać.</p>
+          )}
+          {away.length > 0 && (
+            // People who do not work in the shift's location: folded, so the location's own people come first.
+            // Open at once when there is nobody else to pick.
+            <Disclosure
+              open={here.length === 0 || undefined}
+              summaryClassName="font-semibold text-accent"
+              summary={
+                <span className="flex flex-wrap items-center gap-2">
+                  Z innych lokali ({away.length})
+                  {wantingAway > 0 && <Tag tone="accent">chce wziąć: {wantingAway}</Tag>}
+                  {freeAway > 0 && <Tag>mogą przyjść: {freeAway}</Tag>}
                 </span>
-                {c.problems.map((problem) => (
-                  <span key={problem} className="text-sm text-cannot">
-                    {problem}
-                  </span>
-                ))}
+              }
+            >
+              <div className="mt-2">
+                <CandidateList candidates={away} busy={busy} onPut={put} />
               </div>
-              <Button
-                size="normal"
-                variant={c.problems.length ? 'danger' : 'primary'}
-                disabled={busy}
-                onClick={() =>
-                  reassign.mutate(
-                    { assignmentId: target.id, data: { employee_id: c.employee_id, force: c.problems.length > 0 } },
-                    { onSuccess: onDone },
-                  )
-                }
-              >
-                {c.problems.length ? 'Wpisz mimo to' : 'Wpisz'}: {c.name}
-              </Button>
-            </li>
-          ))}
-        </ul>
+            </Disclosure>
+          )}
+        </>
       )}
-      {candidates.isSuccess && (candidates.data.data as HandoverCandidateOut[]).some((c) => c.problems.length > 0) && (
-        <p className="m-0 text-sm text-ink-muted">{NOT_PINNED}</p>
-      )}
+      {all.some((c) => c.problems.length > 0) && <p className="m-0 text-sm text-ink-muted">{NOT_PINNED}</p>}
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
       <div className="flex flex-wrap gap-2">
         {target.employee_name && (
@@ -237,6 +242,45 @@ function PersonPicker({ target, onSwap, onDone }: { target: ShiftTarget; onSwap:
         )}
       </div>
     </div>
+  )
+}
+
+function CandidateList({
+  candidates,
+  busy,
+  onPut,
+}: {
+  candidates: HandoverCandidateOut[]
+  busy: boolean
+  onPut: (candidate: HandoverCandidateOut) => void
+}) {
+  return (
+    <ul className="m-0 grid list-none gap-2 p-0">
+      {candidates.map((c) => (
+        <li key={c.employee_id} className="grid gap-2 rounded-md border border-line bg-surface p-3">
+          <div className="grid gap-0.5">
+            <span className="flex flex-wrap items-center gap-2 font-semibold">
+              {c.name}
+              {c.wants && <Tag tone="accent">chce wziąć</Tag>}
+              {!c.here && <Tag>{c.home_location_name}</Tag>}
+            </span>
+            {c.problems.map((problem) => (
+              <span key={problem} className="text-sm text-cannot">
+                {problem}
+              </span>
+            ))}
+          </div>
+          <Button
+            size="normal"
+            variant={c.problems.length ? 'danger' : 'primary'}
+            disabled={busy}
+            onClick={() => onPut(c)}
+          >
+            {c.problems.length ? 'Wpisz mimo to' : 'Wpisz'}: {c.name}
+          </Button>
+        </li>
+      ))}
+    </ul>
   )
 }
 
