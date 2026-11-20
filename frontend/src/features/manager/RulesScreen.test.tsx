@@ -9,6 +9,7 @@ const item = (code: string, label: string, extra = {}) => ({
   code,
   label,
   description: '',
+  good_practice: false,
   enabled: true,
   is_hard: false,
   params: {},

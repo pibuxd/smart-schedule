@@ -12,6 +12,7 @@ export interface RuleItemOut {
   code: string;
   label: string;
   description: string;
+  good_practice: boolean;
   enabled: boolean;
   is_hard: boolean;
   params: RuleItemOutParams;
