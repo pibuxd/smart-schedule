@@ -105,18 +105,28 @@ describe('OffersScreen', () => {
     )
   })
 
-  it('folds people from other locations under "Z innych lokali"', async () => {
-    mockApi(api)
+  it('folds people from other locations under "Z innych lokali" and puts one of them on the shift', async () => {
+    const calls = mockApi(api)
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Wybierz osobę sam' }))
     const sheet = await screen.findByRole('dialog')
-    const folded = (await within(sheet).findByText('Z innych lokali (1)')).closest('details')!
+    const summary = await within(sheet).findByText('Z innych lokali (1)')
+    const folded = summary.closest('details')!
     expect(folded).not.toHaveAttribute('open')
-    expect(within(folded).getByText('chce wziąć: 1')).toBeInTheDocument()
-    expect(within(folded).getByText('mogą przyjść: 1')).toBeInTheDocument()
-    expect(within(folded).getByText('Bochnia')).toBeInTheDocument()
-    expect(folded).toContainElement(within(sheet).getByRole('button', { name: 'Wpisz: Ala Nowak' }))
+    expect(within(summary).getByText('chce wziąć: 1')).toBeInTheDocument()
+    expect(within(summary).getByText('mogą przyjść: 1')).toBeInTheDocument()
     expect(folded).not.toContainElement(within(sheet).getByRole('button', { name: 'Wpisz mimo to: Jan Wrona' }))
+    // Open it as the manager does, then pick the person from the other location.
+    fireEvent.click(summary)
+    expect(folded).toHaveAttribute('open')
+    expect(within(folded).getByText('Bochnia')).toBeInTheDocument()
+    fireEvent.click(within(folded).getByRole('button', { name: 'Wpisz: Ala Nowak' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === '/api/assignments/a1/reassign')?.body).toEqual({
+        employee_id: 'e1',
+        force: false,
+      }),
+    )
   })
 
   it('opens "Z innych lokali" at once when nobody from the location can be put there', async () => {
