@@ -363,12 +363,7 @@ export function AssistantPanel({
             readOnly || !enabled || history.isPending || history.isError
           }
           placeholder="Zapytaj albo opisz zasadę…"
-          footer="Zmiany zapiszę dopiero, gdy je zatwierdzisz."
         />
-        <p className="mt-2 mb-0 text-xs text-ink-muted">
-          Asystent czyta Twoje wiadomości i pamięta {MEMORY_COUNT} ostatnich z
-          tego okresu.
-        </p>
         <Disclosure
           className="text-xs text-ink-muted"
           summary="Jak działa asystent"
@@ -384,7 +379,8 @@ export function AssistantPanel({
             pytanie, sprawdza w aplikacji to, co Ty widzisz: grafik, godziny,
             oddane zmiany oraz dyspozycje i prośby pracowników. Nie dostaje
             numerów telefonów i niczego nie zmienia sam. Może się pomylić, więc
-            ważne dane sprawdź na ekranie. Starszą sprawę opisz ponownie. W
+            ważne dane sprawdź na ekranie. Pamięta {MEMORY_COUNT} ostatnich
+            wiadomości z tego okresu, więc starszą sprawę opisz ponownie. W
             historii widzisz ostatnie 50 wiadomości.
           </p>
         </Disclosure>
