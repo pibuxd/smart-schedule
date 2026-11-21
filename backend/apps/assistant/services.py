@@ -925,7 +925,7 @@ def _checked_manager_hours(
                 shift__version__status=ScheduleVersion.Status.PUBLISHED,
                 shift__date=day,
             )
-            .select_related("shift__version", "shift__location", "shift__position")
+            .select_related("shift__version", "shift__location", "shift__position", "employee__membership__user")
         )
         if not candidates:
             result.refuse(f"{name} nie ma zmiany w {_short_day(day)} w opublikowanym grafiku tego lokalu.")
@@ -972,13 +972,15 @@ def _checked_manager_hours(
             # Applying checks that the hours and the waiting report are still what this plan was made for.
             "seen": worktime.Seen.of(assignment).as_dict(),
         }
+        # The plan's lines name the person in full, as the lines about waiting reports do.
+        full_name = assignment.employee.membership.user.full_name or name
         if (start_at, end_at) == (shift.start_at, shift.end_at):
             line = (
-                f"Godziny osoby {name}: {_short_day(shift.date)}, wracają godziny z grafiku "
+                f"Przywrócę godziny z grafiku: {full_name}, {_short_day(shift.date)}, "
                 f"{times['planned_start_time']}–{times['planned_end_time']}."
             )
         else:
-            line = f"Godziny osoby {name}: {hours_words(times)}."
+            line = f"Zmienię godziny: {full_name}, {hours_words(times)}."
         waiting = worktime.pending_reports([assignment]).get(assignment.pk)
         if waiting is not None and (waiting.start_at, waiting.end_at) == (start_at, end_at):
             line += " Takie samo zgłoszenie już czeka, więc zostanie zatwierdzone."

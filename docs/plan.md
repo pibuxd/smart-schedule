@@ -1045,7 +1045,7 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
 - Asystent kierownika: `CommandPlan.hours_changes` (osoba, data, od, do, powód) i `hours_decisions` (numer
   zgłoszenia z listy „Zgłoszenia innych godzin czekające na decyzję” w kontekście, approve; `pending_hours` liczy je
   raz na polecenie). `check_plan` sprawdza akcje tak jak endpointy i zapisuje opisy aplikacji („Zatwierdzę
-  zgłoszenie: Anna Nowak, pt. 20.11, 06:00–15:00 zamiast 06:00–14:00 (nadgodziny: +1 h)”, „Godziny osoby Ewa: …”);
+  zgłoszenie: Anna Nowak, pt. 20.11, 06:00–15:00 zamiast 06:00–14:00 (nadgodziny: +1 h)”, „Zmienię godziny: Ewa Nowak, …”, „Przywrócę godziny z grafiku: …”; zawsze pełne imię i nazwisko);
   te same godziny co teraz trafiają do „To już jest ustawione”, błędna część blokuje cały plan. `apply_command`
   wykonuje je przez `worktime.services` (najpierw decyzje, potem zmiany) w tej samej transakcji: gdy coś się
   zmieniło od przygotowania planu, nic się nie zapisuje (409 „… Nic z tego planu nie zapisałem.”). Plan, który
@@ -1061,3 +1061,9 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
 - Założenia: okno 14 dni wstecz dla pracownika (jak „Zmień obsadę”); zgłoszenie przyszłej zmiany jest dozwolone
   (np. wiadomo, że trzeba wyjść wcześniej), ale zmienia tylko liczenie godzin, nie plan; nadgodziny to po prostu
   godziny ponad grafik (bez Kodeksu pracy, jak w sekcji 17).
+- Poprawki po teście na produkcji (21.11, `testy-asystenta/nadgodziny-produkcja-2026-11-21.md`): instrukcje modelu
+  zabraniają numerów zgłoszeń w odpowiedzi (kierownik ich nie widzi) i słów „godziny nadliczbowe”, podają nazwy
+  „zgłoszenie nadgodzin” / „zgłoszenie wcześniejszego wyjścia”, każą pisać kierownikowi w czasie przyszłym przed
+  „Zatwierdź zmiany”, a przy osobie bez zmiany tego dnia odsyłają do „Popraw grafik” albo „Zmień obsadę sam”
+  („Zmień godziny sam” działa tylko na zmianach z grafiku). Notka `HOURS_NOTE` („zapiszę od razu po
+  zatwierdzeniu…”) znika z polecenia, gdy kierownik je zatwierdzi albo odrzuci (`api._notes`).

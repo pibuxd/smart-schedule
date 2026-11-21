@@ -337,7 +337,7 @@ it("keeps a plan of hours open after the period is published and says where the 
     {
       ...command,
       text: "Ewa wyszła dziś o 12",
-      lines: ["Godziny osoby Ewa: sob. 21.11, 06:00–12:00 zamiast 06:00–14:00 (krócej o 2 h)."],
+      lines: ["Zmienię godziny: Ewa Nowak, sob. 21.11, 06:00–12:00 zamiast 06:00–14:00 (krócej o 2 h)."],
       consumed_at: new Date().toISOString(),
       has_hours: true,
       hours_only: true,
