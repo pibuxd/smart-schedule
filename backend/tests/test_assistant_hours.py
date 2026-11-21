@@ -262,6 +262,7 @@ class TestManagerChat:
         applied = api.post(f"/api/assistant-commands/{body['id']}/apply")
 
         assert applied.status_code == 200 and applied.json()["status"] == "applied"
+        assert applied.json()["notes"] == []  # "will save on acceptance" is over once it is accepted
         assert HoursChange.objects.get(employee=b["ola"]).status == "approved"
         assert HoursChange.objects.get(employee=b["ewa"]).status == "rejected"
         assert kinds("hours_approved") == [user_of(b["ola"]).pk] and kinds("hours_rejected") == [user_of(b["ewa"]).pk]
@@ -277,7 +278,7 @@ class TestManagerChat:
 
         assert "Teraz: " in seen["context"] and "(brak)" in seen["context"].split("Zgłoszenia innych godzin")[1]
         assert body["lines"] == [
-            f"Godziny osoby Ewa: {day_words(b['today'])}, 06:00–12:00 zamiast 06:00–14:00 (krócej o 2 h)."
+            f"Zmienię godziny: Ewa Nowak, {day_words(b['today'])}, 06:00–12:00 zamiast 06:00–14:00 (krócej o 2 h)."
         ]
         assert body["hours_only"] and body["can_apply"]
         # The schedule of the agreements' period is published meanwhile: rules could not change, hours still can.
@@ -292,6 +293,11 @@ class TestManagerChat:
         assert change.status == "approved" and change.by_manager and change.employee == b["ewa"]
         assert kinds("hours_set") == [user_of(b["ewa"]).pk]
         assert hours_of(api, b, b["today"], "Ewa Nowak")["total"] == 6
+
+        back, _ = ask(api, b, monkeypatch, manager_plan(hours_changes=[set_hours("Ewa", b["today"], "06:00", "14:00")]))
+        assert back["lines"] == [f"Przywrócę godziny z grafiku: Ewa Nowak, {day_words(b['today'])}, 06:00–14:00."]
+        assert back["notes"] == [services.HOURS_NOTE]
+        assert api.post(f"/api/assistant-commands/{back['id']}/dismiss").json()["notes"] == []
 
     def test_a_plan_with_rules_and_hours_closes_with_its_period(self, api, bakery, with_key, monkeypatch):
         b = bakery

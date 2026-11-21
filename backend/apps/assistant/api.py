@@ -102,6 +102,14 @@ class InstructionOrderIn(Schema):
     period_id: UUID | None = None
 
 
+def _notes(command: AssistantCommand, plan: dict) -> list[str]:
+    """The plan's notes. The one about what accepting hours will do is dropped once the manager has decided."""
+    notes = plan.get("notes") or []
+    if command.status == AssistantCommand.Status.READY:
+        return notes
+    return [note for note in notes if note != services.HOURS_NOTE]
+
+
 def _command_out(command: AssistantCommand) -> AssistantCommandOut:
     plan = command.plan or {}
     expires_at = command.created_at + services.COMMAND_MAX_AGE
@@ -115,7 +123,7 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
         question=plan.get("question"),
         lines=plan.get("lines") or [],
         effects=plan.get("effects") or [],
-        notes=plan.get("notes") or [],
+        notes=_notes(command, plan),
         can_apply=(
             command.status == AssistantCommand.Status.READY
             and services.has_changes(plan)
