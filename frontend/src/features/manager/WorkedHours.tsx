@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { useHandoverShifts } from '../../api/generated/marketplace/marketplace'
@@ -23,7 +23,7 @@ import { Section, SelectField, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
-import { shortTime, toIsoDate } from '../../lib/dates'
+import { monthName, shiftMonth, shortTime, toIsoDate } from '../../lib/dates'
 import { differenceSentence, differenceText, isTime, minutesBetween } from '../schedule/hours'
 import { useManager } from './ManagerContext'
 import { HOURS_REFRESH_MS } from './waiting-hours'
@@ -143,6 +143,8 @@ function PendingReport({
 /** One person on one published shift: what the schedule says, what counts, a waiting report. */
 export type HoursTarget = {
   assignmentId: string
+  // The person shown: saving fails (409) when the shift went to someone else meanwhile.
+  employeeId: string
   name: string
   date: string
   plannedStart: string
@@ -168,7 +170,10 @@ export function WorkedHoursForm({ target, onDone }: { target: HoursTarget; onDon
   const same = valid && start === counted.start_time && end === counted.end_time && !target.report
   const submit = (from: string, to: string) =>
     save.mutate(
-      { assignmentId: target.assignmentId, data: { start_time: from, end_time: to, reason: reason.trim() } },
+      {
+        assignmentId: target.assignmentId,
+        data: { employee_id: target.employeeId, start_time: from, end_time: to, reason: reason.trim() },
+      },
       {
         onSuccess: () => {
           void queryClient.invalidateQueries()
@@ -250,6 +255,7 @@ export function WorkedHoursSheet({ target, onClose }: { target: HoursTarget | nu
 function managerShiftTarget(row: ManagerShiftOut): HoursTarget {
   return {
     assignmentId: row.id,
+    employeeId: row.employee_id!,
     name: row.employee_name,
     date: row.shift.date,
     plannedStart: row.shift.start_time,
@@ -299,8 +305,29 @@ export function ChangeHours() {
 }
 
 function LocationShifts({ locationId }: { locationId: string }) {
+  const today = toIsoDate(new Date())
+  const [month, setMonth] = useState(today.slice(0, 7))
+  const move = (by: number) => setMonth(shiftMonth(month, by))
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <Button variant="quiet" size="normal" onClick={() => move(-1)} aria-label="Zmiany z poprzedniego miesiąca">
+          <ChevronLeft aria-hidden="true" size={22} />
+        </Button>
+        <span className="min-w-40 text-center font-semibold">{monthName(month)}</span>
+        <Button variant="quiet" size="normal" onClick={() => move(1)} aria-label="Zmiany z następnego miesiąca">
+          <ChevronRight aria-hidden="true" size={22} />
+        </Button>
+      </div>
+      <MonthShifts key={month} locationId={locationId} month={month} today={today} />
+    </>
+  )
+}
+
+/** The published shifts of one month (older ones too: the manager corrects hours with no time limit). */
+function MonthShifts({ locationId, month, today }: { locationId: string; month: string; today: string }) {
   const { readOnly } = useManager()
-  const shifts = useHandoverShifts(locationId)
+  const shifts = useHandoverShifts(locationId, { month })
   const [day, setDay] = useState('')
   const [target, setTarget] = useState<HoursTarget | null>(null)
   if (shifts.isPending) return <Loading>Wczytuję zmiany…</Loading>
@@ -313,8 +340,9 @@ function LocationShifts({ locationId }: { locationId: string }) {
   }
   const rows = (shifts.data.data as ManagerShiftOut[]).filter((s) => s.employee_id)
   const days = [...new Set(rows.map((s) => s.shift.date))].sort()
-  if (days.length === 0) return <p className="m-0 text-ink-muted">Ten lokal nie ma opublikowanego grafiku.</p>
-  const today = toIsoDate(new Date())
+  if (days.length === 0) {
+    return <p className="m-0 text-ink-muted">W tym miesiącu ten lokal nie ma opublikowanego grafiku.</p>
+  }
   const shown = day || (days.includes(today) ? today : days.filter((d) => d < today).pop() ?? days[0])
   return (
     <>

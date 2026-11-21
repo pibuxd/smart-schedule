@@ -390,6 +390,7 @@ function ShiftHours({ shift, assignmentId, onDone }: { shift: VersionShiftOut; a
         <WorkedHoursForm
           target={{
             assignmentId,
+            employeeId: shift.employee_id!,
             name: shift.employee_name,
             date: shift.date,
             plannedStart: shift.start_time,

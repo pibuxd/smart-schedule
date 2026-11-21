@@ -6,15 +6,9 @@ import { getHoursReportCsvUrl, useHoursReport } from '../../api/generated/report
 import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
-import { monthName } from '../../lib/dates'
+import { monthName, shiftMonth } from '../../lib/dates'
 import { useManager } from './ManagerContext'
 import { ChangeHours, HoursReports } from './WorkedHours'
-
-function shiftMonth(month: string, by: number): string {
-  const [year, m] = month.split('-').map(Number)
-  const date = new Date(year, m - 1 + by, 1)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-}
 
 const hours = (value: number) => value.toLocaleString('pl-PL', { maximumFractionDigits: 2 })
 

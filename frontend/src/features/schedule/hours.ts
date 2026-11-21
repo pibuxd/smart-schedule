@@ -40,7 +40,23 @@ export function differenceSentence(minutes: number): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-/** The wall-clock time of a moment, "HH:MM" (the phone's clock: "Wychodzę teraz"). */
-export function clockTime(date: Date): string {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+const pad = (value: number) => String(value).padStart(2, '0')
+
+/** Minutes east of UTC written at the end of an ISO time ("…+01:00" → 60, "…Z" → 0), or null without one. */
+function offsetMinutes(iso: string): number | null {
+  if (/z$/i.test(iso)) return 0
+  const match = /([+-])(\d{2}):?(\d{2})$/.exec(iso)
+  if (!match) return null
+  return (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]))
+}
+
+/**
+ * The wall-clock time of a moment, "HH:MM" ("Wychodzę teraz"). With `zoneOf`, a time of the location with its
+ * offset (a shift's `start_at`), it is the location's clock, whatever zone the phone is in; else the phone's.
+ */
+export function clockTime(date: Date, zoneOf?: string): string {
+  const offset = zoneOf ? offsetMinutes(zoneOf) : null
+  if (offset === null) return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const there = new Date(date.getTime() + offset * 60_000)
+  return `${pad(there.getUTCHours())}:${pad(there.getUTCMinutes())}`
 }

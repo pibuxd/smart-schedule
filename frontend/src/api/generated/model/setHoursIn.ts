@@ -6,6 +6,7 @@
  */
 
 export interface SetHoursIn {
+  employee_id: string;
   /**
      * GG:MM w czasie lokalu, np. 14:30
      * @minLength 3

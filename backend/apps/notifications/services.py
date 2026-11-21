@@ -231,6 +231,11 @@ def notification_text(kind: str, payload: dict) -> str:
                 )
             return f"Kierownik zmienił godziny Twojej zmiany: {hours_words(p)}. Tak liczymy tę zmianę."
         case "hours_lost":
+            if p.get("overlap"):
+                return (
+                    f"Po zmianie grafiku Twoje zatwierdzone godziny nachodzą na inną Twoją zmianę, więc już się nie "
+                    f"liczą: {hours_words(p)}. Liczą się godziny z grafiku."
+                )
             where = f" lokalu {p['location_name']}" if p.get("location_name") else ""
             if p.get("approved"):
                 return (

@@ -22,7 +22,7 @@ from apps.worktime.schemas import WorkedOut, worked_out
 
 router = Router(tags=["worktime"])
 
-HoursStatus = Literal["pending", "approved", "rejected", "cancelled", "replaced"]
+HoursStatus = Literal["pending", "approved", "rejected", "cancelled", "replaced", "expired"]
 ERRORS = {400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
 
 # How long decided changes stay on the manager's list.
@@ -78,6 +78,8 @@ class ReportHoursIn(Schema):
 
 
 class SetHoursIn(Schema):
+    # The person the manager sees on the shift: 409 when someone else got it meanwhile.
+    employee_id: UUID
     start_time: str = TIME_FIELD
     end_time: str = TIME_FIELD
     reason: str = Field(default="", max_length=services.REASON_MAX)
@@ -234,6 +236,7 @@ def set_shift_hours(request, assignment_id: UUID, payload: SetHoursIn):
         services.parse_time(payload.end_time),
         payload.reason,
         ctx.user,
+        employee_id=payload.employee_id,
     )
     shift = assignment.shift
     tz = ZoneInfo(shift.location.timezone)

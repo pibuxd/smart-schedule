@@ -10,6 +10,7 @@ from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
+from apps.core.months import month_range
 from apps.core.schemas import ErrorOut
 from apps.marketplace import services
 from apps.marketplace.models import ShiftClaim, ShiftOffer
@@ -349,17 +350,23 @@ def _managed_assignment(request, assignment_id: UUID, write: bool = True) -> tup
 
 
 @router.get("/locations/{location_id}/handover-shifts", response={200: list[ManagerShiftOut], **DECISION_ERRORS})
-def handover_shifts(request, location_id: UUID):
-    """Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"."""
+def handover_shifts(request, location_id: UUID, month: str | None = None):
+    """Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"; with `month`
+    (RRRR-MM), all of that month instead ("Zmień godziny sam" also corrects older shifts)."""
     ctx, location = context_for(request, Location, location_id)
     ctx.require_manager_of(location)
-    today = timezone.localdate()
+    if month:
+        first, after = month_range(month)
+        days = (first, after - timedelta(days=1))
+    else:
+        today = timezone.localdate()
+        days = (today - timedelta(days=PAST_DAYS), today + timedelta(days=AHEAD_DAYS))
     rows = list(
         ctx.qs(Assignment)
         .filter(
             shift__location=location,
             shift__version__status=ScheduleVersion.Status.PUBLISHED,
-            shift__date__range=(today - timedelta(days=PAST_DAYS), today + timedelta(days=AHEAD_DAYS)),
+            shift__date__range=days,
         )
         .select_related(
             "shift__location", "shift__position", "shift__shift_type", "shift__version", "employee__membership__user"

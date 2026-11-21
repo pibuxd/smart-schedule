@@ -62,6 +62,7 @@ export * from './gridPeriodOutStatus';
 export * from './groupIn';
 export * from './groupOut';
 export * from './handoverCandidateOut';
+export * from './handoverShiftsParams';
 export * from './healthOut';
 export * from './hoursChangeOut';
 export * from './hoursChangeOutStatus';

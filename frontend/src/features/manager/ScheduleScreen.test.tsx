@@ -519,6 +519,7 @@ describe('ScheduleScreen', () => {
     fireEvent.click(within(hours).getByRole('button', { name: 'Zapisz godziny' }))
     await waitFor(() =>
       expect(calls.find((c) => c.url === '/api/assignments/as2/hours')?.body).toEqual({
+        employee_id: 'e2',
         start_time: '06:00',
         end_time: '12:30',
         reason: '',

@@ -14,4 +14,5 @@ export const HoursChangeOutStatus = {
   rejected: 'rejected',
   cancelled: 'cancelled',
   replaced: 'replaced',
+  expired: 'expired',
 } as const;

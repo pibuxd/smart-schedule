@@ -146,10 +146,25 @@ describe('HoursScreen: other hours', () => {
     fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz godziny' }))
     await waitFor(() =>
       expect(calls.find((c) => c.url === '/api/assignments/as1/hours')?.body).toEqual({
+        employee_id: 'e1',
         start_time: '06:00',
         end_time: '12:00',
         reason: 'źle się czuła',
       }),
+    )
+  })
+
+  it('reaches older shifts month by month', async () => {
+    const calls = api({ pending: [] })
+    show()
+    fireEvent.click(await screen.findByText('Zmień godziny sam'))
+    await screen.findByRole('button', { name: 'Zmień godziny: Anna Wróbel' })
+    fireEvent.click(screen.getByRole('button', { name: 'Zmiany z poprzedniego miesiąca' }))
+    const now = new Date()
+    const before = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const month = `${before.getFullYear()}-${String(before.getMonth() + 1).padStart(2, '0')}`
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === `/api/locations/l1/handover-shifts?month=${month}`)).toBe(true),
     )
   })
 

@@ -5,14 +5,13 @@ Approved other hours of a shift (overtime, leaving early; `apps.worktime`) count
 import csv
 import io
 from collections import defaultdict
-from datetime import date
 from uuid import UUID
 
 from django.db.models import Max
 from django.http import HttpResponse
 from ninja import Router, Schema
-from ninja.errors import HttpError
 
+from apps.core.months import month_range
 from apps.core.schemas import ErrorOut
 from apps.scheduling.models import Assignment, ScheduleVersion
 from apps.tenancy.context import tenant_context
@@ -58,19 +57,10 @@ class HoursReportOut(Schema):
     latest_month: str | None
 
 
-def _month(value: str) -> tuple[date, date]:
-    try:
-        first = date.fromisoformat(f"{value}-01")
-        nxt = date(first.year + (first.month == 12), first.month % 12 + 1, 1)
-    except ValueError:
-        raise HttpError(400, "Podaj miesiąc w postaci RRRR-MM, np. 2026-12.") from None
-    return first, nxt
-
-
 def _report(request, company_id: UUID, month: str) -> HoursReportOut:
     ctx = tenant_context(request, company_id)
     ctx.require_manager()
-    first, nxt = _month(month)
+    first, nxt = month_range(month)
     locations = list(ctx.managed_locations().order_by("name"))
     rows = (
         ctx.qs(Assignment)
@@ -85,14 +75,14 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
     )
     rows = list(rows)
     worked = worked_hours(rows)
-    hours: dict = defaultdict(lambda: defaultdict(float))
+    seconds: dict = defaultdict(lambda: defaultdict(float))  # summed first, rounded once
     shifts: dict = defaultdict(int)
     longer: dict = defaultdict(int)  # minutes
     shorter: dict = defaultdict(int)
     people = {}
     for assignment in rows:
         shift, counted = assignment.shift, worked[assignment.pk]
-        hours[assignment.employee_id][shift.location_id] += counted.hours
+        seconds[assignment.employee_id][shift.location_id] += counted.seconds
         difference = counted.difference_minutes(shift)
         if difference > 0:
             longer[assignment.employee_id] += difference
@@ -111,6 +101,10 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
         .exclude(shift__location__in=locations)
         .values_list("employee_id", flat=True)
     )
+    hours = {
+        employee_id: {location_id: value / 3600 for location_id, value in by_location.items()}
+        for employee_id, by_location in seconds.items()
+    }
     used = [loc for loc in locations if any(loc.pk in h for h in hours.values())]
     result = []
     for employee_id, profile in people.items():

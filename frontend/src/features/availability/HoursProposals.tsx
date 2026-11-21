@@ -15,6 +15,7 @@ const SENT: Record<NonNullable<HoursProposalOut["sent_status"]>, string> = {
   rejected: "Kierownik odrzucił te godziny.",
   cancelled: "Zgłoszenie wycofane.",
   replaced: "Zastąpione innymi godzinami.",
+  expired: "Nie masz już tej zmiany w grafiku, więc te godziny się nie liczą.",
 };
 
 /**

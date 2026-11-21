@@ -23,6 +23,13 @@ export function monthName(month: string): string {
   return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${month.slice(0, 4)}`
 }
 
+/** "2026-12" moved by whole months: ("2026-12", 1) -> "2027-01". */
+export function shiftMonth(month: string, by: number): string {
+  const [year, m] = month.split('-').map(Number)
+  const date = new Date(year, m - 1 + by, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 /** "2026-12-04" -> a local Date at midnight (no time-zone shifts). */
 export function parseDate(iso: string): Date {
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number)

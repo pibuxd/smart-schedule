@@ -15,7 +15,7 @@ from apps.notifications.models import Notification
 from apps.scheduling.models import SchedulePeriod
 from apps.worktime.models import HoursChange
 from apps.worktime.services import SAME_HOURS, TOO_OLD
-from tests.test_worktime import bakery, hours_of, report, user_of  # noqa: F401  (fixture)
+from tests.test_worktime import at, bakery, hours_of, report, user_of  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.django_db
 
@@ -400,6 +400,29 @@ class TestManagerChat:
         assert list(HoursChange.objects.values_list("status", flat=True)) == ["cancelled"]  # Ewa's hours neither
         assert not Notification.objects.filter(kind__in=["hours_approved", "hours_set"]).exists()
         assert AssistantCommand.objects.get(pk=body["id"]).status == AssistantCommand.Status.READY
+
+    def test_a_plan_made_before_a_new_report_or_other_hours_saves_nothing(self, api, bakery, with_key, monkeypatch):
+        b = bakery
+        ewa = b["shift"](b["ewa"], b["today"])
+        body, _ = ask(api, b, monkeypatch, manager_plan(hours_changes=[set_hours("Ewa", b["today"], end="12:00")]))
+        assert body["can_apply"]
+        assert report(api, b, ewa, "06:00", "15:00", who=b["ewa"]).status_code == 201  # Ewa writes meanwhile
+
+        api.login(b["manager"])
+        applied = api.post(f"/api/assistant-commands/{body['id']}/apply")
+
+        assert applied.status_code == 409
+        assert applied.json()["detail"].startswith("Godziny tej zmiany zmieniły się od przygotowania propozycji.")
+        assert list(HoursChange.objects.values_list("status", flat=True)) == ["pending"]  # her report still waits
+
+        again, _ = ask(api, b, monkeypatch, manager_plan(hours_changes=[set_hours("Ewa", b["today"], end="12:00")]))
+        assert "Czekające zgłoszenie (06:00–15:00) przestanie czekać." in again["lines"][0]
+        api.login(b["manager"])
+        other = {"employee_id": str(b["ewa"].pk), "start_time": "06:00", "end_time": "13:00"}
+        assert api.post(f"/api/assignments/{ewa.pk}/hours", other).status_code == 200  # the form meanwhile
+
+        assert api.post(f"/api/assistant-commands/{again['id']}/apply").status_code == 409
+        assert HoursChange.objects.get(status="approved").end_at == at(b["today"], 13)
 
     def test_the_manager_tool_lists_waiting_reports(self, api, bakery):
         b = bakery

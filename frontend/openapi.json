@@ -6295,6 +6295,22 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -6353,7 +6369,7 @@
             }
           }
         },
-        "description": "Published shifts of the location (two weeks back, two months ahead) for \"Zmień obsadę\".",
+        "description": "Published shifts of the location (two weeks back, two months ahead) for \"Zmień obsadę\"; with `month`\n(RRRR-MM), all of that month instead (\"Zmień godziny sam\" also corrects older shifts).",
         "tags": [
           "marketplace"
         ],
@@ -11880,7 +11896,8 @@
                   "approved",
                   "rejected",
                   "cancelled",
-                  "replaced"
+                  "replaced",
+                  "expired"
                 ],
                 "type": "string"
               },
@@ -14754,7 +14771,8 @@
               "approved",
               "rejected",
               "cancelled",
-              "replaced"
+              "replaced",
+              "expired"
             ],
             "title": "Status",
             "type": "string"
@@ -14996,6 +15014,11 @@
       },
       "SetHoursIn": {
         "properties": {
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
           "start_time": {
             "description": "GG:MM w czasie lokalu, np. 14:30",
             "maxLength": 5,
@@ -15018,6 +15041,7 @@
           }
         },
         "required": [
+          "employee_id",
           "start_time",
           "end_time"
         ],

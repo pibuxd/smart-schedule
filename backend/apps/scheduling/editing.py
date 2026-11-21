@@ -790,7 +790,7 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
         refresh_after_publish(version, previous)
         from apps.worktime.services import refresh_after_publish as refresh_hours
 
-        refresh_hours(version, previous)
+        refresh_hours(version)
         if notify:
             _notify_published(version, first=previous is None)
     return version

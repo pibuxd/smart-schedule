@@ -969,6 +969,8 @@ def _checked_manager_hours(
             "start_time": times["start_time"],
             "end_time": times["end_time"],
             "reason": item.reason.strip()[: worktime.REASON_MAX],
+            # Applying checks that the hours and the waiting report are still what this plan was made for.
+            "seen": worktime.Seen.of(assignment).as_dict(),
         }
         if (start_at, end_at) == (shift.start_at, shift.end_at):
             line = (
@@ -1489,6 +1491,8 @@ def _apply_hours(ctx: TenantContext, location: Location, plan: dict[str, Any]) -
                 worktime.parse_time(entry["end_time"]),
                 entry.get("reason") or "",
                 ctx.user,
+                employee_id=entry["employee"],
+                seen=worktime.Seen.from_dict(entry.get("seen")),
             )
     except HttpError as exc:
         raise HttpError(409, f"{exc.message} Nic z tego planu nie zapisałem. Napisz polecenie jeszcze raz.") from exc

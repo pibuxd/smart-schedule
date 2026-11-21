@@ -1016,11 +1016,21 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
   planu). Kierownik musi prowadzić lokal zmiany (403), firma tylko do odczytu daje 402, obca firma 404.
 - Powiadomienia: `hours_reported` (kierownicy lokalu, link „Godziny”), `hours_approved`, `hours_rejected`,
   `hours_set`, `hours_lost` (pracownik, link „Mój grafik”). Osoba traci opublikowaną zmianę: `editing.publish` woła
-  `worktime.services.refresh_after_publish(version, previous)`, a zmiany w miejscu (`marketplace._transfer`:
-  oddanie, `manager_reassign`, `manager_swap`; `editing.take_off_published`) wołają `person_left_shift`. Czekające
-  zgłoszenie dostaje `cancelled`, zatwierdzone zostaje `approved` (liczy się znowu, gdy zmiana wróci), a osoba
-  dostaje `hours_lost` (`approved` w payloadzie). Przy publikacji tylko za zmiany, które miała w zastępowanej
-  wersji, więc kolejna poprawka nie powtarza powiadomienia.
+  `worktime.services.refresh_after_publish(version)`, a zmiany w miejscu (`marketplace._transfer`: oddanie,
+  `manager_reassign`, `manager_swap`; `editing.take_off_published`) wołają `person_left_shift`. Czekające
+  zgłoszenie i zatwierdzone godziny dostają status `expired` na stałe (nie wracają ze zmianą, więc nic nie liczy się
+  dwa razy), a osoba dostaje `hours_lost` (`approved` w payloadzie). Zatwierdzone godziny, na które nachodzi zmiana
+  dana osobie później, też wygasają (`overlap` w payloadzie): po publikacji poprawki i po zmianie w miejscu
+  (`person_got_shift`); `marketplace.check_assignment` i `swap_problems` dopisują wtedy wcześniej problem z
+  `worktime.hours_conflicts` (kierownik może wymusić).
+- Recenzja Piotra (21.11): `SetHoursIn.employee_id` (wymagane; inna osoba na zmianie pod blokadą wiersza = 409);
+  przywrócenie planu przechodzi kontrolę kolizji; plan asystenta zapisuje przy każdej zmianie godzin `seen`
+  (godziny, które się liczą, i id czekającego zgłoszenia), a `set_hours(..., seen=)` daje 409, gdy coś się zmieniło;
+  `resolve` zwraca UTC (limit 24 h liczy prawdziwy czas przy zmianie czasu); sumy (raport, CSV, „Mój grafik”) dodają
+  sekundy i zaokrąglają raz (`Worked.seconds`); `/me/schedule` liczy też miesiące z `recent`;
+  `GET /locations/{id}/handover-shifts?month=RRRR-MM` (cały miesiąc, `apps.core.months.month_range`) dla wyboru
+  miesiąca w „Zmień godziny sam”; „Wychodzę teraz” czyta zegar w chwili kliknięcia, w czasie lokalu (przesunięcie z
+  `start_at`); zmiana, która skończyła się przy otwartym ekranie, od razu trafia do „Minionych zmian”.
 - „Nadgodziny” to godziny ponad grafik, nie nadgodziny z Kodeksu pracy: zdanie pod tabelą ekranu „Godziny” (tylko
   gdy są kolumny nadgodzin) i kolumna CSV „Nadgodziny (ponad grafik)”.
 - Asystent pracownika: `EmployeeReply.hours_changes` (0–3: data, od, do, powód; same napisy, bez typów „albo”;

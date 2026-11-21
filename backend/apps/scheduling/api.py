@@ -496,15 +496,17 @@ def my_schedule(request, company_id: UUID):
         )
 
     shifts = [shift_out(a) for a in upcoming]
-    months = sorted({today.strftime("%Y-%m")} | {s.date.strftime("%Y-%m") for s in shifts})
-    totals = dict.fromkeys(months, 0.0)
+    past = [shift_out(a) for a in recent]
+    # The months of "Minione zmiany" too: on the 1st, yesterday's corrected shift belongs to the previous month.
+    months = sorted({today.strftime("%Y-%m")} | {s.date.strftime("%Y-%m") for s in [*shifts, *past]})
+    totals = dict.fromkeys(months, 0.0)  # seconds, rounded once
     first = date.fromisoformat(months[0] + "-01")
     in_months = list(published.filter(shift__date__gte=first))
     counted = worked_hours(in_months)
     for assignment in in_months:
         key = assignment.shift.date.strftime("%Y-%m")
         if key in totals:
-            totals[key] += counted[assignment.pk].hours
+            totals[key] += counted[assignment.pk].seconds
     published_until = (
         ctx.qs(SchedulePeriod)
         .filter(
@@ -520,9 +522,9 @@ def my_schedule(request, company_id: UUID):
     return MyScheduleOut(
         home_location_name=profile.home_location.name,
         shifts=shifts,
-        recent=[shift_out(a) for a in recent],
+        recent=past,
         published_until=published_until,
-        months=[MonthHoursOut(month=m, hours=round(h, 2)) for m, h in totals.items()],
+        months=[MonthHoursOut(month=m, hours=round(h / 3600, 2)) for m, h in totals.items()],
     )
 
 

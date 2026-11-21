@@ -155,7 +155,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   Employees report (`report`, at most 14 days back), managers decide (`decide`) or set hours at once (`set_hours`);
   every check lives in `check_report` / `check_set` / `check_approve`, which the assistant reuses before proposing.
   The assistant only prepares: an employee sends a prepared report with "Wyślij kierownikowi" (`request_id`), a
-  manager's hours plan applies on "Zatwierdź zmiany" and does not need an open rule set.
+  manager's hours plan applies on "Zatwierdź zmiany" and does not need an open rule set. A person who loses a shift
+  loses its other hours for good (`expired`, never revived), so no time counts twice; gaining a shift that approved
+  hours run into is a problem in `check_assignment` and expires them when forced (`person_got_shift`).
 - Assistant (a language model): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   On OpenRouter the structured answer is a call of the `final_answer` tool (never `response_format` next to tools:
   providers then force JSON on every round and no tool gets called); on Anthropic it is `output_config.format`.

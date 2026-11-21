@@ -161,7 +161,7 @@ class HoursProposalOut(Schema):
     position_name: str
     reason: str
     # The report sent from this message: its status; None = not sent yet.
-    sent_status: Literal["pending", "approved", "rejected", "cancelled", "replaced"] | None
+    sent_status: Literal["pending", "approved", "rejected", "cancelled", "replaced", "expired"] | None
 
 
 class MyRequestOut(Schema):

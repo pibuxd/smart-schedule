@@ -30,5 +30,10 @@ describe('hours', () => {
 
   it('writes the clock time with two digits', () => {
     expect(clockTime(new Date(2026, 10, 20, 9, 5))).toBe('09:05')
+    // In the location's time, whatever zone the phone is in.
+    const moment = new Date('2026-11-13T10:15:00Z')
+    expect(clockTime(moment, '2026-11-13T06:00:00+01:00')).toBe('11:15')
+    expect(clockTime(moment, '2026-07-13T06:00:00+02:00')).toBe('12:15')
+    expect(clockTime(moment, '2026-11-13T06:00:00Z')).toBe('10:15')
   })
 })

@@ -59,6 +59,7 @@ class Migration(migrations.Migration):
                             ("rejected", "odrzucone"),
                             ("cancelled", "wycofane"),
                             ("replaced", "zastąpione"),
+                            ("expired", "wygasłe"),
                         ],
                         default="pending",
                         max_length=16,

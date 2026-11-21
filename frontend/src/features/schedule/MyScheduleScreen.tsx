@@ -61,8 +61,13 @@ export function MyScheduleScreen({
     )
   }
   const data = schedule.data.data as MyScheduleOut
-  const [next, ...rest] = data.shifts.filter((shift) => Date.parse(counted(shift).end_at) > today.getTime())
-  const recent = data.recent ?? []
+  const ahead = (shift: MyShiftOut) => Date.parse(counted(shift).end_at) > today.getTime()
+  const [next, ...rest] = data.shifts.filter(ahead)
+  // A shift that ended while the screen was open moves to "Minione zmiany" at once (newest first), so
+  // "Zgłoś inne godziny" stays at hand right when the work ends.
+  const known = new Set((data.recent ?? []).map((s) => s.id))
+  const justEnded = data.shifts.filter((s) => !ahead(s) && s.can_report && !known.has(s.id)).reverse()
+  const recent = [...justEnded, ...(data.recent ?? [])]
   const give = readOnly ? undefined : (shift: MyShiftOut) => setGiving(shift.id)
   const report = readOnly ? undefined : (shift: MyShiftOut) => setReporting(shift.id)
   // "Zgłoś inne godziny" at today's or the running shift; earlier ones are in "Minione zmiany".

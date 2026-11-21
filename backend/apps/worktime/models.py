@@ -28,6 +28,9 @@ class HoursChange(CompanyOwnedModel):
         CANCELLED = "cancelled", "wycofane"
         # Newer hours of the same shift were approved, or the manager set other hours over a waiting report.
         REPLACED = "replaced", "zastąpione"
+        # The person lost the shift (a correction or a change in place), or a corrected schedule made the hours run
+        # into another shift of theirs. Never counts again, even if the shift comes back.
+        EXPIRED = "expired", "wygasłe"
 
     company_from = "location"
 

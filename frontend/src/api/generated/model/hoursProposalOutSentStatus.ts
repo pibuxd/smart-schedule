@@ -14,4 +14,5 @@ export const HoursProposalOutSentStatus = {
   rejected: 'rejected',
   cancelled: 'cancelled',
   replaced: 'replaced',
+  expired: 'expired',
 } as const;

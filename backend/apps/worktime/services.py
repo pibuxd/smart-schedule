@@ -6,8 +6,9 @@
 - `set_hours`: the manager sets the hours alone, at once (over a waiting report too). The schedule's own hours
   bring the plan back.
 - `worked_hours`: the hours that count for a list of published assignments (approved change, else the plan).
-- `refresh_after_publish` / `person_left_shift`: a person who loses a published shift (a corrected schedule, or a
-  change in place) loses its waiting report, and is told when approved hours of it stop counting.
+- `refresh_after_publish` / `person_left_shift` / `person_got_shift`: a person who loses a published shift (a
+  corrected schedule, or a change in place) loses its waiting report and approved hours for good (`expired`), and
+  approved hours that a change makes run into another shift of the person expire too. They are told.
 
 The published shift keeps its planned hours: the generator, the validator and the scores read the plan. Only the
 counting of hours (reports, "Mój grafik", the assistant) reads `worked_hours`.
@@ -18,7 +19,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
@@ -42,6 +43,8 @@ SAME_HOURS = "To są te same godziny, które liczą się teraz. Nic się nie zmi
 TOO_LONG = "Zmiana może trwać najwyżej 24 godziny. Sprawdź godziny początku i końca."
 DECIDED = "To zgłoszenie jest już rozstrzygnięte albo wycofane. Odśwież ekran."
 GONE = "Ta osoba nie ma już tej zmiany w opublikowanym grafiku, więc zgłoszenie wygasło."
+OTHER_PERSON = "Tę zmianę ma już inna osoba. Odśwież ekran i sprawdź, czyje godziny zmieniasz."
+CHANGED_MEANWHILE = "Godziny tej zmiany zmieniły się od przygotowania propozycji."
 NOBODY = "Na tej zmianie nikogo nie ma, więc nie ma czyich godzin zmienić."
 
 
@@ -72,7 +75,8 @@ def resolve(shift: Shift, start: time, end: time) -> tuple[datetime, datetime]:
     end_at = datetime.combine(start_at.date(), end, tzinfo=tz)
     if end_at <= start_at:
         end_at = datetime.combine(start_at.date() + timedelta(days=1), end, tzinfo=tz)
-    return start_at, end_at
+    # In UTC: subtracting two moments of one zone ignores a change of the clock (25 h on the October night).
+    return start_at.astimezone(UTC), end_at.astimezone(UTC)
 
 
 # ----------------------------------------------------------------------------------------------- counting
@@ -89,6 +93,11 @@ class Worked:
     @property
     def hours(self) -> float:
         return hours_between(self.start_at, self.end_at)
+
+    @property
+    def seconds(self) -> float:
+        """For sums: add seconds and round the total, not each shift (3 × 8 h 20 min is 25 h, not 24,99)."""
+        return (self.end_at - self.start_at).total_seconds()
 
     @property
     def changed(self) -> bool:
@@ -362,7 +371,7 @@ def check_approve(change: HoursChange, assignment: Assignment) -> None:
 
 
 def decide(change: HoursChange, user, *, approve: bool) -> HoursChange:
-    """Approve or reject a waiting report. A report whose person lost the shift ends as cancelled (409)."""
+    """Approve or reject a waiting report. A report whose person lost the shift ends as expired (409)."""
     gone = False
     with transaction.atomic():
         _lock_person(change.employee_id)
@@ -377,7 +386,7 @@ def decide(change: HoursChange, user, *, approve: bool) -> HoursChange:
         assignment = published_assignment(locked)
         now = timezone.now()
         if assignment is None:
-            locked.status, locked.decided_at = HoursChange.Status.CANCELLED, now
+            locked.status, locked.decided_at = HoursChange.Status.EXPIRED, now
             locked.save(update_fields=["status", "decided_at"])
             gone = True
         else:
@@ -407,20 +416,77 @@ def check_set(assignment: Assignment, start: time, end: time) -> tuple[datetime,
     waiting = pending_reports([assignment]).get(assignment.pk)
     if (start_at, end_at) == (current.start_at, current.end_at) and waiting is None:
         raise HttpError(400, SAME_HOURS)
-    if (start_at, end_at) != (shift.start_at, shift.end_at):
-        _check_times(assignment, start_at, end_at)
+    # The plan's own hours too: another shift of the person may have been moved onto them meanwhile.
+    _check_times(assignment, start_at, end_at)
     return start_at, end_at
 
 
-def set_hours(assignment: Assignment, start: time, end: time, reason: str, user) -> Worked:
+@dataclass(frozen=True)
+class Seen:
+    """What the hours of a shift were when a change of them was prepared (the assistant's plan): the hours that
+    counted and the waiting report. Applying the change later checks that both are still the same."""
+
+    start_at: str
+    end_at: str
+    waiting_id: str | None
+
+    @classmethod
+    def of(cls, assignment: Assignment) -> Seen:
+        current = worked_hours([assignment])[assignment.pk]
+        waiting = pending_reports([assignment]).get(assignment.pk)
+        return cls(current.start_at.isoformat(), current.end_at.isoformat(), str(waiting.pk) if waiting else None)
+
+    def as_dict(self) -> dict:
+        return {"start_at": self.start_at, "end_at": self.end_at, "waiting_id": self.waiting_id}
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> Seen | None:
+        if not data:
+            return None
+        return cls(data["start_at"], data["end_at"], data.get("waiting_id"))
+
+    def same_as(self, other: Seen) -> bool:
+        return (
+            datetime.fromisoformat(self.start_at) == datetime.fromisoformat(other.start_at)
+            and datetime.fromisoformat(self.end_at) == datetime.fromisoformat(other.end_at)
+            and self.waiting_id == other.waiting_id
+        )
+
+
+def set_hours(
+    assignment: Assignment,
+    start: time,
+    end: time,
+    reason: str,
+    user,
+    *,
+    employee_id=None,
+    seen: Seen | None = None,
+) -> Worked:
     """The manager's own change of one person's hours on a published shift, at once. Hours equal to the plan bring
-    the plan back. A waiting report of the shift is approved when the hours are the same, otherwise replaced."""
+    the plan back. A waiting report of the shift is approved when the hours are the same, otherwise replaced.
+
+    `employee_id`: the person the manager saw (409 when the shift went to someone else meanwhile). `seen`: the
+    hours when the change was prepared (409 when they or the waiting report changed since)."""
     with transaction.atomic():
-        if assignment.employee_id is None:
+        # The shift row first (like the changes of the published schedule), then the person.
+        locked = (
+            Assignment.objects.for_company(assignment.company_id)
+            .select_for_update(of=("self",))
+            .filter(pk=assignment.pk)
+            .first()
+        )
+        if locked is None:
+            raise HttpError(404, "Nie znaleziono tej zmiany.")
+        if locked.employee_id is None:
             raise HttpError(409, NOBODY)
-        _lock_person(assignment.employee_id)
+        if employee_id is not None and str(locked.employee_id) != str(employee_id):
+            raise HttpError(409, OTHER_PERSON)
+        _lock_person(locked.employee_id)
         assignment = _load(assignment.pk, assignment.company_id)
         shift = assignment.shift
+        if seen is not None and not seen.same_as(Seen.of(assignment)):
+            raise HttpError(409, CHANGED_MEANWHILE)
         start_at, end_at = check_set(assignment, start, end)
         waiting = pending_reports([assignment]).get(assignment.pk)
         to_plan = (start_at, end_at) == (shift.start_at, shift.end_at)
@@ -461,10 +527,8 @@ def set_hours(assignment: Assignment, start: time, end: time, reason: str, user)
     return Worked(start_at, end_at, None if to_plan else change)
 
 
-def _holders(version: ScheduleVersion | None) -> set[tuple[str, str]]:
+def _holders(version: ScheduleVersion) -> set[tuple[str, str]]:
     """(slot_key, employee id) of every filled shift of a version."""
-    if version is None:
-        return set()
     return {
         (key, str(employee))
         for key, employee in Assignment.objects.for_company(version.company_id)
@@ -473,57 +537,125 @@ def _holders(version: ScheduleVersion | None) -> set[tuple[str, str]]:
     }
 
 
-def _end_for_lost_shift(changes: list[HoursChange]) -> None:
-    """The people of `changes` no longer have those published shifts: a waiting report ends (cancelled) and approved
-    hours stop counting (they stay approved and count again if the shift comes back). Each person is told."""
+def _expire(changes: list[HoursChange], *, overlap: bool = False) -> None:
+    """End waiting reports and approved hours for good (`expired`): they never count again, even if the shift
+    comes back to the person (the manager sets the hours again, checked against the person's hours then). Each
+    person is told. `overlap`: the person still has the shift, but the hours run into another shift of theirs."""
     if not changes:
         return
-    now = timezone.now()
-    waiting = [change.pk for change in changes if change.status == HoursChange.Status.PENDING]
-    if waiting:
-        HoursChange.objects.for_company(changes[0].company_id).filter(pk__in=waiting).update(
-            status=HoursChange.Status.CANCELLED, decided_at=now
-        )
+    HoursChange.objects.for_company(changes[0].company_id).filter(pk__in=[c.pk for c in changes]).update(
+        status=HoursChange.Status.EXPIRED, decided_at=timezone.now()
+    )
     for change in changes:
         notify(
             change.company_id,
             [_user_of(change.employee)],
             "hours_lost",
-            {**payload(change), "approved": change.status == HoursChange.Status.APPROVED},
+            {**payload(change), "approved": change.status == HoursChange.Status.APPROVED, "overlap": overlap},
         )
 
 
-def _open_changes(company_id, period_id, **filters) -> list[HoursChange]:
+def _open_changes(company_id, **filters) -> list[HoursChange]:
     return list(
         HoursChange.objects.for_company(company_id)
-        .filter(period_id=period_id, status__in=[HoursChange.Status.PENDING, HoursChange.Status.APPROVED], **filters)
+        .filter(status__in=[HoursChange.Status.PENDING, HoursChange.Status.APPROVED], **filters)
         .select_related("location", "employee__membership__user")
     )
 
 
+def _running_into_others(changes: list[HoursChange]) -> list[HoursChange]:
+    """Approved hours that run into another published shift of the same person (with that shift's hours)."""
+    result = []
+    current = current_assignments([c for c in changes if c.status == HoursChange.Status.APPROVED])
+    for change in changes:
+        assignment = current.get(change.pk)
+        if assignment is None:
+            continue
+        try:
+            _check_overlap(assignment, change.start_at, change.end_at)
+        except HttpError:
+            result.append(change)
+    return result
+
+
 def person_left_shift(assignment: Assignment, employee_id) -> None:
     """A published shift went from `employee_id` to someone else (or nobody) in place: a handover, the manager's
-    change or swap, a clash taken off. Their waiting report of it ends and they hear what happened to the hours."""
+    change or swap, a clash taken off. Their waiting report and approved hours of it expire, and they are told."""
     if employee_id is None:
         return
     shift = assignment.shift
-    _end_for_lost_shift(
-        _open_changes(assignment.company_id, shift.version.period_id, slot_key=shift.slot_key, employee_id=employee_id)
+    _expire(
+        _open_changes(
+            assignment.company_id, period_id=shift.version.period_id, slot_key=shift.slot_key, employee_id=employee_id
+        )
     )
 
 
-def refresh_after_publish(version: ScheduleVersion, previous: ScheduleVersion | None = None) -> int:
-    """A newly published version: waiting reports of people who no longer have that shift end (cancelled). People
-    who lose a shift in this correction hear about it, also when their approved hours stop counting (told once:
-    only for shifts they had in the version it replaces). Returns how many reports ended."""
+def person_got_shift(assignment: Assignment) -> None:
+    """The person now on `assignment` (in place: a handover, the manager's change or swap) may have approved hours
+    on another shift that run into this one; those expire (the plan of that shift counts), and they are told."""
+    if assignment.employee_id is None:
+        return
+    shift = assignment.shift
+    nearby = _open_changes(
+        assignment.company_id,
+        employee_id=assignment.employee_id,
+        status=HoursChange.Status.APPROVED,
+        start_at__lt=shift.end_at,
+        end_at__gt=shift.start_at,
+    )
+    _expire(_running_into_others(nearby), overlap=True)
+
+
+def hours_conflicts(shift: Shift, employee_ids, *, exclude=()) -> dict[str, str]:
+    """employee id -> a Polish sentence when that person's approved hours on another published shift run into
+    `shift` (taking it would count that time twice). `exclude`: assignments the person gives away at once."""
+    ids = [e for e in employee_ids if e]
+    if not ids:
+        return {}
+    rows = list(
+        Assignment.objects.for_company(shift.company_id)
+        .filter(
+            employee_id__in=ids,
+            shift__version__status=ScheduleVersion.Status.PUBLISHED,
+            shift__start_at__lt=shift.end_at + MAX_LENGTH,
+            shift__end_at__gt=shift.start_at - MAX_LENGTH,
+        )
+        .exclude(pk__in=list(exclude))
+        .exclude(shift__slot_key=shift.slot_key, shift__version__period_id=shift.version.period_id)
+        .select_related("shift__version", "shift__location")
+    )
+    result: dict[str, str] = {}
+    counted = worked_hours(rows)
+    for row in rows:
+        worked = counted[row.pk]
+        if worked.changed and worked.start_at < shift.end_at and worked.end_at > shift.start_at:
+            tz = ZoneInfo(row.shift.location.timezone)
+            result.setdefault(
+                str(row.employee_id),
+                f"Zatwierdzone godziny tej osoby nachodzą na tę zmianę: {_day(row.shift.date)}, "
+                f"{local_time(worked.start_at, tz)}–{local_time(worked.end_at, tz)}, {row.shift.location.name}.",
+            )
+    return result
+
+
+def refresh_after_publish(version: ScheduleVersion) -> int:
+    """A newly published version: waiting reports and approved hours of people who no longer have that shift
+    expire, and so do approved hours that the corrected schedule makes run into another shift of the person.
+    Everyone is told. Returns how many changes expired."""
     holders = _holders(version)
-    before = _holders(previous)
-    lost = []
-    for change in _open_changes(version.company_id, version.period_id):
-        key = (change.slot_key, str(change.employee_id))
-        if key in holders:
-            continue
-        if change.status == HoursChange.Status.PENDING or key in before:
-            lost.append(change)
-    _end_for_lost_shift(lost)
-    return sum(1 for change in lost if change.status == HoursChange.Status.PENDING)
+    open_changes = _open_changes(version.company_id, period_id=version.period_id)
+    lost = [c for c in open_changes if (c.slot_key, str(c.employee_id)) not in holders]
+    _expire(lost)
+    # Approved hours of the people of this schedule around its days, in any location (a shift here may now run
+    # into hours approved elsewhere).
+    period = version.period
+    nearby = _open_changes(
+        version.company_id,
+        status=HoursChange.Status.APPROVED,
+        employee_id__in={employee for _, employee in holders},
+        date__range=(period.start - timedelta(days=1), period.end + timedelta(days=1)),
+    )
+    overlapping = _running_into_others([c for c in nearby if c not in lost])
+    _expire(overlapping, overlap=True)
+    return len(lost) + len(overlapping)

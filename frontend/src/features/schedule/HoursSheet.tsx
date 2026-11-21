@@ -116,7 +116,13 @@ function ReportHours({ shift, now, onClose }: { shift: MyShiftOut; now: Date; on
       </div>
       {running && (
         <div>
-          <Button type="button" variant="secondary" size="normal" onClick={() => setEnd(clockTime(now))}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="normal"
+            // The clock at the click: the screen's `now` only moves at the edges of shifts.
+            onClick={() => setEnd(clockTime(new Date(), counted.start_at))}
+          >
             Wychodzę teraz
           </Button>
         </div>
