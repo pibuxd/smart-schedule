@@ -24,8 +24,9 @@ Scope and requirements: `docs/spec.md`. Technical plan, data model, endpoints, s
 - Docker Compose: `db`, `api` (gunicorn), `worker`, `caddy` (serves the SPA, proxies `/api`, serves Django static files).
 - LLM: OpenRouter via the `openai` Python SDK (default model `deepseek/deepseek-v4.1-flash`), key only from
   `OPENROUTER_API_KEY`, model from `OPENROUTER_MODEL`, thinking depth from `OPENROUTER_EFFORT` (default `low`; every tool
-  round is a full call, so keep it low). Fallback when that key is empty: Claude via the Anthropic Python SDK
-  (`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`). Answer schemas come from the Pydantic models in `llm.py`.
+  round is a full call, so keep it low). Only when that key is empty: Claude via the Anthropic Python SDK
+  (`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`). The key picks the service; an OpenRouter failure never
+  switches to Claude by itself. Answer schemas come from the Pydantic models in `llm.py`.
 
 ## Commands
 
