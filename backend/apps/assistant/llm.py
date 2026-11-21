@@ -1,19 +1,26 @@
-"""Calls to Claude (Anthropic Python SDK, structured outputs, read-only tools). The only module that talks to the API.
+"""Calls to the language model (structured answers, read-only tools). The only module that talks to the API.
 
 The assistant turns words into settings from closed lists (a manager's rules and instructions about people, an
 employee's preferences) and answers questions about Grafikomat and the location. For the answers it reads data only
 through `tools.Toolbox`: the app's own GET endpoints, run with the permissions of the person who wrote. It never
-arranges a schedule or changes data by itself. Without `ANTHROPIC_API_KEY` it is off (`is_enabled()` is False) and
-callers fall back: a request goes to the manager as written, the manager sets rules by hand.
+arranges a schedule or changes data by itself.
+
+Two backends, chosen by the key that is set (`backend()`): OpenRouter (`OPENROUTER_API_KEY`, its OpenAI-compatible
+chat completions, by default DeepSeek V4.1 Flash; since 21.11.2026) and Anthropic (`ANTHROPIC_API_KEY`, Claude).
+OpenRouter wins when both are set. Without a key the assistant is off (`is_enabled()` is False) and callers fall back:
+a request goes to the manager as written, the manager sets rules by hand. Both backends take the same prompts, tools
+and Pydantic answer models, so a new answer field needs no change here.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import TYPE_CHECKING, Literal
 
 import anthropic
+import openai
 from django.conf import settings
 from pydantic import BaseModel, Field, ValidationError
 
@@ -35,6 +42,25 @@ MAX_TOKENS = 8000
 # output_config.effort levels. Thinking is always on in the default model and every tool round is a full call, so
 # the level multiplies: at the model's default (medium) an answer with two or three rounds took about 40 s.
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
+# OpenRouter's `reasoning.effort` levels ("none" turns thinking off where the model allows it).
+OPENROUTER_EFFORT_LEVELS = ("none", "minimal", "low", "medium", "high", "xhigh")
+# OpenRouter sends a request to one of many providers of the model. Only those that accept every parameter sent here
+# (tools, tool_choice, reasoning) and neither keep nor train on prompts: messages carry people's names and schedules.
+OPENROUTER_PROVIDER = {"require_parameters": True, "data_collection": "deny"}
+# On OpenRouter the structured answer is a call of this tool. A JSON response format next to tools does not work
+# there: providers constrain every round to the JSON, so the model can never call a tool (checked with DeepSeek V4.1
+# Flash on 21.11.2026: it planned a `my_schedule` call and answered with an empty JSON instead).
+ANSWER_TOOL = "final_answer"
+ANSWER_TOOL_DESCRIPTION = (
+    "Twoja odpowiedź końcowa na tę wiadomość. Wywołaj raz, na końcu, gdy masz już potrzebne dane; tylko ona trafia "
+    "do aplikacji."
+)
+ANSWER_RULE = (
+    f"\n\nOdpowiedź końcową zawsze zwracasz jednym wywołaniem narzędzia {ANSWER_TOOL}; zwykły tekst nie dotrze do "
+    "tej osoby."
+)
 
 
 class AssistantError(Exception):
@@ -284,11 +310,30 @@ niejasne, nie zgaduj: zostaw listy zmian puste i zadaj jedno krótkie pytanie. N
 {MANAGER_GUIDE}"""
 
 
+def backend() -> Literal["openrouter", "anthropic"] | None:
+    """Which API the assistant uses: OpenRouter when its key is set, else Anthropic, else none (assistant off)."""
+    if settings.OPENROUTER_API_KEY:
+        return "openrouter"
+    if settings.ANTHROPIC_API_KEY:
+        return "anthropic"
+    return None
+
+
 def is_enabled() -> bool:
-    return bool(settings.ANTHROPIC_API_KEY)
+    return backend() is not None
 
 
-def get_client() -> anthropic.Anthropic:
+def _converse[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None = None) -> T:
+    """One message, with up to `MAX_TOOL_ROUNDS` rounds of read-only tool calls, ending in a structured answer."""
+    if backend() == "openrouter":
+        return _converse_openrouter(system, content, output, toolbox)
+    return _converse_anthropic(system, content, output, toolbox)
+
+
+# ----------------------------------------------------------------- Anthropic (Claude)
+
+
+def anthropic_client() -> anthropic.Anthropic:
     """The API client. Tests replace this function; the key comes only from `ANTHROPIC_API_KEY`."""
     return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=120.0, max_retries=2)
 
@@ -304,9 +349,8 @@ def output_config(output: type[BaseModel]) -> dict:
     return config
 
 
-def _converse[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None = None) -> T:
-    """One message, with up to `MAX_TOOL_ROUNDS` rounds of read-only tool calls, ending in a structured answer."""
-    client = get_client()
+def _converse_anthropic[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None) -> T:
+    client = anthropic_client()
     config = output_config(output)
     tools = toolbox.definitions() if toolbox else []
     messages: list = [{"role": "user", "content": content}]
@@ -364,6 +408,228 @@ def _converse[T: BaseModel](system: str, content: str, output: type[T], toolbox:
             return output.model_validate_json(texts[-1])
         except ValidationError as exc:
             raise AssistantError("invalid answer") from exc
+    raise AssistantError("too many tool rounds")
+
+
+# ----------------------------------------------------------------- OpenRouter (OpenAI-compatible chat completions)
+
+
+def openrouter_client() -> openai.OpenAI:
+    """OpenRouter's API client. Tests replace this function; the key comes only from `OPENROUTER_API_KEY`."""
+    return openai.OpenAI(base_url=OPENROUTER_URL, api_key=settings.OPENROUTER_API_KEY, timeout=120.0, max_retries=2)
+
+
+def openrouter_options() -> dict:
+    """OpenRouter's own request fields: provider choice, plus the thinking level from `OPENROUTER_EFFORT`."""
+    options: dict = {"provider": OPENROUTER_PROVIDER}
+    effort = settings.OPENROUTER_EFFORT
+    if effort in OPENROUTER_EFFORT_LEVELS:
+        options["reasoning"] = {"effort": effort}
+    elif effort:
+        logger.warning(
+            "OPENROUTER_EFFORT=%r is not one of %s; using the model's default", effort, OPENROUTER_EFFORT_LEVELS
+        )
+    return options
+
+
+def answer_schema(output: type[BaseModel]) -> dict:
+    """The JSON schema of an answer model as tool parameters: references inlined, every object closed and with all
+    of its fields listed as required (a field that may be empty is nullable), no titles or defaults. Built from the
+    Pydantic model each time, so a new field of the answer needs no change here."""
+    schema = output.model_json_schema()
+    definitions = schema.pop("$defs", {})
+
+    def walk(node):
+        if isinstance(node, list):
+            return [walk(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        if "$ref" in node:
+            node = {**definitions[node["$ref"].rsplit("/", 1)[-1]], **{k: v for k, v in node.items() if k != "$ref"}}
+        out = {}
+        for key, value in node.items():
+            if key in ("title", "default"):
+                continue
+            out[key] = {name: walk(sub) for name, sub in value.items()} if key == "properties" else walk(value)
+        if out.get("type") == "object" and "properties" in out:
+            out["required"] = list(out["properties"])
+            out["additionalProperties"] = False
+        return out
+
+    return walk(schema)
+
+
+def openrouter_tools(toolbox: Toolbox | None, answer: dict) -> list[dict]:
+    """The read-only tools in the OpenAI format, and last the tool that carries the answer (`answer` = its schema)."""
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": d["name"], "description": d["description"], "parameters": d["input_schema"]},
+        }
+        for d in (toolbox.definitions() if toolbox else [])
+    ]
+    tools.append(
+        {
+            "type": "function",
+            "function": {"name": ANSWER_TOOL, "description": ANSWER_TOOL_DESCRIPTION, "parameters": answer},
+        }
+    )
+    return tools
+
+
+def _empty_lists(value, schema: dict):
+    """null where the schema wants a list becomes an empty list ("no dates"): tool arguments are not constrained to
+    the schema, and the model sometimes writes null there."""
+    if isinstance(value, dict) and schema.get("type") == "object":
+        fields = schema.get("properties", {})
+        return {
+            key: []
+            if item is None and fields.get(key, {}).get("type") == "array"
+            else _empty_lists(item, fields.get(key, {}))
+            for key, item in value.items()
+        }
+    if isinstance(value, list) and schema.get("type") == "array":
+        return [_empty_lists(item, schema.get("items", {})) for item in value]
+    return value
+
+
+def parse_answer[T: BaseModel](raw: str, output: type[T], schema: dict) -> T:
+    """The answer's JSON (the answer tool's arguments) as the answer model. Raises ValidationError."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return output.model_validate_json(raw)  # raises a ValidationError that names the broken JSON
+    return output.model_validate(_empty_lists(data, schema))
+
+
+def _answer_problem(exc: ValidationError) -> str:
+    """A short Polish note for the model on what to fix in its answer."""
+    problems = [
+        f"{'.'.join(str(part) for part in error['loc']) or 'odpowiedź'}: {error['msg']}" for error in exc.errors()
+    ]
+    return f"Błąd: odpowiedź nie pasuje do schematu ({'; '.join(problems[:5])}). Wywołaj {ANSWER_TOOL} jeszcze raz."
+
+
+def _text_answer[T: BaseModel](text: str | None, output: type[T], schema: dict) -> T | None:
+    """The answer written as text by a provider that ignored tool_choice, when it is the answer's JSON."""
+    text = (text or "").strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end < start:
+        return None
+    try:
+        return parse_answer(text[start : end + 1], output, schema)
+    except ValidationError:
+        return None
+
+
+def _converse_openrouter[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None) -> T:
+    client = openrouter_client()
+    model = settings.OPENROUTER_MODEL
+    schema = answer_schema(output)
+    tools = openrouter_tools(toolbox, schema)
+    options = openrouter_options()
+    messages: list[dict] = [{"role": "system", "content": system + ANSWER_RULE}, {"role": "user", "content": content}]
+    started, used, providers, output_tokens, cost = time.monotonic(), [], [], 0, 0.0
+
+    def done(result: T, calls: int) -> T:
+        # One line per answer, so slow or costly answers can be traced on the server.
+        logger.info(
+            "assistant %s: %.1f s, %d calls, tools %s, %d output tokens, effort %s, %s via %s, $%.5f",
+            output.__name__,
+            time.monotonic() - started,
+            calls,
+            ",".join(used) or "-",
+            output_tokens,
+            options.get("reasoning", {}).get("effort", "default"),
+            model,
+            ",".join(dict.fromkeys(providers)) or "-",
+            cost,
+        )
+        return result
+
+    for round_ in range(MAX_TOOL_ROUNDS + 1):
+        last = round_ == MAX_TOOL_ROUNDS
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=tools,
+                # Every round ends in a tool call: a read, or the answer. After the last round only the answer.
+                tool_choice={"type": "function", "function": {"name": ANSWER_TOOL}} if last else "required",
+                max_tokens=MAX_TOKENS,
+                extra_body=options,
+            )
+        except openai.APIConnectionError as exc:
+            raise AssistantError("connection") from exc
+        except openai.RateLimitError as exc:
+            raise AssistantError("rate limit") from exc
+        except openai.APIStatusError as exc:
+            logger.error("assistant call failed: %s %s", exc.status_code, exc.message)
+            raise AssistantError(f"status {exc.status_code}") from exc
+        extra = response.model_extra or {}
+        providers.append(str(extra.get("provider") or "?"))
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            output_tokens += usage.completion_tokens or 0
+            cost += float((usage.model_extra or {}).get("cost") or 0)
+        if not getattr(response, "choices", None):
+            # OpenRouter reports some provider failures inside a 200 response.
+            logger.error("assistant call failed: %s", extra.get("error"))
+            raise AssistantError("provider error")
+        choice = response.choices[0]
+        if choice.finish_reason in ("length", "content_filter", "error"):
+            raise AssistantError(f"stopped: {choice.finish_reason}")
+        message = choice.message
+        calls = [call for call in message.tool_calls or [] if call.type == "function"]
+        if not calls:
+            result = _text_answer(message.content, output, schema)
+            if result is not None:
+                return done(result, round_ + 1)
+            if last:
+                raise AssistantError("no answer")
+            logger.info("assistant %s: text instead of %s, asking again", output.__name__, ANSWER_TOOL)
+            messages.append({"role": "assistant", "content": message.content or ""})
+            messages.append({"role": "user", "content": f"Zwróć odpowiedź wywołaniem narzędzia {ANSWER_TOOL}."})
+            continue
+        entry: dict = {
+            "role": "assistant",
+            "content": message.content or "",
+            "tool_calls": [
+                {
+                    "id": c.id,
+                    "type": "function",
+                    "function": {"name": c.function.name, "arguments": c.function.arguments},
+                }
+                for c in calls
+            ],
+        }
+        # Thinking models need their reasoning back with the tool results (OpenRouter's `reasoning_details`).
+        if (message.model_extra or {}).get("reasoning_details"):
+            entry["reasoning_details"] = message.model_extra["reasoning_details"]
+        messages.append(entry)
+        for call in calls:
+            name, raw = call.function.name, call.function.arguments
+            if name == ANSWER_TOOL:
+                try:
+                    return done(parse_answer(raw or "{}", output, schema), round_ + 1)
+                except ValidationError as exc:
+                    if last:
+                        raise AssistantError("invalid answer") from exc
+                    text = _answer_problem(exc)
+                    logger.info("assistant %s: invalid answer, asking again: %s", output.__name__, text)
+            elif toolbox is None:
+                text = "Nie ma takiego narzędzia."
+            else:
+                used.append(name)
+                try:
+                    arguments = json.loads(raw or "{}")
+                except json.JSONDecodeError:
+                    arguments = None
+                if isinstance(arguments, dict):
+                    text, _ = toolbox.run(name, arguments)
+                else:
+                    text = "Błąd: argumenty muszą być obiektem JSON."
+            messages.append({"role": "tool", "tool_call_id": call.id, "content": text})
     raise AssistantError("too many tool rounds")
 
 

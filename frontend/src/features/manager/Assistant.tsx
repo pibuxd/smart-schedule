@@ -374,7 +374,7 @@ export function AssistantPanel({
             przydziału.
           </p>
           <p className="mt-0 mb-2">
-            Asystent to Claude, zewnętrzna usługa AI. Czyta Twoje wiadomości,
+            Asystent to zewnętrzna usługa AI. Czyta Twoje wiadomości,
             listy zasad, osób i zmian tego lokalu, a żeby odpowiedzieć na
             pytanie, sprawdza w aplikacji to, co Ty widzisz: grafik, godziny,
             oddane zmiany oraz dyspozycje i prośby pracowników. Nie dostaje

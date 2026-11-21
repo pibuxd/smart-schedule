@@ -196,7 +196,7 @@ def fake_client(monkeypatch, responses, sent):
         )
 
     client = Anthropic(api_key="test-key", http_client=DefaultHttpxClient(transport=httpx2.MockTransport(handler)))
-    monkeypatch.setattr(llm, "get_client", lambda: client)
+    monkeypatch.setattr(llm, "anthropic_client", lambda: client)
 
 
 class StubBox:

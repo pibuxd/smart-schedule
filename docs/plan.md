@@ -22,7 +22,7 @@ Technicznie `AssistantRuleSet` przechowuje migawkę zasad katalogowych, zmienion
 Zastępuje „Ograniczenie zakresu asystenta (18.11.2026)”. Zakres produktu: spec.md, „Asystent odpowiada na wszystko o Grafikomacie i lokalu”.
 
 - `apps/assistant/tools.py`: lista narzędzi do odczytu dla roli (pracownik, kierownik). Każde narzędzie to istniejący endpoint `GET /api/...` (nazwa = operation id), wywołany w workerze przez `django.urls.resolve` z `RequestFactory` jako osoba, która napisała wiadomość (`request.user`). Uprawnienia sprawdza sam endpoint (`tenant_context`, `require_manager_of`), więc asystent widzi dokładnie to, co ta osoba w aplikacji; 403/404 wracają do modelu jako błąd narzędzia. Firma i lokal są wpisywane przez serwer, model wybiera tylko okres, wersję, zmianę, miesiąc i zawężenie (`date_from`, `date_to`, `person`) dla długich list. Z odpowiedzi znikają telefony i pola techniczne, a wynik ponad ok. 40 tys. znaków jest przycinany z jawną notatką.
-- `llm.py`: pętla narzędzi na `messages.create` (najwyżej 6 rund, odpowiedź końcowa w `output_config.format` sprawdzana Pydantic). Narzędzia nie mają `strict`: API dopuszcza najwyżej 16 parametrów typu „albo” (`anyOf`, null) łącznie we wszystkich ścisłych schematach zapytania, a schemat odpowiedzi zużywa większość z nich; ze `strict` w narzędziach każde zapytanie kończyło się błędem 400 „Schema is too complex for compilation” (20.11.2026). Test pilnuje tego limitu. Zamiast `strict` serwer sam sprawdza argumenty każdego wywołania ze schematem narzędzia (`tools.argument_error`): nieznany klucz, brak wymaganego albo zły typ wraca do modelu jako błąd narzędzia i nie dociera do endpointu, bo endpoint pominąłby nieznany klucz i odpowiedział o wszystkich. Stały prompt systemowy i lista narzędzi idą przed zmiennym kontekstem, z `cache_control`. Prompt zawiera krótki przewodnik po ekranach dla roli, żeby asystent mówił, gdzie co zrobić. Myślenie modelu ma poziom `output_config.effort` z `ANTHROPIC_EFFORT`, domyślnie `low`: każda runda narzędzi to osobne wywołanie, a Claude Opus 5.5 zawsze myśli (domyślnie na poziomie `medium`), więc przy dwóch–trzech rundach płaciłoby się za to myślenie kilka razy. Uwaga: pomiar „ok. 40 s” z testu 20.11.2026, od którego zaczęła się ta zmiana, był błędem skryptu testowego (30 s czekania przed wysłaniem); naprawdę odpowiedź przychodziła po ok. 7 s, a po zmianie przychodzi po 3–18 s. `low` zostaje, bo odpowiedzi w teście były trafne. Prompt prosi o wszystkie potrzebne odczyty naraz, w jednej rundzie. Każda odpowiedź zostawia w logu workera jedną linię: czas, liczba wywołań, użyte narzędzia i tokeny wyjścia.
+- `llm.py` (droga przez Claude; od 21.11.2026 domyślnie OpenRouter z `final_answer` zamiast `output_config.format`, sekcja 30): pętla narzędzi na `messages.create` (najwyżej 6 rund, odpowiedź końcowa w `output_config.format` sprawdzana Pydantic). Narzędzia nie mają `strict`: API dopuszcza najwyżej 16 parametrów typu „albo” (`anyOf`, null) łącznie we wszystkich ścisłych schematach zapytania, a schemat odpowiedzi zużywa większość z nich; ze `strict` w narzędziach każde zapytanie kończyło się błędem 400 „Schema is too complex for compilation” (20.11.2026). Test pilnuje tego limitu. Zamiast `strict` serwer sam sprawdza argumenty każdego wywołania ze schematem narzędzia (`tools.argument_error`): nieznany klucz, brak wymaganego albo zły typ wraca do modelu jako błąd narzędzia i nie dociera do endpointu, bo endpoint pominąłby nieznany klucz i odpowiedział o wszystkich. Stały prompt systemowy i lista narzędzi idą przed zmiennym kontekstem, z `cache_control`. Prompt zawiera krótki przewodnik po ekranach dla roli, żeby asystent mówił, gdzie co zrobić. Myślenie modelu ma poziom `output_config.effort` z `ANTHROPIC_EFFORT`, domyślnie `low`: każda runda narzędzi to osobne wywołanie, a Claude Opus 5.5 zawsze myśli (domyślnie na poziomie `medium`), więc przy dwóch–trzech rundach płaciłoby się za to myślenie kilka razy. Uwaga: pomiar „ok. 40 s” z testu 20.11.2026, od którego zaczęła się ta zmiana, był błędem skryptu testowego (30 s czekania przed wysłaniem); naprawdę odpowiedź przychodziła po ok. 7 s, a po zmianie przychodzi po 3–18 s. `low` zostaje, bo odpowiedzi w teście były trafne. Prompt prosi o wszystkie potrzebne odczyty naraz, w jednej rundzie. Każda odpowiedź zostawia w logu workera jedną linię: czas, liczba wywołań, użyte narzędzia i tokeny wyjścia.
 - Kierownik (`CommandPlan`): `topic=app|unrelated`, `reply` (odpowiedź modelu jest pokazywana; zamiast stałego „Po zatwierdzeniu zapiszę…”), plan zmian jak dotąd. Pod każdym planem z poleceniem o osobie aplikacja pokazuje jako pierwszą uwagę, że to preferencja bez gwarancji przydziału, więc słowa modelu nie czytają się jak obietnica zmiany. Pytanie i zmiana w jednej wiadomości działają razem. `unrelated` daje stałą odmowę aplikacji bez zmian. Zmiana zasady na wartość, która już obowiązuje, daje „To już jest ustawione: …”. Polecenie o dniach poza okresem ustaleń jest blokowane z wyjaśnieniem (nie zmieniłoby żadnego grafiku), a dni częściowo poza okresem są obcinane z notatką. Porównanie ze skutkiem liczy się na grafiku okresu ustaleń; bez niego na ostatnim opublikowanym (`preview_version(..., period)`).
 - Pracownik (`EmployeeReply`): `topic=app|unrelated`, `answer`, `preferences` (0–3), `leave_to_manager`, `replaces_request`. Same pytania kończą się statusem `answered` z odpowiedzią. Preferencje dają `interpreted` (pierwsza w `interpretation`, kolejne w `interpretation["more"]`; generator robi z każdej osobną prośbę z id `<pk>`, `<pk>:2`, …). Część nie do zamiany na ustawienie albo `leave_to_manager` bez żadnej preferencji daje `needs_manager` z jasnym zdaniem dla pracownika; `leave_to_manager` obok zapisanych preferencji daje `interpreted` z `interpretation["partial"]`, uwagą dla pracownika i dopiskiem dla kierownika, że resztę czyta sam. Odpowiedź modelu dla pracownika jest w nowym polu `TextRequest.reply` (`MyRequestOut.reply`); opis wielu części ma też `part_summary` pierwszej części dla generatora. `cannot=true` przy datach daje `MyRequestOut.unmarked_days` (dni bez „nie mogę” w kalendarzu) i przycisk, który zapisuje je istniejącym `PUT /me/calendar`. `notes` mówią o sprzeczności z kalendarzem („Chętnie” w dniu, w którym prośba mówi o wolnym) i o zmianie, której stanowisko osoby nie ma.
 - Limity pisania są od 20.11.2026 domyślnie wyłączone (Piotr): `TEXT_REQUESTS_PER_PERIOD`, `ASSISTANT_MESSAGES_PER_DAY` i `ASSISTANT_COMMANDS_MONTHLY_LIMIT` mają domyślnie 0, a 0 znaczy „bez limitu” (wcześniej 10, 40 i 400). Liczba większa od zera w `.env` włącza limit jak dotąd. `TEXT_REQUESTS_PER_PERIOD` liczy tylko `new`, `interpreted`, `needs_manager`; przy włączonym asystencie sprawdza go worker: nowa prośba ponad limit kończy się odpowiedzią z prośbą o usunięcie lub poprawkę starej, pytania działają dalej. `ASSISTANT_MESSAGES_PER_DAY` liczy wiadomości osoby na dobę (wszystkie statusy). `ASSISTANT_COMMANDS_MONTHLY_LIMIT` liczy polecenia firmy w miesiącu, pytania też.
@@ -72,7 +72,7 @@ przeglądarka (telefon / komputer)
                                    ▼
                               PostgreSQL  ◄──── worker Procrastinate (ten sam kod Django)
                      (dane + kolejka zadań)        └─ generator (OR-Tools CP-SAT), walidator,
-                                                      interpretacja próśb (Claude API)
+                                                      asystent (OpenRouter albo Claude API)
 ```
 
 Kontenery Docker Compose: `caddy`, `api`, `worker`, `db`. Lokalnie do tego tryb deweloperski: Vite dev server z proxy `/api` do Django.
@@ -555,12 +555,12 @@ Założenia:
 4. Kopie bazy leżą na tym samym serwerze; kopia poza serwerem to osobny krok przed pilotażem.
 5. `SOLVER_WORKERS=2` na serwerze (2 rdzenie), limit 30 s bez zmian.
 
-## 20. Etap 10: asystent (Claude) i przyjęte założenia
+## 20. Etap 10: asystent (Claude; od 21.11.2026 także OpenRouter, sekcja 30) i przyjęte założenia
 
 Co powstało:
 
-- `apps/assistant/`: `llm.py` (jedyny moduł, który woła Claude: Anthropic Python SDK, `messages.parse` ze schematem Pydantic, model z `ANTHROPIC_MODEL`, domyślnie `claude-opus-5-5`), `readings.py` (wspólna struktura "jedno życzenie o jednej osobie": sprawdzanie, daty i dni tygodnia, zdanie po polsku), `services.py` (co wysyłamy, jak sprawdzamy odpowiedź, zapis), `tasks.py` (kolejka `default`), `api.py`, modele `ManagerInstruction` i `AssistantCommand`.
-- Prośby pracowników: `POST /me/requests` zapisuje prośbę i zleca zadanie `assistant.interpret_text_request` w jednej transakcji. Worker pyta Claude i zapisuje interpretację tylko wtedy, gdy typ, osoba, zmiana i dni dają się sprawdzić na danych lokalu, a pewność jest co najmniej `ASSISTANT_MIN_CONFIDENCE` (0,6). W każdym innym przypadku (także błąd sieci, limit, odmowa) prośba ma status "do decyzji menedżera" bez interpretacji i w generatorze jest typu "inne". `PATCH /me/requests/{id}`: nowa treść (czytana od nowa) albo `understood: false` ("nie o to mi chodziło").
+- `apps/assistant/`: `llm.py` (jedyny moduł, który woła model językowy; stan z etapu 10: Anthropic Python SDK, `messages.parse` ze schematem Pydantic, model z `ANTHROPIC_MODEL`, domyślnie `claude-opus-5-5`; od 21.11.2026 domyślnie OpenRouter z `deepseek/deepseek-v4.1-flash`, a Claude tylko przy samym `ANTHROPIC_API_KEY`, sekcja 30), `readings.py` (wspólna struktura "jedno życzenie o jednej osobie": sprawdzanie, daty i dni tygodnia, zdanie po polsku), `services.py` (co wysyłamy, jak sprawdzamy odpowiedź, zapis), `tasks.py` (kolejka `default`), `api.py`, modele `ManagerInstruction` i `AssistantCommand`.
+- Prośby pracowników: `POST /me/requests` zapisuje prośbę i zleca zadanie `assistant.interpret_text_request` w jednej transakcji. Worker pyta model (wtedy Claude, od 21.11.2026 domyślnie DeepSeek przez OpenRouter) i zapisuje interpretację tylko wtedy, gdy typ, osoba, zmiana i dni dają się sprawdzić na danych lokalu, a pewność jest co najmniej `ASSISTANT_MIN_CONFIDENCE` (0,6). W każdym innym przypadku (także błąd sieci, limit, odmowa) prośba ma status "do decyzji menedżera" bez interpretacji i w generatorze jest typu "inne". `PATCH /me/requests/{id}`: nowa treść (czytana od nowa) albo `understood: false` ("nie o to mi chodziło").
 - Polecenia kierownika: `POST /locations/{id}/assistant-commands` (zapis + zadanie `assistant.plan_assistant_command`), `GET /assistant-commands/{id}` (odpytywanie co 1,5 s), `POST /assistant-commands/{id}/apply`, `POST /assistant-commands/{id}/dismiss`, `GET /locations/{id}/instructions`, `PUT /locations/{id}/instructions/order`, `DELETE /instructions/{id}`. Plan jest sprawdzany przez `services.check_plan`: wszystko, czego nie ma w lokalu, wypada z notatką; zdania dla kierownika układa aplikacja; zmiany zasad przechodzą przez ten sam kod co ekran "Zasady" (`save_rules`) i ten sam podgląd skutku.
 - Plan dotyczący osoby pokazuje wykonanie na ostatnim grafiku. Domyślne miejsce dopisania jest ustalane przy zatwierdzeniu. Limit tygodniowy jest liczony w tygodniach kalendarzowych. Wyjaśnienie zmiany porównuje aktualny przydział z wykonalną zamianą przy pozostałych przydziałach bez zmian.
 - Silnik: `Request.by_manager` i `rank`. Polecenia kierownika o osobach trafiają do `Problem` jako prośby z `by_manager=True`; ich waga to `rule_weight(miejsce)` i liczą się do oceny "zasady menedżera" oraz do części `manager_share` w celu solvera. `WeightProfile.level_weights["employee_budget"]` (12 = jedna "bardzo ważna" + jedna "ważna"): suma wag próśb tekstem jednej osoby jest skalowana w dół do budżetu.
@@ -576,7 +576,7 @@ Założenia:
 5. Polecenie z samymi datami, które minęły, zostaje na liście z etykietą "minęło" i nie wpływa na grafik; kierownik je usuwa.
 6. Limity: od 20.11.2026 domyślnie wyłączone (0 = bez limitu, decyzja Piotra). Można je włączyć w `.env`: `ASSISTANT_COMMANDS_MONTHLY_LIMIT` (polecenia firmy w miesiącu; wcześniej domyślnie 400, a do 19.11.2026 200), `TEXT_REQUESTS_PER_PERIOD` (prośby jednej osoby na okres; wcześniej 10; liczą się tylko `new`, `interpreted` i `needs_manager`) i `ASSISTANT_MESSAGES_PER_DAY` (wiadomości osoby na dobę; wcześniej 40). Tryb tylko do odczytu blokuje polecenia jak każdą zmianę.
 7. Nie włączamy automatycznego przełączania na inny model po odmowie; odmowa lub ucięta odpowiedź to po prostu "do decyzji menedżera" / "asystent nie dał rady".
-8. Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie. Głębokość myślenia ustawia `ANTHROPIC_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`; domyślnie `low`, pusta wartość = domyślny poziom modelu).
+8. (Od 21.11.2026 domyślnie OpenRouter z DeepSeek V4.1 Flash, sekcja 30; to, co niżej, dotyczy drogi przez Claude.) Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie. Głębokość myślenia ustawia `ANTHROPIC_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`; domyślnie `low`, pusta wartość = domyślny poziom modelu).
 
 Uzupełnienie 15.11.2026 (po teście Piotra na serwerze, dwie prośby bez interpretacji):
 
@@ -943,3 +943,46 @@ w tygodniu” asystent nie umiał zapisać.
   (`ReadingRobot` w `components/assistant/Chat.tsx`, własny rysunek SVG): oczy przesuwają się wzdłuż wiersza, głowa
   lekko kiwa (animacja CSS w `tokens.css`, bez emoji; przy `prefers-reduced-motion` stoi w miejscu).
 
+## 30. Asystent przez OpenRouter (21.11.2026)
+
+Decyzja Piotra (spec.md, „Asystent przez OpenRouter”): skończył się limit Claude API, asystent ma działać przez
+OpenRouter z DeepSeek V4.1 Flash. Identyfikator sprawdzony 21.11.2026 w `GET https://openrouter.ai/api/v1/models`:
+`deepseek/deepseek-v4.1-flash` (obok jest migawka `deepseek/deepseek-v4.1-flash-1017`).
+
+- Zależność: pakiet `openai` (oficjalny klient API zgodnego z OpenAI chat completions, którego używa OpenRouter;
+  te same biblioteki pod spodem co `anthropic`, czyli jeden nowy pakiet), adres `https://openrouter.ai/api/v1`.
+- `llm.backend()`: `openrouter`, gdy jest `OPENROUTER_API_KEY`, inaczej `anthropic`, gdy jest `ANTHROPIC_API_KEY`,
+  inaczej asystent jest wyłączony (`is_enabled()`). Prompty, narzędzia (`tools.Toolbox`), modele odpowiedzi Pydantic,
+  pamięć wiadomości (`context.py`) i sprawdzanie odpowiedzi w `services.py` są wspólne; różni się tylko pętla rozmowy
+  (`_converse_openrouter`, `_converse_anthropic`).
+- Odpowiedź strukturalna na OpenRouter to wywołanie narzędzia `final_answer`, którego parametry to schemat modelu
+  odpowiedzi (`answer_schema`: z `model_json_schema()`, odwołania wstawione, każdy obiekt zamknięty i z wszystkimi polami
+  wymaganymi). Nowe pole w `EmployeeReply` / `CommandPlan` trafia więc do modelu bez zmian w `llm.py`. Każda runda
+  ma `tool_choice=required` (odczyt albo odpowiedź), po 6 rundach już tylko `final_answer`. `response_format` z
+  `json_schema` obok narzędzi nie działa: dostawcy wymuszają wtedy JSON w każdej rundzie i model nie może wywołać
+  narzędzia (sprawdzone na żywo 21.11.2026: DeepSeek zaplanował odczyt `my_schedule`, a oddał pustą odpowiedź).
+- Argumenty narzędzi nie są wymuszane schematem, więc odpowiedź sprawdza Pydantic: błąd wraca do modelu jako wynik
+  narzędzia („Błąd: odpowiedź nie pasuje do schematu (…)”) i model poprawia się w następnej rundzie; null w miejscu
+  listy znaczy pustą listę. Dostawca, który zignoruje `tool_choice` i odpisze tekstem, dostaje prośbę o
+  `final_answer` (JSON w tekście też jest przyjmowany).
+- Rozumowanie modelu (`reasoning_details`) wraca do niego razem z wynikami narzędzi, jak każe OpenRouter dla modeli
+  myślących. Głębokość myślenia: `OPENROUTER_EFFORT` → `reasoning.effort` (`none`, `minimal`, `low`, `medium`,
+  `high`, `xhigh`; domyślnie `low`, pusta wartość = domyślny poziom modelu).
+- Dostawcy: `provider.require_parameters=true` (tylko ci, którzy obsługują wszystkie wysłane parametry, w tym
+  narzędzia) i `provider.data_collection=deny` (bez zapisywania i uczenia się na zapytaniach).
+- Log workera, jedna linia na odpowiedź: czas, liczba wywołań, narzędzia, tokeny wyjścia, poziom myślenia, model,
+  dostawcy i koszt w dolarach z `usage.cost`, np. `assistant EmployeeReply: 2.1 s, 2 calls, tools my_schedule,
+  242 output tokens, effort low, deepseek/deepseek-v4.1-flash via Alibaba,InferenceNet, $0.00084`.
+- Błędy: brak środków na koncie OpenRouter (402), limit (429), błąd dostawcy w odpowiedzi 200, ucięta odpowiedź
+  (`finish_reason=length`) dają `AssistantError`, czyli tę samą ścieżkę co dotąd (prośba do kierownika, polecenie
+  „asystent nie dał rady”, ślad w `assistant_misses`).
+- Próba na żywo 21.11.2026 na danych `seed_demo` (klucz Piotra tylko w zmiennej środowiskowej, nigdzie nie zapisany):
+  pytania pracownika i kierownika z odczytami API, prośby (`wolne_dni` z `cannot`, `limit_zmian` z `shift_type`,
+  `unikaj_osoby`), polecenie z niejednoznacznym imieniem (asystent dopytał) i wiadomość niezwiązana z pracą. Odpowiedzi
+  przychodziły po 1–5 s (raz 10 s, z jedną poprawką odpowiedzi), koszt ok. 0,0005–0,003 USD za wiadomość.
+- Powtórka całego testu Piotra z 20.11 (52 wiadomości) na `seed_test_data`, po uwagach Prelinta do #55: wynik w
+  projekcie, `testy-asystenta/deepseek-powtorka-2026-11-21.md`. Zachowanie jak u Claude, dane zgodne z bazą (sprawdzone
+  godziny, zmiany i prośby), mediana 4,8 s, najdłużej 34 s przy 6 rundach odczytów. Gdy OpenRouter zawiedzie, nie ma
+  automatycznego przejścia na Claude (spec.md).
+- Testy: `tests/test_assistant_openrouter.py` na sztucznym transporcie HTTP klienta `openai` (bez sieci i bez klucza).
+  `tests/conftest.py` czyści oba klucze w każdym teście, `with_key` ustawia klucz OpenRouter.

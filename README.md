@@ -22,8 +22,9 @@ Stan: prototyp, wszystkie 10 etapów planu zbudowane.
   zatwierdzanie oddanych zmian, godziny w miesiącu z eksportem CSV, kody dostępu i okres próbny.
 - Generator: OR-Tools CP-SAT w osobnym workerze (najpierw jak najmniej zmian bez obsady, potem zasady kierownika
   i prośby pracowników w proporcji 80 do 20), niezależny walidator, który ma ostatnie słowo.
-- Asystent (Claude): czyta prośby pracowników i polecenia kierownika pisane zwykłymi słowami i zamienia je na
-  ustawienia z zamkniętych list. Grafiku nie układa. Kierownik widzi plan zmian i sam go zatwierdza.
+- Asystent (model językowy przez OpenRouter, domyślnie DeepSeek V4.1 Flash; albo Claude): czyta prośby
+  pracowników i polecenia kierownika pisane zwykłymi słowami i zamienia je na ustawienia z zamkniętych list.
+  Grafiku nie układa. Kierownik widzi plan zmian i sam go zatwierdza.
 
 ## Uruchomienie lokalne
 
@@ -62,15 +63,18 @@ Nowa firma bez kodu ma 30 dni okresu próbnego, potem działa tylko do odczytu, 
 
 Opis API (tylko przy `DJANGO_DEBUG=1`): http://localhost:8080/api/docs.
 
-### Asystent (Claude)
+### Asystent
 
-Asystent działa, gdy w `.env` jest klucz:
+Asystent działa, gdy w `.env` jest klucz OpenRouter (openrouter.ai/keys):
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-opus-5-5     # tańszy wariant do krótkich próśb: claude-haiku-5-5
-ANTHROPIC_EFFORT=low                # jak długo model myśli: low (najszybciej), medium, high
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash   # dowolny model z openrouter.ai/models, który wywołuje narzędzia
+OPENROUTER_EFFORT=low                           # jak długo model myśli: none, minimal, low, medium, high, xhigh
 ```
+
+Zamiast OpenRouter można użyć Claude: zostaw `OPENROUTER_API_KEY` pusty i wpisz `ANTHROPIC_API_KEY=sk-ant-...`
+(opcjonalnie `ANTHROPIC_MODEL=claude-opus-5-5`, `ANTHROPIC_EFFORT=low`). Gdy są oba klucze, wygrywa OpenRouter.
 
 Pisanie z asystentem nie ma limitów. Limit można włączyć liczbą w `.env`: `ASSISTANT_COMMANDS_MONTHLY_LIMIT`
 (wiadomości kierowników firmy w miesiącu), `TEXT_REQUESTS_PER_PERIOD` (zapisane prośby osoby na okres, pytania się
@@ -92,8 +96,9 @@ Z kluczem:
   „Zatwierdź zmiany” cokolwiek zmienia. Potem układa grafik od nowa.
 
 Gdy asystent jest włączony, ekran „Coś jeszcze?” mówi pracownikowi, że prośbę czyta też asystent AI.
-Do Claude wysyłana jest tylko treść prośby lub polecenia, daty okresu, nazwy zmian, stanowisk i zasad oraz imiona
-osób z jednego lokalu (bez nazwisk, numerów telefonów i grafiku).
+Do zewnętrznego modelu (przez OpenRouter tylko do dostawców, którzy nie zapisują zapytań) trafia treść prośby lub
+polecenia, daty okresu, nazwy zmian, stanowisk i zasad oraz imiona osób z jednego lokalu, bez numerów telefonów.
+Żeby odpowiedzieć na pytanie, asystent czyta też to, co ta osoba widzi w aplikacji (grafik, godziny, dyspozycje).
 
 Co asystent nie umiał zamienić na ustawienia (prośby bez interpretacji, polecenia z pytaniem, uwagą albo
 błędem), razem z jego odpowiedzią i powodem, zapisuje się w bazie. W panelu administratora widać to w
@@ -106,7 +111,7 @@ docker compose exec api python manage.py assistant_misses --days 30 > misses.csv
 ### Bez Dockera (dla programistów)
 
 Backend, worker i frontend osobno: komendy są w [CLAUDE.md](CLAUDE.md), sekcja „Commands”. Testy backendu nie
-potrzebują klucza do Claude (używają atrapy).
+potrzebują klucza do OpenRouter ani Claude (używają atrapy).
 
 ## Jak aplikacja nie pozwala, żeby „wszystko było bardzo ważne”
 

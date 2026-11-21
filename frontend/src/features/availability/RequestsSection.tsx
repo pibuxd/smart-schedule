@@ -478,7 +478,7 @@ function RequestsChat({
                       Kierownik zobaczy poprawioną treść. Jego wcześniejsza
                       decyzja i nadana prośbie ważność pozostaną w mocy.{" "}
                       {assistantReads &&
-                        "Po zmianie tekstu zewnętrzny asystent AI (Claude) przeczyta prośbę ponownie."}
+                        "Po zmianie tekstu zewnętrzny asystent AI przeczyta prośbę ponownie."}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -686,7 +686,7 @@ function RequestsChat({
               }}
               footer={
                 assistantReads
-                  ? "Czyta to asystent AI (Claude), kierownik i jego asystent."
+                  ? "Czyta to asystent AI (zewnętrzna usługa), kierownik i jego asystent."
                   : "Wiadomość dla kierownika."
               }
             />
@@ -707,7 +707,7 @@ function RequestsChat({
               {!periodId &&
                 "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
               {assistantReads
-                ? "Asystent AI (zewnętrzna usługa Claude) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Prośby czyta też kierownik, a gdy kierownik pyta swojego asystenta, ten też może przeczytać Twoje prośby i dyspozycje. Nie wpisuj tu nic, czego nie chcesz przekazać kierownikowi."
+                ? "Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Prośby czyta też kierownik, a gdy kierownik pyta swojego asystenta, ten też może przeczytać Twoje prośby i dyspozycje. Nie wpisuj tu nic, czego nie chcesz przekazać kierownikowi."
                 : "Przeczyta to tylko kierownik."}
             </p>
           </Disclosure>
