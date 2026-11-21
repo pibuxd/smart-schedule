@@ -302,7 +302,8 @@ def test_a_correction_that_gives_the_shift_to_someone_else_ends_the_report(api, 
     b = bakery
     day = b["today"] - timedelta(days=1)
     row = b["shift"](b["ola"], day)
-    approved = b["shift"](b["ola"], day - timedelta(days=1))
+    # Another day of the same month, so one monthly report shows both.
+    approved = b["shift"](b["ola"], day - timedelta(days=1) if day.day > 1 else day + timedelta(days=1))
     waiting = report(api, b, row, "06:00", "15:00").json()
     api.login(b["manager"])
     api.post(f"/api/assignments/{approved.pk}/hours", {"start_time": "06:00", "end_time": "16:00"})
@@ -315,6 +316,51 @@ def test_a_correction_that_gives_the_shift_to_someone_else_ends_the_report(api, 
     body = api.get(f"/api/reports/hours?company_id={b['company'].id}&month={day:%Y-%m}").json()
     assert [(r["name"], r["total"]) for r in body["rows"]] == [("Ewa Nowak", 16)]  # Ola's 10 h no longer count
     assert api.post(f"/api/hours-changes/{waiting['id']}/approve").status_code == 409
+    # Ola hears about both: the report that ended and the approved hours that stopped counting.
+    told = {n.payload["change_id"]: n for n in notes("hours_lost")}
+    assert {n.user_id for n in told.values()} == {user_of(b["ola"]).pk}
+    ended = notification_text("hours_lost", told[waiting["id"]].payload)
+    assert ended.startswith("Nie masz już tej zmiany w grafiku lokalu") and "zgłoszenie godzin wygasło" in ended
+    kept = HoursChange.objects.get(employee=b["ola"], status="approved")
+    dropped = notification_text("hours_lost", told[str(kept.pk)].payload)
+    assert "zatwierdzone godziny już się nie liczą" in dropped and "nadgodziny: +2 h" in dropped
+
+    # The next correction does not repeat it; giving the shift back makes the approved hours count again.
+    again = start_draft(draft, b["manager"])
+    publish(again, b["manager"], notify=False)
+    assert len(notes("hours_lost")) == 2
+    back = start_draft(again, b["manager"])
+    Assignment.objects.filter(shift__version=back, shift__slot_key=approved.shift.slot_key).update(employee=b["ola"])
+    publish(back, b["manager"], notify=False)
+    assert hours_of(api, b, day, "Pracownik")["total"] == 10
+    assert len(notes("hours_lost")) == 2
+
+
+def test_a_change_in_place_ends_the_report_and_says_the_hours_stop_counting(api, bakery):
+    b = bakery
+    day = b["today"] - timedelta(days=1)
+    row = b["shift"](b["ola"], day)
+    other = b["shift"](b["ola"], day - timedelta(days=1))
+    waiting = report(api, b, row, "06:00", "15:00").json()
+    api.login(b["manager"])
+    api.post(f"/api/assignments/{other.pk}/hours", {"start_time": "06:00", "end_time": "12:00"})
+
+    moved = api.post(f"/api/assignments/{row.pk}/reassign", {"employee_id": str(b["ewa"].pk), "force": True})
+
+    assert moved.status_code == 200, moved.json()
+    assert HoursChange.objects.get(pk=waiting["id"]).status == "cancelled"
+    assert api.get(f"/api/manager/hours-changes?company_id={b['company'].id}").json()["waiting"] == 0
+    [ended] = notes("hours_lost")
+    assert ended.user_id == user_of(b["ola"]).pk and ended.payload["approved"] is False
+
+    swapped = api.post("/api/shift-swaps", {"first_id": str(other.pk), "second_id": str(row.pk), "force": True})
+
+    assert swapped.status_code == 204
+    last = Notification.objects.filter(kind="hours_lost").order_by("-created_at").first()
+    assert last.user_id == user_of(b["ola"]).pk and last.payload["approved"] is True
+    assert "krócej o 2 h" in notification_text(last.kind, last.payload)
+    assert HoursChange.objects.get(employee=b["ola"], by_manager=True).status == "approved"
+    assert hours_of(api, b, day, "Pracownik")["total"] == 8  # Ola now has Ewa's old shift, at its planned hours
 
 
 def test_the_grid_and_the_list_of_published_shifts_show_the_hours(api, bakery):
@@ -343,7 +389,7 @@ def test_csv_has_overtime_and_shorter_columns(api, bakery):
     text = api.get(f"/api/reports/hours.csv?company_id={b['company'].id}&month={day:%Y-%m}").content.decode("utf-8-sig")
 
     header, line = text.strip().splitlines()
-    assert header.endswith(";Razem;Nadgodziny;Krótsze zmiany;Uwagi")
+    assert header.endswith(";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Uwagi")
     assert line.split(";")[-4:] == ["9,25", "1,25", "0,00", ""]
 
 

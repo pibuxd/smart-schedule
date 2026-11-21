@@ -6,7 +6,8 @@
 - `set_hours`: the manager sets the hours alone, at once (over a waiting report too). The schedule's own hours
   bring the plan back.
 - `worked_hours`: the hours that count for a list of published assignments (approved change, else the plan).
-- `refresh_after_publish`: a corrected schedule ends the waiting reports of people who lost their shift.
+- `refresh_after_publish` / `person_left_shift`: a person who loses a published shift (a corrected schedule, or a
+  change in place) loses its waiting report, and is told when approved hours of it stop counting.
 
 The published shift keeps its planned hours: the generator, the validator and the scores read the plan. Only the
 counting of hours (reports, "Mój grafik", the assistant) reads `worked_hours`.
@@ -460,23 +461,69 @@ def set_hours(assignment: Assignment, start: time, end: time, reason: str, user)
     return Worked(start_at, end_at, None if to_plan else change)
 
 
-def refresh_after_publish(version: ScheduleVersion) -> int:
-    """A newly published version: waiting reports of people who no longer have that shift end (cancelled)."""
-    holders = {
+def _holders(version: ScheduleVersion | None) -> set[tuple[str, str]]:
+    """(slot_key, employee id) of every filled shift of a version."""
+    if version is None:
+        return set()
+    return {
         (key, str(employee))
         for key, employee in Assignment.objects.for_company(version.company_id)
         .filter(shift__version=version, employee__isnull=False)
         .values_list("shift__slot_key", "employee_id")
     }
-    stale = [
-        change.pk
-        for change in HoursChange.objects.for_company(version.company_id).filter(
-            period_id=version.period_id, status=HoursChange.Status.PENDING
+
+
+def _end_for_lost_shift(changes: list[HoursChange]) -> None:
+    """The people of `changes` no longer have those published shifts: a waiting report ends (cancelled) and approved
+    hours stop counting (they stay approved and count again if the shift comes back). Each person is told."""
+    if not changes:
+        return
+    now = timezone.now()
+    waiting = [change.pk for change in changes if change.status == HoursChange.Status.PENDING]
+    if waiting:
+        HoursChange.objects.for_company(changes[0].company_id).filter(pk__in=waiting).update(
+            status=HoursChange.Status.CANCELLED, decided_at=now
         )
-        if (change.slot_key, str(change.employee_id)) not in holders
-    ]
-    if stale:
-        HoursChange.objects.for_company(version.company_id).filter(pk__in=stale).update(
-            status=HoursChange.Status.CANCELLED, decided_at=timezone.now()
+    for change in changes:
+        notify(
+            change.company_id,
+            [_user_of(change.employee)],
+            "hours_lost",
+            {**payload(change), "approved": change.status == HoursChange.Status.APPROVED},
         )
-    return len(stale)
+
+
+def _open_changes(company_id, period_id, **filters) -> list[HoursChange]:
+    return list(
+        HoursChange.objects.for_company(company_id)
+        .filter(period_id=period_id, status__in=[HoursChange.Status.PENDING, HoursChange.Status.APPROVED], **filters)
+        .select_related("location", "employee__membership__user")
+    )
+
+
+def person_left_shift(assignment: Assignment, employee_id) -> None:
+    """A published shift went from `employee_id` to someone else (or nobody) in place: a handover, the manager's
+    change or swap, a clash taken off. Their waiting report of it ends and they hear what happened to the hours."""
+    if employee_id is None:
+        return
+    shift = assignment.shift
+    _end_for_lost_shift(
+        _open_changes(assignment.company_id, shift.version.period_id, slot_key=shift.slot_key, employee_id=employee_id)
+    )
+
+
+def refresh_after_publish(version: ScheduleVersion, previous: ScheduleVersion | None = None) -> int:
+    """A newly published version: waiting reports of people who no longer have that shift end (cancelled). People
+    who lose a shift in this correction hear about it, also when their approved hours stop counting (told once:
+    only for shifts they had in the version it replaces). Returns how many reports ended."""
+    holders = _holders(version)
+    before = _holders(previous)
+    lost = []
+    for change in _open_changes(version.company_id, version.period_id):
+        key = (change.slot_key, str(change.employee_id))
+        if key in holders:
+            continue
+        if change.status == HoursChange.Status.PENDING or key in before:
+            lost.append(change)
+    _end_for_lost_shift(lost)
+    return sum(1 for change in lost if change.status == HoursChange.Status.PENDING)

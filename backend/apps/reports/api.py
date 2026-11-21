@@ -182,7 +182,7 @@ def hours_report_csv(request, company_id: UUID, month: str):
             "Zmiany",
             *[_text(loc.name) for loc in report.locations],
             "Razem",
-            "Nadgodziny",
+            "Nadgodziny (ponad grafik)",
             "Krótsze zmiany",
             "Uwagi",
         ]

@@ -1015,8 +1015,14 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
   `POST /assignments/{assignment_id}/hours` (`set_shift_hours`: kierownik sam; godziny jak w grafiku wracają do
   planu). Kierownik musi prowadzić lokal zmiany (403), firma tylko do odczytu daje 402, obca firma 404.
 - Powiadomienia: `hours_reported` (kierownicy lokalu, link „Godziny”), `hours_approved`, `hours_rejected`,
-  `hours_set` (pracownik, link „Mój grafik”). `editing.publish` woła `worktime.services.refresh_after_publish`:
-  czekające zgłoszenia osób, które nie mają już tej zmiany, dostają `cancelled`.
+  `hours_set`, `hours_lost` (pracownik, link „Mój grafik”). Osoba traci opublikowaną zmianę: `editing.publish` woła
+  `worktime.services.refresh_after_publish(version, previous)`, a zmiany w miejscu (`marketplace._transfer`:
+  oddanie, `manager_reassign`, `manager_swap`; `editing.take_off_published`) wołają `person_left_shift`. Czekające
+  zgłoszenie dostaje `cancelled`, zatwierdzone zostaje `approved` (liczy się znowu, gdy zmiana wróci), a osoba
+  dostaje `hours_lost` (`approved` w payloadzie). Przy publikacji tylko za zmiany, które miała w zastępowanej
+  wersji, więc kolejna poprawka nie powtarza powiadomienia.
+- „Nadgodziny” to godziny ponad grafik, nie nadgodziny z Kodeksu pracy: zdanie pod tabelą ekranu „Godziny” (tylko
+  gdy są kolumny nadgodzin) i kolumna CSV „Nadgodziny (ponad grafik)”.
 - Asystent pracownika: `EmployeeReply.hours_changes` (0–3: data, od, do, powód; same napisy, bez typów „albo”;
   pusty początek albo koniec, także null od modelu, znaczy „bez zmian”, czyli godzinę, która liczy się teraz).
   Kontekst ma linię „Teraz: GG:MM (czas lokalu)” do „wychodzę teraz”.

@@ -36,6 +36,7 @@ LINKS = {
     "hours_approved": "schedule",
     "hours_rejected": "schedule",
     "hours_set": "schedule",
+    "hours_lost": "schedule",
 }
 
 
@@ -229,6 +230,14 @@ def notification_text(kind: str, payload: dict) -> str:
                     f"{p.get('start_time', '')}–{p.get('end_time', '')}."
                 )
             return f"Kierownik zmienił godziny Twojej zmiany: {hours_words(p)}. Tak liczymy tę zmianę."
+        case "hours_lost":
+            where = f" lokalu {p['location_name']}" if p.get("location_name") else ""
+            if p.get("approved"):
+                return (
+                    f"Nie masz już tej zmiany w grafiku{where}, więc jej zatwierdzone godziny już się nie liczą: "
+                    f"{hours_words(p)}."
+                )
+            return f"Nie masz już tej zmiany w grafiku{where}, więc Twoje zgłoszenie godzin wygasło: {hours_words(p)}."
         case "shift_emptied":
             return (
                 f"{p.get('employee_name') or 'Ktoś'} pracuje w tym czasie w lokalu {p.get('moved_to', '')}, "

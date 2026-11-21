@@ -298,7 +298,8 @@ def _move(assignment: Assignment, to: EmployeeProfile, pinned: bool = True) -> N
 
 def _transfer(published: Assignment, taker: EmployeeProfile, reason: str, by, now, pinned: bool = True) -> None:
     """Move a published shift (and the newest draft's copy, when it still has the same person) to `taker`, with
-    a history row. The caller holds the locks and saves the scores afterwards (`_rescore`)."""
+    a history row; the person before loses their other hours of it (`worktime.person_left_shift`). The caller
+    holds the locks and saves the scores afterwards (`_rescore`)."""
     shift = published.shift
     before = published.employee_id
     _move(published, taker, pinned)
@@ -328,6 +329,9 @@ def _transfer(published: Assignment, taker: EmployeeProfile, reason: str, by, no
         by=by,
         at=now,
     )
+    from apps.worktime.services import person_left_shift
+
+    person_left_shift(published, before)
 
 
 def _rescore(version: ScheduleVersion) -> None:

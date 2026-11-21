@@ -89,6 +89,11 @@ function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: 
   return (
     <div className="overflow-x-auto rounded-md border border-line bg-surface">
       <table className="w-full border-collapse text-left">
+        {other && (
+          <caption className="caption-bottom px-3 py-2 text-left text-sm text-ink-muted">
+            Nadgodziny to tu godziny ponad grafik, nie nadgodziny z Kodeksu pracy. Do wypłaty sprawdź normy czasu pracy.
+          </caption>
+        )}
         <thead>
           <tr className="border-b-2 border-ink">
             <th className="px-3 py-2">Osoba</th>

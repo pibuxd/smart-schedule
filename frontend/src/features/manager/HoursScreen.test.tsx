@@ -123,6 +123,7 @@ describe('HoursScreen: other hours', () => {
     expect(await screen.findByText('Nikt nie czeka na decyzję o godzinach.')).toBeInTheDocument()
     expect(await screen.findByRole('columnheader', { name: 'Nadgodziny' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: '+1,5' })).toBeInTheDocument()
+    expect(screen.getByText(/nie nadgodziny z Kodeksu pracy/)).toBeInTheDocument()
   })
 
   it('keeps the table short without other hours', async () => {
@@ -130,6 +131,7 @@ describe('HoursScreen: other hours', () => {
     show()
     await screen.findByRole('columnheader', { name: 'Razem godzin' })
     expect(screen.queryByRole('columnheader', { name: 'Nadgodziny' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Kodeksu pracy/)).not.toBeInTheDocument()
   })
 
   it('lets the manager set the hours of a published shift alone', async () => {
