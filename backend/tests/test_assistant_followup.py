@@ -390,3 +390,5 @@ def test_command_history_is_only_same_author_location_and_the_last_ten(shop, mak
     history = context.command_history(current)
     assert "Moja poprzednia" in history and "Sprzed tygodnia" in history and "Dawna 7" in history
     assert all(text not in history for text in ("Dawna 8", "Cudza", "Inny lokal", "Teraz"))
+    # Hours may have changed outside the chat since: the model is told to read the current state.
+    assert "godziny i grafik mogły się potem zmienić, także poza czatem" in history

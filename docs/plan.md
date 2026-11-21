@@ -1067,3 +1067,8 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
   „Zatwierdź zmiany”, a przy osobie bez zmiany tego dnia odsyłają do „Popraw grafik” albo „Zmień obsadę sam”
   („Zmień godziny sam” działa tylko na zmianach z grafiku). Notka `HOURS_NOTE` („zapiszę od razu po
   zatwierdzeniu…”) znika z polecenia, gdy kierownik je zatwierdzi albo odrzuci (`api._notes`).
+- Powtórka testu po wdrożeniu (21.11): „Celina wyszła dziś o 12” dostało „To już jest ustawione”, choć godziny
+  wróciły do planu poza czatem. Model wziął stan z historii. Nagłówek historii kierownika
+  (`context.command_history`) i wspólne zasady mówią teraz, że historia to stan z chwili tamtych wiadomości, a
+  kierownik ma zawsze dostać `hours_changes`, gdy podaje godziny: to, czy nic się nie zmienia, ocenia serwer
+  (`check_set`, „To już jest ustawione”).
