@@ -536,6 +536,9 @@ def take_off_published(clash: Clash, user, *, moved_to) -> None:
         by=user,
     )
     save_scores(shift.version, load_version(shift.version).scores)
+    from apps.worktime.services import person_left_shift
+
+    person_left_shift(row, employee.pk)
     tz = ZoneInfo(shift.location.timezone)
     begin, finish = shift.start_at.astimezone(tz), shift.end_at.astimezone(tz)
     payload = {
@@ -785,6 +788,9 @@ def publish(version: ScheduleVersion, user, *, notify: bool = True) -> ScheduleV
         from apps.marketplace.services import refresh_after_publish
 
         refresh_after_publish(version, previous)
+        from apps.worktime.services import refresh_after_publish as refresh_hours
+
+        refresh_hours(version)
         if notify:
             _notify_published(version, first=previous is None)
     return version

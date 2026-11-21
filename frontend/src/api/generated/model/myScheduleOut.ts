@@ -10,6 +10,7 @@ import type { MyShiftOut } from './myShiftOut';
 export interface MyScheduleOut {
   home_location_name: string;
   shifts: MyShiftOut[];
+  recent?: MyShiftOut[];
   published_until?: string | null;
   months: MonthHoursOut[];
 }

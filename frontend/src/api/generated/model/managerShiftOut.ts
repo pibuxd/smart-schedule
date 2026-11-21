@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { OfferShiftOut } from './offerShiftOut';
+import type { WaitingHoursOut } from './waitingHoursOut';
+import type { WorkedOut } from './workedOut';
 
 export interface ManagerShiftOut {
   id: string;
@@ -14,4 +16,6 @@ export interface ManagerShiftOut {
   employee_name: string;
   started: boolean;
   offer_id?: string | null;
+  worked?: WorkedOut | null;
+  hours_report?: WaitingHoursOut | null;
 }

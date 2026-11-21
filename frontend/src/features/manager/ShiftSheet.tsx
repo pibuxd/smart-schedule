@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Pin, PinOff, Plus, ShieldAlert, Trash2 } from 'lucide-react'
+import { Clock, Pin, PinOff, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { CandidateOut, CheckOut, ShiftExplanationOut, SlotEventOut, VersionShiftOut } from '../../api/generated/model'
@@ -20,6 +20,9 @@ import { StateIcon } from '../availability/StateIcon'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { ClashQuestion } from './ClashQuestion'
 import { percent } from './schedule-grid'
+import { differenceText } from '../schedule/hours'
+import { useManager } from './ManagerContext'
+import { WorkedHoursForm } from './WorkedHours'
 import { shortDay } from './words'
 
 const WISH_LABEL: Record<CandidateOut['wish'], string> = {
@@ -38,12 +41,15 @@ export function ShiftSheet({
   locationId,
   shift,
   editable,
+  published = false,
   onClose,
 }: {
   versionId: string
   locationId: string
   shift: VersionShiftOut | null
   editable: boolean
+  /** A published version: the manager can set the hours a person really works ("Zmień godziny"). */
+  published?: boolean
   onClose: () => void
 }) {
   return (
@@ -54,7 +60,14 @@ export function ShiftSheet({
       description={shift ? `${shortDay(shift.date)}, ${shift.position_name}` : undefined}
     >
       {shift && (
-        <ShiftDetails versionId={versionId} locationId={locationId} shift={shift} editable={editable} onDone={onClose} />
+        <ShiftDetails
+          versionId={versionId}
+          locationId={locationId}
+          shift={shift}
+          editable={editable}
+          published={published}
+          onDone={onClose}
+        />
       )}
     </Sheet>
   )
@@ -65,12 +78,14 @@ function ShiftDetails({
   locationId,
   shift,
   editable,
+  published,
   onDone,
 }: {
   versionId: string
   locationId: string
   shift: VersionShiftOut
   editable: boolean
+  published: boolean
   onDone: () => void
 }) {
   const explanation = useExplainShift(versionId, shift.id)
@@ -217,6 +232,10 @@ function ShiftDetails({
         </div>
       )}
 
+      {published && shift.employee_id && shift.assignment_id && (
+        <ShiftHours shift={shift} assignmentId={shift.assignment_id} onDone={onDone} />
+      )}
+
       {!current && editable && (
         <div className="grid gap-2 rounded-md border-2 border-dashed border-line bg-surface p-3">
           <span className="font-semibold">Ta zmiana jest bez obsady.</span>
@@ -343,6 +362,52 @@ function ShiftDetails({
       )}
       <SlotHistory events={data.history} />
     </div>
+  )
+}
+
+/** Hours of the person on a published shift: what counts, a waiting report, and "Zmień godziny". */
+function ShiftHours({ shift, assignmentId, onDone }: { shift: VersionShiftOut; assignmentId: string; onDone: () => void }) {
+  const { readOnly } = useManager()
+  const [open, setOpen] = useState(false)
+  const range = (start: string, end: string) => `${start}–${end}`
+  return (
+    <section className="grid gap-2 rounded-md border border-line bg-surface p-3" aria-label="Godziny pracy">
+      <h3 className="m-0 flex items-center gap-1.5 text-base font-extrabold">
+        <Clock aria-hidden="true" size={18} /> Godziny pracy
+      </h3>
+      <p className="m-0">
+        {shift.worked
+          ? `Liczą się ${range(shift.worked.start_time, shift.worked.end_time)} zamiast ${range(shift.start_time, shift.end_time)} (${differenceText(shift.worked.difference_minutes)}).`
+          : `Liczą się godziny z grafiku: ${range(shift.start_time, shift.end_time)}.`}
+      </p>
+      {shift.hours_report && !open && (
+        <p className="m-0 font-semibold text-prefer-not">
+          {shift.employee_name} zgłasza {range(shift.hours_report.start_time, shift.hours_report.end_time)} (
+          {differenceText(shift.hours_report.difference_minutes)}). Zdecydujesz w „Godzinach” albo tutaj.
+        </p>
+      )}
+      {open ? (
+        <WorkedHoursForm
+          target={{
+            assignmentId,
+            employeeId: shift.employee_id!,
+            name: shift.employee_name,
+            date: shift.date,
+            plannedStart: shift.start_time,
+            plannedEnd: shift.end_time,
+            worked: shift.worked,
+            report: shift.hours_report,
+          }}
+          onDone={onDone}
+        />
+      ) : (
+        <div>
+          <Button variant="secondary" size="normal" disabled={readOnly} onClick={() => setOpen(true)}>
+            Zmień godziny
+          </Button>
+        </div>
+      )}
+    </section>
   )
 }
 

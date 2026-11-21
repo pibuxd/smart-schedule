@@ -25,6 +25,8 @@ const command: AssistantCommandOut = {
   rule_set_id: "set1",
   period_label: "Grudzień 2026",
   consumed_at: null,
+  has_hours: false,
+  hours_only: false,
 };
 const instructions = (
   items: { id: string; text: string; active: boolean }[] = [],
@@ -328,4 +330,25 @@ it("labels an unaccepted proposal from a published period without approval actio
   expect(
     screen.queryByRole("button", { name: "Zatwierdź zmiany" }),
   ).not.toBeInTheDocument();
+});
+
+it("keeps a plan of hours open after the period is published and says where the hours are", async () => {
+  const calls = chatApi([
+    {
+      ...command,
+      text: "Ewa wyszła dziś o 12",
+      lines: ["Godziny osoby Ewa: sob. 21.11, 06:00–12:00 zamiast 06:00–14:00 (krócej o 2 h)."],
+      consumed_at: new Date().toISOString(),
+      has_hours: true,
+      hours_only: true,
+    },
+  ]);
+  panel();
+  expect(await screen.findByText("Do zatwierdzenia")).toBeInTheDocument();
+  expect(screen.queryByText("Okres zamknięty")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Zatwierdź zmiany" }));
+  expect(
+    await screen.findByText("Zapisane. Godziny liczą się od razu, zobaczysz je w „Godzinach”."),
+  ).toBeInTheDocument();
+  expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/cmd1/apply"))).toBe(true);
 });

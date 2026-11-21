@@ -19,7 +19,7 @@ router = Router(tags=["notifications"])
 # The newest notifications shown on the screen.
 LIMIT = 50
 
-Link = Literal["schedule", "availability", "offers", "none"]
+Link = Literal["schedule", "availability", "offers", "hours", "none"]
 
 
 class NotificationOut(Schema):

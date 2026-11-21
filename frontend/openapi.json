@@ -2029,7 +2029,7 @@
             }
           }
         },
-        "description": "My published shifts from today on, who works with me, and my hours per month. Works in read-only mode.",
+        "description": "My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month\n(approved other hours count instead of the schedule's). Works in read-only mode.",
         "tags": [
           "scheduling"
         ],
@@ -5661,7 +5661,7 @@
             }
           }
         },
-        "description": "Hours of published shifts in a month, per person and location (the locations this manager runs).",
+        "description": "Hours of published shifts in a month, per person and location (the locations this manager runs). Approved\nother hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.",
         "tags": [
           "reports"
         ],
@@ -6295,6 +6295,22 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -6353,7 +6369,7 @@
             }
           }
         },
-        "description": "Published shifts of the location (two weeks back, two months ahead) for \"Zmień obsadę\".",
+        "description": "Published shifts of the location (two weeks back, two months ahead) for \"Zmień obsadę\"; with `month`\n(RRRR-MM), all of that month instead (\"Zmień godziny sam\" also corrects older shifts).",
         "tags": [
           "marketplace"
         ],
@@ -7322,7 +7338,7 @@
             }
           }
         },
-        "description": "Accept the plan: the rule list and the instructions change as the plan's lines say.",
+        "description": "Accept the plan: the rule list, the instructions and the hours change as the plan's lines say.",
         "tags": [
           "assistant"
         ],
@@ -7911,6 +7927,519 @@
         "tags": [
           "assistant"
         ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/me/hours-changes": {
+      "post": {
+        "operationId": "report_my_hours",
+        "summary": "Report My Hours",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursChangeOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Report other hours of my published shift (overtime or leaving early); the manager approves or rejects.",
+        "tags": [
+          "worktime"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportHoursIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/hours-changes/{change_id}/cancel": {
+      "post": {
+        "operationId": "cancel_my_hours_change",
+        "summary": "Cancel My Hours Change",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Change Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursChangeOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Take back my report while it waits for the manager.",
+        "tags": [
+          "worktime"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/manager/hours-changes": {
+      "get": {
+        "operationId": "manager_hours_changes",
+        "summary": "Manager Hours Changes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerHoursChangesOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Reports of other hours in my locations: waiting ones, and what was decided in the last two weeks.",
+        "tags": [
+          "worktime"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/hours-changes/{change_id}/approve": {
+      "post": {
+        "operationId": "approve_hours_change",
+        "summary": "Approve Hours Change",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Change Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursChangeOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The reported hours count instead of the schedule's; the employee is told.",
+        "tags": [
+          "worktime"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/hours-changes/{change_id}/reject": {
+      "post": {
+        "operationId": "reject_hours_change",
+        "summary": "Reject Hours Change",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Change Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursChangeOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The reported hours do not count; the employee is told.",
+        "tags": [
+          "worktime"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assignments/{assignment_id}/hours": {
+      "post": {
+        "operationId": "set_shift_hours",
+        "summary": "Set Shift Hours",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftHoursOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The manager sets the hours one person really works on a published shift, at once (also after the fact).\nThe schedule's own hours bring the plan back; a waiting report of the shift is answered by this.",
+        "tags": [
+          "worktime"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHoursIn"
+              }
+            }
+          },
+          "required": true
+        },
         "security": [
           {
             "SessionAuth": []
@@ -9527,6 +10056,13 @@
             "title": "Shifts",
             "type": "array"
           },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/MyShiftOut"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
           "published_until": {
             "anyOf": [
               {
@@ -9643,6 +10179,31 @@
             "default": false,
             "title": "Handover At Once",
             "type": "boolean"
+          },
+          "worked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkedOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitingHoursOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_report": {
+            "default": false,
+            "title": "Can Report",
+            "type": "boolean"
           }
         },
         "required": [
@@ -9660,6 +10221,92 @@
           "coworkers"
         ],
         "title": "MyShiftOut",
+        "type": "object"
+      },
+      "WaitingHoursOut": {
+        "description": "A report of other hours waiting for the manager.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "difference_minutes": {
+            "title": "Difference Minutes",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "start_time",
+          "end_time",
+          "hours",
+          "difference_minutes",
+          "reason"
+        ],
+        "title": "WaitingHoursOut",
+        "type": "object"
+      },
+      "WorkedOut": {
+        "description": "Hours that count instead of the schedule's (approved overtime or a shorter shift).",
+        "properties": {
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "difference_minutes": {
+            "title": "Difference Minutes",
+            "type": "integer"
+          },
+          "by_manager": {
+            "title": "By Manager",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "start_at",
+          "end_at",
+          "start_time",
+          "end_time",
+          "hours",
+          "difference_minutes",
+          "by_manager"
+        ],
+        "title": "WorkedOut",
         "type": "object"
       },
       "PositionNameOut": {
@@ -10130,6 +10777,38 @@
             },
             "title": "Overridden",
             "type": "array"
+          },
+          "assignment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          },
+          "worked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkedOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hours_report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitingHoursOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -11157,6 +11836,94 @@
         "title": "PeriodRefIn",
         "type": "object"
       },
+      "HoursProposalOut": {
+        "description": "A report of other hours of my published shift, prepared by the assistant (nothing is sent by itself).",
+        "properties": {
+          "assignment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "planned_start_time": {
+            "title": "Planned Start Time",
+            "type": "string"
+          },
+          "planned_end_time": {
+            "title": "Planned End Time",
+            "type": "string"
+          },
+          "difference_minutes": {
+            "title": "Difference Minutes",
+            "type": "integer"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "position_name": {
+            "title": "Position Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "sent_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "cancelled",
+                  "replaced",
+                  "expired"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Status"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "date",
+          "start_time",
+          "end_time",
+          "planned_start_time",
+          "planned_end_time",
+          "difference_minutes",
+          "location_name",
+          "position_name",
+          "reason",
+          "sent_status"
+        ],
+        "title": "HoursProposalOut",
+        "type": "object"
+      },
       "MyRequestOut": {
         "properties": {
           "id": {
@@ -11221,6 +11988,13 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "hours_reports": {
+            "items": {
+              "$ref": "#/components/schemas/HoursProposalOut"
+            },
+            "title": "Hours Reports",
+            "type": "array"
           }
         },
         "required": [
@@ -12865,6 +13639,16 @@
             "title": "Total",
             "type": "number"
           },
+          "longer": {
+            "default": 0,
+            "title": "Longer",
+            "type": "number"
+          },
+          "shorter": {
+            "default": 0,
+            "title": "Shorter",
+            "type": "number"
+          },
           "by_location": {
             "items": {
               "$ref": "#/components/schemas/LocationHoursOut"
@@ -13325,6 +14109,26 @@
               }
             ],
             "title": "Offer Id"
+          },
+          "worked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkedOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hours_report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitingHoursOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13460,6 +14264,7 @@
               "schedule",
               "availability",
               "offers",
+              "hours",
               "none"
             ],
             "title": "Link",
@@ -13648,6 +14453,14 @@
               }
             ],
             "title": "Consumed At"
+          },
+          "has_hours": {
+            "title": "Has Hours",
+            "type": "boolean"
+          },
+          "hours_only": {
+            "title": "Hours Only",
+            "type": "boolean"
           }
         },
         "required": [
@@ -13665,7 +14478,9 @@
           "expires_at",
           "rule_set_id",
           "period_label",
-          "consumed_at"
+          "consumed_at",
+          "has_hours",
+          "hours_only"
         ],
         "title": "AssistantCommandOut",
         "type": "object"
@@ -13941,6 +14756,296 @@
           "ids"
         ],
         "title": "InstructionOrderIn",
+        "type": "object"
+      },
+      "HoursChangeOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "cancelled",
+              "replaced",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "position_name": {
+            "title": "Position Name",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "planned_start_time": {
+            "title": "Planned Start Time",
+            "type": "string"
+          },
+          "planned_end_time": {
+            "title": "Planned End Time",
+            "type": "string"
+          },
+          "planned_hours": {
+            "title": "Planned Hours",
+            "type": "number"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "difference_minutes": {
+            "title": "Difference Minutes",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "by_manager": {
+            "title": "By Manager",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by_name": {
+            "title": "Decided By Name",
+            "type": "string"
+          },
+          "assignment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "employee_id",
+          "employee_name",
+          "location_id",
+          "location_name",
+          "position_name",
+          "date",
+          "planned_start_time",
+          "planned_end_time",
+          "planned_hours",
+          "start_time",
+          "end_time",
+          "hours",
+          "difference_minutes",
+          "reason",
+          "by_manager",
+          "created_at",
+          "decided_at",
+          "decided_by_name",
+          "assignment_id"
+        ],
+        "title": "HoursChangeOut",
+        "type": "object"
+      },
+      "ReportHoursIn": {
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "start_time": {
+            "description": "GG:MM w czasie lokalu, np. 14:30",
+            "maxLength": 5,
+            "minLength": 3,
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "description": "GG:MM w czasie lokalu, np. 14:30",
+            "maxLength": 5,
+            "minLength": 3,
+            "title": "End Time",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Reason",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "start_time",
+          "end_time"
+        ],
+        "title": "ReportHoursIn",
+        "type": "object"
+      },
+      "ManagerHoursChangesOut": {
+        "properties": {
+          "pending": {
+            "items": {
+              "$ref": "#/components/schemas/HoursChangeOut"
+            },
+            "title": "Pending",
+            "type": "array"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/HoursChangeOut"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending",
+          "recent",
+          "waiting"
+        ],
+        "title": "ManagerHoursChangesOut",
+        "type": "object"
+      },
+      "ShiftHoursOut": {
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "planned_start_time": {
+            "title": "Planned Start Time",
+            "type": "string"
+          },
+          "planned_end_time": {
+            "title": "Planned End Time",
+            "type": "string"
+          },
+          "worked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkedOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "assignment_id",
+          "planned_start_time",
+          "planned_end_time",
+          "worked"
+        ],
+        "title": "ShiftHoursOut",
+        "type": "object"
+      },
+      "SetHoursIn": {
+        "properties": {
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "start_time": {
+            "description": "GG:MM w czasie lokalu, np. 14:30",
+            "maxLength": 5,
+            "minLength": 3,
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "description": "GG:MM w czasie lokalu, np. 14:30",
+            "maxLength": 5,
+            "minLength": 3,
+            "title": "End Time",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "employee_id",
+          "start_time",
+          "end_time"
+        ],
+        "title": "SetHoursIn",
         "type": "object"
       }
     },

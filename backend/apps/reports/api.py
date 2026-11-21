@@ -1,19 +1,21 @@
-"""Hours worked in a month, from published schedules, split by location; also as a CSV file for payroll."""
+"""Hours worked in a month, from published schedules, split by location; also as a CSV file for payroll.
+
+Approved other hours of a shift (overtime, leaving early; `apps.worktime`) count instead of the schedule's."""
 
 import csv
 import io
 from collections import defaultdict
-from datetime import date
 from uuid import UUID
 
 from django.db.models import Max
 from django.http import HttpResponse
 from ninja import Router, Schema
-from ninja.errors import HttpError
 
+from apps.core.months import month_range
 from apps.core.schemas import ErrorOut
 from apps.scheduling.models import Assignment, ScheduleVersion
 from apps.tenancy.context import tenant_context
+from apps.worktime.services import worked_hours
 
 router = Router(tags=["reports"])
 
@@ -35,7 +37,11 @@ class EmployeeHoursOut(Schema):
     name: str
     home_location_name: str
     shifts: int
+    # Hours that count: the schedule's, or the approved other hours of a shift (overtime, a shorter shift).
     total: float
+    # Of the total: hours above the schedule (approved overtime) and hours below it (shorter shifts), both >= 0.
+    longer: float = 0
+    shorter: float = 0
     by_location: list[LocationHoursOut]
     # Also worked this month in locations this manager does not run: the total here is not the whole month.
     elsewhere: bool
@@ -51,19 +57,10 @@ class HoursReportOut(Schema):
     latest_month: str | None
 
 
-def _month(value: str) -> tuple[date, date]:
-    try:
-        first = date.fromisoformat(f"{value}-01")
-        nxt = date(first.year + (first.month == 12), first.month % 12 + 1, 1)
-    except ValueError:
-        raise HttpError(400, "Podaj miesiąc w postaci RRRR-MM, np. 2026-12.") from None
-    return first, nxt
-
-
 def _report(request, company_id: UUID, month: str) -> HoursReportOut:
     ctx = tenant_context(request, company_id)
     ctx.require_manager()
-    first, nxt = _month(month)
+    first, nxt = month_range(month)
     locations = list(ctx.managed_locations().order_by("name"))
     rows = (
         ctx.qs(Assignment)
@@ -74,14 +71,23 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
             shift__date__gte=first,
             shift__date__lt=nxt,
         )
-        .select_related("shift", "employee__membership__user", "employee__home_location")
+        .select_related("shift__version", "employee__membership__user", "employee__home_location")
     )
-    hours: dict = defaultdict(lambda: defaultdict(float))
+    rows = list(rows)
+    worked = worked_hours(rows)
+    seconds: dict = defaultdict(lambda: defaultdict(float))  # summed first, rounded once
     shifts: dict = defaultdict(int)
+    longer: dict = defaultdict(int)  # minutes
+    shorter: dict = defaultdict(int)
     people = {}
     for assignment in rows:
-        shift = assignment.shift
-        hours[assignment.employee_id][shift.location_id] += (shift.end_at - shift.start_at).total_seconds() / 3600
+        shift, counted = assignment.shift, worked[assignment.pk]
+        seconds[assignment.employee_id][shift.location_id] += counted.seconds
+        difference = counted.difference_minutes(shift)
+        if difference > 0:
+            longer[assignment.employee_id] += difference
+        else:
+            shorter[assignment.employee_id] -= difference
         shifts[assignment.employee_id] += 1
         people[assignment.employee_id] = assignment.employee
     elsewhere = set(
@@ -95,6 +101,10 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
         .exclude(shift__location__in=locations)
         .values_list("employee_id", flat=True)
     )
+    hours = {
+        employee_id: {location_id: value / 3600 for location_id, value in by_location.items()}
+        for employee_id, by_location in seconds.items()
+    }
     used = [loc for loc in locations if any(loc.pk in h for h in hours.values())]
     result = []
     for employee_id, profile in people.items():
@@ -105,6 +115,8 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
                 home_location_name=profile.home_location.name,
                 shifts=shifts[employee_id],
                 total=round(sum(hours[employee_id].values()), 2),
+                longer=round(longer[employee_id] / 60, 2),
+                shorter=round(shorter[employee_id] / 60, 2),
                 by_location=[
                     LocationHoursOut(location_id=loc.pk, hours=round(hours[employee_id][loc.pk], 2))
                     for loc in used
@@ -134,7 +146,8 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
 
 @router.get("/reports/hours", response={200: HoursReportOut, 400: ErrorOut, 403: ErrorOut, 404: ErrorOut})
 def hours_report(request, company_id: UUID, month: str):
-    """Hours of published shifts in a month, per person and location (the locations this manager runs)."""
+    """Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
+    other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them."""
     return _report(request, company_id, month)
 
 
@@ -157,7 +170,16 @@ def hours_report_csv(request, company_id: UUID, month: str):
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow(
-        ["Osoba", "Lokal domowy", "Zmiany", *[_text(loc.name) for loc in report.locations], "Razem", "Uwagi"]
+        [
+            "Osoba",
+            "Lokal domowy",
+            "Zmiany",
+            *[_text(loc.name) for loc in report.locations],
+            "Razem",
+            "Nadgodziny (ponad grafik)",
+            "Krótsze zmiany",
+            "Uwagi",
+        ]
     )
     for row in report.rows:
         by_location = {h.location_id: h.hours for h in row.by_location}
@@ -168,6 +190,8 @@ def hours_report_csv(request, company_id: UUID, month: str):
                 row.shifts,
                 *[_number(by_location.get(loc.id, 0.0)) for loc in report.locations],
                 _number(row.total),
+                _number(row.longer),
+                _number(row.shorter),
                 ELSEWHERE_NOTE if row.elsewhere else "",
             ]
         )

@@ -11,7 +11,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Hand, Pin, Plus, Send, ShieldAlert, SquarePen } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Clock, Hand, Pin, Plus, Send, ShieldAlert, SquarePen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
@@ -586,7 +586,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
           ))}
         </SelectField>
       )}
-      <Legend person={!!personId} />
+      <Legend person={!!personId} hours={data.shifts.some((s) => s.worked || s.hours_report)} />
       {message && (
         <p role="status" className={cn('m-0 rounded-sm px-3 py-2', message.bad ? 'bg-cannot-soft text-cannot' : 'bg-accent-soft')}>
           {message.text}
@@ -691,7 +691,14 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
         </div>
         <DragOverlay dropAnimation={null}>{dragging && <DragCard dragging={dragging} target={target} check={check} />}</DragOverlay>
       </DndContext>
-      <ShiftSheet versionId={data.id} locationId={data.location_id} shift={open} editable={editable} onClose={() => setOpen(null)} />
+      <ShiftSheet
+        versionId={data.id}
+        locationId={data.location_id}
+        shift={open}
+        editable={editable}
+        published={data.status === 'published'}
+        onClose={() => setOpen(null)}
+      />
       <Sheet open={override !== null} onOpenChange={(o) => !o && setOverride(null)} title="Zapisać mimo to?">
         {override && (
           <div className="grid gap-4">
@@ -759,6 +766,8 @@ function ShiftChip({
     shift.pinned ? 'przypięta' : '',
     shift.manual ? 'zmieniona ręcznie' : '',
     shift.forced ? 'wpisana mimo przeszkód' : '',
+    shift.worked ? `naprawdę ${shift.worked.start_time}–${shift.worked.end_time}` : '',
+    shift.hours_report ? 'czeka zgłoszenie innych godzin' : '',
     bad ? 'łamie regułę' : '',
     fit ? FIT_WORDS[fit.fit] : '',
   ]
@@ -801,6 +810,13 @@ function ShiftChip({
             {shift.start_time}–{shift.end_time}
           </span>
         )}
+        {(shift.worked || shift.hours_report) && (
+          <Clock
+            aria-hidden="true"
+            size={16}
+            className={cn('shrink-0', shift.hours_report ? 'text-prefer-not' : 'text-ink-muted')}
+          />
+        )}
         {shift.forced && <ShieldAlert aria-hidden="true" size={16} className="shrink-0 text-prefer-not" />}
         {shift.manual && !shift.forced && <Hand aria-hidden="true" size={16} className="shrink-0 text-ink-muted" />}
         {shift.pinned && <Pin aria-hidden="true" size={16} className="shrink-0 text-accent" />}
@@ -821,7 +837,7 @@ const FIT_WORDS: Record<ShiftFitOut['fit'], string> = {
   cannot: 'wybrana osoba nie może',
 }
 
-function Legend({ person }: { person: boolean }) {
+function Legend({ person, hours = false }: { person: boolean; hours?: boolean }) {
   return (
     <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-sm text-ink-muted">
       {person && (
@@ -849,6 +865,11 @@ function Legend({ person }: { person: boolean }) {
       <li className="flex items-center gap-1.5">
         <ShieldAlert aria-hidden="true" size={16} className="text-prefer-not" /> wpisane mimo przeszkód
       </li>
+      {hours && (
+        <li className="flex items-center gap-1.5">
+          <Clock aria-hidden="true" size={16} /> inne godziny (w karcie zmiany)
+        </li>
+      )}
     </ul>
   )
 }

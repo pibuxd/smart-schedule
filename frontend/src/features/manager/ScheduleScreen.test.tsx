@@ -489,6 +489,44 @@ describe('ScheduleScreen', () => {
     expect(screen.getByText(/Ten grafik widzą pracownicy w „Mój grafik”/)).toBeInTheDocument()
   })
 
+  it('shows other hours on a published shift and lets the manager change them', async () => {
+    const worked = { start_at: '', end_at: '', start_time: '06:00', end_time: '15:00', hours: 9, difference_minutes: 60, by_manager: false }
+    const anna = shift('s1', '2026-12-01', ['e1', 'Anna Wróbel'], { assignment_id: 'as1', worked })
+    const marek = shift('s2', '2026-12-01', ['e2', 'Marek Zając'], {
+      assignment_id: 'as2',
+      hours_report: { id: 'h1', start_time: '06:00', end_time: '12:00', hours: 6, difference_minutes: -120, reason: '' },
+    })
+    const published = { ...version, status: 'published', editable: false, shifts: [anna, marek, version.shifts[2]] }
+    const calls = mockApi((method, path) => {
+      if (method === 'GET' && path.endsWith('/periods')) return [200, [{ ...period, status: 'published' }]]
+      if (method === 'GET' && path === '/api/versions/v1') return [200, published]
+      if (method === 'GET' && path.endsWith('/explain')) return [200, { ...explanation, shift: marek, candidates: [] }]
+      if (method === 'POST' && path === '/api/assignments/as2/hours')
+        return [200, { assignment_id: 'as2', planned_start_time: '06:00', planned_end_time: '14:00', worked: null }]
+      return [404, { detail: 'Nie ma.' }]
+    })
+    show()
+    expect(await screen.findByRole('button', { name: /Anna Wróbel, 06:00–14:00, .*naprawdę 06:00–15:00/ })).toBeInTheDocument()
+    expect(screen.getByText('inne godziny (w karcie zmiany)')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Marek Zając, .*czeka zgłoszenie innych godzin/ }))
+    const hours = await screen.findByRole('region', { name: 'Godziny pracy' })
+    expect(hours).toHaveTextContent('Liczą się godziny z grafiku: 06:00–14:00.')
+    expect(hours).toHaveTextContent('Marek Zając zgłasza 06:00–12:00 (krócej o 2 h)')
+    fireEvent.click(within(hours).getByRole('button', { name: 'Zmień godziny' }))
+    fireEvent.change(within(hours).getByLabelText('Do'), { target: { value: '12:30' } })
+    expect(within(hours).getByRole('status')).toHaveTextContent('Krócej o 1 h 30 min')
+    fireEvent.click(within(hours).getByRole('button', { name: 'Zapisz godziny' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === '/api/assignments/as2/hours')?.body).toEqual({
+        employee_id: 'e2',
+        start_time: '06:00',
+        end_time: '12:30',
+        reason: '',
+      }),
+    )
+  })
+
   it('says what to do before anything is arranged', async () => {
     api({ period: { ...period, status: 'collecting', latest_version_id: null, latest_version_status: null } })
     show()

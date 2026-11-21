@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { MyScheduleOut, MyShiftOut } from '../../api/generated/model'
 import { useMySchedule } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
+import { Section } from '../../components/ui/field'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
 import {
@@ -15,10 +16,13 @@ import {
   parseDate,
   relativeDay,
   shortTime,
+  toIsoDate,
   weekdayLong,
   weekdayShort,
 } from '../../lib/dates'
 import { GiveAwaySheet } from './GiveAwaySheet'
+import { differenceText } from './hours'
+import { HoursSheet } from './HoursSheet'
 import { OffersToTake } from './OffersToTake'
 import { buildRows, coworkersText } from './rows'
 
@@ -38,12 +42,15 @@ export function MyScheduleScreen({
   useEffect(() => {
     if (fixedTime || !shifts?.length) return
     const now = Date.now()
-    const boundaries = shifts.flatMap((s) => [Date.parse(s.start_at), Date.parse(s.end_at)]).filter((t) => t > now)
+    const boundaries = shifts
+      .flatMap((s) => [Date.parse(counted(s).start_at), Date.parse(counted(s).end_at)])
+      .filter((t) => t > now)
     const delay = Math.min(86_400_000, Math.min(...boundaries) - now + 1)
     const timer = window.setTimeout(() => setClock(new Date()), delay)
     return () => window.clearTimeout(timer)
   }, [fixedTime, shifts, clock])
   const [giving, setGiving] = useState<string | null>(null)
+  const [reporting, setReporting] = useState<string | null>(null)
 
   if (schedule.isPending) return <Loading>Wczytuję Twój grafik…</Loading>
   if (schedule.isError) {
@@ -54,14 +61,31 @@ export function MyScheduleScreen({
     )
   }
   const data = schedule.data.data as MyScheduleOut
-  const [next, ...rest] = data.shifts.filter((shift) => Date.parse(shift.end_at) > today.getTime())
+  const ahead = (shift: MyShiftOut) => Date.parse(counted(shift).end_at) > today.getTime()
+  const [next, ...rest] = data.shifts.filter(ahead)
+  // A shift that ended while the screen was open moves to "Minione zmiany" at once (newest first), so
+  // "Zgłoś inne godziny" stays at hand right when the work ends.
+  const known = new Set((data.recent ?? []).map((s) => s.id))
+  const justEnded = data.shifts.filter((s) => !ahead(s) && s.can_report && !known.has(s.id)).reverse()
+  const recent = [...justEnded, ...(data.recent ?? [])]
   const give = readOnly ? undefined : (shift: MyShiftOut) => setGiving(shift.id)
+  const report = readOnly ? undefined : (shift: MyShiftOut) => setReporting(shift.id)
+  // "Zgłoś inne godziny" at today's or the running shift; earlier ones are in "Minione zmiany".
+  const reportNext =
+    next && next.can_report && (next.date === toIsoDate(today) || Date.parse(next.start_at) <= today.getTime())
+      ? report
+      : undefined
 
   return (
     <div className="grid gap-5">
       <OffersToTake companyId={companyId} readOnly={readOnly} />
       {next ? (
-        <NextShift shift={next} today={today} onGive={Date.parse(next.start_at) > today.getTime() ? give : undefined} />
+        <NextShift
+          shift={next}
+          today={today}
+          onGive={Date.parse(next.start_at) > today.getTime() ? give : undefined}
+          onReport={reportNext}
+        />
       ) : (
         <EmptyState title="Nie masz jeszcze zmian w grafiku">
           <p className="m-0">Gdy kierownik opublikuje grafik, zobaczysz tu swoje zmiany i godziny.</p>
@@ -94,7 +118,43 @@ export function MyScheduleScreen({
           </div>
         ))}
       </div>
+      {recent.length > 0 && <PastShifts shifts={recent} onReport={report} />}
       <GiveAwaySheet shift={data.shifts.find((s) => s.id === giving) ?? null} onClose={() => setGiving(null)} />
+      <HoursSheet
+        shift={[...data.shifts, ...recent].find((s) => s.id === reporting) ?? null}
+        now={today}
+        onClose={() => setReporting(null)}
+      />
+    </div>
+  )
+}
+
+/** The hours that count: approved other hours, else the schedule's. */
+function counted(shift: MyShiftOut) {
+  return shift.worked ?? shift
+}
+
+function timeRange(shift: MyShiftOut): string {
+  const hours = counted(shift)
+  return `${shortTime(hours.start_time)}–${shortTime(hours.end_time)}`
+}
+
+/** Under a shift: the schedule's hours when others count, and my report waiting for the manager. */
+function HoursNote({ shift }: { shift: MyShiftOut }) {
+  if (!shift.worked && !shift.report) return null
+  return (
+    <div className="grid text-sm text-ink-muted">
+      {shift.worked && (
+        <span>
+          W grafiku {shortTime(shift.start_time)}–{shortTime(shift.end_time)}, {differenceText(shift.worked.difference_minutes)}{' '}
+          ({shift.worked.by_manager ? 'od kierownika' : 'zatwierdzone'})
+        </span>
+      )}
+      {shift.report && (
+        <span className="font-semibold text-prefer-not">
+          Zgłoszone {shortTime(shift.report.start_time)}–{shortTime(shift.report.end_time)}: czeka na kierownika
+        </span>
+      )}
     </div>
   )
 }
@@ -132,10 +192,12 @@ function NextShift({
   shift,
   today,
   onGive,
+  onReport,
 }: {
   shift: MyShiftOut
   today: Date
   onGive?: (shift: MyShiftOut) => void
+  onReport?: (shift: MyShiftOut) => void
 }) {
   const day = parseDate(shift.date)
   return (
@@ -154,9 +216,8 @@ function NextShift({
           </span>
         </div>
         <div className="grid min-w-0 gap-0.5">
-          <div className="text-xl font-extrabold tabular-nums">
-            {shortTime(shift.start_time)}–{shortTime(shift.end_time)}
-          </div>
+          <div className="text-xl font-extrabold tabular-nums">{timeRange(shift)}</div>
+          <HoursNote shift={shift} />
           <div className="font-semibold">{shiftLine(shift)}</div>
           <div className="text-sm text-ink-muted">
             {shift.location_name}
@@ -167,9 +228,14 @@ function NextShift({
           </div>
         </div>
       </div>
-      {onGive && (
-        <div className="border-t border-grid px-4 py-2">
+      {(onGive || onReport) && (
+        <div className="grid gap-1 border-t border-grid px-4 py-2">
           <GiveButton shift={shift} onGive={onGive} wide />
+          {onReport && (
+            <Button variant="quiet" size="normal" wide onClick={() => onReport(shift)}>
+              {shift.report ? 'Zgłoszone inne godziny: zmień albo wycofaj' : 'Zgłoś inne godziny'}
+            </Button>
+          )}
         </div>
       )}
     </article>
@@ -223,9 +289,8 @@ function UpcomingList({
             >
               {row.showDate ? <DateCell date={parseDate(row.shift.date)} /> : <span />}
               <div className="min-w-0">
-                <div className="font-extrabold tabular-nums">
-                  {shortTime(row.shift.start_time)}–{shortTime(row.shift.end_time)}
-                </div>
+                <div className="font-extrabold tabular-nums">{timeRange(row.shift)}</div>
+                <HoursNote shift={row.shift} />
                 <div className="text-sm text-ink-muted">
                   {shiftLine(row.shift)}
                   {row.shift.away && `, ${row.shift.location_name}`}
@@ -244,5 +309,44 @@ function UpcomingList({
         )}
       </ol>
     </section>
+  )
+}
+
+/** The last two weeks: the hours that counted, and "Inne godziny" while I may still report them. */
+function PastShifts({ shifts, onReport }: { shifts: MyShiftOut[]; onReport?: (shift: MyShiftOut) => void }) {
+  const waiting = shifts.filter((s) => s.report).length
+  return (
+    <Section
+      collapsible
+      title="Minione zmiany"
+      status={waiting > 0 ? <span className="font-semibold text-prefer-not">czeka: {waiting}</span> : undefined}
+      description="Ostatnie dwa tygodnie. Gdy praca trwała dłużej albo krócej niż w grafiku, zgłoś to kierownikowi."
+    >
+      <ol className="m-0 grid list-none overflow-hidden rounded-lg border border-line bg-surface p-0">
+        {shifts.map((shift) => (
+          <li
+            key={shift.id}
+            className="grid grid-cols-[52px_1fr_auto] items-center gap-x-3 border-t border-grid px-4 py-3 first:border-t-0"
+          >
+            <DateCell date={parseDate(shift.date)} />
+            <div className="min-w-0">
+              <div className="font-extrabold tabular-nums">{timeRange(shift)}</div>
+              <HoursNote shift={shift} />
+              <div className="text-sm text-ink-muted">
+                {shiftLine(shift)}
+                {shift.away && `, ${shift.location_name}`}
+              </div>
+            </div>
+            {onReport && shift.can_report ? (
+              <Button variant="quiet" size="normal" className="px-2 text-sm" onClick={() => onReport(shift)}>
+                Inne godziny
+              </Button>
+            ) : (
+              <span />
+            )}
+          </li>
+        ))}
+      </ol>
+    </Section>
   )
 }

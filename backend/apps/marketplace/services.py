@@ -35,6 +35,7 @@ from apps.scheduling.editing import save_scores
 from apps.scheduling.models import Assignment, AssignmentEvent, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import build_problem_for_version
 from apps.staffing.models import EmployeeProfile, Position, works_in_q
+from apps.worktime.services import hours_conflicts, person_got_shift, person_left_shift
 from engine.explain import without_pin
 from engine.scoring import score
 from engine.validator import validate
@@ -128,10 +129,14 @@ def check_assignment(assignment: Assignment, people=None, also_location: bool = 
     key = assignment.shift.slot_key
     problem = without_pin(built.problem, key)
     known = {v.message for v in validate(problem, schedule).hard}
+    # Approved other hours of a candidate's neighbouring shift that run into this one would count twice.
+    hours = hours_conflicts(assignment.shift, [p.pk for p in candidates])
     verdicts = []
     for person in candidates:
         report = validate(problem, {**schedule, key: str(person.pk)})
         problems = tuple(v.message for v in report.hard if v.message not in known)
+        if str(person.pk) in hours:
+            problems = (*problems, hours[str(person.pk)])
         verdicts.append(Verdict(person, problems))
     return verdicts
 
@@ -298,7 +303,8 @@ def _move(assignment: Assignment, to: EmployeeProfile, pinned: bool = True) -> N
 
 def _transfer(published: Assignment, taker: EmployeeProfile, reason: str, by, now, pinned: bool = True) -> None:
     """Move a published shift (and the newest draft's copy, when it still has the same person) to `taker`, with
-    a history row. The caller holds the locks and saves the scores afterwards (`_rescore`)."""
+    a history row; the person before loses their other hours of it (`worktime.person_left_shift`). The caller
+    holds the locks and saves the scores afterwards (`_rescore`)."""
     shift = published.shift
     before = published.employee_id
     _move(published, taker, pinned)
@@ -328,6 +334,7 @@ def _transfer(published: Assignment, taker: EmployeeProfile, reason: str, by, no
         by=by,
         at=now,
     )
+    person_left_shift(published, before)
 
 
 def _rescore(version: ScheduleVersion) -> None:
@@ -350,6 +357,7 @@ def _hand_over(offer: ShiftOffer, claim: ShiftClaim, taker: EmployeeProfile, by,
     now = timezone.now()
     shift = offer.assignment.shift
     _transfer(offer.assignment, taker, AssignmentEvent.Reason.OFFER, by, now)
+    person_got_shift(offer.assignment)
     _rescore(shift.version)
 
     claim.status = ShiftClaim.Status.APPROVED
@@ -510,6 +518,7 @@ def manager_reassign(assignment: Assignment, taker: EmployeeProfile, user, force
         shift = assignment.shift
         before = assignment.employee
         _transfer(assignment, taker, AssignmentEvent.Reason.MANUAL, user, now, pinned=not problems)
+        person_got_shift(assignment)
         _rescore(shift.version)
         _end_offer_after_change(assignment, taker, user, now)
 
@@ -536,7 +545,10 @@ def swap_problems(first: Assignment, second: Assignment) -> tuple[str, ...]:
     problem = without_pin(without_pin(built.problem, keys[0]), keys[1])
     known = {v.message for v in validate(problem, schedule).hard}
     swapped = {**schedule, keys[0]: str(second.employee_id), keys[1]: str(first.employee_id)}
-    return tuple(v.message for v in validate(problem, swapped).hard if v.message not in known)
+    problems = tuple(v.message for v in validate(problem, swapped).hard if v.message not in known)
+    gets_first = hours_conflicts(first.shift, [second.employee_id], exclude=[second.pk])
+    gets_second = hours_conflicts(second.shift, [first.employee_id], exclude=[first.pk])
+    return (*problems, *gets_first.values(), *gets_second.values())
 
 
 def manager_swap(first: Assignment, second: Assignment, user, force: bool = False) -> None:
@@ -556,6 +568,8 @@ def manager_swap(first: Assignment, second: Assignment, user, force: bool = Fals
         one, two = people[first.employee_id], people[second.employee_id]
         _transfer(first, two, AssignmentEvent.Reason.SWAP, user, now, pinned=not problems)
         _transfer(second, one, AssignmentEvent.Reason.SWAP, user, now, pinned=not problems)
+        person_got_shift(first)
+        person_got_shift(second)
         _rescore(first.shift.version)
         for row in (first, second):
             _end_offer_after_change(row, None, user, now)

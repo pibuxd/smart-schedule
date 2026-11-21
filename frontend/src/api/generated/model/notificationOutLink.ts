@@ -12,5 +12,6 @@ export const NotificationOutLink = {
   schedule: 'schedule',
   availability: 'availability',
   offers: 'offers',
+  hours: 'hours',
   none: 'none',
 } as const;

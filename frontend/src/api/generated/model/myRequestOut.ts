@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { HoursProposalOut } from './hoursProposalOut';
 import type { MyRequestOutStatus } from './myRequestOutStatus';
 
 export interface MyRequestOut {
@@ -15,4 +16,5 @@ export interface MyRequestOut {
   unmarked_days: string[];
   notes: string[];
   created_at: string;
+  hours_reports?: HoursProposalOut[];
 }

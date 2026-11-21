@@ -28,6 +28,7 @@ import type {
   AvailableOffersParams,
   ErrorOut,
   HandoverCandidateOut,
+  HandoverShiftsParams,
   ManagerOffersOut,
   ManagerOffersParams,
   ManagerShiftOut,
@@ -1006,21 +1007,31 @@ export type handoverShiftsResponseError = (handoverShiftsResponse402 | handoverS
 
 export type handoverShiftsResponse = (handoverShiftsResponseSuccess | handoverShiftsResponseError)
 
-export const getHandoverShiftsUrl = (locationId: string,) => {
+export const getHandoverShiftsUrl = (locationId: string,
+    params?: HandoverShiftsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/locations/${locationId}/handover-shifts`
+  return stringifiedParams.length > 0 ? `/api/locations/${locationId}/handover-shifts?${stringifiedParams}` : `/api/locations/${locationId}/handover-shifts`
 }
 
 /**
- * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"; with `month`
+ * (RRRR-MM), all of that month instead ("Zmień godziny sam" also corrects older shifts).
  * @summary Handover Shifts
  */
-export const handoverShifts = async (locationId: string, options?: Parameters<typeof apiFetch>[1]): Promise<handoverShiftsResponse> => {
+export const handoverShifts = async (locationId: string,
+    params?: HandoverShiftsParams, options?: Parameters<typeof apiFetch>[1]): Promise<handoverShiftsResponse> => {
 
-  return apiFetch<handoverShiftsResponse>(getHandoverShiftsUrl(locationId),
+  return apiFetch<handoverShiftsResponse>(getHandoverShiftsUrl(locationId,params),
   {
     ...options,
     method: 'GET'
@@ -1033,23 +1044,25 @@ export const handoverShifts = async (locationId: string, options?: Parameters<ty
 
 
 
-export const getHandoverShiftsQueryKey = (locationId: string,) => {
+export const getHandoverShiftsQueryKey = (locationId: string,
+    params?: HandoverShiftsParams,) => {
     return [
-    `/api/locations/${locationId}/handover-shifts`
+    `/api/locations/${locationId}/handover-shifts`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getHandoverShiftsQueryOptions = <TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getHandoverShiftsQueryOptions = <TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(locationId: string,
+    params?: HandoverShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getHandoverShiftsQueryKey(locationId);
+  const queryKey =  queryOptions?.queryKey ?? getHandoverShiftsQueryKey(locationId,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof handoverShifts>>> = ({ signal }) => handoverShifts(locationId, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof handoverShifts>>> = ({ signal }) => handoverShifts(locationId,params, { signal, ...requestOptions });
 
 
 
@@ -1063,11 +1076,13 @@ export type HandoverShiftsQueryError = ErrorOut
 
 
 /**
- * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"; with `month`
+ * (RRRR-MM), all of that month instead ("Zmień godziny sam" also corrects older shifts).
  * @summary Handover Shifts
  */
 export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
- locationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>> & Pick<
+ locationId: string,
+    params: undefined |  HandoverShiftsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof handoverShifts>>,
           TError,
@@ -1077,11 +1092,13 @@ export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShif
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"; with `month`
+ * (RRRR-MM), all of that month instead ("Zmień godziny sam" also corrects older shifts).
  * @summary Handover Shifts
  */
 export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>> & Pick<
+ locationId: string,
+    params?: HandoverShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof handoverShifts>>,
           TError,
@@ -1091,23 +1108,27 @@ export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShif
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"; with `month`
+ * (RRRR-MM), all of that month instead ("Zmień godziny sam" also corrects older shifts).
  * @summary Handover Shifts
  */
 export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ locationId: string,
+    params?: HandoverShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę".
+ * Published shifts of the location (two weeks back, two months ahead) for "Zmień obsadę"; with `month`
+ * (RRRR-MM), all of that month instead ("Zmień godziny sam" also corrects older shifts).
  * @summary Handover Shifts
  */
 export function useHandoverShifts<TData = Awaited<ReturnType<typeof handoverShifts>>, TError = ErrorOut>(
- locationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ locationId: string,
+    params?: HandoverShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof handoverShifts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getHandoverShiftsQueryOptions(locationId,options)
+  const queryOptions = getHandoverShiftsQueryOptions(locationId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

@@ -6,14 +6,9 @@ import { getHoursReportCsvUrl, useHoursReport } from '../../api/generated/report
 import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
-import { monthName } from '../../lib/dates'
+import { monthName, shiftMonth } from '../../lib/dates'
 import { useManager } from './ManagerContext'
-
-function shiftMonth(month: string, by: number): string {
-  const [year, m] = month.split('-').map(Number)
-  const date = new Date(year, m - 1 + by, 1)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-}
+import { ChangeHours, HoursReports } from './WorkedHours'
 
 const hours = (value: number) => value.toLocaleString('pl-PL', { maximumFractionDigits: 2 })
 
@@ -25,11 +20,14 @@ export function HoursScreen({ today = new Date() }: { today?: Date }) {
 
   return (
     <div className="grid gap-6">
+      <HoursReports />
+      <ChangeHours />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid gap-1">
           <h1 className="m-0 text-2xl font-extrabold">Godziny w miesiącu</h1>
           <p className="m-0 max-w-[62ch] text-ink-muted">
-            Zmiany z opublikowanych grafików. Ktoś zamienił się poza aplikacją? Popraw ten dzień w grafiku i opublikuj.
+            Zmiany z opublikowanych grafików, z zatwierdzonymi nadgodzinami i krótszymi zmianami. Ktoś zamienił się poza
+            aplikacją? Popraw ten dzień w grafiku i opublikuj.
           </p>
         </div>
         <a
@@ -80,14 +78,27 @@ function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: 
     )
   }
   const many = data.locations.length > 1
+  // Only when someone worked other hours than the schedule says, so the usual table stays short.
+  const other = data.rows.some((row) => (row.longer ?? 0) > 0 || (row.shorter ?? 0) > 0)
   return (
     <div className="overflow-x-auto rounded-md border border-line bg-surface">
       <table className="w-full border-collapse text-left">
+        {other && (
+          <caption className="caption-bottom px-3 py-2 text-left text-sm text-ink-muted">
+            Nadgodziny to tu godziny ponad grafik, nie nadgodziny z Kodeksu pracy. Do wypłaty sprawdź normy czasu pracy.
+          </caption>
+        )}
         <thead>
           <tr className="border-b-2 border-ink">
             <th className="px-3 py-2">Osoba</th>
             <th className="px-3 py-2 text-right">Zmiany</th>
             {many && data.locations.map((l) => <th key={l.id} className="px-3 py-2 text-right">{l.name}</th>)}
+            {other && (
+              <>
+                <th className="px-3 py-2 text-right">Nadgodziny</th>
+                <th className="px-3 py-2 text-right">Krócej</th>
+              </>
+            )}
             <th className="px-3 py-2 text-right">Razem godzin</th>
           </tr>
         </thead>
@@ -112,6 +123,12 @@ function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: 
                       {by.has(l.id) ? hours(by.get(l.id)!) : '–'}
                     </td>
                   ))}
+                {other && (
+                  <>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.longer ? `+${hours(row.longer)}` : '–'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.shorter ? `−${hours(row.shorter)}` : '–'}</td>
+                  </>
+                )}
                 <td className="px-3 py-2 text-right font-semibold tabular-nums">{hours(row.total)}</td>
               </tr>
             )
@@ -119,7 +136,10 @@ function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: 
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-ink">
-            <td className="px-3 py-2 font-extrabold" colSpan={2 + (many ? data.locations.length : 0)}>
+            <td
+              className="px-3 py-2 font-extrabold"
+              colSpan={2 + (many ? data.locations.length : 0) + (other ? 2 : 0)}
+            >
               Razem
             </td>
             <td className="px-3 py-2 text-right font-extrabold tabular-nums">{hours(data.total)}</td>

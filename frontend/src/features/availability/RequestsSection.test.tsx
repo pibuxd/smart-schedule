@@ -409,3 +409,104 @@ describe("Twoje prośby window", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("reports of other hours in the chat", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const proposal = (over = {}) => ({
+    assignment_id: "as1",
+    date: "2026-11-20",
+    start_time: "06:00",
+    end_time: "11:00",
+    planned_start_time: "06:00",
+    planned_end_time: "14:00",
+    difference_minutes: -180,
+    location_name: "Rynek",
+    position_name: "Sprzedawca",
+    reason: "źle się czuję",
+    sent_status: null,
+    ...over,
+  });
+
+  it("sends a prepared report only when the person presses the button", async () => {
+    let sent = false;
+    const calls = mockApi((method, path) => {
+      if (method === "POST" && path === "/api/me/hours-changes") {
+        sent = true;
+        return [201, { id: "h1", status: "pending" }];
+      }
+      return [
+        200,
+        [
+          request({
+            text: "Źle się czuję, wyjdę o 11.",
+            status: "answered",
+            summary: null,
+            reply: "Przygotowałem zgłoszenie innych godzin.",
+            hours_reports: [proposal(sent ? { sent_status: "pending" } : {})],
+          }),
+        ],
+      ];
+    });
+    renderScreen(
+      <RequestsSection companyId="c1" month="2026-11-01" editable assistantReads />,
+    );
+    await openChat();
+    const card = await screen.findByRole("list", {
+      name: "Zgłoszenia innych godzin",
+    });
+    expect(card).toHaveTextContent(
+      "piątek 20 listopada: 6:00–11:00 zamiast 6:00–14:00 (krócej o 3 h)",
+    );
+    expect(card).toHaveTextContent("Powód: źle się czuję");
+    expect(calls.some((c) => c.method === "POST")).toBe(false); // nothing goes by itself
+
+    fireEvent.click(
+      within(card).getByRole("button", { name: "Wyślij kierownikowi" }),
+    );
+
+    expect(
+      await within(card).findByText("Wysłane. Czeka na kierownika."),
+    ).toBeInTheDocument();
+    expect(
+      calls.find((c) => c.method === "POST" && c.url === "/api/me/hours-changes")!
+        .body,
+    ).toEqual({
+      assignment_id: "as1",
+      start_time: "06:00",
+      end_time: "11:00",
+      reason: "źle się czuję",
+      request_id: "r1",
+    });
+  });
+
+  it("says when the shift is gone or the manager decided", async () => {
+    mockApi(() => [
+      200,
+      [
+        request({
+          status: "answered",
+          summary: null,
+          reply: "Gotowe.",
+          hours_reports: [
+            proposal({ assignment_id: null }),
+            proposal({ date: "2026-11-19", sent_status: "approved" }),
+          ],
+        }),
+      ],
+    ]);
+    renderScreen(
+      <RequestsSection companyId="c1" month="2026-11-01" editable assistantReads />,
+    );
+    await openChat();
+    expect(
+      await screen.findByText(/nie masz już tej zmiany, więc tego zgłoszenia nie wyślesz/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Kierownik zatwierdził te godziny."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Wyślij kierownikowi" }),
+    ).not.toBeInTheDocument();
+  });
+});
