@@ -64,6 +64,28 @@ docker compose logs api --since 5m | grep "SMS to"
 Dopóki tak jest, zalogować może się tylko ktoś, komu podasz kod z logu. Przed wpuszczeniem prawdziwych pracowników
 trzeba podłączyć bramkę SMS (nowa klasa wskazana w `SMS_BACKEND`).
 
+### Asystent (OpenRouter)
+
+Asystent działa, gdy w `/opt/grafikomat/.env` jest klucz OpenRouter (openrouter.ai/keys). Wystarczy jedna linia, model
+(`deepseek/deepseek-v4.1-flash`) i głębokość myślenia (`low`) mają wartości domyślne:
+
+```bash
+OPENROUTER_API_KEY=sk-or-...        # klucz tylko w .env na serwerze, nigdy w repozytorium
+# OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash
+# OPENROUTER_EFFORT=low
+```
+
+Po zmianie `.env` uruchom `docker compose up -d` (kontenery `api`, `worker` i `solver` wstaną z nowym kluczem).
+Czy działa: napisz do asystenta i sprawdź log workera. Każda odpowiedź zostawia jedną linię z czasem, modelem,
+dostawcą i kosztem:
+
+```bash
+docker compose logs worker --since 10m | grep "assistant "
+```
+
+Błąd `status 401` znaczy zły klucz, `status 402` brak środków na koncie OpenRouter. Limit wydatków ustawisz przy
+kluczu na openrouter.ai/keys. Bez klucza OpenRouter, a z `ANTHROPIC_API_KEY`, asystent używa Claude.
+
 Kody na darmowy dostęp dla firm tworzy się w panelu administratora: Kody dostępu → Dodaj.
 
 ## 3. Aktualizacja

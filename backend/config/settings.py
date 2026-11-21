@@ -145,8 +145,14 @@ SOLVER_TIME_LIMIT_S = int(env("SOLVER_TIME_LIMIT_S", "30"))
 SOLVER_WORKERS = int(env("SOLVER_WORKERS", "8"))
 GENERATION_MONTHLY_LIMIT = int(env("GENERATION_MONTHLY_LIMIT", "30"))
 
-# The assistant (Claude) reads employees' text requests and the manager's commands. Without a key it is off:
-# requests go to the manager as written and the manager sets rules by hand.
+# The assistant (a language model) reads employees' text requests and the manager's commands. Without a key it is
+# off: requests go to the manager as written and the manager sets rules by hand. OpenRouter is used when its key is
+# set (since 21.11.2026), else Anthropic's API (Claude).
+OPENROUTER_API_KEY = env("OPENROUTER_API_KEY", "").strip()
+# Model id as on openrouter.ai/models.
+OPENROUTER_MODEL = env("OPENROUTER_MODEL", "").strip() or "deepseek/deepseek-v4.1-flash"
+# reasoning.effort: how much the model thinks on each call (none|minimal|low|medium|high|xhigh). Empty = model default.
+OPENROUTER_EFFORT = env("OPENROUTER_EFFORT", "low").strip().lower()
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_MODEL = env("ANTHROPIC_MODEL", "claude-opus-5-5")
 # output_config.effort: how much the model thinks on each call (low|medium|high|xhigh|max). Empty = model default.

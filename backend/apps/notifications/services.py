@@ -173,8 +173,8 @@ def notification_text(kind: str, payload: dict) -> str:
             )
         case "request_to_assistant":
             return (
-                f"Kierownik dał Twoją prośbę „{p.get('text', '')}” do przeczytania asystentowi AI (Claude, "
-                "zewnętrzna usługa), żeby generator mógł ją uwzględnić."
+                f"Kierownik dał Twoją prośbę „{p.get('text', '')}” do przeczytania asystentowi AI (zewnętrzna "
+                "usługa), żeby generator mógł ją uwzględnić."
             )
         case "offer_opened_for_you":
             if not p.get("able"):

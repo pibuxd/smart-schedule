@@ -22,7 +22,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def with_key(settings):
-    settings.ANTHROPIC_API_KEY = "test-key"
+    settings.OPENROUTER_API_KEY = "test-key"
 
 
 def day_words(day) -> str:

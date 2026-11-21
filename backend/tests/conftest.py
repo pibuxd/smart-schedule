@@ -46,6 +46,13 @@ def make_company(db):
 
 
 @pytest.fixture(autouse=True)
+def no_assistant_key(settings):
+    """Tests never reach a real model: the assistant is off unless a test sets a fake key (`with_key`)."""
+    settings.OPENROUTER_API_KEY = ""
+    settings.ANTHROPIC_API_KEY = ""
+
+
+@pytest.fixture(autouse=True)
 def sms_outbox(settings):
     """Login codes "sent" during a test; the last one is `sms_outbox[-1]` as (phone, text)."""
     from apps.accounts.sms import MemorySmsSender
