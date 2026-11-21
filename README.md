@@ -22,7 +22,7 @@ Stan: prototyp, wszystkie 10 etapów planu zbudowane.
   zatwierdzanie oddanych zmian, godziny w miesiącu z eksportem CSV, kody dostępu i okres próbny.
 - Generator: OR-Tools CP-SAT w osobnym workerze (najpierw jak najmniej zmian bez obsady, potem zasady kierownika
   i prośby pracowników w proporcji 80 do 20), niezależny walidator, który ma ostatnie słowo.
-- Asystent (model językowy przez OpenRouter, domyślnie DeepSeek V4.1 Flash; zapasowo Claude): czyta prośby
+- Asystent (model językowy przez OpenRouter, domyślnie DeepSeek V4.1 Flash; albo Claude): czyta prośby
   pracowników i polecenia kierownika pisane zwykłymi słowami i zamienia je na ustawienia z zamkniętych list.
   Grafiku nie układa. Kierownik widzi plan zmian i sam go zatwierdza.
 

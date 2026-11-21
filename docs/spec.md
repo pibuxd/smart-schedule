@@ -11,13 +11,22 @@ DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash`). Działanie dla ludzi się 
 odpowiedzi, odczyty danych przez API i pamięć 10 wiadomości.
 
 - Klucz `OPENROUTER_API_KEY`, model `OPENROUTER_MODEL` (dowolny model z openrouter.ai/models, który umie wywoływać
-  narzędzia), głębokość myślenia `OPENROUTER_EFFORT` (domyślnie `low`). Claude zostaje jako zapasowa droga: gdy nie ma
+  narzędzia), głębokość myślenia `OPENROUTER_EFFORT` (domyślnie `low`). Claude zostaje jako druga droga do wyboru: gdy nie ma
   klucza OpenRouter, a jest `ANTHROPIC_API_KEY`, asystent używa Claude jak dotąd. Gdy są oba, wygrywa OpenRouter.
 - OpenRouter wysyła zapytanie do jednego z wielu dostawców tego modelu. Aplikacja dopuszcza tylko dostawców, którzy nie
   zapisują i nie uczą się na treści zapytań (`data_collection: deny`), bo w wiadomościach są imiona i grafiki ludzi.
+- Claude nie przejmuje rozmowy sam: gdy OpenRouter zawiedzie (np. brak środków, błąd 402), wiadomość idzie zwykłą
+  drogą błędu (prośba do kierownika, polecenie „asystent nie dał rady”, ślad w `assistant_misses`), nawet jeśli jest
+  też klucz Claude. Tak samo jak decyzja z 20.11.2026 o braku automatycznej zmiany modelu, a dane nie trafiają po
+  cichu do drugiego podmiotu. Zmiana usługi to zmiana klucza w `.env`.
 - Ekrany nie wymieniają już nazwy usługi („Claude”), tylko mówią „zewnętrzna usługa AI”, bo model można zmienić bez
-  zmiany kodu. Przed wpuszczeniem prawdziwych ludzi polityka prywatności musi wymienić OpenRouter i dostawców modelu
-  jako podmioty przetwarzające (wcześniej: Anthropic).
+  zmiany kodu.
+- Jakość sprawdzona 21.11.2026 powtórką całego testu z 20.11 (52 wiadomości, plik
+  `testy-asystenta/deepseek-powtorka-2026-11-21.md` w projekcie): zachowanie jak u Claude, dane w odpowiedziach
+  zgodne z bazą, mediana 4,8 s. Próg pewności 0,6 zostaje; pilnuje go lista pomyłek (`assistant_misses`).
+- Warunki przed wpuszczeniem prawdziwych pracowników (razem z bramką SMS, jak w `docs/deploy.md`): polityka
+  prywatności wymienia OpenRouter i dostawców modelu jako podmioty przetwarzające (wcześniej: Anthropic), a test
+  asystenta powtarza się na prawdziwych sformułowaniach z pilotażu i przegląda listę pomyłek.
 
 ## Asystent odpowiada na wszystko o Grafikomacie i lokalu (decyzja Piotra z 19.11.2026)
 

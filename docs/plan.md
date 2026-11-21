@@ -980,5 +980,9 @@ OpenRouter z DeepSeek V4.1 Flash. Identyfikator sprawdzony 21.11.2026 w `GET htt
   pytania pracownika i kierownika z odczytami API, prośby (`wolne_dni` z `cannot`, `limit_zmian` z `shift_type`,
   `unikaj_osoby`), polecenie z niejednoznacznym imieniem (asystent dopytał) i wiadomość niezwiązana z pracą. Odpowiedzi
   przychodziły po 1–5 s (raz 10 s, z jedną poprawką odpowiedzi), koszt ok. 0,0005–0,003 USD za wiadomość.
+- Powtórka całego testu Piotra z 20.11 (52 wiadomości) na `seed_test_data`, po uwagach Prelinta do #55: wynik w
+  projekcie, `testy-asystenta/deepseek-powtorka-2026-11-21.md`. Zachowanie jak u Claude, dane zgodne z bazą (sprawdzone
+  godziny, zmiany i prośby), mediana 4,8 s, najdłużej 34 s przy 6 rundach odczytów. Gdy OpenRouter zawiedzie, nie ma
+  automatycznego przejścia na Claude (spec.md).
 - Testy: `tests/test_assistant_openrouter.py` na sztucznym transporcie HTTP klienta `openai` (bez sieci i bez klucza).
   `tests/conftest.py` czyści oba klucze w każdym teście, `with_key` ustawia klucz OpenRouter.
