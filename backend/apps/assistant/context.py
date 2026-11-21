@@ -65,7 +65,9 @@ def command_history(command: AssistantCommand) -> str:
         .order_by("-created_at", "-pk")[:MAX_CONVERSATION]
     )
     return (
-        f"Ostatnie wiadomości tego kierownika (maks. {MAX_CONVERSATION}; tylko applied oznacza przyjęty plan):\n"
+        f"Ostatnie wiadomości tego kierownika (maks. {MAX_CONVERSATION}; tylko applied oznacza przyjęty plan). "
+        "To stan z chwili tamtych wiadomości: godziny i grafik mogły się potem zmienić, także poza czatem, "
+        "więc obecny stan bierz z list w kontekście i z narzędzi:\n"
     ) + as_json(
         [
             {
