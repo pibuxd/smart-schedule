@@ -993,7 +993,7 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
 
 - Nowa aplikacja `apps/worktime`. Model `HoursChange` (firma, lokal, okres, `slot_key`, pracownik, `date`, godziny z
   grafiku w chwili zapisu `planned_start_at`/`planned_end_at`, godziny naprawdę `start_at`/`end_at`, `reason`,
-  `status` pending/approved/rejected/cancelled/replaced, `by_manager`, `requested_by`, `decided_by`, `decided_at`,
+  `status` pending/approved/rejected/cancelled/replaced/expired, `by_manager`, `requested_by`, `decided_by`, `decided_at`,
   `source_request` = wiadomość czatu, z której przyszło zgłoszenie). Klucz (okres, `slot_key`, osoba) jest stały
   między wersjami, tak jak w `AssignmentEvent`, więc poprawka grafiku niczego nie kopiuje. Na klucz najwyżej jedno
   zgłoszenie `pending` i jedno `approved` (indeksy częściowe); nowe zatwierdzone godziny zmieniają poprzednie na
