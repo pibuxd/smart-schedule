@@ -10,6 +10,7 @@ import { useSession } from '../features/auth/session'
 import { AccessBanner } from '../features/manager/AccessBanner'
 import { isManagerRole, ManagerContext } from '../features/manager/ManagerContext'
 import { useWaitingClaims } from '../features/manager/waiting-claims'
+import { useWaitingHours } from '../features/manager/waiting-hours'
 import { useUnreadNotifications } from '../features/notifications/unread'
 
 const MENU_LINK =
@@ -87,9 +88,7 @@ function ManagerLayout() {
             </Link>
             <OffersLink companyId={company.id} />
             <NotificationsLink companyId={company.id} />
-            <Link to="/kierownik/godziny" className={MENU_LINK}>
-              Godziny
-            </Link>
+            <HoursLink companyId={company.id} />
             <Link to="/kierownik/dostep" className={MENU_LINK}>
               Dostęp
             </Link>
@@ -119,6 +118,21 @@ function OffersLink({ companyId }: { companyId: string }) {
   return (
     <Link to="/kierownik/oddane-zmiany" className={MENU_LINK}>
       Oddane zmiany
+      {waiting > 0 && (
+        <span className="rounded-full bg-accent px-2 text-sm text-accent-ink no-underline" aria-label={`czeka: ${waiting}`}>
+          {waiting}
+        </span>
+      )}
+    </Link>
+  )
+}
+
+/** "Godziny", with the number of reports of other hours waiting for a decision. */
+function HoursLink({ companyId }: { companyId: string }) {
+  const waiting = useWaitingHours(companyId)
+  return (
+    <Link to="/kierownik/godziny" className={MENU_LINK}>
+      Godziny
       {waiting > 0 && (
         <span className="rounded-full bg-accent px-2 text-sm text-accent-ink no-underline" aria-label={`czeka: ${waiting}`}>
           {waiting}

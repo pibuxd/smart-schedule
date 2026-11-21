@@ -21,6 +21,7 @@ import { Disclosure } from "../../components/ui/disclosure";
 import { Drawer } from "../../components/ui/drawer";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
+import { HoursProposals } from "./HoursProposals";
 
 /** Requests that count: understood by the assistant (they reach the generator) or left for the manager. */
 const isSaved = (request: MyRequestOut) =>
@@ -653,6 +654,7 @@ function RequestsChat({
                       })
                     }
                   />
+                  <HoursProposals request={request} />
                 </RequestReply>
               </li>
             ))}

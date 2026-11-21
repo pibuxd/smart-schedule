@@ -26,19 +26,12 @@ import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { shortTime, toIsoDate } from '../../lib/dates'
 import { differenceSentence, differenceText, isTime, minutesBetween } from '../schedule/hours'
 import { useManager } from './ManagerContext'
+import { HOURS_REFRESH_MS } from './waiting-hours'
 import { shortDay } from './words'
 
-/** How often the list and the header badge look for new reports. */
-export const HOURS_REFRESH_MS = 60_000
 const REASON_MAX = 300
 
 const range = (start: string, end: string) => `${shortTime(start)}–${shortTime(end)}`
-
-/** Reports of other hours waiting for the manager's decision, for the badge in the header. */
-export function useWaitingHours(companyId: string): number {
-  const query = useManagerHoursChanges({ company_id: companyId }, { query: { refetchInterval: HOURS_REFRESH_MS } })
-  return query.data?.status === 200 ? (query.data.data as ManagerHoursChangesOut).waiting : 0
-}
 
 // ----------------------------------------------------------------------------------------------- reports
 
@@ -254,7 +247,7 @@ export function WorkedHoursSheet({ target, onClose }: { target: HoursTarget | nu
   )
 }
 
-export function managerShiftTarget(row: ManagerShiftOut): HoursTarget {
+function managerShiftTarget(row: ManagerShiftOut): HoursTarget {
   return {
     assignmentId: row.id,
     name: row.employee_name,

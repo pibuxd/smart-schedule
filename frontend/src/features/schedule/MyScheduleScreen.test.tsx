@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
+import { clockTime } from './hours'
 import { MyScheduleScreen } from './MyScheduleScreen'
 
 const shift = {
@@ -150,5 +151,86 @@ describe('MyScheduleScreen', () => {
     renderScreen(<MyScheduleScreen companyId="c1" />)
     expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się wczytać grafiku')
     expect(screen.getByRole('button', { name: 'Spróbuj jeszcze raz' })).toBeInTheDocument()
+  })
+
+  describe('other hours', () => {
+    function withHours(shifts: unknown[], recent: unknown[] = []) {
+      return mockApi((method, path) => {
+        if (path === '/api/me/offers') return [200, []]
+        if (method === 'POST' && path === '/api/me/hours-changes') return [201, { id: 'h9', status: 'pending' }]
+        if (method === 'POST' && path === '/api/hours-changes/h1/cancel') return [200, { id: 'h1', status: 'cancelled' }]
+        return [200, { home_location_name: 'Wieliczka – Rynek', shifts, recent, months: [{ month: '2026-11', hours: 112 }] }]
+      })
+    }
+
+    it('reports leaving a running shift early with "Wychodzę teraz"', async () => {
+      const calls = withHours([{ ...shift, can_report: true }])
+      const now = new Date(Date.parse(shift.start_at) + 5 * 3_600_000)
+      renderScreen(<MyScheduleScreen companyId="c1" today={now} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Zgłoś inne godziny' }))
+      const sheet = await screen.findByRole('dialog')
+      expect(within(sheet).getByRole('status')).toHaveTextContent('To te same godziny, które liczą się teraz.')
+      expect(within(sheet).getByRole('button', { name: 'Wyślij kierownikowi' })).toBeDisabled()
+
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Wychodzę teraz' }))
+      fireEvent.change(within(sheet).getByLabelText('Powód (nie musisz pisać)'), { target: { value: 'źle się czuję' } })
+      expect(within(sheet).getByRole('status')).toHaveTextContent(/^Krócej o /)
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Wyślij kierownikowi' }))
+
+      expect(await within(sheet).findByText(/Wysłane\. Kierownik zatwierdzi albo odrzuci te godziny/)).toBeInTheDocument()
+      const sent = calls.find((c) => c.method === 'POST' && c.url === '/api/me/hours-changes')
+      expect(sent?.body).toEqual({ assignment_id: 'a1', start_time: '06:00', end_time: clockTime(now), reason: 'źle się czuję' })
+    })
+
+    it('says what overtime means while typing the hours', async () => {
+      withHours([{ ...shift, can_report: true }])
+      renderScreen(<MyScheduleScreen companyId="c1" today={new Date(Date.parse(shift.start_at) - 3_600_000)} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Zgłoś inne godziny' }))
+      const sheet = await screen.findByRole('dialog')
+      expect(within(sheet).queryByRole('button', { name: 'Wychodzę teraz' })).not.toBeInTheDocument() // not started yet
+      fireEvent.change(within(sheet).getByLabelText('Do'), { target: { value: '15:30' } })
+      expect(within(sheet).getByRole('status')).toHaveTextContent('Nadgodziny: +1 h 30 min')
+    })
+
+    it('shows approved hours, a waiting report and lets me take the report back', async () => {
+      const calls = withHours([
+        {
+          ...shift,
+          can_report: true,
+          worked: { start_at: shift.start_at, end_at: '2026-11-13T15:00:00+01:00', start_time: '06:00', end_time: '15:00', hours: 9, difference_minutes: 60, by_manager: false },
+          report: { id: 'h1', start_time: '06:00', end_time: '16:00', hours: 10, difference_minutes: 120, reason: '' },
+        },
+      ])
+      renderScreen(<MyScheduleScreen companyId="c1" today={new Date(shift.start_at)} />)
+      const next = await screen.findByRole('article', { name: 'Najbliższa zmiana' })
+      expect(next).toHaveTextContent('6:00–15:00')
+      expect(next).toHaveTextContent('W grafiku 6:00–14:00, nadgodziny: +1 h (zatwierdzone)')
+      expect(next).toHaveTextContent('Zgłoszone 6:00–16:00: czeka na kierownika')
+
+      fireEvent.click(within(next).getByRole('button', { name: 'Zgłoszone inne godziny: zmień albo wycofaj' }))
+      const sheet = await screen.findByRole('dialog')
+      expect(within(sheet).getByText(/Czeka na kierownika: 6:00–16:00 \(nadgodziny: \+2 h\)/)).toBeInTheDocument()
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Wycofaj zgłoszenie' }))
+      await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/hours-changes/h1/cancel')).toBe(true))
+    })
+
+    it('offers other hours for past shifts and not for a shift next week', async () => {
+      const later = { ...shift, id: 'a2', date: '2026-11-20', start_at: '2026-11-20T06:00:00+01:00', end_at: '2026-11-20T14:00:00+01:00', can_report: true }
+      const past = { ...shift, id: 'a0', date: '2026-11-10', start_at: '2026-11-10T06:00:00+01:00', end_at: '2026-11-10T14:00:00+01:00', can_report: true }
+      withHours([later], [past])
+      renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
+      await screen.findByRole('article', { name: 'Najbliższa zmiana' })
+      expect(screen.queryByRole('button', { name: 'Zgłoś inne godziny' })).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Minione zmiany'))
+      fireEvent.click(await screen.findByRole('button', { name: 'Inne godziny' }))
+      expect(await screen.findByRole('dialog')).toHaveTextContent('w grafiku 6:00–14:00')
+    })
+
+    it('hides reporting in read-only mode', async () => {
+      withHours([{ ...shift, can_report: true }])
+      renderScreen(<MyScheduleScreen companyId="c1" readOnly today={new Date(shift.start_at)} />)
+      await screen.findByText('Trwa Twoja zmiana')
+      expect(screen.queryByRole('button', { name: 'Zgłoś inne godziny' })).not.toBeInTheDocument()
+    })
   })
 })

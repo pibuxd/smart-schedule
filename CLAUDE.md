@@ -149,6 +149,13 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   published shift of another location after the manager confirmed a clash (`editing.take_off_published`, reason
   `manual`). In-app notifications are written with
   `apps.notifications.services.notify`; their Polish text is built on read in `notification_text` (add a case per kind).
+- Other hours of a published shift (overtime, leaving early): `apps/worktime` (`HoursChange`, keyed by period +
+  `slot_key` + employee like `AssignmentEvent`). The published shift keeps its planned hours (generator, validator,
+  scores); counting hours (reports, CSV, "Mój grafik", the assistant) goes through `worktime.services.worked_hours`.
+  Employees report (`report`, at most 14 days back), managers decide (`decide`) or set hours at once (`set_hours`);
+  every check lives in `check_report` / `check_set` / `check_approve`, which the assistant reuses before proposing.
+  The assistant only prepares: an employee sends a prepared report with "Wyślij kierownikowi" (`request_id`), a
+  manager's hours plan applies on "Zatwierdź zmiany" and does not need an open rule set.
 - Assistant (a language model): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   On OpenRouter the structured answer is a call of the `final_answer` tool (never `response_format` next to tools:
   providers then force JSON on every round and no tool gets called); on Anthropic it is `output_config.format`.

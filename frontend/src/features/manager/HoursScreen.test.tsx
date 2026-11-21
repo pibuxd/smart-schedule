@@ -1,0 +1,159 @@
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { mockApi, renderScreen } from '../../test/render'
+import { HoursScreen } from './HoursScreen'
+import { AsManager } from './test-utils'
+
+const change = (over = {}) => ({
+  id: 'h1',
+  status: 'pending',
+  employee_id: 'e1',
+  employee_name: 'Anna Wróbel',
+  location_id: 'l1',
+  location_name: 'Rynek',
+  position_name: 'Sprzedawca',
+  date: '2026-11-20',
+  planned_start_time: '06:00',
+  planned_end_time: '14:00',
+  planned_hours: 8,
+  start_time: '06:00',
+  end_time: '15:30',
+  hours: 9.5,
+  difference_minutes: 90,
+  reason: 'Inwentaryzacja',
+  by_manager: false,
+  created_at: '2026-11-20T15:00:00Z',
+  decided_at: null,
+  decided_by_name: '',
+  assignment_id: 'as1',
+  ...over,
+})
+
+const report = (rows: unknown[] = []) => ({
+  month: '2026-11',
+  locations: [{ id: 'l1', name: 'Rynek' }],
+  rows,
+  total: 0,
+  latest_month: null,
+})
+
+const row = (over = {}) => ({
+  employee_id: 'e1',
+  name: 'Anna Wróbel',
+  home_location_name: 'Rynek',
+  shifts: 10,
+  total: 81.5,
+  longer: 1.5,
+  shorter: 0,
+  by_location: [{ location_id: 'l1', hours: 81.5 }],
+  elsewhere: false,
+  ...over,
+})
+
+const handoverShift = (over = {}) => ({
+  id: 'as1',
+  version_id: 'v1',
+  shift: {
+    date: '2026-11-20',
+    start_time: '06:00',
+    end_time: '14:00',
+    hours: 8,
+    location_id: 'l1',
+    location_name: 'Rynek',
+    position_name: 'Sprzedawca',
+    shift_type_name: 'Ranna',
+  },
+  employee_id: 'e1',
+  employee_name: 'Anna Wróbel',
+  started: true,
+  offer_id: null,
+  worked: null,
+  hours_report: null,
+  ...over,
+})
+
+function api({ pending = [change()], recent = [] as unknown[], rows = [row()] } = {}) {
+  return mockApi((method, path) => {
+    if (path === '/api/manager/hours-changes') return [200, { pending, recent, waiting: pending.length }]
+    if (method === 'POST' && path.endsWith('/approve')) return [200, change({ status: 'approved' })]
+    if (method === 'POST' && path.endsWith('/reject')) return [200, change({ status: 'rejected' })]
+    if (method === 'POST' && path === '/api/assignments/as1/hours')
+      return [200, { assignment_id: 'as1', planned_start_time: '06:00', planned_end_time: '14:00', worked: null }]
+    if (path === '/api/reports/hours') return [200, report(rows)]
+    if (path === '/api/manager/overview') return [200, { locations: [{ id: 'l1', name: 'Rynek' }] }]
+    if (path === '/api/locations/l1/handover-shifts') return [200, [handoverShift()]]
+    return [404, { detail: 'Nie ma.' }]
+  })
+}
+
+function show(readOnly = false) {
+  renderScreen(
+    <AsManager readOnly={readOnly}>
+      <HoursScreen today={new Date(2026, 10, 21)} />
+    </AsManager>,
+  )
+}
+
+describe('HoursScreen: other hours', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('lists a waiting report with its reason and approves it', async () => {
+    const calls = api()
+    show()
+    const item = (await screen.findByText('Anna Wróbel', { selector: 'b' })).closest('li')!
+    expect(item).toHaveTextContent('6:00–15:30 zamiast 6:00–14:00: nadgodziny: +1 h 30 min')
+    expect(item).toHaveTextContent('Powód: Inwentaryzacja')
+    fireEvent.click(within(item).getByRole('button', { name: 'Zatwierdź: Anna Wróbel' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/hours-changes/h1/approve')).toBe(true))
+  })
+
+  it('rejects a report, and shows decisions in a fold', async () => {
+    const calls = api({ recent: [change({ id: 'h0', status: 'rejected', decided_by_name: 'Menedżer', date: '2026-11-18' })] })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Odrzuć: Anna Wróbel' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/hours-changes/h1/reject')).toBe(true))
+    fireEvent.click(screen.getByText('Ostatnie decyzje'))
+    expect(await screen.findByText('Odrzucone (Menedżer)')).toBeInTheDocument()
+  })
+
+  it('says when nobody waits and shows overtime in the table only when there is some', async () => {
+    api({ pending: [] })
+    show()
+    expect(await screen.findByText('Nikt nie czeka na decyzję o godzinach.')).toBeInTheDocument()
+    expect(await screen.findByRole('columnheader', { name: 'Nadgodziny' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: '+1,5' })).toBeInTheDocument()
+  })
+
+  it('keeps the table short without other hours', async () => {
+    api({ pending: [], rows: [row({ longer: 0, shorter: 0 })] })
+    show()
+    await screen.findByRole('columnheader', { name: 'Razem godzin' })
+    expect(screen.queryByRole('columnheader', { name: 'Nadgodziny' })).not.toBeInTheDocument()
+  })
+
+  it('lets the manager set the hours of a published shift alone', async () => {
+    const calls = api({ pending: [] })
+    show()
+    fireEvent.click(await screen.findByText('Zmień godziny sam'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień godziny: Anna Wróbel' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.change(within(sheet).getByLabelText('Do'), { target: { value: '12:00' } })
+    fireEvent.change(within(sheet).getByLabelText('Powód (nie musisz pisać)'), { target: { value: 'źle się czuła' } })
+    expect(within(sheet).getByRole('status')).toHaveTextContent('Krócej o 2 h')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz godziny' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === '/api/assignments/as1/hours')?.body).toEqual({
+        start_time: '06:00',
+        end_time: '12:00',
+        reason: 'źle się czuła',
+      }),
+    )
+  })
+
+  it('cannot decide in read-only mode', async () => {
+    api()
+    show(true)
+    expect(await screen.findByRole('button', { name: 'Zatwierdź: Anna Wróbel' })).toBeDisabled()
+  })
+})

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Literal
 import anthropic
 import openai
 from django.conf import settings
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 if TYPE_CHECKING:
     from apps.assistant.tools import Toolbox
@@ -105,6 +105,11 @@ class HoursReport(BaseModel):
     end_time: str = Field(description="HH:MM the person really ends (or leaves), local time; '' if unchanged.")
     reason: str = Field(description="The reason in a few words if the person gave one (e.g. źle się czuje); else ''.")
 
+    @field_validator("start_time", "end_time", "reason", mode="before")
+    @classmethod
+    def _null_is_empty(cls, value):
+        return "" if value is None else value  # a model on OpenRouter may write null for "unchanged"
+
 
 class EmployeeReply(BaseModel):
     """The answer to one employee message: words for the person and preferences to save."""
@@ -171,6 +176,11 @@ class HoursSet(BaseModel):
     start_time: str = Field(description="HH:MM the person really starts (started), local time; '' if unchanged.")
     end_time: str = Field(description="HH:MM the person really ends (ended), local time; '' if unchanged.")
     reason: str = Field(description="The reason in a few words if the manager gave one (e.g. źle się czuła); else ''.")
+
+    @field_validator("start_time", "end_time", "reason", mode="before")
+    @classmethod
+    def _null_is_empty(cls, value):
+        return "" if value is None else value
 
 
 class HoursDecision(BaseModel):

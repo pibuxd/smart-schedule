@@ -416,3 +416,26 @@ class TestManagerChat:
             ("Pracownik", "15:00", "Dostawa")
         ]
         assert data["waiting"] == 1
+
+
+def test_the_answer_schemas_carry_hours_and_null_means_unchanged():
+    """On OpenRouter the answer is a tool call built from the models: the hours are in it, and a model that writes
+    null for an hour that does not change is read as "unchanged", not refused."""
+    employee = llm.answer_schema(llm.EmployeeReply)
+    report_fields = employee["properties"]["hours_changes"]["items"]
+    assert report_fields["required"] == ["date", "start_time", "end_time", "reason"]
+    manager = llm.answer_schema(llm.CommandPlan)
+    assert {"hours_changes", "hours_decisions"} <= set(manager["required"])
+
+    raw = json.dumps(
+        {
+            "topic": "app",
+            "answer": "",
+            "preferences": [],
+            "leave_to_manager": False,
+            "replaces_request": None,
+            "hours_changes": [{"date": "2026-11-21", "start_time": None, "end_time": "11:00", "reason": None}],
+        }
+    )
+    [item] = llm.parse_answer(raw, llm.EmployeeReply, employee).hours_changes
+    assert (item.start_time, item.end_time, item.reason) == ("", "11:00", "")
