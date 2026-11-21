@@ -1,7 +1,7 @@
 """What the manager tells the assistant in words, and what stays of it.
 
 - `AssistantCommand`: one message of the manager ("Ania i Kasia nie razem, to ważniejsze niż równe weekendy").
-  The assistant (Claude, in the worker) turns it into a plan: changes on the location's rule list and
+  The assistant (a language model, in the worker) turns it into a plan: changes on the location's rule list and
   instructions about people. Nothing changes until the manager accepts the plan.
 - `ManagerInstruction`: an accepted instruction about one person. The generator scores it with the manager's
   rules; its place on the list of instructions is its importance, so "everything most important" cannot be said.

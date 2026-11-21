@@ -1,4 +1,4 @@
-"""Background jobs of the assistant (queue `default`): calls to Claude never run inside an HTTP request."""
+"""Background jobs of the assistant (queue `default`): calls to the model never run inside an HTTP request."""
 
 import logging
 

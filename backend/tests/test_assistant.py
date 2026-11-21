@@ -50,7 +50,7 @@ def shop(make_company, subscribe):
 
 @pytest.fixture
 def with_key(settings):
-    settings.ANTHROPIC_API_KEY = "test-key"
+    settings.OPENROUTER_API_KEY = "test-key"
 
 
 def reading(**changes) -> llm.EmployeeReply:
@@ -160,7 +160,9 @@ class TestRequests:
         api.login(shop["worker"])
         url = f"/api/me/availability?company_id={shop['company'].pk}"
         assert api.get(url).json()["period"]["assistant_reads"] is False
-        settings.ANTHROPIC_API_KEY = "test-key"
+        settings.OPENROUTER_API_KEY = "test-key"
+        assert api.get(url).json()["period"]["assistant_reads"] is True
+        settings.OPENROUTER_API_KEY, settings.ANTHROPIC_API_KEY = "", "test-key"
         assert api.get(url).json()["period"]["assistant_reads"] is True
 
     def test_with_a_key_the_request_is_saved_and_queued_together(self, api, shop, with_key):
@@ -805,7 +807,7 @@ def test_the_sdk_call_sends_a_schema_and_reads_the_structured_answer(settings, m
         )
 
     client = Anthropic(api_key="test-key", http_client=DefaultHttpxClient(transport=httpx2.MockTransport(handler)))
-    monkeypatch.setattr(llm, "get_client", lambda: client)
+    monkeypatch.setattr(llm, "anthropic_client", lambda: client)
 
     result = llm.read_request("Wolałabym nie pracować w piątki.", "Okres grafiku: …")
 
@@ -834,7 +836,7 @@ def test_a_refusal_or_cut_off_answer_is_an_error(settings, monkeypatch):
         )
 
     client = Anthropic(api_key="test-key", http_client=DefaultHttpxClient(transport=httpx2.MockTransport(handler)))
-    monkeypatch.setattr(llm, "get_client", lambda: client)
+    monkeypatch.setattr(llm, "anthropic_client", lambda: client)
     with pytest.raises(llm.AssistantError):
         llm.plan_command("x", "y")
 

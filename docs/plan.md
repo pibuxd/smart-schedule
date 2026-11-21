@@ -555,7 +555,7 @@ Założenia:
 4. Kopie bazy leżą na tym samym serwerze; kopia poza serwerem to osobny krok przed pilotażem.
 5. `SOLVER_WORKERS=2` na serwerze (2 rdzenie), limit 30 s bez zmian.
 
-## 20. Etap 10: asystent (Claude) i przyjęte założenia
+## 20. Etap 10: asystent (Claude; od 21.11.2026 także OpenRouter, sekcja 30) i przyjęte założenia
 
 Co powstało:
 
@@ -576,7 +576,7 @@ Założenia:
 5. Polecenie z samymi datami, które minęły, zostaje na liście z etykietą "minęło" i nie wpływa na grafik; kierownik je usuwa.
 6. Limity: od 20.11.2026 domyślnie wyłączone (0 = bez limitu, decyzja Piotra). Można je włączyć w `.env`: `ASSISTANT_COMMANDS_MONTHLY_LIMIT` (polecenia firmy w miesiącu; wcześniej domyślnie 400, a do 19.11.2026 200), `TEXT_REQUESTS_PER_PERIOD` (prośby jednej osoby na okres; wcześniej 10; liczą się tylko `new`, `interpreted` i `needs_manager`) i `ASSISTANT_MESSAGES_PER_DAY` (wiadomości osoby na dobę; wcześniej 40). Tryb tylko do odczytu blokuje polecenia jak każdą zmianę.
 7. Nie włączamy automatycznego przełączania na inny model po odmowie; odmowa lub ucięta odpowiedź to po prostu "do decyzji menedżera" / "asystent nie dał rady".
-8. Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie. Głębokość myślenia ustawia `ANTHROPIC_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`; domyślnie `low`, pusta wartość = domyślny poziom modelu).
+8. (Od 21.11.2026 domyślnie OpenRouter z DeepSeek V4.1 Flash, sekcja 30; to, co niżej, dotyczy drogi przez Claude.) Model domyślny to `claude-opus-5-5`; do taniej, masowej interpretacji próśb można ustawić `ANTHROPIC_MODEL=claude-haiku-5-5` bez zmian w kodzie. Głębokość myślenia ustawia `ANTHROPIC_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`; domyślnie `low`, pusta wartość = domyślny poziom modelu).
 
 Uzupełnienie 15.11.2026 (po teście Piotra na serwerze, dwie prośby bez interpretacji):
 
@@ -943,3 +943,42 @@ w tygodniu” asystent nie umiał zapisać.
   (`ReadingRobot` w `components/assistant/Chat.tsx`, własny rysunek SVG): oczy przesuwają się wzdłuż wiersza, głowa
   lekko kiwa (animacja CSS w `tokens.css`, bez emoji; przy `prefers-reduced-motion` stoi w miejscu).
 
+## 30. Asystent przez OpenRouter (21.11.2026)
+
+Decyzja Piotra (spec.md, „Asystent przez OpenRouter”): skończył się limit Claude API, asystent ma działać przez
+OpenRouter z DeepSeek V4.1 Flash. Identyfikator sprawdzony 21.11.2026 w `GET https://openrouter.ai/api/v1/models`:
+`deepseek/deepseek-v4.1-flash` (obok jest migawka `deepseek/deepseek-v4.1-flash-1017`).
+
+- Zależność: pakiet `openai` (oficjalny klient API zgodnego z OpenAI chat completions, którego używa OpenRouter;
+  te same biblioteki pod spodem co `anthropic`, czyli jeden nowy pakiet), adres `https://openrouter.ai/api/v1`.
+- `llm.backend()`: `openrouter`, gdy jest `OPENROUTER_API_KEY`, inaczej `anthropic`, gdy jest `ANTHROPIC_API_KEY`,
+  inaczej asystent jest wyłączony (`is_enabled()`). Prompty, narzędzia (`tools.Toolbox`), modele odpowiedzi Pydantic,
+  pamięć wiadomości (`context.py`) i sprawdzanie odpowiedzi w `services.py` są wspólne; różni się tylko pętla rozmowy
+  (`_converse_openrouter`, `_converse_anthropic`).
+- Odpowiedź strukturalna na OpenRouter to wywołanie narzędzia `final_answer`, którego parametry to schemat modelu
+  odpowiedzi (`answer_schema`: z `model_json_schema()`, odwołania wstawione, każdy obiekt zamknięty i z wszystkimi polami
+  wymaganymi). Nowe pole w `EmployeeReply` / `CommandPlan` trafia więc do modelu bez zmian w `llm.py`. Każda runda
+  ma `tool_choice=required` (odczyt albo odpowiedź), po 6 rundach już tylko `final_answer`. `response_format` z
+  `json_schema` obok narzędzi nie działa: dostawcy wymuszają wtedy JSON w każdej rundzie i model nie może wywołać
+  narzędzia (sprawdzone na żywo 21.11.2026: DeepSeek zaplanował odczyt `my_schedule`, a oddał pustą odpowiedź).
+- Argumenty narzędzi nie są wymuszane schematem, więc odpowiedź sprawdza Pydantic: błąd wraca do modelu jako wynik
+  narzędzia („Błąd: odpowiedź nie pasuje do schematu (…)”) i model poprawia się w następnej rundzie; null w miejscu
+  listy znaczy pustą listę. Dostawca, który zignoruje `tool_choice` i odpisze tekstem, dostaje prośbę o
+  `final_answer` (JSON w tekście też jest przyjmowany).
+- Rozumowanie modelu (`reasoning_details`) wraca do niego razem z wynikami narzędzi, jak każe OpenRouter dla modeli
+  myślących. Głębokość myślenia: `OPENROUTER_EFFORT` → `reasoning.effort` (`none`, `minimal`, `low`, `medium`,
+  `high`, `xhigh`; domyślnie `low`, pusta wartość = domyślny poziom modelu).
+- Dostawcy: `provider.require_parameters=true` (tylko ci, którzy obsługują wszystkie wysłane parametry, w tym
+  narzędzia) i `provider.data_collection=deny` (bez zapisywania i uczenia się na zapytaniach).
+- Log workera, jedna linia na odpowiedź: czas, liczba wywołań, narzędzia, tokeny wyjścia, poziom myślenia, model,
+  dostawcy i koszt w dolarach z `usage.cost`, np. `assistant EmployeeReply: 2.1 s, 2 calls, tools my_schedule,
+  242 output tokens, effort low, deepseek/deepseek-v4.1-flash via Alibaba,InferenceNet, $0.00084`.
+- Błędy: brak środków na koncie OpenRouter (402), limit (429), błąd dostawcy w odpowiedzi 200, ucięta odpowiedź
+  (`finish_reason=length`) dają `AssistantError`, czyli tę samą ścieżkę co dotąd (prośba do kierownika, polecenie
+  „asystent nie dał rady”, ślad w `assistant_misses`).
+- Próba na żywo 21.11.2026 na danych `seed_demo` (klucz Piotra tylko w zmiennej środowiskowej, nigdzie nie zapisany):
+  pytania pracownika i kierownika z odczytami API, prośby (`wolne_dni` z `cannot`, `limit_zmian` z `shift_type`,
+  `unikaj_osoby`), polecenie z niejednoznacznym imieniem (asystent dopytał) i wiadomość niezwiązana z pracą. Odpowiedzi
+  przychodziły po 1–5 s (raz 10 s, z jedną poprawką odpowiedzi), koszt ok. 0,0005–0,003 USD za wiadomość.
+- Testy: `tests/test_assistant_openrouter.py` na sztucznym transporcie HTTP klienta `openai` (bez sieci i bez klucza).
+  `tests/conftest.py` czyści oba klucze w każdym teście, `with_key` ustawia klucz OpenRouter.
