@@ -36,7 +36,7 @@ export type ArrangeTarget = {
  * the manager: the sheet says who has not answered yet, that it is early when the deadline has not passed, and that
  * unpinned manual changes will be dropped. Nothing is ever arranged by itself.
  * `different` is "Ułóż inaczej": a new schedule that gives about every third shift to someone else than each earlier
- * version did (docs/plan.md section 35).
+ * version did (docs/plan.md section 36).
  */
 export function ArrangeButton({
   targets,

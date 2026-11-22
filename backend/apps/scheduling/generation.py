@@ -9,7 +9,7 @@
 - A run that fails gives its generation back to the monthly limit.
 - `cancel_generation` stops a queued or running run when the manager asks: the run is marked cancelled at once,
   the worker's solver notices within about a second, nothing is saved and the generation is given back.
-- A `different` run ("Ułóż inaczej", docs/plan.md section 35) asks the solver to give at least `DIFFERENT_SHARE`
+- A `different` run ("Ułóż inaczej", docs/plan.md section 36) asks the solver to give at least `DIFFERENT_SHARE`
   of the person-shifts of each earlier version of the period (up to `COMPARED_VERSIONS`) to someone else, without more
   holes; the new draft's notes say how different it came out.
 """

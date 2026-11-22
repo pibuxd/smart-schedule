@@ -19,6 +19,7 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
 import { prettyPhone } from '../auth/phone'
 import { useManager } from './ManagerContext'
+import { OwnRates } from './PayRates'
 import { EXPERIENCE, shifts } from './words'
 
 export function EmployeesScreen({ locationId }: { locationId: string }) {
@@ -252,131 +253,134 @@ function EmployeeForm({
   const shared = employee.is_home !== false
 
   return (
-    <form onSubmit={submit} className="grid gap-5">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField label="Imię" value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} required />
-        <TextField label="Nazwisko" value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} />
-        <p className="m-0 text-sm text-ink-muted sm:col-span-2">
-          Numer {prettyPhone(employee.phone)} służy do logowania, więc zmienia go tylko administrator Grafikomatu.
-        </p>
-      </div>
-      <fieldset className="m-0 grid gap-1 border-0 p-0">
-        <legend className="mb-1 font-semibold">Stanowiska</legend>
-        {positions.length === 0 && (
-          <p className="m-0 text-sm text-ink-muted">Najpierw dodaj stanowiska w „Ustawieniach lokalu”.</p>
-        )}
-        {positions.map((p) => (
-          <CheckField key={p.id} label={p.name} checked={chosen.includes(p.id)} onChange={() => toggle(p.id)} />
-        ))}
-      </fieldset>
-      {shared && (
-        <fieldset className="m-0 grid gap-1 border-0 p-0">
-          <legend className="mb-1 font-semibold">Doświadczenie</legend>
-          <p className="m-0 text-sm text-ink-muted">
-            Widzisz to tylko Ty. Liczy się w zasadzie „Początkujący z doświadczonymi”.
+    <div className="grid gap-5">
+      <form onSubmit={submit} className="grid gap-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField label="Imię" value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} required />
+          <TextField label="Nazwisko" value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} />
+          <p className="m-0 text-sm text-ink-muted sm:col-span-2">
+            Numer {prettyPhone(employee.phone)} służy do logowania, więc zmienia go tylko administrator Grafikomatu.
           </p>
-          {([1, 2, 3] as const).map((value) => (
-            <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
-              <input
-                type="radio"
-                name="experience"
-                className="size-6 accent-accent"
-                checked={experience === value}
-                onChange={() => setExperience(value)}
-              />
-              <span className="grid">
-                <span>{EXPERIENCE[value].label}</span>
-                <span className="text-sm text-ink-muted">{EXPERIENCE[value].hint}</span>
-              </span>
-            </label>
+        </div>
+        <fieldset className="m-0 grid gap-1 border-0 p-0">
+          <legend className="mb-1 font-semibold">Stanowiska</legend>
+          {positions.length === 0 && (
+            <p className="m-0 text-sm text-ink-muted">Najpierw dodaj stanowiska w „Ustawieniach lokalu”.</p>
+          )}
+          {positions.map((p) => (
+            <CheckField key={p.id} label={p.name} checked={chosen.includes(p.id)} onChange={() => toggle(p.id)} />
           ))}
         </fieldset>
-      )}
-      {chosen.length >= 2 && (
-        <fieldset className="m-0 grid gap-2 border-0 p-0">
-          <legend className="mb-1 font-semibold">Inny stopień na którymś stanowisku</legend>
-          <p className="m-0 text-sm text-ink-muted">
-            Np. ktoś doświadczony przy piecu dopiero uczy się kasy.
-          </p>
-          {positions
-            .filter((p) => chosen.includes(p.id))
-            .map((p) => (
-              <label key={p.id} className="grid gap-1 sm:grid-cols-[1fr_minmax(200px,auto)] sm:items-center">
-                <span>{p.name}</span>
-                <select
-                  className="min-h-(--touch) rounded-md border border-line bg-surface px-3 text-base text-ink"
-                  aria-label={`Stopień na stanowisku ${p.name}`}
-                  value={levels[p.id] ?? ''}
-                  onChange={(event) => {
-                    const value = event.target.value
-                    setLevels((now) => {
-                      const next = { ...now }
-                      if (value === '') delete next[p.id]
-                      else next[p.id] = Number(value) as Level
-                      return next
-                    })
-                  }}
-                >
-                  <option value="">{`Tak jak wyżej (${EXPERIENCE[experience].label.toLowerCase()})`}</option>
-                  {([1, 2, 3] as const)
-                    .filter((value) => value !== experience)
-                    .map((value) => (
-                      <option key={value} value={value}>
-                        {EXPERIENCE[value].label}
-                      </option>
-                    ))}
-                </select>
+        {shared && (
+          <fieldset className="m-0 grid gap-1 border-0 p-0">
+            <legend className="mb-1 font-semibold">Doświadczenie</legend>
+            <p className="m-0 text-sm text-ink-muted">
+              Widzisz to tylko Ty. Liczy się w zasadzie „Początkujący z doświadczonymi”.
+            </p>
+            {([1, 2, 3] as const).map((value) => (
+              <label key={value} className="flex min-h-(--touch) cursor-pointer items-center gap-3">
+                <input
+                  type="radio"
+                  name="experience"
+                  className="size-6 accent-accent"
+                  checked={experience === value}
+                  onChange={() => setExperience(value)}
+                />
+                <span className="grid">
+                  <span>{EXPERIENCE[value].label}</span>
+                  <span className="text-sm text-ink-muted">{EXPERIENCE[value].hint}</span>
+                </span>
               </label>
             ))}
-        </fieldset>
-      )}
-      {shared && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <TextField
-            label="Cel godzin w miesiącu"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={400}
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            hint="Puste = bez celu."
+          </fieldset>
+        )}
+        {chosen.length >= 2 && (
+          <fieldset className="m-0 grid gap-2 border-0 p-0">
+            <legend className="mb-1 font-semibold">Inny stopień na którymś stanowisku</legend>
+            <p className="m-0 text-sm text-ink-muted">
+              Np. ktoś doświadczony przy piecu dopiero uczy się kasy.
+            </p>
+            {positions
+              .filter((p) => chosen.includes(p.id))
+              .map((p) => (
+                <label key={p.id} className="grid gap-1 sm:grid-cols-[1fr_minmax(200px,auto)] sm:items-center">
+                  <span>{p.name}</span>
+                  <select
+                    className="min-h-(--touch) rounded-md border border-line bg-surface px-3 text-base text-ink"
+                    aria-label={`Stopień na stanowisku ${p.name}`}
+                    value={levels[p.id] ?? ''}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setLevels((now) => {
+                        const next = { ...now }
+                        if (value === '') delete next[p.id]
+                        else next[p.id] = Number(value) as Level
+                        return next
+                      })
+                    }}
+                  >
+                    <option value="">{`Tak jak wyżej (${EXPERIENCE[experience].label.toLowerCase()})`}</option>
+                    {([1, 2, 3] as const)
+                      .filter((value) => value !== experience)
+                      .map((value) => (
+                        <option key={value} value={value}>
+                          {EXPERIENCE[value].label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ))}
+          </fieldset>
+        )}
+        {shared && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="Cel godzin w miesiącu"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={400}
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              hint="Puste = bez celu."
+            />
+            <TextField
+              label="Najwyżej godzin w miesiącu"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={400}
+              value={max}
+              onChange={(e) => setMax(e.target.value)}
+              hint="Puste = bez limitu."
+            />
+          </div>
+        )}
+        {!shared ? (
+          <p className="m-0 text-sm text-ink-muted">
+            {`Lokal główny tej osoby to ${employee.home_location_name}. Tu ustawiasz jej stanowiska w swoim lokalu. Doświadczenie, godziny i wyłączenie z grafiku ustawia kierownik lokalu głównego.`}
+          </p>
+        ) : (
+          <CheckField
+            label="W grafiku"
+            hint="Dawne zmiany tej osoby zostaną."
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
           />
-          <TextField
-            label="Najwyżej godzin w miesiącu"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={400}
-            value={max}
-            onChange={(e) => setMax(e.target.value)}
-            hint="Puste = bez limitu."
-          />
-        </div>
-      )}
-      {!shared ? (
-        <p className="m-0 text-sm text-ink-muted">
-          {`Lokal główny tej osoby to ${employee.home_location_name}. Tu ustawiasz jej stanowiska w swoim lokalu. Doświadczenie, godziny i wyłączenie z grafiku ustawia kierownik lokalu głównego.`}
-        </p>
-      ) : (
-        <CheckField
-          label="W grafiku"
-          hint="Dawne zmiany tej osoby zostaną."
-          checked={active}
-          onChange={(e) => setActive(e.target.checked)}
-        />
-      )}
-      {!active && employee.is_active && (employee.draft_shifts ?? 0) > 0 && (
-        <p role="alert" className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
-          {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Po zapisaniu ułóż grafik od nowa albo przenieś je ręcznie.`}
-        </p>
-      )}
-      {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
-      <Button type="submit" wide disabled={update.isPending}>
-        Zapisz
-      </Button>
+        )}
+        {!active && employee.is_active && (employee.draft_shifts ?? 0) > 0 && (
+          <p role="alert" className="m-0 rounded-sm bg-prefer-not-soft px-3 py-2 text-ink">
+            {`Ta osoba ma ${shifts(employee.draft_shifts ?? 0)} w szkicu grafiku. Po zapisaniu ułóż grafik od nowa albo przenieś je ręcznie.`}
+          </p>
+        )}
+        {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
+        <Button type="submit" wide disabled={update.isPending}>
+          Zapisz
+        </Button>
+      </form>
+      <OwnRates employeeId={employee.id} positionIds={employee.position_ids} locationId={locationId} />
       <RemoveEmployee employee={employee} locationId={locationId} onDone={onDone} />
-    </form>
+    </div>
   )
 }
 

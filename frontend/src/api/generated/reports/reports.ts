@@ -95,6 +95,8 @@ export const getHoursReportUrl = (params: HoursReportParams,) => {
 /**
  * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
  * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
+ * `pay` is what to pay before tax (hours × the shift's rate on its day, plus supplements, `supplements_pay` of it);
+ * hours without a rate are `unpriced_hours`.
  * @summary Hours Report
  */
 export const hoursReport = async (params: HoursReportParams, options?: Parameters<typeof apiFetch>[1]): Promise<hoursReportResponse> => {
@@ -144,6 +146,8 @@ export type HoursReportQueryError = ErrorOut
 /**
  * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
  * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
+ * `pay` is what to pay before tax (hours × the shift's rate on its day, plus supplements, `supplements_pay` of it);
+ * hours without a rate are `unpriced_hours`.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(
@@ -159,6 +163,8 @@ export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, 
 /**
  * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
  * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
+ * `pay` is what to pay before tax (hours × the shift's rate on its day, plus supplements, `supplements_pay` of it);
+ * hours without a rate are `unpriced_hours`.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(
@@ -174,6 +180,8 @@ export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, 
 /**
  * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
  * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
+ * `pay` is what to pay before tax (hours × the shift's rate on its day, plus supplements, `supplements_pay` of it);
+ * hours without a rate are `unpriced_hours`.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(
@@ -183,6 +191,8 @@ export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, 
 /**
  * Hours of published shifts in a month, per person and location (the locations this manager runs). Approved
  * other hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.
+ * `pay` is what to pay before tax (hours × the shift's rate on its day, plus supplements, `supplements_pay` of it);
+ * hours without a rate are `unpriced_hours`.
  * @summary Hours Report
  */
 export function useHoursReport<TData = Awaited<ReturnType<typeof hoursReport>>, TError = ErrorOut>(

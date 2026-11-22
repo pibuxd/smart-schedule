@@ -59,6 +59,7 @@ describe('RequestCard', () => {
         text: 'Od poniedziałku, przy piecu.',
         unread_reason: 'unsure',
         asked: { text: 'Po zabiegu nie mogę dźwigać blach.', question: 'Od kiedy i na których zmianach?' },
+        exchange: [{ text: 'Po zabiegu nie mogę dźwigać blach.', question: 'Od kiedy i na których zmianach?' }],
       }),
     )
     expect(
@@ -67,6 +68,23 @@ describe('RequestCard', () => {
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('„Od poniedziałku, przy piecu.”')).toBeInTheDocument()
+  })
+
+  it('shows every question when the assistant asked several times', async () => {
+    mockApi(() => [200, {}])
+    card(
+      request({
+        text: 'Nie wiem.',
+        unread_reason: 'unsure',
+        asked: { text: 'Trochę mniej.', question: 'Ile najwyżej w tygodniu?' },
+        exchange: [
+          { text: 'Chcę mniej pracować.', question: 'Ile godzin?' },
+          { text: 'Trochę mniej.', question: 'Ile najwyżej w tygodniu?' },
+        ],
+      }),
+    )
+    expect(await screen.findByText('Wcześniej: „Chcę mniej pracować.” Asystent zapytał: „Ile godzin?”')).toBeInTheDocument()
+    expect(screen.getByText('Potem: „Trochę mniej.” Asystent zapytał: „Ile najwyżej w tygodniu?”')).toBeInTheDocument()
   })
 
   it('tells apart a request the assistant read but could not turn into a setting', async () => {
