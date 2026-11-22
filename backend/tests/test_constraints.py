@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User, normalize_phone
 from apps.availability.models import AvailabilityDay, AvailabilityState
-from apps.billing.models import AccessCode, GenerationUsage, Subscription
+from apps.billing.models import AccessCode, Subscription
 from apps.rules.models import RuleSetting, WeightProfile
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.models import EmployeeProfile, ShiftType, StaffingRule
@@ -187,13 +187,10 @@ def test_one_published_version_per_period(make_company):
 
 
 @pytest.mark.django_db
-def test_subscription_and_usage_constraints(make_company):
+def test_subscription_constraints(make_company):
     a = make_company()
     Subscription.objects.create(company=a["company"], ends_at=timezone.now() + timedelta(days=30))
     violates(lambda: Subscription.objects.create(company=a["company"], ends_at=timezone.now()))
-    GenerationUsage.objects.create(company=a["company"], month=date(2026, 12, 1))
-    violates(lambda: GenerationUsage.objects.create(company=a["company"], month=date(2026, 12, 1)))
-    violates(lambda: GenerationUsage.objects.create(company=a["company"], month=date(2027, 1, 2)))
 
 
 @pytest.mark.django_db

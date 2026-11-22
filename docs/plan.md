@@ -92,7 +92,7 @@ backend/
   apps/
     accounts/             User (numer telefonu), logowanie kodem SMS, sesje, limity
     tenancy/              Company, LocationGroup, Location, Membership, Invitation, izolacja firm
-    billing/              Subscription, AccessCode, CodeRedemption, GenerationUsage
+    billing/              Subscription, AccessCode, CodeRedemption
     staffing/             Position, ShiftType, StaffingRule, StaffingException, EmployeeProfile
     availability/         AvailabilityDay, AvailabilityPattern, TextRequest
     rules/                RuleSetting (kolejność, twarda/miękka), WeightProfile
@@ -161,7 +161,6 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `CodeRedemption` | code, company, user, redeemed_at, days_added | |
 | `CodeAttempt` | user, ip, at, success | do limitu prób |
 | `Subscription` | company, ends_at, source (code/stripe), status liczony z ends_at | jedna na firmę; kod przedłuża od max(ends_at, teraz) |
-| `GenerationUsage` | company, month, count | licznik ułożeń; limit `GENERATION_MONTHLY_LIMIT`, domyślnie 0 = bez limitu (od 22.11.2026, wcześniej 30) |
 
 ### Ustawienia lokalu i pracownicy
 
@@ -397,7 +396,7 @@ Założenia:
 5. Ponowne generowanie, gdy okres ma opublikowaną wersję: dni przed dzisiejszym są zamrożone i biorą zmiany z opublikowanej wersji (także gdy ustawienia obsady się zmieniły); dalsze dni układamy z obecnej obsady z karą za każdą zmianę względem opublikowanej. Przypięcia bierzemy z najnowszej wersji okresu (szkicu albo opublikowanej).
 6. Osoba wyłączona (`is_active = false`) albo pożyczona z innego lokalu zachowuje tylko swoje przypięte i minione zmiany; generator nie daje jej nowych. Opublikowane zmiany tych samych osób w innych okresach i lokalach (7 dni wokół okresu) liczą się do odpoczynku, nakładania i dni z rzędu.
 7. Wynik zapisujemy jako nową wersję szkicu (numer o 1 większy) dla każdego lokalu; okres "zbieranie dyspozycji" przechodzi w "szkic". Historię przypisań (`AssignmentEvent`) zapisujemy dopiero przy publikacji (etap 8), żeby kolejne szkice jej nie zaśmiecały.
-8. Limit generowań (gdy jest włączony; od 22.11.2026 domyślnie 0 = bez limitu) liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
+8. Limitu generowań nie ma (usunięty 22.11.2026, sekcja 39). Zlecenia jednej firmy przechodzą po kolei (blokada na wierszu firmy), a drugie zlecenie dla okresu, który już się układa, dostaje 409.
 9. Zlecenie, które zostało "w trakcie" ponad 10 minut (albo "w kolejce" ponad 30), zadanie okresowe co 10 minut oznacza jako nieudane, żeby ekran nie czekał w nieskończoność.
 10. Warianty: kod przyjmuje inny profil wag i listę wcześniejszych grafików, od których nowy musi się różnić w min. 15 % przypisań; w tej wersji wołamy go raz.
 
@@ -441,8 +440,8 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 
 ## 14. Etap 8: układanie z ekranu, edycja, publikacja, godziny
 
-- Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Limit ułożeń grafiku, gdy jest włączony, działa też w okresie próbnym. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
-- Ekrany: "Załóż firmę" (`/rejestracja`: numer, kod SMS, nazwa firmy, imię i nazwisko, opcjonalny kod; link z ekranu logowania), "Dostęp" (`/kierownik/dostep`: stan, ułożenia w miesiącu, wpisanie kodu), baner dostępu w panelu kierownika, "Godziny" (`/kierownik/godziny`: miesiąc, tabela osób z podziałem na lokale, CSV) i karta "Grafik" w lokalu (`/kierownik/lokal/{id}/grafik`). Na "Lokale" przycisk "Ułóż grafik" przy każdym lokalu i "Ułóż dla wszystkich" (każdy lokal osobno), z arkuszem, który ostrzega przed terminem, mówi, ilu osób brakuje i ile nieprzypiętych ręcznych poprawek zniknie; postęp odpytywany co 1,5 s.
+- Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
+- Ekrany: "Załóż firmę" (`/rejestracja`: numer, kod SMS, nazwa firmy, imię i nazwisko, opcjonalny kod; link z ekranu logowania), "Dostęp" (`/kierownik/dostep`: stan i wpisanie kodu), baner dostępu w panelu kierownika, "Godziny" (`/kierownik/godziny`: miesiąc, tabela osób z podziałem na lokale, CSV) i karta "Grafik" w lokalu (`/kierownik/lokal/{id}/grafik`). Na "Lokale" przycisk "Ułóż grafik" przy każdym lokalu i "Ułóż dla wszystkich" (każdy lokal osobno), z arkuszem, który ostrzega przed terminem, mówi, ilu osób brakuje i ile nieprzypiętych ręcznych poprawek zniknie; postęp odpytywany co 1,5 s.
 - Karta "Grafik": trzy wartości oceny, twarde problemy, siatka dni × zmiany (przypięte, ręczne, pożyczone, bez obsady; znacznik "woli nie" usunięty 13.11.2026, zob. sekcja 15), przeciąganie osoby na inną zmianę z wynikiem sprawdzenia na żywo w trakcie przeciągania (prośba Piotra z 18.11.2026: bez napisu "Sprawdzam…"; gdy kierownik chwyci kafelek, jedno zapytanie liczy wynik dla wszystkich zmian, więc po najechaniu na zmianę wynik jest od razu; zanim ta odpowiedź przyjdzie, zmiana pod kursorem jest sprawdzana osobno, bez opóźnienia), arkusz zmiany z wyjaśnieniem (kto może, ile to kosztuje, kto nie może i dlaczego) i akcjami "Wpisz", "Zostaw bez obsady", "Przypnij", godziny osób, zasady z procentem, niespełnione prośby, wersje, "Opublikuj" i "Popraw grafik".
 - Nowe pole `Assignment.manual` (ręczna zmiana). Nowy moduł `engine/explain.py` (bez Django): dla każdej osoby ze stanowiskiem sprawdza walidatorem grafik z tą osobą na zmianie, więc wyjaśnienie zgadza się z walidatorem. `apps/scheduling/editing.py`: sprawdzanie i zapis ręcznych zmian, przypinanie, poprawka opublikowanego grafiku, publikacja. Raport godzin: `apps/reports`.
 
@@ -1115,8 +1114,7 @@ Prośba Piotra: przycisk, którym kierownik usuwa szkic grafiku. Wcześniej szki
 
 Założenia: usunięcie szkicu nie cofa tego, co poprawki w nim zrobiły poza nim samym: obsada dnia z "Dodaj
 miejsce" / "Usuń miejsce" (to ustawienie lokalu) i zdjęcie osoby z opublikowanego grafiku innego lokalu po
-potwierdzonym konflikcie (razem z jej innymi godzinami tamtej zmiany) zostają. Licznik ułożeń w miesiącu się nie
-zmienia. Ustalenia asystenta i inne godziny opublikowanych zmian zmieniają się dopiero przy publikacji, więc szkic
+potwierdzonym konflikcie (razem z jej innymi godzinami tamtej zmiany) zostają. Ustalenia asystenta i inne godziny opublikowanych zmian zmieniają się dopiero przy publikacji, więc szkic
 niczego w nich nie zużył.
 
 ## 34. Asystent pracownika dopytuje (22.11.2026)
@@ -1269,15 +1267,13 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
 - Ekran „Grafik”: `ArrangeButton different` („Ułóż inaczej”, ikona Shuffle) obok „Ułóż od nowa”, gdy okres ma
   wersję. Arkusz „Ułożyć inny grafik?” mówi o co trzeciej zmianie, ostrzega o ręcznych poprawkach jak zwykle, mówi o
   koszu i ma „Napisz asystentowi, co ma być inaczej” (`openChat` z okresem i tekstem „Ułóż inny grafik, żeby ”).
-  Każdy arkusz układania czyta `useSubscription`; przy włączonym limicie pokazuje „Zostało ułożeń w tym miesiącu: N
-  z L.” (ostrzeżenie, gdy zostało mniej niż lokali do ułożenia), bez limitu nic.
 - Asystent: `llm.CommandPlan.arrange` (`no` / `again` / `different`, domyślnie `no`), opis w `COMMAND_SYSTEM`
   (punkt 4) i w przewodniku kierownika. `services._checked_arrange` w `check_plan`: tylko okres ustaleń, który ma
   wersję, lokal nie w archiwum, bez trwającego układania; inaczej uwaga i cały plan zablokowany. Plan dostaje
   `arrange = {period_id, different}`, ostatni punkt „Po zatwierdzeniu ułożę nowy grafik na okres …, wyraźnie inny
   niż obecny.” / „… ułożę grafik na okres … od nowa.” i uwagę o przypięciach, ręcznych poprawkach i koszu.
   `has_changes` liczy `arranges(plan)`. `apply_command` po ustaleniach i godzinach woła `_apply_arrange` →
-  `request_generation` w tej samej transakcji; błąd (limit 429, trwające układanie 409, okres opublikowany) cofa
+  `request_generation` w tej samej transakcji; błąd (trwające układanie 409, okres opublikowany) cofa
   cały plan z dopiskiem „Nic z tego planu się nie zapisało.”. `AssistantCommand.generation_run` (migracja assistant
   0004); `AssistantCommandOut.arranges`, `changes_agreements`, `run_id`. Czat po zatwierdzeniu pokazuje
   `RunProgress` (postęp, „Anuluj”, „Zobacz szkic”).
@@ -1291,12 +1287,8 @@ też przy poprawkach opublikowanego grafiku (tak jak „Ułóż od nowa”), a o
 (`ARRANGE_PUBLISHED`), arkusz nie pokazuje wtedy „Napisz asystentowi”. Linia planu nie podaje numeru wersji, bo do
 zatwierdzenia mogła powstać nowsza; numer podaje uwaga w nowym szkicu.
 
-Limit ułożeń (Piotr, 22.11.2026: „Bez limitu ułożeń”): `GENERATION_MONTHLY_LIMIT` domyślnie 0 = bez limitu (w
-`settings.py`, `docker-compose.yml`, `.env.example` i `.env.production.example`); `request_generation` sprawdza limit
-tylko, gdy jest większy od zera, a `GenerationUsage` dalej liczy ułożenia. „Dostęp” przy limicie 0 mówi „Ułożenia
-grafiku w tym miesiącu: N. Bez limitu.”, arkusz układania nie mówi o limicie. Liczba w `.env` serwera włącza limit z
-powrotem. Serwer, którego `.env` ma jeszcze `GENERATION_MONTHLY_LIMIT=30`, trzyma stary limit, dopóki tej linii nie
-zmienić na 0 albo usunąć.
+Limit ułożeń (Piotr, 22.11.2026: „Bez limitu ułożeń”): najpierw domyślnie wyłączony, tego samego dnia usunięty
+z kodu (sekcja 39).
 
 ## 37. Prośby na stałe (22.11.2026)
 
@@ -1379,3 +1371,21 @@ rozmowy z asystentem i układanie grafiku.
 Założenia: „konto” to osoba z loginem w danej firmie (sumę firmy daje `--by company`). Koszt w dolarach, bo tak liczy
 OpenRouter; przeliczenie na złote zostaje Piotrowi. Czas solvera nie jest przeliczany na pieniądze, bo serwer kosztuje
 tyle samo bez względu na liczbę układań.
+
+## 39. Bez limitu ułożeń (22.11.2026)
+
+Prośba Piotra: „w ogóle usuń ten limit na tworzenie grafików” (po napisie „Ułożenia grafiku w tym miesiącu: 4. Bez
+limitu.” na ekranie „Dostęp”).
+
+- Usunięte: ustawienie `GENERATION_MONTHLY_LIMIT` (`settings.py`, `docker-compose.yml`, `.env.example`,
+  `.env.production.example`), sprawdzanie w `request_generation` (429) i oddawanie użycia przy błędzie i anulowaniu,
+  model `GenerationUsage` z adminem (migracja billing 0003 usuwa tabelę), `generations_used` i `generations_limit`
+  w `SubscriptionOut`, napis na ekranie „Dostęp” i linia „Zostało ułożeń…” w arkuszu układania (arkusz nie czyta już
+  `useSubscription`), 429 z `generate_schedule` i `apply_assistant_command`.
+- Blokada na wierszu firmy w `request_generation` zostaje: dzięki niej dwa równoczesne zlecenia tego samego okresu
+  nie przejdą obok sprawdzenia „już się układa” (409).
+- Zestawienie kosztów (sekcja 38) liczy układania z `GenerationRun`, więc się nie zmienia.
+
+Założenia: tabela `GenerationUsage` miała tylko liczniki ułożeń; ta sama informacja (z czasem solvera) jest w
+`GenerationRun`, więc usuwamy ją razem z danymi. Linia `GENERATION_MONTHLY_LIMIT=0` w `.env` serwera po wdrożeniu nic
+nie robi i można ją skasować.

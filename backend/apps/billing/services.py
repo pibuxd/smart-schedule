@@ -12,7 +12,7 @@ from django.utils import timezone
 from ninja.errors import HttpError
 
 from apps.billing.codes import hash_code, normalize_code
-from apps.billing.models import AccessCode, CodeAttempt, CodeRedemption, GenerationUsage, Subscription
+from apps.billing.models import AccessCode, CodeAttempt, CodeRedemption, Subscription
 from apps.tenancy.models import Company
 
 EXPIRED_MESSAGE = (
@@ -74,12 +74,6 @@ def start_trial(company: Company, user, now: datetime | None = None) -> Subscrip
     return Subscription.objects.create(
         company=company, ends_at=now + timedelta(days=settings.TRIAL_DAYS), source=Subscription.Source.TRIAL
     )
-
-
-def generations_used_this_month(company_id, now: datetime | None = None) -> int:
-    month = timezone.localdate(now or timezone.now()).replace(day=1)
-    count = GenerationUsage.objects.for_company(company_id).filter(month=month).values_list("count", flat=True).first()
-    return count or 0
 
 
 class CodeRejected(Exception):

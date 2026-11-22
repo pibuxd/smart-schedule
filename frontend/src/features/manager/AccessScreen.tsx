@@ -12,7 +12,7 @@ import { dayAndMonth } from '../../lib/dates'
 import { useManager } from './ManagerContext'
 import { statusWords } from './words'
 
-/** "Dostęp": how long the company can use Grafikomat, how many arrangements are left, and entering a code. */
+/** "Dostęp": how long the company can use Grafikomat, and entering a code. */
 export function AccessScreen() {
   const { companyId } = useManager()
   const subscription = useSubscription(companyId)
@@ -33,11 +33,6 @@ export function AccessScreen() {
           <Tag tone={data.read_only ? 'bad' : data.expiring_soon ? 'warn' : 'accent'}>{statusWords(data)}</Tag>
         </span>
         <p className="m-0">{explanation(data)}</p>
-        <p className="m-0 text-ink-muted">
-          {data.generations_limit > 0
-            ? `Ułożenia grafiku w tym miesiącu: ${data.generations_used} z ${data.generations_limit}. Każde „Ułóż grafik”, „Ułóż od nowa” i „Ułóż inaczej” to jedno ułożenie. Limit wraca na początku miesiąca.`
-            : `Ułożenia grafiku w tym miesiącu: ${data.generations_used}. Bez limitu.`}
-        </p>
       </section>
       <RedeemForm companyId={companyId} />
     </div>

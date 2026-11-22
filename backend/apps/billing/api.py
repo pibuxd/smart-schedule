@@ -3,14 +3,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from django.conf import settings
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 
 from apps.billing.services import (
     CodeRejected,
     code_attempt,
-    generations_used_this_month,
     redeem_code,
     subscription_state,
 )
@@ -30,9 +28,6 @@ class SubscriptionOut(Schema):
     expiring_soon: bool
     # Access comes from the free trial (no code entered yet).
     trial: bool
-    generations_used: int
-    # Arrangings allowed this month; 0 = no limit.
-    generations_limit: int
 
 
 class RedeemIn(Schema):
@@ -48,8 +43,6 @@ def _subscription_out(ctx: TenantContext) -> SubscriptionOut:
         days_left=state.days_left,
         expiring_soon=state.expiring_soon,
         trial=state.trial,
-        generations_used=generations_used_this_month(ctx.company.pk),
-        generations_limit=settings.GENERATION_MONTHLY_LIMIT,
     )
 
 

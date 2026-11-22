@@ -1821,16 +1821,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
           }
         },
         "description": "Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.\nWith `different` each new schedule differs clearly from its period's latest versions (\"Ułóż inaczej\").",
@@ -7673,19 +7663,9 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
           }
         },
-        "description": "Accept the plan: the rule list, the instructions and the hours change as the plan's lines say, and the\narranging it asks for starts (429 when the month's arrangings are used up; then nothing is saved).",
+        "description": "Accept the plan: the rule list, the instructions and the hours change as the plan's lines say, and the\narranging it asks for starts (when it cannot start, nothing is saved).",
         "tags": [
           "assistant"
         ],
@@ -10585,14 +10565,6 @@
           "trial": {
             "title": "Trial",
             "type": "boolean"
-          },
-          "generations_used": {
-            "title": "Generations Used",
-            "type": "integer"
-          },
-          "generations_limit": {
-            "title": "Generations Limit",
-            "type": "integer"
           }
         },
         "required": [
@@ -10601,9 +10573,7 @@
           "ends_at",
           "days_left",
           "expiring_soon",
-          "trial",
-          "generations_used",
-          "generations_limit"
+          "trial"
         ],
         "title": "SubscriptionOut",
         "type": "object"

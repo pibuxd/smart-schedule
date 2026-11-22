@@ -299,12 +299,11 @@ def assistant_command(request, command_id: UUID):
         403: ErrorOut,
         404: ErrorOut,
         409: ErrorOut,
-        429: ErrorOut,
     },
 )
 def apply_assistant_command(request, command_id: UUID):
     """Accept the plan: the rule list, the instructions and the hours change as the plan's lines say, and the
-    arranging it asks for starts (429 when the month's arrangings are used up; then nothing is saved)."""
+    arranging it asks for starts (when it cannot start, nothing is saved)."""
     ctx, command = _managed_command(request, command_id)
     ctx.require_writable()
     services.apply_command(ctx, command)

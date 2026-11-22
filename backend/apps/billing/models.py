@@ -91,18 +91,3 @@ class Subscription(CompanyOwnedModel):
     @property
     def status_label(self) -> str:
         return "aktywna" if self.is_active else "wygasła"
-
-
-class GenerationUsage(CompanyOwnedModel):
-    """Number of schedule generations per company and calendar month (limit GENERATION_MONTHLY_LIMIT, 0 = none)."""
-
-    month = models.DateField("miesiąc", help_text="Pierwszy dzień miesiąca.")
-    count = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        verbose_name = "użycie generatora"
-        verbose_name_plural = "użycie generatora"
-        constraints = [
-            models.UniqueConstraint(fields=["company", "month"], name="generation_usage_unique_month"),
-            models.CheckConstraint(condition=models.Q(month__day=1), name="generation_usage_month_first_day"),
-        ]

@@ -12,7 +12,6 @@ from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.accounts.models import User
 from apps.availability.models import AvailabilityDay, TextRequest
-from apps.billing.models import GenerationUsage
 from apps.rules.models import RuleSetting, WeightProfile
 from apps.scheduling.generation import (
     DIFFERENT_SHARE,
@@ -194,7 +193,6 @@ def test_flexible_shift_without_hours_stops_the_run_instead_of_hiding_it(shop):
 
     assert run.status == GenerationRun.Status.FAILED
     assert "„Bez godzin”" in run.error and "Uzupełnij godziny" in run.error
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
 
 
 @pytest.mark.django_db
@@ -327,7 +325,6 @@ def test_generate_saves_a_run_and_defers_the_job_together(api, shop):
     run = GenerationRun.objects.get(pk=body["id"])
     job = ProcrastinateJob.objects.get(task_name="scheduling.solve_schedule")
     assert job.queue_name == "solver" and job.args == {"run_id": str(run.pk)}
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 1
 
     again = generate(api, shop["period"])
     assert again.status_code == 409
@@ -347,26 +344,13 @@ def test_generate_differently_from_the_api(api, shop):
 
 
 @pytest.mark.django_db
-def test_monthly_generation_limit(api, shop, settings):
-    settings.GENERATION_MONTHLY_LIMIT = 1
+def test_arranging_again_and_again_is_never_limited(api, shop):
     api.login(shop["manager"])
-    assert generate(api, shop["period"]).status_code == 202
-    GenerationRun.objects.update(status=GenerationRun.Status.SUCCEEDED)
+    for _ in range(5):
+        assert generate(api, shop["period"]).status_code == 202
+        GenerationRun.objects.update(status=GenerationRun.Status.SUCCEEDED)
 
-    response = generate(api, shop["period"])
-
-    assert response.status_code == 429
-    assert "limit to 1 ułożeń" in response.json()["detail"]
-
-
-@pytest.mark.django_db
-def test_no_monthly_limit_by_default(api, shop, settings):
-    settings.GENERATION_MONTHLY_LIMIT = 0
-    GenerationUsage.objects.create(company=shop["company"], month=timezone.localdate().replace(day=1), count=500)
-    api.login(shop["manager"])
-
-    assert generate(api, shop["period"]).status_code == 202
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 501
+    assert GenerationRun.objects.count() == 5
 
 
 @pytest.mark.django_db
@@ -449,16 +433,14 @@ def test_worker_arranges_the_schedule_and_saves_a_draft_version(api, shop, setti
 
 
 @pytest.mark.django_db
-def test_failed_generation_gives_the_generation_back(shop):
+def test_generation_without_shifts_to_fill_fails(shop):
     StaffingRule.objects.all().delete()
     run = request_generation(_ctx(shop), [shop["period"]])[0]
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 1
 
     run = run_generation(run.pk, **FAST)
 
     assert run.status == GenerationRun.Status.FAILED
     assert "nie ma żadnych zmian" in run.error
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
     assert run_generation(run.pk, **FAST).status == GenerationRun.Status.FAILED  # a second run does nothing
 
 
@@ -506,7 +488,6 @@ def test_stale_runs_are_failed(shop):
 
     run.refresh_from_db()
     assert run.status == GenerationRun.Status.FAILED
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
 
 
 def _person_shifts(version) -> set:
@@ -639,7 +620,7 @@ def test_arrange_all_runs_each_demo_bakery_on_its_own():
 
     runs = request_generation(TenantContext(company=manager.company, membership=manager), periods)
 
-    assert len(runs) == 4 and GenerationUsage.objects.get(company_id=BAKERY_COMPANY_ID).count == 4
+    assert len(runs) == 4
     worked = set()
     for run in runs:
         run = run_generation(run.pk, time_limit_s=8, workers=4, today=TODAY)
@@ -662,31 +643,14 @@ def test_arrange_all_runs_each_demo_bakery_on_its_own():
 
 
 @pytest.mark.django_db
-def test_too_few_generations_left_for_all_locations(api, shop, settings, make_company):
-    settings.GENERATION_MONTHLY_LIMIT = 1
-    second = SchedulePeriod.objects.create(
-        location=shop["location"], start=MON + timedelta(days=7), end=MON + timedelta(days=13)
-    )
-    api.login(shop["manager"])
-
-    response = generate(api, shop["period"], second)
-
-    assert response.status_code == 429
-    assert "zostało 1, a potrzeba 2" in response.json()["detail"]
-    assert not GenerationRun.objects.exists()
-
-
-@pytest.mark.django_db
-def test_manager_cancels_a_queued_generation_and_gets_it_back(api, shop):
+def test_manager_cancels_a_queued_generation(api, shop):
     api.login(shop["manager"])
     run_id = generate(api, shop["period"]).json()[0]["id"]
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 1
 
     response = api.post(f"/api/generation-runs/{run_id}/cancel")
 
     assert response.status_code == 200, response.content
     assert response.json()["status"] == "cancelled"
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
     periods = api.get(f"/api/locations/{shop['location'].id}/periods").json()
     assert periods[0]["active_run_id"] is None
     # The worker finds the job later and leaves the cancelled run alone.
@@ -708,7 +672,6 @@ def test_cancelling_while_the_solver_works_saves_nothing(shop):
 
     assert run.status == GenerationRun.Status.CANCELLED
     assert not ScheduleVersion.objects.exists()
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
     shop["period"].refresh_from_db()
     assert shop["period"].status == SchedulePeriod.Status.COLLECTING
 
@@ -727,7 +690,6 @@ def test_a_result_that_arrives_after_the_cancel_is_dropped(shop):
 
     assert run.status == GenerationRun.Status.CANCELLED
     assert not ScheduleVersion.objects.exists()
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 0
 
 
 @pytest.mark.django_db

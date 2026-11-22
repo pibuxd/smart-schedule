@@ -7,7 +7,7 @@ from django.urls import path
 from django.utils import timezone
 
 from apps.billing.codes import PREFIX_LENGTH, format_code, generate_code, hash_code
-from apps.billing.models import AccessCode, CodeAttempt, CodeRedemption, GenerationUsage, Subscription
+from apps.billing.models import AccessCode, CodeAttempt, CodeRedemption, Subscription
 from apps.tenancy.admin_base import CompanyOwnedAdmin
 
 
@@ -103,8 +103,3 @@ class CodeAttemptAdmin(admin.ModelAdmin):
 @admin.register(Subscription)
 class SubscriptionAdmin(CompanyOwnedAdmin):
     list_display = ("company", "ends_at", "source", "status_label")
-
-
-@admin.register(GenerationUsage)
-class GenerationUsageAdmin(CompanyOwnedAdmin):
-    list_display = ("company", "month", "count")
