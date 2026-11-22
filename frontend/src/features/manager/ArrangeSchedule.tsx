@@ -93,7 +93,7 @@ function ArrangeSheet({
   const { companyId } = useManager()
   const subscription = useSubscription(companyId, { query: { enabled: open, staleTime: 60_000 } })
   const usage = subscription.data?.data as SubscriptionOut | undefined
-  // The company's monthly limit counts every arranging, "Ułóż inaczej" too: say what is left before the click.
+  // A monthly limit (off by default, 0) counts every arranging, "Ułóż inaczej" too: when on, say what is left.
   const limit = typeof usage?.generations_limit === 'number' && usage.generations_limit > 0 ? usage.generations_limit : 0
   const left = limit && usage ? Math.max(0, limit - usage.generations_used) : 0
   const one = targets.length === 1

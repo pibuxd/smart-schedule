@@ -83,7 +83,7 @@ def request_generation(
             raise HttpError(409, "Grafik dla tego okresu już się układa. Poczekaj na wynik.")
         usage, _ = ctx.qs(GenerationUsage).get_or_create(company=ctx.company, month=_month())
         limit = settings.GENERATION_MONTHLY_LIMIT
-        if usage.count + len(periods) > limit:
+        if limit and usage.count + len(periods) > limit:
             left = max(0, limit - usage.count)
             raise HttpError(
                 429,

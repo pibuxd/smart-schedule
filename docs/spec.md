@@ -11,8 +11,8 @@ także według jego prośby słowami. Wcześniej „Ułóż od nowa” przy tych
 bo generator znowu szukał najlepszego, a najlepszy się nie zmienił.
 
 - „Ułóż inaczej” w zakładce „Grafik”, obok „Ułóż od nowa” (gdy okres ma już grafik). Działa jak „Ułóż od nowa”:
-  zostają przypięte zmiany, osoby wpisane mimo przeszkód i minione dni, nieprzypięte ręczne poprawki znikają, to jedno
-  ułożenie z miesięcznego limitu, „Anuluj” działa. Do tego generator dostaje warunek: co najmniej 30% zmian każdej
+  zostają przypięte zmiany, osoby wpisane mimo przeszkód i minione dni, nieprzypięte ręczne poprawki znikają,
+  „Anuluj” działa. Do tego generator dostaje warunek: co najmniej 30% zmian każdej
   wcześniejszej wersji okresu (bez przypiętych i minionych) ma w nowym grafiku inną osobę. Liczy się, kto
   pracuje danego dnia na danej zmianie i stanowisku; dwie osoby zamienione miejscami na tej samej zmianie to nie
   różnica. Porównanie ze wszystkimi wersjami (technicznie do 100 najnowszych), bo kierownik może klikać „Ułóż
@@ -33,21 +33,22 @@ bo generator znowu szukał najlepszego, a najlepszy się nie zmienił.
   dni opublikowanego grafiku już się wydarzyły) i nie działa w trakcie układania.
 - Okno przed ułożeniem mówi to jednym zdaniem, ostrzega o ręcznych poprawkach jak przy „Ułóż od nowa” i mówi, że
   gorszy szkic można usunąć koszem, a wtedy wraca obecny (razem z ręcznymi poprawkami, bo zostają w obecnej
-  wersji). Każde okno układania mówi też, ile ułożeń z miesięcznego limitu firmy zostało („Zostało ułożeń w tym
-  miesiącu: 3 z 30.”), bo przy klikaniu do skutku limit może się skończyć. Przed publikacją ma też „Napisz asystentowi”, który otwiera czat z tym okresem, gdy kierownik wie, co ma
+  wersji). Ułożeń grafiku w miesiącu nie ogranicza żaden limit (decyzja Piotra z 22.11.2026: kierownik klika „Ułóż
+  inaczej”, ile chce). Limit da się włączyć z powrotem zmienną `GENERATION_MONTHLY_LIMIT` w `.env` serwera; wtedy
+  każde okno układania mówi, ile ułożeń zostało („Zostało ułożeń w tym miesiącu: 3 z 30.”). Przed publikacją ma też „Napisz asystentowi”, który otwiera czat z tym okresem, gdy kierownik wie, co ma
   być inaczej (po publikacji ustalenia okresu są zamknięte, więc czat by odmówił).
 - Według prośby kierownika: w czacie kierownik pisze np. „Ten grafik mi nie pasuje, ułóż inny, żeby Ania miała mniej
   porannych zmian”. Plan ma wtedy zwykłe zmiany (polecenie o Ani, zasady) i ostatni punkt „Po zatwierdzeniu ułożę
   nowy grafik na okres …, wyraźnie inny niż obecny.” Po „Zatwierdź zmiany” ustalenia się zapisują i od razu rusza
-  układanie (jedno ułożenie z limitu, „Anuluj” działa), a czat pokazuje postęp i link do szkicu. Gdy kierownik prosi tylko o ułożenie
+  układanie („Anuluj” działa), a czat pokazuje postęp i link do szkicu. Gdy kierownik prosi tylko o ułożenie
   jeszcze raz po zmianach („zmień to i ułóż od nowa”), ostatni punkt to „Po zatwierdzeniu ułożę grafik na okres …
   od nowa.”, bez warunku różnicy. Samo „ułóż inny grafik” bez innych zmian też jest planem do zatwierdzenia.
 - Asystent nadal niczego nie układa sam: punkt o układaniu dodaje tylko na wyraźną prośbę kierownika, a układanie
   rusza dopiero po „Zatwierdź zmiany”. Dotyczy wyłącznie okresu ustaleń, który ma już grafik. Gdy okres nie ma
   jeszcze grafiku, grafik właśnie się układa albo ustalenia nie mają okresu, plan nie przechodzi w całości (jak każda
   niewykonalna część), a asystent mówi, co zrobić. Gdy lokal ma opublikowany grafik, który jeszcze trwa, mówi też,
-  że ten grafik ułoży inaczej przycisk „Ułóż inaczej” w zakładce „Grafik”. Gdy przy zatwierdzeniu układanie nie może ruszyć (limit, trwa inne
-  układanie), nic z planu się nie zapisuje.
+  że ten grafik ułoży inaczej przycisk „Ułóż inaczej” w zakładce „Grafik”. Gdy przy zatwierdzeniu układanie nie może ruszyć (trwa inne
+  układanie albo włączony limit ułożeń się skończył), nic z planu się nie zapisuje.
 
 ## Asystent przez OpenRouter (decyzja Piotra z 21.11.2026)
 
@@ -218,7 +219,7 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 2. Przegląd dyspozycji: siatka pracownicy x dni, lista próśb z interpretacją (menedżer może prośbę odrzucić albo oznaczyć jako ważniejszą lub mniej ważną), lista osób bez zgłoszonej dyspozycji.
 3. Lokal dziedziczy ustawienia i kolejność zasad grupy. Zmiana samego miejsca zasady na liście tworzy lokalne ustawienie. Przywrócenie zasady grupy odtwarza jej wartości i miejsce. Zasady lokalu: gotowa lista z przełącznikami i licznikami; kolejność na liście = ważność; każdą zasadę można oznaczyć "bez wyjątków" (twarda). Przed zapisaniem pokaż skutek zmiany na danych z ostatniego okresu, np. "przez tę zasadę 6 próśb nie zostałoby spełnionych".
 4. Generowanie grafiku osobno dla każdego lokalu (lokale są od siebie niezależne: każdy ma własne zasady i wagi; "ułóż dla wszystkich" uruchamia osobne generowanie dla każdego lokalu); osoba pracująca w kilku lokalach jest w puli każdego z nich, a zmiany, które już ma w opublikowanych grafikach i najnowszych szkicach innych lokali, są dla niej zajęte i liczą się do jej godzin, odpoczynku i dni z rzędu). Lokale zależą od siebie tylko wtedy, gdy kierownik tak powie w poleceniu dla asystenta. Wynik z oceną i wyjaśnieniami; ręczna edycja (przeciąganie, przypinanie) z walidacją na żywo przez endpoint; publikacja z wersjami. Gdy kierownik ręcznie wpisuje osobę, która ma w tym czasie inną zmianę (w tym samym grafiku albo w grafiku lub szkicu innego lokalu), aplikacja pyta, czy na pewno chce to zmienić; po potwierdzeniu zdejmuje osobę z tamtej zmiany, która zostaje pusta, a przy opublikowanym grafiku innego lokalu daje znać tej osobie i kierownikowi tamtego lokalu. Zmianę w lokalu, którego kierownik nie prowadzi, albo taką, która już się zaczęła, zmienia tylko jej kierownik (decyzja Piotra z 18.11.2026). Dwie zmiany jednej osoby w tym samym czasie nadal nie mogą zostać zapisane.
-5. Ponowne generowanie układa od nowa wszystko poza zmianami przypiętymi i dniami, które minęły: nieprzypięte ręczne poprawki znikają. Kierownik, który chce coś zmienić w wyniku, pisze polecenie dla asystenta (LLM), a ten zamienia je na zasady i ich ważność. Wyraźnie inny grafik daje „Ułóż inaczej” albo prośba w czacie (sekcja „Inny grafik na prośbę kierownika”, 22.11.2026). Układanie w trakcie (w kolejce albo już liczone) kierownik może anulować przyciskiem "Anuluj": nic się nie zapisuje, wcześniejszy szkic zostaje, a anulowane układanie nie wlicza się do miesięcznego limitu (prośba Piotra z 13.11.2026 po testach).
+5. Ponowne generowanie układa od nowa wszystko poza zmianami przypiętymi i dniami, które minęły: nieprzypięte ręczne poprawki znikają. Kierownik, który chce coś zmienić w wyniku, pisze polecenie dla asystenta (LLM), a ten zamienia je na zasady i ich ważność. Wyraźnie inny grafik daje „Ułóż inaczej” albo prośba w czacie (sekcja „Inny grafik na prośbę kierownika”, 22.11.2026). Układanie w trakcie (w kolejce albo już liczone) kierownik może anulować przyciskiem "Anuluj": nic się nie zapisuje, wcześniejszy szkic zostaje, a anulowane układanie nie wlicza się do miesięcznego licznika ułożeń (prośba Piotra z 13.11.2026 po testach; od 22.11.2026 limitu ułożeń domyślnie nie ma).
 6. Okres grafiku: kierownik wpisuje daty okresu i dzień, w którym będzie układał grafik. Może jednym przyciskiem poprosić wszystkich pracowników lokalu o dyspozycje (powiadomienie w aplikacji z okresem i terminem). Widzi, kto już wpisał dyspozycje, a kto nie, i może przypomnieć tylko tym, którzy jeszcze nie wpisali.
    Grafik powstaje wyłącznie na świadome polecenie kierownika, gdy minie termin albo gdy wszyscy wpiszą dyspozycje (Piotr, 12.11.2026: ludzie zwlekają do ostatniej chwili, więc grafik ma sens dopiero przy komplecie danych). Aplikacja nie układa grafiku sama, okresowo ani automatycznie; może jedynie podpowiedzieć, że przyszła pora.
 7. Podsumowanie godzin w miesiącu z podziałem na lokale, eksport CSV.
@@ -279,7 +280,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Kod wpisuje kierownik przy zakładaniu firmy albo później w ustawieniach. Subskrypcja dotyczy całej firmy; pracownicy niczego nie wpisują.
 - Tabela subscriptions niezależna od dostawcy płatności: firma, status (aktywna / wygasła), data końca, źródło ("kod", w przyszłości "stripe"). Kolejny kod przedłuża dostęp od daty końca, nie od dnia wpisania.
 - 7 dni przed końcem baner w panelu kierownika. Po wygaśnięciu tryb tylko do odczytu: grafik widoczny, bez edycji i generowania. Danych nie usuwamy.
-- Firma założona bez kodu dostaje 30 dni okresu próbnego z pełnym dostępem (decyzja Piotra z 12.11.2026; 13.11.2026 wydłużone z 14 do 30 dni, żeby zmieścił się pełny miesięczny cykl: dyspozycje, termin, ułożenie, publikacja). Okres próbny dostaje tylko pierwsza firma zakładana przez daną osobę; limit ułożeń grafiku obowiązuje także wtedy. Po okresie próbnym firma jest tylko do odczytu, dopóki kierownik nie wpisze kodu; kod wpisany w okresie próbnym dolicza swoje dni do końca okresu próbnego, więc nic nie przepada.
+- Firma założona bez kodu dostaje 30 dni okresu próbnego z pełnym dostępem (decyzja Piotra z 12.11.2026; 13.11.2026 wydłużone z 14 do 30 dni, żeby zmieścił się pełny miesięczny cykl: dyspozycje, termin, ułożenie, publikacja). Okres próbny dostaje tylko pierwsza firma zakładana przez daną osobę; limit ułożeń grafiku, gdy jest włączony, obowiązuje także wtedy (od 22.11.2026 domyślnie go nie ma). Po okresie próbnym firma jest tylko do odczytu, dopóki kierownik nie wpisze kodu; kod wpisany w okresie próbnym dolicza swoje dni do końca okresu próbnego, więc nic nie przepada.
 - W trybie tylko do odczytu każda zmiana danych firmy jest odrzucana (HTTP 402 z komunikatem po polsku); wyjątki: wpisanie kodu, odpowiedź zaproszonej osoby na zaproszenie oraz oznaczenie i usunięcie własnych powiadomień (pracownik nadal widzi grafik i powiadomienia; oddawać ani brać zmian nie można).
 - Limit prób wpisania kodu: 5 błędnych na konto i 20 na adres IP w ciągu godziny. Kod ma 12 znaków, pokazywany w grupach po 4 (ABCD-EFGH-JKMN); spacje i myślniki nie mają znaczenia. Jeden kod można użyć w danej firmie tylko raz. Kody widać w całości tylko raz, zaraz po wygenerowaniu; w bazie jest skrót i pierwsze 4 znaki.
 - Limit generowań grafiku na firmę (roboczo 30 na miesiąc), także w okresie darmowym.

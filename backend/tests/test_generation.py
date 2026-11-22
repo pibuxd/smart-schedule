@@ -360,6 +360,16 @@ def test_monthly_generation_limit(api, shop, settings):
 
 
 @pytest.mark.django_db
+def test_no_monthly_limit_by_default(api, shop, settings):
+    settings.GENERATION_MONTHLY_LIMIT = 0
+    GenerationUsage.objects.create(company=shop["company"], month=timezone.localdate().replace(day=1), count=500)
+    api.login(shop["manager"])
+
+    assert generate(api, shop["period"]).status_code == 202
+    assert GenerationUsage.objects.get(company=shop["company"]).count == 501
+
+
+@pytest.mark.django_db
 def test_read_only_company_and_employees_cannot_generate(api, shop, subscribe):
     api.login(shop["worker"])
     assert generate(api, shop["period"]).status_code == 403

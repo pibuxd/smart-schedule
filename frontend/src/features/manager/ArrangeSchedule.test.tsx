@@ -168,6 +168,21 @@ describe('ArrangeButton', () => {
     ).toBeInTheDocument()
   })
 
+  it('says nothing about a limit when there is none', async () => {
+    const calls = mockApi((_method, path) =>
+      path.endsWith('/subscription') ? [200, { generations_used: 120, generations_limit: 0 }] : [200, [run]],
+    )
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/subscription'))).toBe(true))
+    expect(await screen.findByRole('button', { name: 'Ułóż inny grafik' })).toBeEnabled()
+    expect(screen.queryByText(/Zostało ułożeń/)).not.toBeInTheDocument()
+  })
+
   it('arranges again without asking for a different schedule', async () => {
     const calls = mockApi(() => [200, [run]])
     renderScreen(

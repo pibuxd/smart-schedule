@@ -161,7 +161,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `CodeRedemption` | code, company, user, redeemed_at, days_added | |
 | `CodeAttempt` | user, ip, at, success | do limitu prób |
 | `Subscription` | company, ends_at, source (code/stripe), status liczony z ends_at | jedna na firmę; kod przedłuża od max(ends_at, teraz) |
-| `GenerationUsage` | company, month, count | limit 30 na miesiąc (`GENERATION_MONTHLY_LIMIT`) |
+| `GenerationUsage` | company, month, count | licznik ułożeń; limit `GENERATION_MONTHLY_LIMIT`, domyślnie 0 = bez limitu (od 22.11.2026, wcześniej 30) |
 
 ### Ustawienia lokalu i pracownicy
 
@@ -439,7 +439,7 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 
 ## 14. Etap 8: układanie z ekranu, edycja, publikacja, godziny
 
-- Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Limit ułożeń grafiku działa też w okresie próbnym. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
+- Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Limit ułożeń grafiku, gdy jest włączony, działa też w okresie próbnym. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
 - Ekrany: "Załóż firmę" (`/rejestracja`: numer, kod SMS, nazwa firmy, imię i nazwisko, opcjonalny kod; link z ekranu logowania), "Dostęp" (`/kierownik/dostep`: stan, ułożenia w miesiącu, wpisanie kodu), baner dostępu w panelu kierownika, "Godziny" (`/kierownik/godziny`: miesiąc, tabela osób z podziałem na lokale, CSV) i karta "Grafik" w lokalu (`/kierownik/lokal/{id}/grafik`). Na "Lokale" przycisk "Ułóż grafik" przy każdym lokalu i "Ułóż dla wszystkich" (każdy lokal osobno), z arkuszem, który ostrzega przed terminem, mówi, ilu osób brakuje i ile nieprzypiętych ręcznych poprawek zniknie; postęp odpytywany co 1,5 s.
 - Karta "Grafik": trzy wartości oceny, twarde problemy, siatka dni × zmiany (przypięte, ręczne, pożyczone, bez obsady; znacznik "woli nie" usunięty 13.11.2026, zob. sekcja 15), przeciąganie osoby na inną zmianę z wynikiem sprawdzenia na żywo w trakcie przeciągania (prośba Piotra z 18.11.2026: bez napisu "Sprawdzam…"; gdy kierownik chwyci kafelek, jedno zapytanie liczy wynik dla wszystkich zmian, więc po najechaniu na zmianę wynik jest od razu; zanim ta odpowiedź przyjdzie, zmiana pod kursorem jest sprawdzana osobno, bez opóźnienia), arkusz zmiany z wyjaśnieniem (kto może, ile to kosztuje, kto nie może i dlaczego) i akcjami "Wpisz", "Zostaw bez obsady", "Przypnij", godziny osób, zasady z procentem, niespełnione prośby, wersje, "Opublikuj" i "Popraw grafik".
 - Nowe pole `Assignment.manual` (ręczna zmiana). Nowy moduł `engine/explain.py` (bez Django): dla każdej osoby ze stanowiskiem sprawdza walidatorem grafik z tą osobą na zmianie, więc wyjaśnienie zgadza się z walidatorem. `apps/scheduling/editing.py`: sprawdzanie i zapis ręcznych zmian, przypinanie, poprawka opublikowanego grafiku, publikacja. Raport godzin: `apps/reports`.
@@ -1178,8 +1178,8 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
 - Ekran „Grafik”: `ArrangeButton different` („Ułóż inaczej”, ikona Shuffle) obok „Ułóż od nowa”, gdy okres ma
   wersję. Arkusz „Ułożyć inny grafik?” mówi o co trzeciej zmianie, ostrzega o ręcznych poprawkach jak zwykle, mówi o
   koszu i ma „Napisz asystentowi, co ma być inaczej” (`openChat` z okresem i tekstem „Ułóż inny grafik, żeby ”).
-  Każdy arkusz układania czyta `useSubscription` i pokazuje „Zostało ułożeń w tym miesiącu: N z L.” (ostrzeżenie,
-  gdy zostało mniej niż lokali do ułożenia).
+  Każdy arkusz układania czyta `useSubscription`; przy włączonym limicie pokazuje „Zostało ułożeń w tym miesiącu: N
+  z L.” (ostrzeżenie, gdy zostało mniej niż lokali do ułożenia), bez limitu nic.
 - Asystent: `llm.CommandPlan.arrange` (`no` / `again` / `different`, domyślnie `no`), opis w `COMMAND_SYSTEM`
   (punkt 4) i w przewodniku kierownika. `services._checked_arrange` w `check_plan`: tylko okres ustaleń, który ma
   wersję, lokal nie w archiwum, bez trwającego układania; inaczej uwaga i cały plan zablokowany. Plan dostaje
@@ -1199,3 +1199,10 @@ opublikowany zamyka ustalenia, więc z czatu da się układać tylko przed publi
 też przy poprawkach opublikowanego grafiku (tak jak „Ułóż od nowa”), a odmowa czatu go wskazuje
 (`ARRANGE_PUBLISHED`), arkusz nie pokazuje wtedy „Napisz asystentowi”. Linia planu nie podaje numeru wersji, bo do
 zatwierdzenia mogła powstać nowsza; numer podaje uwaga w nowym szkicu.
+
+Limit ułożeń (Piotr, 22.11.2026: „Bez limitu ułożeń”): `GENERATION_MONTHLY_LIMIT` domyślnie 0 = bez limitu (w
+`settings.py`, `docker-compose.yml`, `.env.example` i `.env.production.example`); `request_generation` sprawdza limit
+tylko, gdy jest większy od zera, a `GenerationUsage` dalej liczy ułożenia. „Dostęp” przy limicie 0 mówi „Ułożenia
+grafiku w tym miesiącu: N. Bez limitu.”, arkusz układania nie mówi o limicie. Liczba w `.env` serwera włącza limit z
+powrotem. Serwer, którego `.env` ma jeszcze `GENERATION_MONTHLY_LIMIT=30`, trzyma stary limit, dopóki tej linii nie
+zmienić na 0 albo usunąć.
