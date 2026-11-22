@@ -23,7 +23,9 @@ bo generator znowu szukał najlepszego, a najlepszy się nie zmienił.
   się nie da (np. tylko jedna osoba umie piec), grafik jest tak inny, jak się da.
 - „Uwagi” nowego szkicu mówią, ile zmian ma inne osoby niż w wersji, którą kierownik widział („Ułożony inaczej niż
   wersja 3: inne osoby na 31 z 90 zmian.”), czy od starszych wersji też różni się co najmniej co trzecią zmianą (albo
-  od której mniej), a gdy 30% się nie udało, że bardziej się nie dało przy tych ustawieniach.
+  od której mniej), a gdy 30% się nie udało, że bardziej się nie dało przy tych ustawieniach. Gdy zasady kierownika
+  albo prośby pracowników wyszły słabiej niż w tamtej wersji, uwaga to mówi („Słabiej niż w wersji 3: zasady
+  kierownika 85,5 % zamiast 90 %.”), bo różnica idzie przed nimi. Okno mówi to z góry jednym zdaniem.
 - Wszystkie szkice zostają (Piotr, 22.11.2026): każda ułożona wersja jest na liście „Wersje”, a usuwa ją tylko kosz.
   Do starszego szkicu da się wrócić przyciskiem „Wróć do tej wersji”: aplikacja robi z niego nowy szkic (kolejny
   numer, na liście „jak wersja 5”), z jego osobami, przypięciami i ręcznymi poprawkami, a obecny szkic zostaje na

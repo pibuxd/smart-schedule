@@ -34,8 +34,8 @@ export type ArrangeTarget = {
  * "Ułóż grafik" (one location) or "Ułóż dla wszystkich" (each location arranged on its own). A deliberate action of
  * the manager: the sheet says who has not answered yet, that it is early when the deadline has not passed, and that
  * unpinned manual changes will be dropped. Nothing is ever arranged by itself.
- * `different` is "Ułóż inaczej": a new schedule that gives about every third shift to someone else than the latest
- * versions did (docs/plan.md section 35).
+ * `different` is "Ułóż inaczej": a new schedule that gives about every third shift to someone else than each earlier
+ * version did (docs/plan.md section 35).
  */
 export function ArrangeButton({
   targets,
@@ -123,8 +123,8 @@ function ArrangeSheet({
       <div className="grid gap-4">
         {different && (
           <p className="m-0">
-            Co trzecia zmiana dostanie inną osobę niż w ostatnich wersjach, o ile się da. Zasady i prośby liczą się jak
-            zawsze.
+            Co trzecia zmiana dostanie inną osobę niż we wcześniejszych wersjach, o ile się da. Zmian bez obsady nie
+            przybędzie, ale zasady i prośby mogą wyjść trochę słabiej.
           </p>
         )}
         {early.length > 0 && (

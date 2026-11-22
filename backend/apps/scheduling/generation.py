@@ -33,7 +33,7 @@ from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, Sc
 from apps.scheduling.problem_builder import BuildError, BuiltProblem, build_problem
 from apps.tenancy.context import TenantContext
 from apps.tenancy.models import Company
-from engine.scoring import score
+from engine.scoring import Scores, score
 from engine.solver import SolveStatus, changed_shifts, solve
 from engine.validator import validate
 
@@ -217,7 +217,13 @@ def run_generation(
             if not _still_active(run):  # cancelled while the result was being checked
                 run.refresh_from_db()
                 return run
-            notes = {pk: _difference_notes(built, versions, result.schedule) for pk, versions in earlier.items()}
+            locations = {period.pk: str(period.location_id) for period in periods}
+            notes = {
+                pk: _difference_notes(
+                    built, versions, result.schedule, score(built.problem, report, location=locations[pk])
+                )
+                for pk, versions in earlier.items()
+            }
             _save_versions(run, built, result.schedule, report, notes)
             run.status = GenerationRun.Status.SUCCEEDED
             run.solver_status = result.status
@@ -251,8 +257,9 @@ def _earlier_versions(periods: Sequence[SchedulePeriod]) -> dict:
     return earlier
 
 
-def _difference_notes(built: BuiltProblem, versions, schedule) -> list[str]:
-    """What "Ułóż inaczej" achieved: compared with the version the manager saw, then with the older ones."""
+def _difference_notes(built: BuiltProblem, versions, schedule, scores: Scores) -> list[str]:
+    """What "Ułóż inaczej" achieved: compared with the version the manager saw, then with the older ones, and the
+    scores that came out lower than in the version the manager saw (difference goes before rules and requests)."""
     version, before = versions[0]
     changed, total = changed_shifts(built.problem, before, schedule)
     if total == 0:
@@ -276,7 +283,19 @@ def _difference_notes(built: BuiltProblem, versions, schedule) -> list[str]:
             note += f" Od wersji {number} różni się mniej: inne osoby na {least} z {out_of} {_shifts_of(out_of)}."
     if not reached:
         note += " Bardziej się nie dało przy tych dyspozycjach i zasadach bez zostawiania zmian bez obsady."
+    lower = [
+        f"{label} {_percent(getattr(scores, key))} zamiast {_percent(before)}"
+        for key, label in (("manager_rules", "zasady kierownika"), ("employee_requests", "prośby pracowników"))
+        if (before := (version.scores or {}).get(key)) is not None and round(getattr(scores, key), 1) < round(before, 1)
+    ]
+    if lower:
+        note += f" Słabiej niż w wersji {version.number}: {', '.join(lower)}."
     return [note]
+
+
+def _percent(value: float) -> str:
+    """Like the screen: one decimal at most, a decimal comma ("81,6 %", "90 %")."""
+    return f"{round(value, 1):g}".replace(".", ",") + " %"
 
 
 def _shifts_of(count: int) -> str:

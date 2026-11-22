@@ -100,7 +100,7 @@ describe('ArrangeButton', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
     const sheet = await screen.findByRole('dialog')
     expect(sheet).toHaveTextContent('Ułożyć inny grafik?')
-    expect(sheet).toHaveTextContent('Co trzecia zmiana dostanie inną osobę niż w ostatnich wersjach')
+    expect(sheet).toHaveTextContent('Co trzecia zmiana dostanie inną osobę niż we wcześniejszych wersjach')
     expect(sheet).toHaveTextContent('Stracisz ręczne poprawki bez przypięcia: 2.')
     expect(sheet).toHaveTextContent('Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny razem z poprawkami.')
 

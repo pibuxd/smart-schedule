@@ -519,11 +519,35 @@ def test_arranging_differently_gives_other_people_and_says_how_many(shop):
         assert changed >= math.ceil(DIFFERENT_SHARE * 12)
     assert third.scores["holes"] == 0
     changed = len(_person_shifts(again) - _person_shifts(third))
-    assert (
+    [note] = [note for note in third.scores["notes"] if "inaczej" in note]
+    assert note.startswith(
         f"Ułożony inaczej niż wersja 2: inne osoby na {changed} z 12 zmian. "
         "Od starszych wersji też różni się co najmniej co trzecią zmianą."
-    ) in third.scores["notes"]
+    )
     assert not any("inaczej" in note for note in again.scores["notes"])
+
+
+@pytest.mark.django_db
+def test_the_notes_say_when_rules_or_requests_came_out_lower(shop):
+    from apps.scheduling.generation import _difference_notes
+    from engine.scoring import Scores
+
+    period = shop["period"]
+    first = run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get()
+    first.scores = {**first.scores, "manager_rules": 90.0, "employee_requests": 75.31}
+    rows = Assignment.objects.filter(shift__version=first).values_list("shift__slot_key", "employee")
+    schedule = {key: str(e) if e else None for key, e in rows}
+    built = build_problem([period])
+
+    def notes(manager_rules, employee_requests):
+        scores = Scores(12, 12, manager_rules, employee_requests, 0, 0)
+        return _difference_notes(built, [(first, schedule)], schedule, scores)[0]
+
+    assert notes(85.54, 75.31).endswith("Słabiej niż w wersji 1: zasady kierownika 85,5 % zamiast 90 %.")
+    assert notes(85.54, 70.0).endswith(
+        "Słabiej niż w wersji 1: zasady kierownika 85,5 % zamiast 90 %, prośby pracowników 70 % zamiast 75,3 %."
+    )
+    assert "Słabiej" not in notes(90.0, 80.0)
 
 
 @pytest.mark.django_db

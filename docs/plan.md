@@ -1166,7 +1166,8 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
   `COMPARED_VERSIONS` = 100, jednym zapytaniem, `_earlier_versions`), woła solver z `min_difference=DIFFERENT_SHARE`
   (0,3) i dopisuje do `scores.notes` nowego szkicu zdanie z `_difference_notes`: różnica względem najnowszej, potem
   „Od starszych wersji też różni się co najmniej co trzecią zmianą.” albo wersja, od której różni się najmniej; gdy
-  próg nie został osiągnięty, także „Bardziej się nie dało…”.
+  próg nie został osiągnięty, także „Bardziej się nie dało…”; gdy `manager_rules` albo `employee_requests` wyszły
+  niżej niż w najnowszej wersji, „Słabiej niż w wersji N: …”.
 - Powrót do starszego szkicu: `editing.restore_version(version, user)` kopiuje wersję (zmiany, osoby, przypięcia,
   ręczne poprawki, uwagi) jako nowy szkic o kolejnym numerze z `ScheduleVersion.restored_from` = numer źródła
   (migracja 0012), poprzedni szkic staje się historią, ocena liczy się od nowa. 409, gdy wersja była opublikowana,
