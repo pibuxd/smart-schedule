@@ -33,7 +33,8 @@ bo generator znowu szukał najlepszego, a najlepszy się nie zmienił.
   dni opublikowanego grafiku już się wydarzyły) i nie działa w trakcie układania.
 - Okno przed ułożeniem mówi to jednym zdaniem, ostrzega o ręcznych poprawkach jak przy „Ułóż od nowa” i mówi, że
   gorszy szkic można usunąć koszem, a wtedy wraca obecny (razem z ręcznymi poprawkami, bo zostają w obecnej
-  wersji). Przed publikacją ma też „Napisz asystentowi”, który otwiera czat z tym okresem, gdy kierownik wie, co ma
+  wersji). Każde okno układania mówi też, ile ułożeń z miesięcznego limitu firmy zostało („Zostało ułożeń w tym
+  miesiącu: 3 z 30.”), bo przy klikaniu do skutku limit może się skończyć. Przed publikacją ma też „Napisz asystentowi”, który otwiera czat z tym okresem, gdy kierownik wie, co ma
   być inaczej (po publikacji ustalenia okresu są zamknięte, więc czat by odmówił).
 - Według prośby kierownika: w czacie kierownik pisze np. „Ten grafik mi nie pasuje, ułóż inny, żeby Ania miała mniej
   porannych zmian”. Plan ma wtedy zwykłe zmiany (polecenie o Ani, zasady) i ostatni punkt „Po zatwierdzeniu ułożę

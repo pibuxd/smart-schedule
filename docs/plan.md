@@ -1178,6 +1178,8 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
 - Ekran „Grafik”: `ArrangeButton different` („Ułóż inaczej”, ikona Shuffle) obok „Ułóż od nowa”, gdy okres ma
   wersję. Arkusz „Ułożyć inny grafik?” mówi o co trzeciej zmianie, ostrzega o ręcznych poprawkach jak zwykle, mówi o
   koszu i ma „Napisz asystentowi, co ma być inaczej” (`openChat` z okresem i tekstem „Ułóż inny grafik, żeby ”).
+  Każdy arkusz układania czyta `useSubscription` i pokazuje „Zostało ułożeń w tym miesiącu: N z L.” (ostrzeżenie,
+  gdy zostało mniej niż lokali do ułożenia; nic, gdy limit to 0).
 - Asystent: `llm.CommandPlan.arrange` (`no` / `again` / `different`, domyślnie `no`), opis w `COMMAND_SYSTEM`
   (punkt 4) i w przewodniku kierownika. `services._checked_arrange` w `check_plan`: tylko okres ustaleń, który ma
   wersję, lokal nie w archiwum, bez trwającego układania; inaczej uwaga i cały plan zablokowany. Plan dostaje

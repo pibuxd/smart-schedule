@@ -141,6 +141,33 @@ describe('ArrangeButton', () => {
     expect(screen.queryByRole('button', { name: 'Napisz asystentowi, co ma być inaczej' })).not.toBeInTheDocument()
   })
 
+  it('says how many arrangings are left this month', async () => {
+    const subscription = { generations_used: 27, generations_limit: 30 }
+    mockApi((_method, path) => (path.endsWith('/subscription') ? [200, subscription] : [200, [run]]))
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    expect(await screen.findByText('Zostało ułożeń w tym miesiącu: 3 z 30.')).toBeInTheDocument()
+  })
+
+  it('warns when nothing is left of the monthly limit', async () => {
+    mockApi((_method, path) =>
+      path.endsWith('/subscription') ? [200, { generations_used: 30, generations_limit: 30 }] : [200, [run]],
+    )
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    expect(
+      await screen.findByText(/Zostało ułożeń w tym miesiącu: 0 z 30\. Nowe będą możliwe od pierwszego dnia/),
+    ).toBeInTheDocument()
+  })
+
   it('arranges again without asking for a different schedule', async () => {
     const calls = mockApi(() => [200, [run]])
     renderScreen(
