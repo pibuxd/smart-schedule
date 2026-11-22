@@ -35,6 +35,7 @@ PreferenceTypeName = Literal[
 LevelName = Literal["bardzo_wazne", "wazne", "mile_widziane"]
 HoursPeriodName = Literal["day", "week", "period"]
 TopicName = Literal["app", "unrelated"]
+ArrangeName = Literal["no", "again", "different"]
 
 # Rounds of tool calls before the model must answer with what it has.
 MAX_TOOL_ROUNDS = 6
@@ -215,6 +216,11 @@ class CommandPlan(BaseModel):
     hours_decisions: list[HoursDecision] = Field(
         default_factory=list, description="Decisions on waiting reports of other hours, by their numbers."
     )
+    arrange: ArrangeName = Field(
+        default="no",
+        description="Arrange the period's schedule after acceptance, only when the manager asks for it: different = "
+        "a new schedule clearly different from the current one; again = arrange again after the changes; else no.",
+    )
 
 
 EMPLOYEE_GUIDE = """\
@@ -247,8 +253,9 @@ Przewodnik po aplikacji kierownika:
   stawek ani dodatków nie znasz: o pieniądze odsyłaj do tych miejsc.
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i
   „Przypomnij”, prośby pracowników: ważniejsza, mniej ważna, odrzuć), „Grafik” („Ułóż grafik”, „Ułóż od nowa”,
-  oceny, przeciąganie osób, przypinanie, „Dodaj miejsce”/„Usuń miejsce” przy zmianie, wyjaśnienie po kliknięciu
-  zmiany, „Opublikuj”, „Usuń szkic”; opublikowany grafik zmienia się przez „Popraw grafik” i ponowną
+  „Ułóż inaczej” (nowy grafik wyraźnie inny niż ostatnie wersje: inne osoby na mniej więcej co trzeciej
+  zmianie), oceny, przeciąganie osób, przypinanie, „Dodaj miejsce”/„Usuń miejsce” przy zmianie, wyjaśnienie po
+  kliknięciu zmiany, „Opublikuj”, „Usuń szkic”; opublikowany grafik zmienia się przez „Popraw grafik” i ponowną
   publikację), „Ustalenia” (to, co zatwierdzono w rozmowie z asystentem dla okresu; kopiowanie z poprzedniego
   okresu), „Pracownicy”
   (zaproszenie po numerze telefonu, stanowiska, stopień doświadczenia, maksimum i cel godzin, wyłączenie z
@@ -258,7 +265,7 @@ Przewodnik po aplikacji kierownika:
 - Przycisk „Asystent” w nagłówku lokalu otwiera tę rozmowę.
 Kierownik może ręcznie wpisać osobę mimo „nie mogę” i zasad (aplikacja pyta „Zapisać mimo to?”). Aplikacja nie
 wysyła SMS-ów ani e-maili poza kodem logowania; powiadomienia są tylko w aplikacji. Grafik powstaje wyłącznie, gdy
-kierownik naciśnie „Ułóż grafik”."""
+kierownik naciśnie „Ułóż grafik” (albo „Ułóż od nowa”, „Ułóż inaczej”) lub zatwierdzi plan z ułożeniem grafiku."""
 
 COMMON_RULES = """\
 Dane o grafiku, godzinach, dyspozycjach, prośbach, oddanych zmianach i powiadomieniach bierzesz wyłącznie
@@ -366,8 +373,16 @@ Jedna wiadomość może zawierać pytanie i polecenie: odpowiedz i przygotuj pla
    Gdy osoba nie ma tego dnia zmiany w opublikowanym grafiku, nie dodawaj hours_changes: godziny zmienia się
    tylko na zmianie z grafiku. Powiedz, że najpierw trzeba ją dopisać („Grafik” → „Popraw grafik”, potem
    „Opublikuj”) albo, gdy wzięła cudzą zmianę, wpisać ją tam („Oddane zmiany” → „Zmień obsadę sam”).
-Nie układasz ani nie publikujesz grafiku, nie przypisujesz ludzi do zmian, nie zmieniasz obsady dnia, dyspozycji,
-pracowników ani ustawień lokalu i nie wysyłasz wiadomości: powiedz, gdzie kierownik zrobi to sam.
+4. Nowy grafik: gdy kierownik wprost prosi o nowy, inny grafik („ten grafik mi nie pasuje, ułóż inny”, „przetasuj
+   ludzi”, „daj inną wersję”), ustaw arrange=different; gdy prosi tylko, żeby po zmianach ułożyć grafik jeszcze raz
+   („zmień to i ułóż od nowa”), arrange=again. Gdy mówi też, co ma być inaczej („żeby Ania miała mniej porannych
+   zmian”), dodaj do planu zwykłe zmiany (zasady, polecenia o osobach) i arrange. Bez takiej prośby arrange=no; sam
+   układania nie proponuj. Układanie rusza dopiero po „Zatwierdź zmiany”, dotyczy okresu z linii „Ustalenia na okres”
+   i zostawia przypięte zmiany i minione dni. Na pytanie, czemu „Ułóż od nowa” daje prawie ten sam grafik, odpowiedz,
+   że przy tych samych ustawieniach najlepszy grafik się nie zmienia, i wskaż „Ułóż inaczej” albo prośbę do Ciebie.
+Nie publikujesz grafiku, nie przypisujesz ludzi do zmian, nie zmieniasz obsady dnia, dyspozycji, pracowników ani
+ustawień lokalu i nie wysyłasz wiadomości: powiedz, gdzie kierownik zrobi to sam. Grafik układasz tylko przez
+arrange z punktu 4.
 
 {COMMON_RULES}
 
@@ -375,7 +390,7 @@ reply: najwyżej 6 krótkich zdań albo krótka lista z myślnikami. Gdy proponu
 co zmieniasz i dlaczego; dokładną listę zmian aplikacja pokaże sama. Do zatwierdzenia nic się nie zmienia, więc
 pisz „proponuję”, „po zatwierdzeniu zapiszę”, nie „zatwierdzam” ani „zapisuję”.
 
-Plan ma dwa rodzaje zmian ustawień (i godziny pracy z punktu 3):
+Plan ma dwa rodzaje zmian ustawień (oraz godziny pracy z punktu 3 i ułożenie grafiku z punktu 4):
 1. Zasady z katalogu (lista poniżej, z kodami): można je włączyć, wyłączyć, zmienić liczbę, stanowisko lub
    zmianę, oznaczyć „bez wyjątków” i przesunąć na liście. Jeśli da się użyć zasady z katalogu, użyj zasady.
    Gdy zasada już jest tak ustawiona, nie dodawaj zmiany i powiedz, że tak już jest.
@@ -389,7 +404,8 @@ Plan ma dwa rodzaje zmian ustawień (i godziny pracy z punktu 3):
    wolne_dni (daty lub dni tygodnia; „tylko w weekendy” = wolne_dni w dni 1–5), chce_pracowac (min_days = w ilu
    z dni, shifts_per_day = ile zmian danego dnia, opcjonalne shift_type).
 Polecenia o osobach są preferencjami, nie twardymi zakazami ani gwarancją przydziału. Zatwierdzenie planu zapisuje
-ustawienia do następnego układania grafiku; nie uruchamia generatora, nie zmienia dyspozycji ani publikacji.
+ustawienia do następnego układania grafiku; generator rusza tylko przy arrange, a dyspozycji ani publikacji plan nie
+zmienia.
 W reply nie obiecuj przydziału: pisz „proponuję preferencję: Anna rano 3.12”, nie „Anna będzie rano”.
 Ustalenia dotyczą okresu z linii „Ustalenia na okres”. Polecenie o dniach spoza tego okresu nie zmieni żadnego
 grafiku: nie dodawaj go, tylko powiedz, jak to zrobić (opublikowany grafik: „Grafik” → „Popraw grafik”).

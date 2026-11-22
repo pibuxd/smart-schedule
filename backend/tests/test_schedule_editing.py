@@ -312,6 +312,76 @@ def test_deleting_a_draft_brings_back_the_attempt_before_it(api, shop, draft):
     assert period["latest_version_id"] == str(draft.id)
 
 
+def test_deleting_a_new_draft_brings_back_the_manual_changes_of_the_one_before(api, shop, draft):
+    # "Ułóż inaczej" and the assistant promise this: the bin gives back the current draft with its changes.
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    free = free_person(shop, draft, MON)
+    change = {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]}
+    assert api.patch(url(draft, "/assignments"), change).status_code == 200
+    run = request_generation(_ctx(shop), [shop["period"]], different=True)[0]
+    newer = run_generation(run.pk, **FAST).versions.get()
+
+    assert api.client.delete(url(newer)).status_code == 204
+
+    taken.refresh_from_db()
+    assert taken.employee_id == free.pk and taken.manual is True
+    assert api.get(url(draft)).json()["editable"] is True
+    period = api.get(f"/api/locations/{shop['location'].id}/periods").json()[0]
+    assert period["latest_version_id"] == str(draft.id) and period["manual_changes"] == 1
+
+
+def test_going_back_to_an_older_draft_keeps_every_attempt(api, shop, draft):
+    api.login(shop["manager"])
+    taken = shift_of(draft, MON)
+    free = free_person(shop, draft, MON)
+    api.patch(url(draft, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id), "employee_id": str(free.pk)}]})
+    Assignment.objects.filter(pk=shift_of(draft, MON + timedelta(days=1)).pk).update(pinned=True)
+    newer = run_generation(request_generation(_ctx(shop), [shop["period"]], different=True)[0].pk, **FAST)
+    newer = newer.versions.get()
+    assert api.get(url(draft)).json()["restorable"] is True
+    assert api.get(url(newer)).json()["restorable"] is False  # already the current one
+
+    response = api.post(url(draft, "/restore"))
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["number"] == 3 and body["status"] == "draft" and body["restored_from"] == 1
+    left = dict(ScheduleVersion.objects.filter(period=shop["period"]).values_list("number", "status"))
+    assert left == {1: "superseded", 2: "superseded", 3: "draft"}  # nothing is lost
+    copy = ScheduleVersion.objects.get(pk=body["id"])
+    before = Assignment.objects.filter(shift__version=draft).order_by("shift__slot_key")
+    after = Assignment.objects.filter(shift__version=copy).order_by("shift__slot_key")
+    fields = ("shift__slot_key", "employee", "pinned", "manual", "forced", "borrowed")
+    assert list(after.values_list(*fields)) == list(before.values_list(*fields))
+    shown = api.get(url(copy)).json()
+    assert shown["editable"] is True and shown["restorable"] is False
+    assert [h["restored_from"] for h in shown["history"]] == [1, None, None]
+    assert shown["scores"]["holes"] == draft.scores["holes"]
+    # The attempt in between can be brought back the same way.
+    assert api.post(url(newer, "/restore")).json()["number"] == 4
+
+
+def test_going_back_is_only_for_drafts_since_the_last_publication(api, shop, draft):
+    api.login(shop["manager"])
+    published = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    assert api.post(url(published, "/publish")).status_code == 200
+    corrected = ScheduleVersion.objects.get(pk=api.post(url(published, "/draft")).json()["id"])
+    run_generation(request_generation(_ctx(shop), [shop["period"]], different=True)[0].pk, **FAST)
+
+    for version, reason in ((draft, "przed publikacją"), (published, "opublikowanej")):
+        assert api.get(url(version)).json()["restorable"] is False
+        refused = api.post(url(version, "/restore"))
+        assert refused.status_code == 409 and reason in refused.json()["detail"]
+    assert api.get(url(corrected)).json()["restorable"] is True
+
+    request_generation(_ctx(shop), [shop["period"]])
+    busy = api.post(url(corrected, "/restore"))
+
+    assert busy.status_code == 409 and "układa" in busy.json()["detail"]
+    assert ScheduleVersion.objects.filter(period=shop["period"]).count() == 4
+
+
 def test_deleting_an_older_attempt_leaves_the_current_draft(api, shop, draft):
     api.login(shop["manager"])
     newer = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
@@ -544,6 +614,7 @@ def test_read_only_company_can_look_but_not_change(api, shop, draft, subscribe):
     assert api.get(url(draft)).json()["editable"] is False
     assert api.patch(url(draft, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id)}]}).status_code == 402
     assert api.post(url(draft, "/publish")).status_code == 402
+    assert api.post(url(draft, "/restore")).status_code == 402
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 402
     forced = {"changes": [{"shift_id": str(taken.shift_id)}], "force": True}
     assert api.patch(url(draft, "/assignments"), forced).status_code == 402
@@ -566,6 +637,7 @@ def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
     assert api.patch(url(draft, "/assignments"), change).status_code == 404
     assert api.post(url(draft, f"/shifts/{taken.shift_id}/pin"), {"pinned": True}).status_code == 404
     assert api.post(url(draft, "/draft")).status_code == 404
+    assert api.post(url(draft, "/restore")).status_code == 404
     assert api.post(url(draft, "/publish")).status_code == 404
     assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 404
     assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 404

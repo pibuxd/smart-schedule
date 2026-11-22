@@ -77,6 +77,8 @@ class GenerationRun(CompanyOwnedModel):
     group = models.ForeignKey(LocationGroup, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     periods = models.ManyToManyField(SchedulePeriod, related_name="generation_runs")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
+    # "Ułóż inaczej": the result has to differ clearly from the period's latest versions (docs/plan.md section 36).
+    different = models.BooleanField("inny niż ostatnie wersje", default=False)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(default=timezone.now)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -118,6 +120,8 @@ class ScheduleVersion(CompanyOwnedModel):
     is_complete = models.BooleanField("kompletny (bez dziur)", default=False)
     created_at = models.DateTimeField(default=timezone.now)
     published_at = models.DateTimeField(null=True, blank=True)
+    # "Wróć do tej wersji": the number of the older draft this one is a copy of.
+    restored_from = models.PositiveIntegerField("kopia wersji", null=True, blank=True)
 
     class Meta:
         verbose_name = "wersja grafiku"

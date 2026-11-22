@@ -81,6 +81,8 @@ class AskAvailabilityOut(Schema):
 class GenerateIn(Schema):
     # One period, or periods of several locations ("arrange all"): each location gets its own run.
     period_ids: list[UUID] = Field(min_length=1, max_length=50)
+    # "Ułóż inaczej": the new schedule has to differ clearly from the period's latest versions.
+    different: bool = False
 
 
 class ScoresOut(Schema):
@@ -109,6 +111,8 @@ class GeneratedVersionOut(Schema):
 class GenerationRunOut(Schema):
     id: UUID
     status: RunStatus
+    # Asked to differ clearly from the latest versions ("Ułóż inaczej").
+    different: bool
     solver_status: SolverStatus
     period_ids: list[UUID]
     created_at: datetime
@@ -168,6 +172,7 @@ def _run_out(run: GenerationRun) -> GenerationRunOut:
     return GenerationRunOut(
         id=run.id,
         status=run.status,
+        different=run.different,
         solver_status=run.solver_status,
         period_ids=sorted(run.periods.values_list("id", flat=True), key=str),
         created_at=run.created_at,
@@ -333,11 +338,12 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
     },
 )
 def generate_schedule(request, payload: GenerateIn):
-    """Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`."""
+    """Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.
+    With `different` each new schedule differs clearly from its period's latest versions ("Ułóż inaczej")."""
     ids = list(dict.fromkeys(payload.period_ids))
     ctx, first = context_for(request, SchedulePeriod, ids[0])
     periods = [first] + [ctx.get(SchedulePeriod, pk=pk) for pk in ids[1:]]
-    runs = request_generation(ctx, periods)
+    runs = request_generation(ctx, periods, different=payload.different)
     return Status(202, [_run_out(run) for run in runs])
 
 
@@ -626,6 +632,8 @@ class VersionSummaryOut(Schema):
     published_at: datetime | None
     generated: bool
     created_by_name: str
+    # "Wróć do tej wersji": the number of the older draft this version is a copy of.
+    restored_from: int | None
 
 
 class PositionNameOut(Schema):
@@ -657,6 +665,8 @@ class VersionOut(Schema):
     unmet_request_count: int
     notes: list[str]
     history: list[VersionSummaryOut]
+    # An older draft the manager can go back to ("Wróć do tej wersji").
+    restorable: bool
     today: date  # days before it have passed: their shifts and places cannot be changed
     # A correction of a published schedule: people whose shifts would change on publishing.
     changed_people: list[str]
@@ -942,6 +952,7 @@ def _history(version: ScheduleVersion) -> list[VersionSummaryOut]:
             published_at=v.published_at,
             generated=v.from_run_id is not None,
             created_by_name=v.created_by.full_name if v.created_by else "",
+            restored_from=v.restored_from,
         )
         for v in rows
     ]
@@ -949,7 +960,7 @@ def _history(version: ScheduleVersion) -> list[VersionSummaryOut]:
 
 def _version_out(ctx, loaded, today: date) -> VersionOut:
     from apps.billing.services import subscription_state
-    from apps.scheduling.editing import accepted, blocking, changed_people, is_editable
+    from apps.scheduling.editing import accepted, blocking, changed_people, is_editable, restore_refusal
 
     version, problem = loaded.version, loaded.problem
     period = version.period
@@ -1006,6 +1017,7 @@ def _version_out(ctx, loaded, today: date) -> VersionOut:
         unmet_request_count=unmet_count,
         notes=notes,
         history=_history(version),
+        restorable=version.status == ScheduleVersion.Status.SUPERSEDED and not restore_refusal(version),
         today=today,
         changed_people=changed_people(loaded),
     )
@@ -1256,6 +1268,20 @@ def start_correcting(request, version_id: UUID):
     ctx.require_writable()
     draft = start_draft(version, ctx.user)
     return Status(201, next(v for v in _history(draft) if v.id == draft.id))
+
+
+@router.post(
+    "/versions/{version_id}/restore",
+    response={201: VersionSummaryOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def restore_version(request, version_id: UUID):
+    """ "Wróć do tej wersji": an older draft becomes a new draft (the next number); the current one stays as history."""
+    from apps.scheduling import editing
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    copy = editing.restore_version(version, ctx.user)
+    return Status(201, next(v for v in _history(copy) if v.id == copy.id))
 
 
 @router.delete(

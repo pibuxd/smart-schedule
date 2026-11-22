@@ -27,6 +27,9 @@ const command: AssistantCommandOut = {
   consumed_at: null,
   has_hours: false,
   hours_only: false,
+  changes_agreements: true,
+  arranges: false,
+  run_id: null,
 };
 const instructions = (
   items: { id: string; text: string; active: boolean }[] = [],
@@ -341,6 +344,7 @@ it("keeps a plan of hours open after the period is published and says where the 
       consumed_at: new Date().toISOString(),
       has_hours: true,
       hours_only: true,
+      changes_agreements: false,
     },
   ]);
   panel();
@@ -350,5 +354,48 @@ it("keeps a plan of hours open after the period is published and says where the 
   expect(
     await screen.findByText("Zapisane. Godziny liczą się od razu, zobaczysz je w „Godzinach”."),
   ).toBeInTheDocument();
+  expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/cmd1/apply"))).toBe(true);
+});
+
+it("follows the arranging an accepted plan started, with a link to the new draft", async () => {
+  let row: AssistantCommandOut = {
+    ...command,
+    text: "Ten grafik mi nie pasuje, ułóż inny",
+    lines: ["Po zatwierdzeniu ułożę nowy grafik na okres 01.12–31.12.2026, wyraźnie inny niż obecny."],
+    changes_agreements: false,
+    arranges: true,
+  };
+  let status = "running";
+  const calls = mockApi((_method, path) => {
+    if (path.endsWith("/instructions")) return [200, instructions()];
+    if (path === "/api/locations/l1/assistant-commands") return [200, [row]];
+    if (path.endsWith("/cmd1/apply")) {
+      row = { ...row, status: "applied", can_apply: false, run_id: "r1" };
+      return [200, row];
+    }
+    if (path === "/api/generation-runs/r1") {
+      const run = {
+        id: "r1",
+        status,
+        different: true,
+        solver_status: "",
+        period_ids: ["p1"],
+        created_at: new Date().toISOString(),
+        started_at: null,
+        finished_at: null,
+        time_ms: null,
+        error: "",
+        versions: [],
+      };
+      status = "succeeded";
+      return [200, run];
+    }
+    return [404, { detail: "Nie znaleziono." }];
+  });
+  panel();
+  fireEvent.click(await screen.findByRole("button", { name: "Zatwierdź zmiany" }));
+  expect(await screen.findByText("Układam grafik…")).toBeInTheDocument();
+  expect(screen.queryByText(/Zapisane/)).not.toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Zobacz szkic" }, { timeout: 4000 })).toBeInTheDocument();
   expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/cmd1/apply"))).toBe(true);
 });

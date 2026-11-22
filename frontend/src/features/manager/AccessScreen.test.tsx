@@ -50,4 +50,14 @@ describe('AccessScreen', () => {
     )
     expect(await screen.findByText('Błąd serwera.')).toBeInTheDocument()
   })
+
+  it('says there is no limit when the limit is off', async () => {
+    mockApi(() => [200, { ...trial, generations_used: 41, generations_limit: 0 }])
+    renderScreen(
+      <AsManager>
+        <AccessScreen />
+      </AsManager>,
+    )
+    expect(await screen.findByText('Ułożenia grafiku w tym miesiącu: 41. Bez limitu.')).toBeInTheDocument()
+  })
 })

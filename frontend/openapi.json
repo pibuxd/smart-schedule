@@ -1833,7 +1833,7 @@
             }
           }
         },
-        "description": "Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.",
+        "description": "Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.\nWith `different` each new schedule differs clearly from its period's latest versions (\"Ułóż inaczej\").",
         "tags": [
           "scheduling"
         ],
@@ -2918,6 +2918,85 @@
           }
         },
         "description": "Correct a published schedule: a new draft copy (or the newest draft, if there already is one).",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/versions/{version_id}/restore": {
+      "post": {
+        "operationId": "restore_version",
+        "summary": "Restore Version",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionSummaryOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "\"Wróć do tej wersji\": an older draft becomes a new draft (the next number); the current one stays as history.",
         "tags": [
           "scheduling"
         ],
@@ -7406,9 +7485,19 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         },
-        "description": "Accept the plan: the rule list, the instructions and the hours change as the plan's lines say.",
+        "description": "Accept the plan: the rule list, the instructions and the hours change as the plan's lines say, and the\narranging it asks for starts (429 when the month's arrangings are used up; then nothing is saved).",
         "tags": [
           "assistant"
         ],
@@ -10613,6 +10702,10 @@
             "title": "Status",
             "type": "string"
           },
+          "different": {
+            "title": "Different",
+            "type": "boolean"
+          },
           "solver_status": {
             "enum": [
               "",
@@ -10687,6 +10780,7 @@
         "required": [
           "id",
           "status",
+          "different",
           "solver_status",
           "period_ids",
           "created_at",
@@ -10776,6 +10870,11 @@
             "minItems": 1,
             "title": "Period Ids",
             "type": "array"
+          },
+          "different": {
+            "default": false,
+            "title": "Different",
+            "type": "boolean"
           }
         },
         "required": [
@@ -11409,6 +11508,10 @@
             "title": "History",
             "type": "array"
           },
+          "restorable": {
+            "title": "Restorable",
+            "type": "boolean"
+          },
           "today": {
             "format": "date",
             "title": "Today",
@@ -11443,6 +11546,7 @@
           "unmet_request_count",
           "notes",
           "history",
+          "restorable",
           "today",
           "changed_people"
         ],
@@ -11665,6 +11769,17 @@
           "created_by_name": {
             "title": "Created By Name",
             "type": "string"
+          },
+          "restored_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From"
           }
         },
         "required": [
@@ -11674,7 +11789,8 @@
           "created_at",
           "published_at",
           "generated",
-          "created_by_name"
+          "created_by_name",
+          "restored_from"
         ],
         "title": "VersionSummaryOut",
         "type": "object"
@@ -15365,6 +15481,26 @@
           "hours_only": {
             "title": "Hours Only",
             "type": "boolean"
+          },
+          "changes_agreements": {
+            "title": "Changes Agreements",
+            "type": "boolean"
+          },
+          "arranges": {
+            "title": "Arranges",
+            "type": "boolean"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
           }
         },
         "required": [
@@ -15384,7 +15520,10 @@
           "period_label",
           "consumed_at",
           "has_hours",
-          "hours_only"
+          "hours_only",
+          "changes_agreements",
+          "arranges",
+          "run_id"
         ],
         "title": "AssistantCommandOut",
         "type": "object"

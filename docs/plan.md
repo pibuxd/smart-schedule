@@ -161,7 +161,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `CodeRedemption` | code, company, user, redeemed_at, days_added | |
 | `CodeAttempt` | user, ip, at, success | do limitu prób |
 | `Subscription` | company, ends_at, source (code/stripe), status liczony z ends_at | jedna na firmę; kod przedłuża od max(ends_at, teraz) |
-| `GenerationUsage` | company, month, count | limit 30 na miesiąc (`GENERATION_MONTHLY_LIMIT`) |
+| `GenerationUsage` | company, month, count | licznik ułożeń; limit `GENERATION_MONTHLY_LIMIT`, domyślnie 0 = bez limitu (od 22.11.2026, wcześniej 30) |
 
 ### Ustawienia lokalu i pracownicy
 
@@ -397,7 +397,7 @@ Założenia:
 5. Ponowne generowanie, gdy okres ma opublikowaną wersję: dni przed dzisiejszym są zamrożone i biorą zmiany z opublikowanej wersji (także gdy ustawienia obsady się zmieniły); dalsze dni układamy z obecnej obsady z karą za każdą zmianę względem opublikowanej. Przypięcia bierzemy z najnowszej wersji okresu (szkicu albo opublikowanej).
 6. Osoba wyłączona (`is_active = false`) albo pożyczona z innego lokalu zachowuje tylko swoje przypięte i minione zmiany; generator nie daje jej nowych. Opublikowane zmiany tych samych osób w innych okresach i lokalach (7 dni wokół okresu) liczą się do odpoczynku, nakładania i dni z rzędu.
 7. Wynik zapisujemy jako nową wersję szkicu (numer o 1 większy) dla każdego lokalu; okres "zbieranie dyspozycji" przechodzi w "szkic". Historię przypisań (`AssignmentEvent`) zapisujemy dopiero przy publikacji (etap 8), żeby kolejne szkice jej nie zaśmiecały.
-8. Limit generowań liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
+8. Limit generowań (gdy jest włączony; od 22.11.2026 domyślnie 0 = bez limitu) liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
 9. Zlecenie, które zostało "w trakcie" ponad 10 minut (albo "w kolejce" ponad 30), zadanie okresowe co 10 minut oznacza jako nieudane, żeby ekran nie czekał w nieskończoność.
 10. Warianty: kod przyjmuje inny profil wag i listę wcześniejszych grafików, od których nowy musi się różnić w min. 15 % przypisań; w tej wersji wołamy go raz.
 
@@ -441,7 +441,7 @@ Po przeglądzie Prelinta (PR #9): komunikat po "Poproś o dyspozycje" mówi, że
 
 ## 14. Etap 8: układanie z ekranu, edycja, publikacja, godziny
 
-- Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Limit ułożeń grafiku działa też w okresie próbnym. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
+- Decyzja Piotra (12.11.2026): firma założona bez kodu dostaje okres próbny (`Subscription.source = "trial"`, `TRIAL_DAYS` w ustawieniach, domyślnie 30). Najpierw 14 dni; 13.11.2026 Piotr zgodził się na 30 po uwadze Prelinta, że 14 dni nie mieści pełnego miesięcznego cyklu. Limit ułożeń grafiku, gdy jest włączony, działa też w okresie próbnym. Po nim tryb tylko do odczytu jak po wygaśnięciu kodu; baner i ekran "Dostęp" mówią, ile dni zostało.
 - Ekrany: "Załóż firmę" (`/rejestracja`: numer, kod SMS, nazwa firmy, imię i nazwisko, opcjonalny kod; link z ekranu logowania), "Dostęp" (`/kierownik/dostep`: stan, ułożenia w miesiącu, wpisanie kodu), baner dostępu w panelu kierownika, "Godziny" (`/kierownik/godziny`: miesiąc, tabela osób z podziałem na lokale, CSV) i karta "Grafik" w lokalu (`/kierownik/lokal/{id}/grafik`). Na "Lokale" przycisk "Ułóż grafik" przy każdym lokalu i "Ułóż dla wszystkich" (każdy lokal osobno), z arkuszem, który ostrzega przed terminem, mówi, ilu osób brakuje i ile nieprzypiętych ręcznych poprawek zniknie; postęp odpytywany co 1,5 s.
 - Karta "Grafik": trzy wartości oceny, twarde problemy, siatka dni × zmiany (przypięte, ręczne, pożyczone, bez obsady; znacznik "woli nie" usunięty 13.11.2026, zob. sekcja 15), przeciąganie osoby na inną zmianę z wynikiem sprawdzenia na żywo w trakcie przeciągania (prośba Piotra z 18.11.2026: bez napisu "Sprawdzam…"; gdy kierownik chwyci kafelek, jedno zapytanie liczy wynik dla wszystkich zmian, więc po najechaniu na zmianę wynik jest od razu; zanim ta odpowiedź przyjdzie, zmiana pod kursorem jest sprawdzana osobno, bez opóźnienia), arkusz zmiany z wyjaśnieniem (kto może, ile to kosztuje, kto nie może i dlaczego) i akcjami "Wpisz", "Zostaw bez obsady", "Przypnij", godziny osób, zasady z procentem, niespełnione prośby, wersje, "Opublikuj" i "Popraw grafik".
 - Nowe pole `Assignment.manual` (ręczna zmiana). Nowy moduł `engine/explain.py` (bez Django): dla każdej osoby ze stanowiskiem sprawdza walidatorem grafik z tą osobą na zmianie, więc wyjaśnienie zgadza się z walidatorem. `apps/scheduling/editing.py`: sprawdzanie i zapis ręcznych zmian, przypinanie, poprawka opublikowanego grafiku, publikacja. Raport godzin: `apps/reports`.
@@ -1061,7 +1061,7 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
   zgłoszenie: Anna Nowak, pt. 20.11, 06:00–15:00 zamiast 06:00–14:00 (nadgodziny: +1 h)”, „Zmienię godziny: Ewa Nowak, …”, „Przywrócę godziny z grafiku: …”; zawsze pełne imię i nazwisko);
   te same godziny co teraz trafiają do „To już jest ustawione”, błędna część blokuje cały plan. `apply_command`
   wykonuje je przez `worktime.services` (najpierw decyzje, potem zmiany) w tej samej transakcji: gdy coś się
-  zmieniło od przygotowania planu, nic się nie zapisuje (409 „… Nic z tego planu nie zapisałem.”). Plan, który
+  zmieniło od przygotowania planu, nic się nie zapisuje (409 „… Nic z tego planu się nie zapisało.”). Plan, który
   zmienia tylko godziny, nie wymaga otwartego zestawu ustaleń, więc działa też po publikacji okresu
   (`AssistantCommandOut.has_hours`, `hours_only`). Nowe narzędzie `manager_hours_changes`. Na OpenRouter schematy
   odpowiedzi powstają z modeli (`answer_schema`), na Claude zostają w limicie API (test).
@@ -1236,3 +1236,64 @@ choć część zmian jest jeszcze przed nimi; czy właściciele chcą, żeby sta
 kierownik lokalu (jeśli odpowiedzi będą różne, najpierw przełącznik w lokalu); czy kierownicy chcą zamknąć minione
 miesiące zamiast samego ostrzeżenia; czy zmiana stopnia doświadczenia ma proponować nową stawkę; czy dodatek za święto
 jest potrzebny od razu.
+
+## 36. Inny grafik na prośbę kierownika (22.11.2026)
+
+Prośba Piotra (spec.md, „Inny grafik na prośbę kierownika”): gdy ułożony grafik nie pasuje kierownikowi, da się
+ułożyć nowy, wyraźnie inny, także według jego prośby w czacie. Wcześniej „Ułóż od nowa” przy tych samych ustawieniach
+dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opublikowanej wersji).
+
+- Silnik: `solve(..., diversity_from=[...], min_difference=...)` nie dodaje już twardego ograniczenia w całym modelu.
+  Dla każdego wcześniejszego grafiku `_Builder._diversity` liczy, ile jego osobozmian nowy grafik zatrzymuje ponad
+  dozwolone `(1 − min_difference)` (zmienna `shortfall`). `solve` ma wtedy fazę między dziurami a karą: przy
+  `holes ≤ best` minimalizuje sumę `shortfall` (najwyżej `DIFFERENCE_SHARE` = 20 % limitu czasu, z podpowiedzią z
+  fazy 1), potem utrwala ją ograniczeniem i minimalizuje karę jak zawsze. Nigdy więcej dziur i nigdy sprzeczność.
+  Osobozmiana = osoba na zmianie danego dnia i stanowiska, bez numeru miejsca (`_shift_of`), więc zamiana dwóch osób
+  miejscami nie jest różnicą. Nie liczą się miejsca przypięte, minione dni ani osoba przypięta na innym miejscu tej
+  samej zmiany (`_compared`). `changed_shifts(problem, previous, schedule)` zwraca (zmienione, porównane) tą samą
+  miarą.
+- `GenerationRun.different` (migracja 0011). `POST /periods/generate` przyjmuje `different: true`;
+  `GenerationRunOut.different`. `run_generation` przy `different` czyta wszystkie wersje okresu (najnowsze
+  `COMPARED_VERSIONS` = 100, jednym zapytaniem, `_earlier_versions`), woła solver z `min_difference=DIFFERENT_SHARE`
+  (0,3) i dopisuje do `scores.notes` nowego szkicu zdanie z `_difference_notes`: różnica względem najnowszej, potem
+  „Od starszych wersji też różni się co najmniej co trzecią zmianą.” albo wersja, od której różni się najmniej; gdy
+  próg nie został osiągnięty, także „Bardziej się nie dało…”; gdy `manager_rules` albo `employee_requests` wyszły
+  niżej niż w najnowszej wersji, „Słabiej niż w wersji N: …”.
+- Powrót do starszego szkicu: `editing.restore_version(version, user)` kopiuje wersję (zmiany, osoby, przypięcia,
+  ręczne poprawki, uwagi) jako nowy szkic o kolejnym numerze z `ScheduleVersion.restored_from` = numer źródła
+  (migracja 0012), poprzedni szkic staje się historią, ocena liczy się od nowa. 409, gdy wersja była opublikowana,
+  jest najnowsza, powstała przed ostatnią publikacją albo okres się układa. `POST /versions/{id}/restore`
+  (`restore_version`, 201 `VersionSummaryOut`); `VersionOut.restorable`, `VersionSummaryOut.restored_from`. Ekran:
+  „Wróć do tej wersji” przy starszej wersji, lista „Wersje” pisze „jak wersja 5”. Wspólne kopiowanie z
+  `start_draft` w `_copy_version`.
+- Ekran „Grafik”: `ArrangeButton different` („Ułóż inaczej”, ikona Shuffle) obok „Ułóż od nowa”, gdy okres ma
+  wersję. Arkusz „Ułożyć inny grafik?” mówi o co trzeciej zmianie, ostrzega o ręcznych poprawkach jak zwykle, mówi o
+  koszu i ma „Napisz asystentowi, co ma być inaczej” (`openChat` z okresem i tekstem „Ułóż inny grafik, żeby ”).
+  Każdy arkusz układania czyta `useSubscription`; przy włączonym limicie pokazuje „Zostało ułożeń w tym miesiącu: N
+  z L.” (ostrzeżenie, gdy zostało mniej niż lokali do ułożenia), bez limitu nic.
+- Asystent: `llm.CommandPlan.arrange` (`no` / `again` / `different`, domyślnie `no`), opis w `COMMAND_SYSTEM`
+  (punkt 4) i w przewodniku kierownika. `services._checked_arrange` w `check_plan`: tylko okres ustaleń, który ma
+  wersję, lokal nie w archiwum, bez trwającego układania; inaczej uwaga i cały plan zablokowany. Plan dostaje
+  `arrange = {period_id, different}`, ostatni punkt „Po zatwierdzeniu ułożę nowy grafik na okres …, wyraźnie inny
+  niż obecny.” / „… ułożę grafik na okres … od nowa.” i uwagę o przypięciach, ręcznych poprawkach i koszu.
+  `has_changes` liczy `arranges(plan)`. `apply_command` po ustaleniach i godzinach woła `_apply_arrange` →
+  `request_generation` w tej samej transakcji; błąd (limit 429, trwające układanie 409, okres opublikowany) cofa
+  cały plan z dopiskiem „Nic z tego planu się nie zapisało.”. `AssistantCommand.generation_run` (migracja assistant
+  0004); `AssistantCommandOut.arranges`, `changes_agreements`, `run_id`. Czat po zatwierdzeniu pokazuje
+  `RunProgress` (postęp, „Anuluj”, „Zobacz szkic”).
+
+Piotr (22.11.2026): 30 % zostaje; „Ułóż inaczej” ma dawać ciągle nowe grafiki (kierownik klika do skutku), więc
+porównanie obejmuje wszystkie wersje zamiast trzech, a wszystkie szkice zostają i da się do nich wrócić.
+Założenia: asystent nie układa
+pierwszego grafiku okresu (to dalej przycisk z ostrzeżeniami o terminie i brakujących dyspozycjach). Okres
+opublikowany zamyka ustalenia, więc z czatu da się układać tylko przed publikacją; przycisk „Ułóż inaczej” działa
+też przy poprawkach opublikowanego grafiku (tak jak „Ułóż od nowa”), a odmowa czatu go wskazuje
+(`ARRANGE_PUBLISHED`), arkusz nie pokazuje wtedy „Napisz asystentowi”. Linia planu nie podaje numeru wersji, bo do
+zatwierdzenia mogła powstać nowsza; numer podaje uwaga w nowym szkicu.
+
+Limit ułożeń (Piotr, 22.11.2026: „Bez limitu ułożeń”): `GENERATION_MONTHLY_LIMIT` domyślnie 0 = bez limitu (w
+`settings.py`, `docker-compose.yml`, `.env.example` i `.env.production.example`); `request_generation` sprawdza limit
+tylko, gdy jest większy od zera, a `GenerationUsage` dalej liczy ułożenia. „Dostęp” przy limicie 0 mówi „Ułożenia
+grafiku w tym miesiącu: N. Bez limitu.”, arkusz układania nie mówi o limicie. Liczba w `.env` serwera włącza limit z
+powrotem. Serwer, którego `.env` ma jeszcze `GENERATION_MONTHLY_LIMIT=30`, trzyma stary limit, dopóki tej linii nie
+zmienić na 0 albo usunąć.

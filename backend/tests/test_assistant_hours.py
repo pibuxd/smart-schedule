@@ -402,7 +402,7 @@ class TestManagerChat:
         applied = api.post(f"/api/assistant-commands/{body['id']}/apply")
 
         assert applied.status_code == 409
-        assert "Nic z tego planu nie zapisałem." in applied.json()["detail"]
+        assert "Nic z tego planu się nie zapisało." in applied.json()["detail"]
         assert list(HoursChange.objects.values_list("status", flat=True)) == ["cancelled"]  # Ewa's hours neither
         assert not Notification.objects.filter(kind__in=["hours_approved", "hours_set"]).exists()
         assert AssistantCommand.objects.get(pk=body["id"]).status == AssistantCommand.Status.READY

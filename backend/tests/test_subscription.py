@@ -221,7 +221,7 @@ def test_company_without_a_code_is_read_only_and_keeps_its_data(api, make_compan
         "expiring_soon": False,
         "trial": False,
         "generations_used": 0,
-        "generations_limit": 30,
+        "generations_limit": 0,
     }
     assert api.get("/api/me").json()["companies"][0]["read_only"] is True
 
@@ -240,7 +240,8 @@ def test_expiry_blocks_changes_until_a_new_code_is_entered(api, make_company, su
     assert Invitation.objects.count() == 1
 
 
-def test_generation_usage_of_the_current_month_is_reported(api, make_company, subscribe):
+def test_generation_usage_of_the_current_month_is_reported(api, make_company, subscribe, settings):
+    settings.GENERATION_MONTHLY_LIMIT = 30
     a = make_company()
     subscribe(a["company"])
     this_month = timezone.localdate().replace(day=1)
