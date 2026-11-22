@@ -43,7 +43,7 @@ const agreements = (over: Partial<InstructionsOut> = {}): InstructionsOut => ({
 const show = (readOnly = false) =>
   renderScreen(
     <AsManager readOnly={readOnly}>
-      <AssistantDrawerProvider locationId="l1">
+      <AssistantDrawerProvider>
         <AssistantRulesTable locationId="l1" />
       </AssistantDrawerProvider>
     </AsManager>,

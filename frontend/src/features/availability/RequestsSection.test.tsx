@@ -1,8 +1,39 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import type { ComponentProps, ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { mockApi, renderScreen } from "../../test/render";
+import { mockApi as mockAnswers, renderScreen } from "../../test/render";
+import { EmployeeChatProvider } from "./EmployeeChat";
 import { RequestsSection } from "./RequestsSection";
+
+// The chat lives in the employee layout and asks the server whether the assistant reads messages.
+let assistantReads = false;
+const mockApi: typeof mockAnswers = (answer) =>
+  mockAnswers((method, path, body) =>
+    path === "/api/me/availability"
+      ? [
+          200,
+          {
+            period: null,
+            days: [],
+            submitted_at: null,
+            assistant_reads: assistantReads,
+          },
+        ]
+      : answer(method, path, body),
+  );
+
+/** "Twoje prośby" with the chat around it, as in the employee layout. */
+function renderSection(
+  ui: ReactElement<ComponentProps<typeof RequestsSection>>,
+) {
+  assistantReads = ui.props.assistantReads ?? false;
+  return renderScreen(
+    <EmployeeChatProvider companyId={ui.props.companyId} readOnly={false}>
+      {ui}
+    </EmployeeChatProvider>,
+  );
+}
 
 const openChat = async () =>
   fireEvent.click(
@@ -35,7 +66,7 @@ describe("RequestsSection", () => {
       }
       return [200, rows];
     });
-    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    renderSection(<RequestsSection companyId="c1" periodId="p1" editable />);
     expect(
       await screen.findByText("Wolne w piątki, jeśli się da."),
     ).toBeInTheDocument();
@@ -66,7 +97,7 @@ describe("RequestsSection", () => {
         ? [200, request({ status: "new", summary: null })]
         : [200, [request()]],
     );
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     await openChat();
@@ -86,7 +117,7 @@ describe("RequestsSection", () => {
 
   it("shows a reading robot while the assistant reads a message", async () => {
     mockApi(() => [200, [request({ status: "new", summary: null })]]);
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     await openChat();
@@ -113,7 +144,7 @@ describe("RequestsSection", () => {
             ],
           ],
     );
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     await openChat();
@@ -137,7 +168,7 @@ describe("RequestsSection", () => {
 
   it("a request nobody interpreted simply goes to the manager", async () => {
     mockApi(() => [200, [request({ status: "needs_manager", summary: null })]]);
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable={false} />,
     );
     await openChat();
@@ -149,7 +180,7 @@ describe("RequestsSection", () => {
 
   it("says that the assistant also reads the request, only when it does", async () => {
     mockApi(() => [200, []]);
-    const { unmount } = renderScreen(
+    const { unmount } = renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     await openChat();
@@ -161,7 +192,7 @@ describe("RequestsSection", () => {
     ).not.toBeInTheDocument();
     unmount();
 
-    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    renderSection(<RequestsSection companyId="c1" periodId="p1" editable />);
     await openChat();
     expect(
       await screen.findByText(/Przeczyta to tylko kierownik/),
@@ -170,7 +201,7 @@ describe("RequestsSection", () => {
 
   it("keeps superseded requests visible without an edit action", async () => {
     mockApi(() => [200, [request({ status: "superseded", summary: null })]]);
-    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    renderSection(<RequestsSection companyId="c1" periodId="p1" editable />);
     await openChat();
     expect(
       await screen.findByText(/Ta prośba została zastąpiona/),
@@ -199,7 +230,7 @@ describe("RequestsSection", () => {
         }),
       ],
     ]);
-    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    renderSection(<RequestsSection companyId="c1" periodId="p1" editable />);
     await openChat();
     expect(
       await screen.findByText("W listopadzie masz 120 godzin."),
@@ -225,7 +256,7 @@ describe("RequestsSection", () => {
       }
       return [200, [row]];
     });
-    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    renderSection(<RequestsSection companyId="c1" periodId="p1" editable />);
     await openChat();
     fireEvent.click(
       await screen.findByRole("button", { name: "Niech przeczyta kierownik" }),
@@ -241,7 +272,7 @@ describe("RequestsSection", () => {
 
 it("does not send an employee request on Enter", async () => {
   const calls = mockApi(() => [200, []]);
-  renderScreen(
+  renderSection(
     <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
   );
   await openChat();
@@ -270,7 +301,7 @@ it("lets the employee forward a rejected request to the manager without claiming
           ],
         ],
   );
-  renderScreen(
+  renderSection(
     <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
   );
   await openChat();
@@ -319,7 +350,7 @@ describe("Twoje prośby window", () => {
         }),
       ],
     ]);
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     const saved = await screen.findByRole("list", { name: "Zapisane prośby" });
@@ -344,7 +375,7 @@ describe("Twoje prośby window", () => {
         }),
       ],
     ]);
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     expect(
@@ -360,7 +391,7 @@ describe("Twoje prośby window", () => {
     const calls = mockApi((method) =>
       method === "PATCH" ? [200, request()] : [200, [request()]],
     );
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     fireEvent.click(
@@ -382,7 +413,7 @@ describe("Twoje prośby window", () => {
     const calls = mockApi((method) =>
       method === "DELETE" ? [204, null] : [200, [request()]],
     );
-    renderScreen(<RequestsSection companyId="c1" periodId="p1" editable />);
+    renderSection(<RequestsSection companyId="c1" periodId="p1" editable />);
     fireEvent.click(await screen.findByRole("button", { name: "Usuń prośbę" }));
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Tak, usuń" }));
@@ -393,7 +424,7 @@ describe("Twoje prośby window", () => {
 
   it("offers no edits once the period is closed", async () => {
     mockApi(() => [200, [request()]]);
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable={false} />,
     );
     expect(
@@ -446,7 +477,7 @@ describe("reports of other hours in the chat", () => {
         ],
       ];
     });
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" month="2026-11-01" editable assistantReads />,
     );
     await openChat();
@@ -493,7 +524,7 @@ describe("reports of other hours in the chat", () => {
         }),
       ],
     ]);
-    renderScreen(
+    renderSection(
       <RequestsSection companyId="c1" month="2026-11-01" editable assistantReads />,
     );
     await openChat();

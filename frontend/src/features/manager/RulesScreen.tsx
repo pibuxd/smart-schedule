@@ -290,7 +290,8 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
 
       <div
         className={cn(
-          '-mx-4 flex flex-wrap items-center gap-3 border-t border-line bg-paper px-4 py-3',
+          // On a phone the buttons keep clear of the assistant's button in the corner.
+          '-mx-4 flex flex-wrap items-center gap-3 border-t border-line bg-paper py-3 pr-20 pl-4 sm:pr-4',
           dirty && 'sticky bottom-0 z-20 shadow-sheet',
         )}
       >

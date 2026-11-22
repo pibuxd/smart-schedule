@@ -69,6 +69,7 @@
   --shadow-sheet: 0 -12px 32px -16px rgb(23 33 47 / 0.35);
   --shadow-chat: 0 8px 30px -18px rgb(23 33 47 / 0.18);
   --shadow-drawer: -16px 0 40px -20px rgb(23 33 47 / 0.4);
+  --shadow-fab: 0 8px 24px -8px rgb(23 33 47 / 0.5);
 }
 
 :root {

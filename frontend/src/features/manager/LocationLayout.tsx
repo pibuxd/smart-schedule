@@ -5,7 +5,8 @@ import type { LocationOut } from '../../api/generated/model'
 import { useLocationDetail } from '../../api/generated/tenancy/tenancy'
 import { ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
-import { AssistantDrawerProvider, OpenAssistantButton } from './AssistantDrawer'
+import { useChatLocation } from './assistant-drawer'
+import { OpenAssistantButton } from './AssistantDrawer'
 import { useManager } from './ManagerContext'
 
 const TABS = [
@@ -17,10 +18,15 @@ const TABS = [
   { to: '/kierownik/lokal/$locationId/zasady', label: 'Zasady' },
 ] as const
 
-/** One location: its tabs, and the assistant chat that slides in from the right over any of them. */
+/**
+ * One location: its tabs, and "Asystent" in its header. The chat (this button or the one in the corner) talks
+ * about this location while it is open.
+ */
 export function LocationLayout({ locationId }: { locationId: string }) {
   const { readOnly } = useManager()
   const location = useLocationDetail(locationId)
+  const live = location.data && !(location.data.data as LocationOut).archived
+  useChatLocation(live ? locationId : null)
   if (location.isPending) return <Loading>Wczytuję lokal…</Loading>
   if (location.isError) {
     return (
@@ -31,46 +37,44 @@ export function LocationLayout({ locationId }: { locationId: string }) {
   }
   const data = location.data.data as LocationOut
   return (
-    <AssistantDrawerProvider key={locationId} locationId={locationId}>
-      <div className="grid min-w-0 grid-cols-1 gap-5">
-        <div className="grid gap-2">
-          <Link
-            to="/kierownik"
-            className="inline-flex min-h-(--touch) w-fit items-center gap-1.5 font-semibold text-accent underline underline-offset-4"
-          >
-            <ArrowLeft aria-hidden="true" size={20} />
-            Wszystkie lokale
-          </Link>
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <div className="flex flex-wrap items-baseline gap-x-3">
-              <h1 className="m-0 text-2xl font-extrabold">{data.name}</h1>
-              {data.group_name && <span className="text-ink-muted">{data.group_name}</span>}
-              {data.archived && <span className="font-semibold text-cannot">W archiwum</span>}
-            </div>
-            {!readOnly && !data.archived && <OpenAssistantButton />}
+    <div className="grid min-w-0 grid-cols-1 gap-5">
+      <div className="grid gap-2">
+        <Link
+          to="/kierownik"
+          className="inline-flex min-h-(--touch) w-fit items-center gap-1.5 font-semibold text-accent underline underline-offset-4"
+        >
+          <ArrowLeft aria-hidden="true" size={20} />
+          Wszystkie lokale
+        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h1 className="m-0 text-2xl font-extrabold">{data.name}</h1>
+            {data.group_name && <span className="text-ink-muted">{data.group_name}</span>}
+            {data.archived && <span className="font-semibold text-cannot">W archiwum</span>}
           </div>
+          {!readOnly && !data.archived && <OpenAssistantButton locationId={locationId} />}
         </div>
-        <nav aria-label="Ekrany lokalu" className="flex min-w-0 flex-wrap gap-1 border-b border-line">
-          {TABS.map((tab) => (
-            <Link
-              key={tab.to}
-              to={tab.to}
-              params={{ locationId }}
-              className="inline-flex min-h-(--touch) shrink-0 items-center border-b-2 px-3 text-sm font-semibold no-underline transition-colors"
-              inactiveProps={{
-                className: 'border-transparent text-ink-muted hover:text-accent',
-              }}
-              activeProps={{
-                className: 'border-accent text-accent',
-                'aria-current': 'page',
-              }}
-            >
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
-        <Outlet />
       </div>
-    </AssistantDrawerProvider>
+      <nav aria-label="Ekrany lokalu" className="flex min-w-0 flex-wrap gap-1 border-b border-line">
+        {TABS.map((tab) => (
+          <Link
+            key={tab.to}
+            to={tab.to}
+            params={{ locationId }}
+            className="inline-flex min-h-(--touch) shrink-0 items-center border-b-2 px-3 text-sm font-semibold no-underline transition-colors"
+            inactiveProps={{
+              className: 'border-transparent text-ink-muted hover:text-accent',
+            }}
+            activeProps={{
+              className: 'border-accent text-accent',
+              'aria-current': 'page',
+            }}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </nav>
+      <Outlet />
+    </div>
   )
 }

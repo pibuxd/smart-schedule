@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MyCalendarOut } from '../../api/generated/model'
 import { mockApi, renderScreen } from '../../test/render'
 import { AvailabilityScreen } from './AvailabilityScreen'
+import { EmployeeChatProvider } from './EmployeeChat'
 
 const period = {
   id: 'p1',
@@ -39,7 +40,13 @@ function api({ period: asked = period, submitted_at = null, locked = [], days, l
   })
 }
 
-const show = (readOnly = false) => renderScreen(<AvailabilityScreen companyId="c1" readOnly={readOnly} today={TODAY} />)
+// As in the employee layout: the chat with "Twoje prośby" lives around the screen.
+const show = (readOnly = false) =>
+  renderScreen(
+    <EmployeeChatProvider companyId="c1" readOnly={readOnly}>
+      <AvailabilityScreen companyId="c1" readOnly={readOnly} today={TODAY} />
+    </EmployeeChatProvider>,
+  )
 
 describe('AvailabilityScreen', () => {
   afterEach(() => vi.unstubAllGlobals())

@@ -18,9 +18,9 @@ import {
 } from "../../components/assistant/Chat";
 import { Button } from "../../components/ui/button";
 import { Disclosure } from "../../components/ui/disclosure";
-import { Drawer } from "../../components/ui/drawer";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
+import { useEmployeeChat, useScreenChatScope } from "./employee-chat";
 import { HoursProposals } from "./HoursProposals";
 
 /** Requests that count: understood by the assistant (they reach the generator) or left for the manager. */
@@ -255,27 +255,11 @@ function RequestStatus({
   );
 }
 
-/**
- * "Twoje prośby": requests in words, only for what the calendar cannot say. The person writes in a chat that
- * slides in from the right; a request the assistant understood (or one left for the manager to read) lands in
- * the "Twoje prośby" window, where it can be edited or removed. When the assistant is on (`assistantReads`),
- * the text also goes to an outside AI service, and the chat says so.
- * A request belongs to the period the manager asked for (`periodId`), or, before that, to the month on the
- * screen (`month`, its first day): the manager sees it in every period that covers that month.
- */
-function RequestsChat({
-  companyId,
-  periodId,
-  month,
-  editable,
-  assistantReads = false,
-}: {
-  companyId: string;
-  periodId?: string;
-  month?: string;
-  editable: boolean;
-  assistantReads?: boolean;
-}) {
+/** One conversation of a person: a period (`periodId`) or, before the manager asks for one, a month (`month`). */
+type Scope = { companyId: string; periodId?: string; month?: string };
+
+/** The person's messages of one conversation; asks again while the assistant is still reading a fresh one. */
+function useRequests({ companyId, periodId, month }: Scope) {
   const params = periodId
     ? { company_id: companyId, period_id: periodId }
     : { company_id: companyId, month };
@@ -298,26 +282,83 @@ function RequestsChat({
   const queryClient = useQueryClient();
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: getMyRequestsQueryKey(params) });
-  const create = useCreateMyRequest({ mutation: { onSuccess: refresh } });
+  const list = (requests.data?.data as MyRequestOut[] | undefined) ?? [];
+  return { requests, list, params, refresh };
+}
+
+/** The bin, and a second tap to be sure. */
+function RemoveControl({
+  asking,
+  busy,
+  onAsk,
+  onCancel,
+  onRemove,
+}: {
+  asking: boolean;
+  busy: boolean;
+  onAsk: () => void;
+  onCancel: () => void;
+  onRemove: () => void;
+}) {
+  return asking ? (
+    <span className="flex flex-wrap items-center justify-end gap-1">
+      <span className="text-sm font-semibold">Usunąć tę prośbę?</span>
+      <Button variant="quiet" size="normal" disabled={busy} onClick={onRemove}>
+        Tak, usuń
+      </Button>
+      <Button variant="quiet" size="normal" onClick={onCancel}>
+        Nie
+      </Button>
+    </span>
+  ) : (
+    <Button
+      variant="quiet"
+      size="normal"
+      aria-label="Usuń prośbę"
+      title="Usuń prośbę"
+      className="min-w-(--touch) px-2"
+      onClick={onAsk}
+    >
+      <Trash2 size={18} aria-hidden="true" />
+    </Button>
+  );
+}
+
+/**
+ * "Twoje prośby" under the calendar: only the requests that count (understood by the assistant, or left for the
+ * manager to read); each can be corrected or removed here. The conversation itself is in the chat that slides in
+ * from the right (`EmployeeChatProvider`); while this window is on screen, the "Asystent" button opens it on this
+ * window's month too. A request belongs to the period the manager asked for (`periodId`), or, before that, to the
+ * month on the screen (`month`, its first day): the manager sees it in every period that covers that month.
+ */
+function RequestsWindow({
+  companyId,
+  periodId,
+  month,
+  editable,
+  assistantReads = false,
+}: {
+  companyId: string;
+  periodId?: string;
+  month?: string;
+  editable: boolean;
+  assistantReads?: boolean;
+}) {
+  const chat = useEmployeeChat();
+  useScreenChatScope({ periodId, month, editable });
+  const { requests, list, refresh } = useRequests({
+    companyId,
+    periodId,
+    month,
+  });
   const remove = useDeleteMyRequest({ mutation: { onSuccess: refresh } });
   const [removing, setRemoving] = useState<string | null>(null);
   const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } });
-  // "Zaznacz „nie mogę”": the same save as a tap in the calendar, so the calendar screens refresh too.
-  const markCannot = useSaveMyCalendar({
-    mutation: {
-      onSuccess: () =>
-        queryClient.invalidateQueries({
-          predicate: (query) =>
-            String(query.queryKey[0]).startsWith("/api/me/"),
-        }),
-    },
-  });
-  const [text, setText] = useState("");
-  const [chatOpen, setChatOpen] = useState(false);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(
     null,
   );
-  const list = (requests.data?.data as MyRequestOut[] | undefined) ?? [];
+  const chatOpen = chat?.open ?? false;
+  const openChat = () => chat?.openChat({ periodId, month, editable });
   const saved = list.filter(isSaved);
   const reading = assistantReads && list.some((r) => r.status === "new");
   // The newest message left a trace only in the chat: say so in the window, so it does not look lost.
@@ -326,64 +367,7 @@ function RequestsChat({
     last && (last.status === "rejected" || last.status === "answered")
       ? last
       : undefined;
-
-  const feedRef = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  const changeKey = list.map((r) => `${r.id}:${r.status}`).join(",");
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    // The chat opens at the newest message, also while the drawer is still sliding in.
-    if (chatOpen && !wasOpen.current) follow.current = true;
-    wasOpen.current = chatOpen;
-    if (!chatOpen) return;
-    const scroll = () => {
-      const feed = feedRef.current;
-      if (feed && follow.current) feed.scrollTop = feed.scrollHeight;
-    };
-    scroll();
-    const frame = requestAnimationFrame(scroll);
-    const timer = setTimeout(scroll, 300);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(timer);
-    };
-  }, [changeKey, chatOpen]);
-
-  const removeControl = (request: MyRequestOut) =>
-    removing === request.id ? (
-      <span className="flex flex-wrap items-center justify-end gap-1">
-        <span className="text-sm font-semibold">Usunąć tę prośbę?</span>
-        <Button
-          variant="quiet"
-          size="normal"
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(
-              { requestId: request.id },
-              { onSettled: () => setRemoving(null) },
-            )
-          }
-        >
-          Tak, usuń
-        </Button>
-        <Button variant="quiet" size="normal" onClick={() => setRemoving(null)}>
-          Nie
-        </Button>
-      </span>
-    ) : (
-      <Button
-        variant="quiet"
-        size="normal"
-        aria-label="Usuń prośbę"
-        title="Usuń prośbę"
-        className="min-w-(--touch) px-2"
-        onClick={() => setRemoving(request.id)}
-      >
-        <Trash2 size={18} aria-hidden="true" />
-      </Button>
-    );
-  const failure =
-    update.error ?? remove.error ?? create.error ?? markCannot.error;
+  const failure = update.error ?? remove.error;
 
   return (
     <section
@@ -394,12 +378,8 @@ function RequestsChat({
         <h2 id="requests-title" className="m-0 text-lg font-semibold">
           Twoje prośby
         </h2>
-        {(editable || list.length > 0) && (
-          <Button
-            variant="secondary"
-            size="normal"
-            onClick={() => setChatOpen(true)}
-          >
+        {chat && (editable || list.length > 0) && (
+          <Button variant="secondary" size="normal" onClick={openChat}>
             <MessageCircle size={18} aria-hidden="true" />
             {!editable
               ? "Pokaż rozmowę"
@@ -533,7 +513,18 @@ function RequestsChat({
                           <Pencil size={18} aria-hidden="true" />
                         </Button>
                       )}
-                      {removeControl(request)}
+                      <RemoveControl
+                        asking={removing === request.id}
+                        busy={remove.isPending}
+                        onAsk={() => setRemoving(request.id)}
+                        onCancel={() => setRemoving(null)}
+                        onRemove={() =>
+                          remove.mutate(
+                            { requestId: request.id },
+                            { onSettled: () => setRemoving(null) },
+                          )
+                        }
+                      />
                     </span>
                   )}
                 </div>
@@ -551,7 +542,7 @@ function RequestsChat({
           <button
             type="button"
             className="min-h-(--touch) cursor-pointer font-semibold text-accent underline"
-            onClick={() => setChatOpen(true)}
+            onClick={openChat}
           >
             Pokaż odpowiedź
           </button>
@@ -560,164 +551,235 @@ function RequestsChat({
       {failure && !chatOpen && (
         <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>
       )}
-
-      <Drawer
-        open={chatOpen}
-        onOpenChange={setChatOpen}
-        title={assistantReads ? "Asystent" : "Prośby do kierownika"}
-        description={
-          assistantReads
-            ? "Zapytaj o swój grafik albo napisz prośbę."
-            : "Napisz prośbę do kierownika."
-        }
-      >
-        <div
-          ref={feedRef}
-          onScroll={() => {
-            const f = feedRef.current;
-            if (f)
-              follow.current =
-                f.scrollHeight - f.scrollTop - f.clientHeight < 100;
-          }}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"
-          role="log"
-          aria-label="Twoje prośby o grafiku"
-          aria-live="polite"
-          aria-relevant="additions text"
-        >
-          {list.length === 0 && (
-            <div className="py-4">
-              <h3 className="m-0 mb-2 text-lg font-semibold">
-                {assistantReads
-                  ? "W czym pomóc?"
-                  : "Co warto uwzględnić w Twoim grafiku?"}
-              </h3>
-              <p className="m-0 text-sm text-ink-muted">
-                {assistantReads
-                  ? "Zapytaj, na przykład: „Kiedy mam następną zmianę?”. Albo napisz prośbę: „W piątki wolę pracować rano”. Prośby zapiszę w „Twoich prośbach”."
-                  : "Na przykład: „W piątki wolę pracować rano”. Prośba trafi do „Twoich próśb” i do kierownika."}
-              </p>
-            </div>
-          )}
-          <ol className="m-0 grid list-none gap-6 p-0">
-            {list.map((request) => (
-              <li key={request.id} className="grid gap-2">
-                <ChatMessage from="user" date={request.created_at}>
-                  <p className="m-0 whitespace-pre-wrap">{request.text}</p>
-                </ChatMessage>
-                <div className="flex flex-wrap items-center justify-end gap-x-2 text-xs text-ink-muted">
-                  <span>
-                    {request.status === "answered"
-                      ? "Odpowiedź asystenta"
-                      : request.status === "superseded"
-                        ? "Historia prośby"
-                        : request.status === "rejected"
-                          ? "Odrzucona"
-                          : request.status === "new" && assistantReads
-                            ? "Wysłane"
-                            : "Zapisane w Twoich prośbach"}
-                  </span>
-                  {editable && !isSaved(request) && removeControl(request)}
-                </div>
-                <RequestReply request={request} assistantReads={assistantReads}>
-                  <RequestStatus
-                    request={request}
-                    editable={editable && request.status !== "superseded"}
-                    busy={update.isPending}
-                    marking={markCannot.isPending}
-                    onRewrite={(newText) => {
-                      follow.current = true;
-                      update.mutate({
-                        requestId: request.id,
-                        data: { text: newText },
-                      });
-                    }}
-                    onToManager={() =>
-                      update.mutate({
-                        requestId: request.id,
-                        data: { understood: false },
-                      })
-                    }
-                    onMarkCannot={(days) =>
-                      markCannot.mutate({
-                        data: {
-                          company_id: companyId,
-                          days: days.map((date) => ({
-                            date,
-                            state: "cannot",
-                          })),
-                        },
-                      })
-                    }
-                  />
-                  <HoursProposals request={request} />
-                </RequestReply>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="grid shrink-0 gap-2 border-t border-grid px-4 pt-3 pb-2">
-          {failure && (
-            <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>
-          )}
-          {editable ? (
-            <ChatComposer
-              text={text}
-              onChange={setText}
-              label={assistantReads ? "Twoja wiadomość" : "Twoja prośba"}
-              sendLabel={assistantReads ? "Wyślij" : "Wyślij prośbę"}
-              enterSends={false}
-              placeholder={
-                assistantReads
-                  ? "Zapytaj albo opisz prośbę…"
-                  : "Opisz swoją prośbę…"
-              }
-              disabled={requests.isPending || requests.isError}
-              sending={create.isPending}
-              onSend={() => {
-                if (!text.trim() || create.isPending) return;
-                follow.current = true;
-                create.mutate(
-                  { data: { ...params, text: text.trim() } },
-                  { onSuccess: () => setText("") },
-                );
-              }}
-              footer={
-                assistantReads
-                  ? "Czyta to asystent AI (zewnętrzna usługa), kierownik i jego asystent."
-                  : "Wiadomość dla kierownika."
-              }
-            />
-          ) : (
-            <p className="m-0 text-sm text-ink-muted">
-              Prośby na ten okres są już zamknięte. Jeśli coś się zmieniło,
-              porozmawiaj z kierownikiem.
-            </p>
-          )}
-          <Disclosure
-            className="text-xs text-ink-muted"
-            summary="O prośbach i Twoich danych"
-          >
-            <p className="mt-0 mb-2 leading-relaxed">
-              W jednej wiadomości możesz zapytać o coś i napisać do trzech
-              próśb. Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w
-              kalendarzu.{" "}
-              {!periodId &&
-                "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
-              {assistantReads
-                ? "Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Prośby czyta też kierownik, a gdy kierownik pyta swojego asystenta, ten też może przeczytać Twoje prośby i dyspozycje. Nie wpisuj tu nic, czego nie chcesz przekazać kierownikowi."
-                : "Przeczyta to tylko kierownik."}
-            </p>
-          </Disclosure>
-        </div>
-      </Drawer>
     </section>
   );
 }
 
-export function RequestsSection(props: Parameters<typeof RequestsChat>[0]) {
+/**
+ * The conversation, in the chat that slides in from the right (`EmployeeChatProvider`): every message with the
+ * assistant's answer, and the field to write. When the assistant is on (`assistantReads`), the text also goes to
+ * an outside AI service, and the chat says so.
+ */
+export function RequestsChat({
+  companyId,
+  periodId,
+  month,
+  editable,
+  assistantReads = false,
+  text,
+  onTextChange,
+}: {
+  companyId: string;
+  periodId?: string;
+  month?: string;
+  editable: boolean;
+  assistantReads?: boolean;
+  /** The message being written; kept outside, so closing the chat does not lose it. */
+  text: string;
+  onTextChange: (text: string) => void;
+}) {
+  const { requests, list, params, refresh } = useRequests({
+    companyId,
+    periodId,
+    month,
+  });
+  const queryClient = useQueryClient();
+  const create = useCreateMyRequest({ mutation: { onSuccess: refresh } });
+  const remove = useDeleteMyRequest({ mutation: { onSuccess: refresh } });
+  const [removing, setRemoving] = useState<string | null>(null);
+  const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } });
+  // "Zaznacz „nie mogę”": the same save as a tap in the calendar, so the calendar screens refresh too.
+  const markCannot = useSaveMyCalendar({
+    mutation: {
+      onSuccess: () =>
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            String(query.queryKey[0]).startsWith("/api/me/"),
+        }),
+    },
+  });
+  const failure =
+    update.error ?? remove.error ?? create.error ?? markCannot.error;
+
+  const feedRef = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
+  const changeKey = list.map((r) => `${r.id}:${r.status}`).join(",");
+  useEffect(() => {
+    // The chat opens at the newest message, also while the drawer is still sliding in.
+    const scroll = () => {
+      const feed = feedRef.current;
+      if (feed && follow.current) feed.scrollTop = feed.scrollHeight;
+    };
+    scroll();
+    const frame = requestAnimationFrame(scroll);
+    const timer = setTimeout(scroll, 300);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [changeKey]);
+
   return (
-    <RequestsChat
+    <>
+      <div
+        ref={feedRef}
+        onScroll={() => {
+          const f = feedRef.current;
+          if (f)
+            follow.current =
+              f.scrollHeight - f.scrollTop - f.clientHeight < 100;
+        }}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"
+        role="log"
+        aria-label="Twoje prośby o grafiku"
+        aria-live="polite"
+        aria-relevant="additions text"
+      >
+        {list.length === 0 && (
+          <div className="py-4">
+            <h3 className="m-0 mb-2 text-lg font-semibold">
+              {assistantReads
+                ? "W czym pomóc?"
+                : "Co warto uwzględnić w Twoim grafiku?"}
+            </h3>
+            <p className="m-0 text-sm text-ink-muted">
+              {assistantReads
+                ? "Zapytaj, na przykład: „Kiedy mam następną zmianę?”. Albo napisz prośbę: „W piątki wolę pracować rano”. Prośby zapiszę w „Twoich prośbach”."
+                : "Na przykład: „W piątki wolę pracować rano”. Prośba trafi do „Twoich próśb” i do kierownika."}
+            </p>
+          </div>
+        )}
+        <ol className="m-0 grid list-none gap-6 p-0">
+          {list.map((request) => (
+            <li key={request.id} className="grid gap-2">
+              <ChatMessage from="user" date={request.created_at}>
+                <p className="m-0 whitespace-pre-wrap">{request.text}</p>
+              </ChatMessage>
+              <div className="flex flex-wrap items-center justify-end gap-x-2 text-xs text-ink-muted">
+                <span>
+                  {request.status === "answered"
+                    ? "Odpowiedź asystenta"
+                    : request.status === "superseded"
+                      ? "Historia prośby"
+                      : request.status === "rejected"
+                        ? "Odrzucona"
+                        : request.status === "new" && assistantReads
+                          ? "Wysłane"
+                          : "Zapisane w Twoich prośbach"}
+                </span>
+                {editable && !isSaved(request) && (
+                  <RemoveControl
+                    asking={removing === request.id}
+                    busy={remove.isPending}
+                    onAsk={() => setRemoving(request.id)}
+                    onCancel={() => setRemoving(null)}
+                    onRemove={() =>
+                      remove.mutate(
+                        { requestId: request.id },
+                        { onSettled: () => setRemoving(null) },
+                      )
+                    }
+                  />
+                )}
+              </div>
+              <RequestReply request={request} assistantReads={assistantReads}>
+                <RequestStatus
+                  request={request}
+                  editable={editable && request.status !== "superseded"}
+                  busy={update.isPending}
+                  marking={markCannot.isPending}
+                  onRewrite={(newText) => {
+                    follow.current = true;
+                    update.mutate({
+                      requestId: request.id,
+                      data: { text: newText },
+                    });
+                  }}
+                  onToManager={() =>
+                    update.mutate({
+                      requestId: request.id,
+                      data: { understood: false },
+                    })
+                  }
+                  onMarkCannot={(days) =>
+                    markCannot.mutate({
+                      data: {
+                        company_id: companyId,
+                        days: days.map((date) => ({
+                          date,
+                          state: "cannot",
+                        })),
+                      },
+                    })
+                  }
+                />
+                <HoursProposals request={request} />
+              </RequestReply>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div className="grid shrink-0 gap-2 border-t border-grid px-4 pt-3 pb-2">
+        {failure && (
+          <InlineError>{errorMessage(failure, NETWORK_PROBLEM)}</InlineError>
+        )}
+        {editable ? (
+          <ChatComposer
+            text={text}
+            onChange={onTextChange}
+            label={assistantReads ? "Twoja wiadomość" : "Twoja prośba"}
+            sendLabel={assistantReads ? "Wyślij" : "Wyślij prośbę"}
+            enterSends={false}
+            placeholder={
+              assistantReads
+                ? "Zapytaj albo opisz prośbę…"
+                : "Opisz swoją prośbę…"
+            }
+            disabled={requests.isPending || requests.isError}
+            sending={create.isPending}
+            onSend={() => {
+              if (!text.trim() || create.isPending) return;
+              follow.current = true;
+              create.mutate(
+                { data: { ...params, text: text.trim() } },
+                { onSuccess: () => onTextChange("") },
+              );
+            }}
+            footer={
+              assistantReads
+                ? "Czyta to asystent AI (zewnętrzna usługa), kierownik i jego asystent."
+                : "Wiadomość dla kierownika."
+            }
+          />
+        ) : (
+          <p className="m-0 text-sm text-ink-muted">
+            Prośby na ten okres są już zamknięte. Jeśli coś się zmieniło,
+            porozmawiaj z kierownikiem.
+          </p>
+        )}
+        <Disclosure
+          className="text-xs text-ink-muted"
+          summary="O prośbach i Twoich danych"
+        >
+          <p className="mt-0 mb-2 leading-relaxed">
+            W jednej wiadomości możesz zapytać o coś i napisać do trzech
+            próśb. Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w
+            kalendarzu.{" "}
+            {!periodId &&
+              "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
+            {assistantReads
+              ? "Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Prośby czyta też kierownik, a gdy kierownik pyta swojego asystenta, ten też może przeczytać Twoje prośby i dyspozycje. Nie wpisuj tu nic, czego nie chcesz przekazać kierownikowi."
+              : "Przeczyta to tylko kierownik."}
+          </p>
+        </Disclosure>
+      </div>
+    </>
+  );
+}
+
+export function RequestsSection(props: Parameters<typeof RequestsWindow>[0]) {
+  return (
+    <RequestsWindow
       key={`${props.companyId}:${props.periodId ?? props.month}`}
       {...props}
     />

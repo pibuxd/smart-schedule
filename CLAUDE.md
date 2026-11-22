@@ -176,10 +176,14 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   informational replies are not misses. Limits on writing to the assistant are off by default (0 = no limit):
   `ASSISTANT_COMMANDS_MONTHLY_LIMIT`, `TEXT_REQUESTS_PER_PERIOD`, `ASSISTANT_MESSAGES_PER_DAY`; when set, the request
   limit per period counts only `new`/`interpreted`/`needs_manager`.
-  The chat UI slides in from the right (`components/ui/drawer.tsx`): managers open it with
-  `useAssistantDrawer().openChat()` (`features/manager/AssistantDrawer.tsx`, one per location), employees from
-  "Twoje prośby". Approved results live in a separate editable window: `AssistantRulesTable` ("Ustalenia") for
-  managers, the saved list in `RequestsSection` for employees. Never show a chat inline in a page.
+  The chat UI slides in from the right (`components/ui/drawer.tsx`) and is one tap away on every screen after login
+  (`components/assistant/AssistantFab.tsx` in the corner; on an employee's phone the last tab of the bottom bar).
+  Managers: one `AssistantDrawerProvider` in the panel layout, `useAssistantDrawer().openChat({ locationId?, periodId?, text? })`;
+  the chat is about the location on screen (`useChatLocation`), else the last one, else it asks which. Employees:
+  `EmployeeChatProvider` in the employee layout, `useEmployeeChat().openChat(scope?)`; "Kiedy mogę" sets the month
+  (`useScreenChatScope`), else the requested period or this month. Approved results live in a separate editable window:
+  `AssistantRulesTable` ("Ustalenia") for managers, the saved list in `RequestsSection` for employees. Never show a
+  chat inline in a page. Layouts that show the corner button leave room for it at the bottom.
   Agreements belong to one availability period (`apps/assistant/agreements.py`): a new period starts empty and the
   manager copies chosen ones from the previous period (`copy_from_previous`); nothing carries over by itself. An
   employee may forward a rejected message to the manager (`unread_reason="rejected"`); it is never scored.
