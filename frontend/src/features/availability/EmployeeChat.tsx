@@ -3,17 +3,29 @@ import { MessageCircle } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 
 import { getMyAvailabilityQueryKey, useMyAvailability } from '../../api/generated/availability/availability'
-import type { MyAvailabilityOut } from '../../api/generated/model'
+import type { AvailabilityPeriodOut, MyAvailabilityOut } from '../../api/generated/model'
 import { AssistantFab } from '../../components/assistant/AssistantFab'
 import { Drawer } from '../../components/ui/drawer'
 import { ErrorState, Loading } from '../../components/ui/status'
 import { cn } from '../../lib/cn'
-import { toIsoDate } from '../../lib/dates'
+import { monthName, periodWords, toIsoDate } from '../../lib/dates'
 import { EmployeeChatContext, useEmployeeChat, type ChatScope } from './employee-chat'
 import { RequestsChat } from './RequestsSection'
 
 /** The first day of this month: the conversation before the manager asks for a period. */
 const thisMonth = (today: Date) => toIsoDate(new Date(today.getFullYear(), today.getMonth(), 1))
+
+/**
+ * "Prośby na grudzień 2026.": which month (or period) a request written now goes to, so a message written on another
+ * screen is not taken for a different month. Null when the period's dates are not at hand.
+ */
+function scopeLine(scope: ChatScope, period: AvailabilityPeriodOut | null | undefined): string | null {
+  const month = (iso: string) => monthName(iso.slice(0, 7)).toLowerCase()
+  if (scope.month) return `Prośby na ${month(scope.month)}.`
+  if (!period || period.id !== scope.periodId) return null
+  const words = periodWords(period.start, period.end)
+  return `Prośby na ${words.startsWith('w ') ? month(period.start) : words}.`
+}
 
 /**
  * The employee's chat, one for every screen: the "Asystent" button opens it (a tab on a phone, the corner button
@@ -79,7 +91,10 @@ export function EmployeeChatProvider({
         open={open}
         onOpenChange={setOpen}
         title={assistantReads ? 'Asystent' : 'Prośby do kierownika'}
-        description={assistantReads ? 'Zapytaj o swój grafik albo napisz prośbę.' : 'Napisz prośbę do kierownika.'}
+        description={
+          (scope && scopeLine(scope, data?.period)) ??
+          (assistantReads ? 'Zapytaj o swój grafik albo napisz prośbę.' : 'Napisz prośbę do kierownika.')
+        }
       >
         {scope ? (
           <RequestsChat

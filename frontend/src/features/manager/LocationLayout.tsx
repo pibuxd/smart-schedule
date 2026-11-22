@@ -6,6 +6,8 @@ import { useLocationDetail } from '../../api/generated/tenancy/tenancy'
 import { ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
 import { useChatLocation } from './assistant-drawer'
+import { OpenAssistantButton } from './AssistantDrawer'
+import { useManager } from './ManagerContext'
 
 const TABS = [
   { to: '/kierownik/lokal/$locationId/dyspozycje', label: 'Dyspozycje' },
@@ -16,8 +18,12 @@ const TABS = [
   { to: '/kierownik/lokal/$locationId/zasady', label: 'Zasady' },
 ] as const
 
-/** One location: its tabs. The assistant chat (the corner button) talks about this location while it is open. */
+/**
+ * One location: its tabs, and "Asystent" in its header. The chat (this button or the one in the corner) talks
+ * about this location while it is open.
+ */
 export function LocationLayout({ locationId }: { locationId: string }) {
+  const { readOnly } = useManager()
   const location = useLocationDetail(locationId)
   const live = location.data && !(location.data.data as LocationOut).archived
   useChatLocation(live ? locationId : null)
@@ -40,10 +46,13 @@ export function LocationLayout({ locationId }: { locationId: string }) {
           <ArrowLeft aria-hidden="true" size={20} />
           Wszystkie lokale
         </Link>
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <h1 className="m-0 text-2xl font-extrabold">{data.name}</h1>
-          {data.group_name && <span className="text-ink-muted">{data.group_name}</span>}
-          {data.archived && <span className="font-semibold text-cannot">W archiwum</span>}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h1 className="m-0 text-2xl font-extrabold">{data.name}</h1>
+            {data.group_name && <span className="text-ink-muted">{data.group_name}</span>}
+            {data.archived && <span className="font-semibold text-cannot">W archiwum</span>}
+          </div>
+          {!readOnly && !data.archived && <OpenAssistantButton locationId={locationId} />}
         </div>
       </div>
       <nav aria-label="Ekrany lokalu" className="flex min-w-0 flex-wrap gap-1 border-b border-line">

@@ -44,6 +44,8 @@ describe('Assistant button on every employee screen', () => {
     expect(await screen.findByRole('dialog', { name: 'Asystent' })).toBeInTheDocument()
     expect(await screen.findByLabelText('Twoja wiadomość')).toBeInTheDocument()
     expect(asked(calls)).toContain('/api/me/requests?company_id=c1&period_id=p1')
+    // Written on another screen, a request still says which month it is for.
+    expect(screen.getByText('Prośby na grudzień 2026.')).toBeInTheDocument()
   })
 
   it('talks about this month before the manager asks', async () => {
@@ -63,6 +65,7 @@ describe('Assistant button on every employee screen', () => {
     expect(await screen.findByRole('dialog', { name: 'Asystent' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(/W czym pomóc/)).toBeInTheDocument())
     expect(asked(calls).every((url) => url.endsWith('month=2027-01-01'))).toBe(true)
+    expect(screen.getByText('Prośby na styczeń 2027.')).toBeInTheDocument()
   })
 
   it('has no button while the company has no access', async () => {

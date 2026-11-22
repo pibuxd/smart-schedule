@@ -83,6 +83,9 @@ describe('Assistant button on every manager screen', () => {
     expect(await within(chat).findByLabelText('Twoja wiadomość')).toBeInTheDocument()
     expect(historyOf(calls, 'l2')).toBe(true)
     expect(within(chat).queryByText('O którym lokalu rozmawiamy?')).not.toBeInTheDocument()
+    // With several locations the chat names its own, also when it covers the page on a phone.
+    expect(await within(chat).findByText('Dworzec')).toBeInTheDocument()
+    expect(within(chat).queryByRole('button', { name: 'Zmień lokal' })).not.toBeInTheDocument()
   })
 
   it('has no button while the company has no access', async () => {

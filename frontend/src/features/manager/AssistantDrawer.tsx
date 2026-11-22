@@ -58,7 +58,10 @@ export function AssistantDrawerProvider({ children }: { children: ReactNode }) {
   )
 }
 
-/** The chat of the location on screen; elsewhere of the chosen (or only) location, with a way to pick another. */
+/**
+ * The chat of the location on screen; elsewhere of the chosen (or only) location, with a way to pick another.
+ * With several locations the chat always names its location, also on a phone where it covers the page.
+ */
 function LocationChat({
   onScreen,
   chosen,
@@ -71,41 +74,42 @@ function LocationChat({
   chat: Chat
 }) {
   const { companyId } = useManager()
-  const overview = useManagerOverview({ company_id: companyId }, { query: { enabled: !onScreen } })
+  const overview = useManagerOverview({ company_id: companyId })
   const live = (overview.data?.data as ManagerOverviewOut | undefined)?.locations
-  const panel = (locationId: string) => (
-    <AssistantPanel
-      key={`${locationId}:${chat.visit}`}
-      locationId={locationId}
-      // A period and a draft belong to the location they were opened for.
-      periodId={!chat.locationId || chat.locationId === locationId ? chat.periodId : undefined}
-      initialText={!chat.locationId || chat.locationId === locationId ? chat.text : undefined}
-    />
-  )
-  if (onScreen) return panel(onScreen)
+  const chatAbout = (locationId: string, canChange: boolean) => {
+    const name = live && live.length > 1 ? live.find((location) => location.id === locationId)?.name : undefined
+    return (
+      <>
+        {name && (
+          <div className="flex min-h-(--touch) shrink-0 items-center justify-between gap-2 border-b border-grid pr-1 pl-4 text-sm">
+            <span className="min-w-0 truncate">
+              Lokal: <b>{name}</b>
+            </span>
+            {canChange && (
+              <Button variant="quiet" size="normal" className="text-sm" onClick={() => onChoose(null)}>
+                Zmień lokal
+              </Button>
+            )}
+          </div>
+        )}
+        <AssistantPanel
+          key={`${locationId}:${chat.visit}`}
+          locationId={locationId}
+          // A period and a draft belong to the location they were opened for.
+          periodId={!chat.locationId || chat.locationId === locationId ? chat.periodId : undefined}
+          initialText={!chat.locationId || chat.locationId === locationId ? chat.text : undefined}
+        />
+      </>
+    )
+  }
+  if (onScreen) return chatAbout(onScreen, false)
 
   // Until the list arrives, a location opened by name is trusted; then it must still be live.
   const current = live
     ? (live.find((location) => location.id === chosen) ?? (live.length === 1 ? live[0] : undefined))
     : undefined
   const locationId = live ? current?.id : chosen
-  if (locationId) {
-    return (
-      <>
-        {live && live.length > 1 && current && (
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-grid py-1 pr-1 pl-4 text-sm">
-            <span className="min-w-0 truncate">
-              Lokal: <b>{current.name}</b>
-            </span>
-            <Button variant="quiet" size="normal" className="text-sm" onClick={() => onChoose(null)}>
-              Zmień lokal
-            </Button>
-          </div>
-        )}
-        {panel(locationId)}
-      </>
-    )
-  }
+  if (locationId) return chatAbout(locationId, true)
   if (overview.isError) {
     return (
       <div className="p-4">
