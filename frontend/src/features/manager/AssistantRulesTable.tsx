@@ -91,7 +91,7 @@ export function AssistantRulesTable({
   const items = data.items
   const busy = readOnly || data.closed || order.isPending || remove.isPending || revert.isPending
   const canChat = !!drawer && data.assistant_enabled && !readOnly && !data.closed
-  const reword = (text: string) => drawer?.openChat({ periodId: chatPeriod, text })
+  const reword = (text: string) => drawer?.openChat({ locationId, periodId: chatPeriod, text })
   const move = (from: number, to: number) => {
     const ids = items.map((item) => item.id)
     ids.splice(to, 0, ...ids.splice(from, 1))
@@ -131,7 +131,9 @@ export function AssistantRulesTable({
                 : 'Czekają na prośbę o dyspozycje'}
           </p>
         </div>
-        {!data.closed && !readOnly && <OpenAssistantButton periodId={chatPeriod}>Ustal w rozmowie</OpenAssistantButton>}
+        {!data.closed && !readOnly && <OpenAssistantButton locationId={locationId} periodId={chatPeriod}>
+            Ustal w rozmowie
+          </OpenAssistantButton>}
       </div>
 
       {!data.closed && (

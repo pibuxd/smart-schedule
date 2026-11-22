@@ -34,11 +34,18 @@ Zastępuje „Ograniczenie zakresu asystenta (18.11.2026)”. Zakres produktu: s
 
 ## Wysuwany czat i okienko ustaleń (18.11.2026)
 
-- `components/ui/drawer.tsx`: panel z prawej na Radix Dialog w trybie niemodalnym (bez tła, kliknięcie obok go nie zamyka). `features/manager/AssistantDrawer.tsx` trzyma jeden czat na lokal (`AssistantDrawerProvider` w `LocationLayout`), a `useAssistantDrawer().openChat({ periodId, text })` otwiera go z dowolnego ekranu lokalu, opcjonalnie z wpisanym początkiem wiadomości. Na ekranie od 1280 px treść strony odsuwa się, żeby okienko ustaleń było widać obok rozmowy.
+- `components/ui/drawer.tsx`: panel z prawej na Radix Dialog w trybie niemodalnym (bez tła, kliknięcie obok go nie zamyka). `features/manager/AssistantDrawer.tsx` trzyma jeden czat (od 22.11.2026 na cały panel kierownika, sekcja niżej), a `useAssistantDrawer().openChat({ locationId, periodId, text })` otwiera go z dowolnego ekranu, opcjonalnie z wpisanym początkiem wiadomości. Na ekranie od 1280 px treść strony odsuwa się, żeby okienko ustaleń było widać obok rozmowy.
 - Trasa `/kierownik/lokal/$locationId/asystent` pokazuje teraz okienko ustaleń (`AssistantRulesTable`), zakładka nazywa się „Ustalenia”. To samo okienko jest przy dyspozycjach okresu i (skrócone) na ekranie zasad.
 - Nowy endpoint `DELETE /locations/{location_id}/agreed-rules/{code}?period_id=` (`revert_agreed_rule`): zasada ustalona w rozmowie wraca do bieżącego ustawienia lokalu i znika z `changed_codes`; 404, gdy zasady nie ma wśród ustaleń, 409 po publikacji. Kolejność i usuwanie poleceń korzystają z istniejących endpointów.
 - Pracownik: `RequestsSection` to okienko „Twoje prośby” (statusy `interpreted` i `needs_manager`, edycja i usuwanie istniejącymi endpointami) oraz ten sam `Drawer` z historią rozmowy i polem pisania. Bez zmian w API.
 - Założenie: rozmowa pracownika zostaje jednokrokowa (jedna wiadomość, jedno odczytanie; poprawka zastępuje wcześniejszą prośbę). Wieloetapowe dopytywanie pracownika wymagałoby zmian w `interpret_request` i nie jest częścią tego etapu.
+
+## Przycisk asystenta na każdym ekranie (22.11.2026)
+
+- `components/assistant/AssistantFab.tsx`: okrągły przycisk w prawym dolnym rogu (`fixed`, `z-30`, pod arkuszami i panelem z `z-40`/`z-50`), cień `--shadow-fab`. Podpis od `lg` u pracownika, od 1600 px u kierownika (`nameFrom="wide"`), bo dopiero wtedy mieści się na marginesie obok treści.
+- Kierownik: `AssistantDrawerProvider` przeniesiony z `LocationLayout` do `routes/kierownik.tsx` (klucz = firma). `LocationLayout` zgłasza swój lokal przez `useChatLocation(id)` (null dla archiwum); czat bierze lokal z ekranu, potem ostatnio wybrany (`openChat({ locationId })` też go ustawia), a przy jednym lokalu jedyny z `GET /api/manager/overview`. Okres i szkic z `openChat` dotyczą tylko lokalu, dla którego je podano. `main` ma `pb-24`, pasek zapisu zasad `pr-20` na telefonie.
+- Pracownik: `features/availability/EmployeeChat.tsx` (`EmployeeChatProvider` w `routes/_pracownik.tsx`) trzyma jeden `Drawer` z rozmową (`RequestsChat`); `RequestsSection` to już tylko okienko „Twoje prośby” i zgłasza swój miesiąc przez `useScreenChatScope`. Bez ekranu „Kiedy mogę” czat bierze okres z `GET /api/me/availability` (osobny klucz zapytania z dopiskiem `chat`, żeby nie zmieniać `gcTime: 0` ekranu kalendarza; odświeżany przy otwarciu), a bez okresu bieżący miesiąc. `EmployeeChatTab` to czwarta zakładka paska na telefonie (`md:hidden`); od `md` przycisk w rogu. Niewysłany tekst czatu trzyma provider, osobno dla każdej rozmowy.
+- Bez zmian w API.
 
 ## Czat asystenta (18.11.2026)
 
