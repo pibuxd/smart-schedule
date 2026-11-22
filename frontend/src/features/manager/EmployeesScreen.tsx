@@ -13,10 +13,12 @@ import {
 } from '../../api/generated/staffing/staffing'
 import { useCancelInvitation, useInviteToLocation, useLocationInvitations } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
+import { Disclosure } from '../../components/ui/disclosure'
 import { CheckField, Section, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
+import { BAD_RATE, parseRate, rateInput, rateText } from '../../lib/money'
 import { prettyPhone } from '../auth/phone'
 import { useManager } from './ManagerContext'
 import { EXPERIENCE, shifts } from './words'
@@ -211,6 +213,12 @@ function EmployeeForm({
         .map((level) => [level.position_id, level.experience]),
     ),
   )
+  // Own hourly rates on single positions, as typed (position id -> "34,50"); empty = the position's rate.
+  const ownRates = new Map((employee.position_rates ?? []).map((r) => [r.position_id, r.hourly_rate]))
+  const [rates, setRates] = useState<Record<string, string>>(() =>
+    Object.fromEntries([...ownRates].map(([id, rate]) => [id, rateInput(rate)])),
+  )
+  const [badRate, setBadRate] = useState(false)
   const [max, setMax] = useState(employee.max_hours_month?.toString() ?? '')
   const [target, setTarget] = useState(employee.target_hours_month?.toString() ?? '')
   const [active, setActive] = useState(employee.is_active)
@@ -219,6 +227,10 @@ function EmployeeForm({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
+    const wantedRates = chosen.map((id) => ({ position_id: id, hourly_rate: parseRate(rates[id] ?? '') }))
+    const typo = wantedRates.some((r) => r.hourly_rate !== null && Number.isNaN(r.hourly_rate))
+    setBadRate(typo)
+    if (typo) return
     // Positions and their levels change only in this location (a person can work in several).
     const data: EmployeeIn = { revision: employee.revision, location_id: locationId }
     if (first !== employee.first_name) data.first_name = first
@@ -233,6 +245,11 @@ function EmployeeForm({
     const originalLevels = employee.position_experience.filter((p) => p.experience !== employee.experience)
     if (chosen.some((id) => levels[id] !== originalLevels.find((p) => p.position_id === id)?.experience)) {
       data.position_experience = chosen.map((id) => ({ position_id: id, experience: levels[id] ?? experience }))
+    }
+    // With new positions too: a position checked again gets what the form shows, not a rate it had long ago.
+    const ratesChanged = wantedRates.some((r) => r.hourly_rate !== (ownRates.get(r.position_id) ?? null))
+    if (wantedRates.length > 0 && (data.position_ids || ratesChanged)) {
+      data.position_rates = wantedRates
     }
     update.mutate(
       { employeeId: employee.id, data },
@@ -330,6 +347,14 @@ function EmployeeForm({
             ))}
         </fieldset>
       )}
+      {chosen.length > 0 && (
+        <OwnRates
+          positions={positions.filter((p) => chosen.includes(p.id))}
+          rates={rates}
+          onChange={(id, value) => setRates((now) => ({ ...now, [id]: value }))}
+        />
+      )}
+      {badRate && <InlineError>{BAD_RATE}</InlineError>}
       {shared && (
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
@@ -377,6 +402,46 @@ function EmployeeForm({
       </Button>
       <RemoveEmployee employee={employee} locationId={locationId} onDone={onDone} />
     </form>
+  )
+}
+
+/** "Własna stawka": the person's own hourly rate on their positions here, folded away because few people need it. */
+function OwnRates({
+  positions,
+  rates,
+  onChange,
+}: {
+  positions: PositionOut[]
+  rates: Record<string, string>
+  onChange: (positionId: string, value: string) => void
+}) {
+  const set = positions.filter((p) => (rates[p.id] ?? '').trim() !== '')
+  return (
+    <Disclosure
+      summary={
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-semibold">Własna stawka</span>
+          <span className="text-sm text-ink-muted">
+            {set.length ? set.map((p) => `${p.name}: ${rates[p.id]} zł/h`).join(', ') : 'taka jak na stanowisku'}
+          </span>
+        </span>
+      }
+    >
+      <div className="grid gap-3 pt-2">
+        <p className="m-0 text-sm text-ink-muted">Liczy się tylko do szacunku wypłaty. Puste pole = stawka stanowiska.</p>
+        {positions.map((p) => (
+          <TextField
+            key={p.id}
+            label={`${p.name}, zł/h`}
+            inputMode="decimal"
+            className="max-w-60"
+            value={rates[p.id] ?? ''}
+            onChange={(e) => onChange(p.id, e.target.value)}
+            hint={p.hourly_rate != null ? `Stanowisko: ${rateText(p.hourly_rate)}` : 'Stanowisko nie ma stawki.'}
+          />
+        ))}
+      </div>
+    </Disclosure>
   )
 }
 

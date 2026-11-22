@@ -167,12 +167,13 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 
 | Model | Pola | Uwagi |
 |---|---|---|
-| `Position` | location, name | np. Sprzedawca, Piekarz, Kierownik zmiany |
+| `Position` | location, name, hourly_rate (zł/h, puste = bez stawki) | np. Sprzedawca, Piekarz, Kierownik zmiany; stawka tylko do szacunku wypłaty (sekcja 35) |
 | `ShiftType` | location, name, start_time, end_time, kind (fixed/flexible), is_closing | koniec przed początkiem = przez północ |
 | `StaffingRule` | location, weekday, shift_type, position, count, start/end (tylko dla zmian z dowolnymi godzinami) | unikalne (location, weekday, shift_type, position) |
 | `StaffingException` | location, date, shift_type, position, count, start/end (opcjonalnie inne godziny) | np. Wigilia, dzień bez obsady (count=0) |
 | `EmployeeProfile` | membership, home_location, positions (M2M), experience (1 początkujący / 2 samodzielny / 3 doświadczony), max_hours_month, target_hours_month, is_active | zlecenie domyślne, stopień 2; stopnia nie widzi pracownik |
 | `PositionExperience` | employee, position, level (1–3) | stopień inny niż domyślny na jednym stanowisku; jeden wiersz na parę |
+| `PersonalRate` | employee, position, hourly_rate | własna stawka osoby na stanowisku zamiast stawki stanowiska; jeden wiersz na parę (sekcja 35) |
 
 ### Dyspozycyjność i prośby
 
@@ -262,7 +263,7 @@ Grafik
 - `GET /generation-runs/{id}` · `GET /versions/{id}` (zmiany, przypisania, ocena, zasady, niespełnione prośby, historia wersji)
 - `POST /versions/{id}/check` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena + `can_force`) · `GET /versions/{id}/shifts/{shift_id}/drops` (wynik upuszczenia osoby z tej zmiany na każdą inną zmianę, liczony raz na początku przeciągania) · `PATCH /versions/{id}/assignments` (wpisanie, zamiana, zostawienie bez obsady; `force` zapisuje mimo twardej reguły) · `GET /versions/{id}/employees/{employee_id}/fit` (dyspozycje osoby na zmianach, do podświetlania) · `POST /versions/{id}/shifts/{shift_id}/pin`
 - `POST /versions/{id}/draft` (poprawka opublikowanego grafiku) · `DELETE /versions/{id}` (usunięcie szkicu, sekcja 33) · `POST /versions/{id}/publish` · `GET /versions/{id}/shifts/{shift_id}/explain`
-- `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin, współpracownicy na zmianie)
+- `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin i szacunek wypłaty w miesiącu, współpracownicy na zmianie)
 
 Oddawanie zmian i powiadomienia
 - `POST /me/shifts/{assignment_id}/offer` · `POST /offers/{id}/cancel` · `GET /me/offers?company_id=` · `POST /offers/{id}/claim` · `POST /claims/{id}/withdraw`
@@ -270,7 +271,7 @@ Oddawanie zmian i powiadomienia
 - `GET /me/notifications?company_id=` · `POST /me/notifications/read`
 
 Raporty
-- `GET /reports/hours?company_id=&month=` · `GET /reports/hours.csv?company_id=&month=`
+- `GET /reports/hours?company_id=&month=` · `GET /reports/hours.csv?company_id=&month=` (godziny i szacunek wypłat, sekcja 35)
 
 Admin Django: kody subskrypcji (generowanie partii, podgląd użyć), firmy, profile wag.
 
@@ -279,7 +280,7 @@ Admin Django: kody subskrypcji (generowanie partii, podgląd użyć), firmy, pro
 Pracownik (telefon)
 1. Logowanie: numer telefonu → kod (duże pola, automatyczne przejście, "wyślij ponownie" z odliczaniem).
 2. Zaproszenie: nazwa firmy i lokalu, Akceptuj / Odrzuć.
-3. Mój grafik: lista najbliższych zmian (data, lokal, godziny, stanowisko, kto ze mną), suma godzin, "Oddaj zmianę", sekcja "Zmiany do wzięcia" z przyciskiem "Biorę".
+3. Mój grafik: lista najbliższych zmian (data, lokal, godziny, stanowisko, kto ze mną), suma godzin i szacunek wypłaty, "Oddaj zmianę", sekcja "Zmiany do wzięcia" z przyciskiem "Biorę".
 4. Kiedy mogę: kalendarz okresu z czterema stanami (kolor + ikona + wzór, podpis na przyciskach pędzla), wybór stanu "pędzlem" na dole, potem stuknięcie lub przeciągnięcie po dniach, "Powtarzaj co tydzień do…", "Skopiuj z poprzedniego miesiąca", termin zgłoszenia; na dole "Coś jeszcze?" na prośbę tekstem i pokazanie, jak system ją zrozumiał.
 
 Menedżer (komputer)
@@ -291,7 +292,7 @@ Menedżer (komputer)
 6. Zasady: jedna lista do przeciągania, przełącznik włącz/wyłącz, "bez wyjątków", parametry, podgląd skutku przed zapisaniem.
 7. Grafik: siatka dni × zmiany, trzy wartości oceny, dziury wyraźnie oznaczone, przeciąganie i przypinanie z walidacją na żywo, wyjaśnienia po kliknięciu, publikacja i historia wersji.
 8. Oddane zmiany: lista do zatwierdzenia.
-9. Godziny: podsumowanie miesiąca z podziałem na lokale, eksport CSV.
+9. Godziny: podsumowanie miesiąca z podziałem na lokale i szacunkiem wypłat, eksport CSV.
 
 Każdy ekran ma stan pusty, ładowania i błędu.
 
@@ -1145,3 +1146,44 @@ Założenia: pytanie czeka, dopóki asystent je pamięta (10 wiadomości; decyzj
 na następną wiadomość). Potem pierwsza wiadomość zostaje niezapisana, ale „Twoje prośby” pokazują ją jako czekającą
 (można ją napisać od nowa albo przekazać kierownikowi). Zgłoszenia innych godzin z
 wiadomości z pytaniem pokazują się jak dotąd, bo i tak wysyła je dopiero pracownik.
+
+## 35. Oczekiwana wypłata (22.11.2026)
+
+Prośba Piotra (spec.md, „Oczekiwana wypłata”): przy godzinach pracownik widzi szacunek wypłaty, a kierownik sumy do
+wypłaty.
+
+- `Position.hourly_rate` (Decimal 7,2, puste = bez stawki, większa od zera) i model `staffing.PersonalRate` (osoba,
+  stanowisko, `hourly_rate`; jeden wiersz na parę; migracja `staffing.0009`). Stawka zmiany: własna stawka osoby na
+  stanowisku zmiany, inaczej stawka stanowiska, inaczej brak. Generator, walidator i oceny stawek nie czytają.
+- Liczenie: `apps/worktime/pay.py`. `shift_rates(assignments)` (potrzebuje `shift__position`) i `Pay`, który dodaje
+  sekundy z `worked_hours` razy stawka w `Decimal` i zaokrągla do grosza raz na końcu (ROUND_HALF_UP). Godziny bez
+  stawki idą osobno (`unpriced_hours`), nigdy jako 0 zł. Suma raportu to suma zaokrąglonych kwot osób, żeby tabela i
+  CSV się zgadzały.
+- API: `PositionIn.hourly_rate` (POST; PATCH zmienia stawkę tylko, gdy jest w treści, null ją usuwa),
+  `PositionOut.hourly_rate`. `EmployeeIn.position_rates` (lista `PositionRate`: stanowisko osoby w `location_id`
+  i kwota albo null = stawka stanowiska; stanowiska spoza listy zostają bez zmian, stanowisko spoza osoby i lokalu =
+  400) i `EmployeeOut.position_rates` (tylko ustawione, tylko stanowiska z wyświetlanego lokalu); rewizja obejmuje
+  wszystkie stawki osoby. Kwoty w API to liczby (złote), spoza 0,01–10 000 zł dają 400 z polskim zdaniem.
+  `MonthHoursOut.pay` i `unpriced_hours` w `/me/schedule`; `EmployeeHoursOut.pay`, `unpriced_hours` i
+  `HoursReportOut.pay`, `unpriced_hours` w `/reports/hours`; w CSV kolumny „Wypłata brutto, zł (szacunek)” (pusta bez
+  stawki) i „Godziny bez stawki” przed „Uwagi”. `pay` = null, gdy żadna godzina nie miała stawki.
+- Własne stawki nie znikają, gdy osoba traci stanowisko (odznaczenie, usunięcie stanowiska z grafików, odejście z
+  lokalu, usunięcie osoby): dawne zmiany liczą się dalej z tą stawką. Formularz pracownika wysyła stawki wszystkich
+  zaznaczonych stanowisk, więc po ponownym zaznaczeniu stanowiska liczy się to, co widać w formularzu. Stanowisko
+  usunięte całkiem (bez zmian w grafikach) zabiera stawki kaskadą.
+- UI: „Stanowiska” w ustawieniach lokalu pokazują stawkę („31,40 zł/h” albo „bez stawki”), „Zmień” edytuje nazwę i
+  stawkę, nowe stanowisko ma pole stawki. Formularz pracownika ma zwijaną część „Własna stawka” (`Disclosure`) z
+  polem dla każdego zaznaczonego stanowiska; puste = stawka stanowiska (w podpowiedzi). „Mój grafik”: druga linia
+  „Szacunkowa wypłata brutto” w ramce miesiąca, tylko gdy `pay` nie jest null, i zdanie o godzinach bez stawki.
+  „Godziny”: kolumna „Wypłata” i suma w stopce, podpis tabeli „Wypłata to szacunek brutto…”, a gdy w miesiącu nic
+  nie ma stawki, jedno zdanie, że stawki ustawia się przy stanowiskach w ustawieniach lokalu. Kwoty
+  `lib/money.ts` (`Intl.NumberFormat` pl-PL, PLN).
+- Asystent: opisy narzędzi `my_schedule` i `hours_report` mówią o `pay` i `unpriced_hours`, więc odpowiada o
+  wypłacie tak jak o godzinach. Pracownik widzi tylko swoją wypłatę (te same uprawnienia co ekran).
+- Dane przykładowe (`seed_demo`) mają stawki stanowisk; firmy testowe (`seed_test_data`) nie, żeby było widać stan
+  bez stawek.
+
+Założenia: stawka jest jedna na stanowisko i jest liczona taka, jaka jest teraz (bez historii „od dnia”), więc
+zmiana stawki przelicza minione miesiące. Bez dodatków za noc, niedzielę i święta, bez podatku i składek (aplikacja
+nie zna umowy, sekcja 17). Kwota jest brutto, bo stawkę za godzinę zwykle podaje się brutto. Pracownik widzi wypłatę za
+cały miesiąc z opublikowanych zmian, także przyszłych, bo o to chodzi w „oczekiwanej” wypłacie.

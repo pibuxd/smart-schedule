@@ -151,6 +151,7 @@ export * from './positionLevel';
 export * from './positionLevelExperience';
 export * from './positionNameOut';
 export * from './positionOut';
+export * from './positionRate';
 export * from './previewOut';
 export * from './previousAgreementsOut';
 export * from './previousAgreementsParams';

@@ -1,5 +1,6 @@
 """Location settings: positions, shift types, staffing, and employee profiles."""
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -20,11 +21,29 @@ class Weekday(models.IntegerChoices):
 WEEKDAY_RANGE = Q(weekday__gte=0, weekday__lte=6)
 
 
+def hourly_rate_field(verbose_name: str) -> models.DecimalField:
+    """Złoty per hour before tax (an estimate of pay, docs/plan.md section 35); empty = no rate."""
+    return models.DecimalField(
+        verbose_name,
+        max_digits=7,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0.01)],
+    )
+
+
+RATE_POSITIVE = Q(hourly_rate__isnull=True) | Q(hourly_rate__gt=0)
+
+
 class Position(CompanyOwnedModel):
     company_from = "location"
 
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="positions")
     name = models.CharField("nazwa", max_length=100)
+    # What an hour on this position pays (a person may have their own rate here, `PersonalRate`). Only for the
+    # estimate of pay next to the hours; the generator never reads it.
+    hourly_rate = hourly_rate_field("stawka za godzinę")
     # A position used in a saved schedule cannot be deleted, so "Usuń" hides it instead: it leaves staffing,
     # people and every list, and only old schedules still show its name. Read live positions with `removed_at=None`.
     removed_at = models.DateTimeField("usunięte", null=True, blank=True)
@@ -36,7 +55,8 @@ class Position(CompanyOwnedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["location", "name"], condition=Q(removed_at__isnull=True), name="position_unique_name"
-            )
+            ),
+            models.CheckConstraint(condition=RATE_POSITIVE, name="position_rate_positive"),
         ]
 
     def __str__(self) -> str:
@@ -268,3 +288,28 @@ class PositionExperience(CompanyOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.employee}: {self.position.name} – {self.get_level_display()}"
+
+
+class PersonalRate(CompanyOwnedModel):
+    """A person's own hourly rate on one position, instead of the position's (`Position.hourly_rate`): someone
+    experienced may earn more at the till than the till's usual rate. No row = the position's rate. Set by the
+    manager of the position's location, like the person's positions there."""
+
+    company_from = "employee"
+
+    employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name="personal_rates")
+    position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name="personal_rates")
+    hourly_rate = models.DecimalField(
+        "stawka za godzinę", max_digits=7, decimal_places=2, validators=[MinValueValidator(0.01)]
+    )
+
+    class Meta:
+        verbose_name = "stawka osoby na stanowisku"
+        verbose_name_plural = "stawki osób na stanowiskach"
+        constraints = [
+            models.UniqueConstraint(fields=["employee", "position"], name="personal_rate_unique"),
+            models.CheckConstraint(condition=Q(hourly_rate__gt=0), name="personal_rate_positive"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee}: {self.position.name} – {self.hourly_rate} zł/h"

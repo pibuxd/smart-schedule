@@ -7,12 +7,13 @@ import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
 import { monthName, shiftMonth } from '../../lib/dates'
+import { moneyText } from '../../lib/money'
 import { useManager } from './ManagerContext'
 import { ChangeHours, HoursReports } from './WorkedHours'
 
 const hours = (value: number) => value.toLocaleString('pl-PL', { maximumFractionDigits: 2 })
 
-/** Hours of published shifts in a month, per person and location, and the CSV for payroll. */
+/** Hours of published shifts in a month, per person and location, with the estimated pay, and the CSV for payroll. */
 export function HoursScreen({ today = new Date() }: { today?: Date }) {
   const { companyId } = useManager()
   const [month, setMonth] = useState(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
@@ -79,72 +80,97 @@ function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: 
   const many = data.locations.length > 1
   // Only when someone worked other hours than the schedule says, so the usual table stays short.
   const other = data.rows.some((row) => (row.longer ?? 0) > 0 || (row.shorter ?? 0) > 0)
+  // Only once some shift of the month has a rate (positions in the location settings).
+  const pay = data.pay != null
   return (
-    <div className="overflow-x-auto rounded-md border border-line bg-surface">
-      <table className="w-full border-collapse text-left">
-        {other && (
-          <caption className="caption-bottom px-3 py-2 text-left text-sm text-ink-muted">
-            Nadgodziny to tu godziny ponad grafik, nie nadgodziny z Kodeksu pracy. Do wypłaty sprawdź normy czasu pracy.
-          </caption>
-        )}
-        <thead>
-          <tr className="border-b-2 border-ink">
-            <th className="px-3 py-2">Osoba</th>
-            <th className="px-3 py-2 text-right">Zmiany</th>
-            {many && data.locations.map((l) => <th key={l.id} className="px-3 py-2 text-right">{l.name}</th>)}
-            {other && (
-              <>
-                <th className="px-3 py-2 text-right">Nadgodziny</th>
-                <th className="px-3 py-2 text-right">Krócej</th>
-              </>
-            )}
-            <th className="px-3 py-2 text-right">Razem godzin</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.rows.map((row) => {
-            const by = new Map(row.by_location.map((h) => [h.location_id, h.hours]))
-            return (
-              <tr key={row.employee_id} className="border-b border-grid">
-                <td className="px-3 py-2">
-                  <span className="font-semibold">{row.name}</span>
-                  <span className="block text-sm text-ink-muted">{row.home_location_name}</span>
-                  {row.elsewhere && (
-                    <span className="block text-sm font-semibold text-prefer-not">
-                      Pracuje też w lokalach, których nie prowadzisz, więc suma jest niepełna.
-                    </span>
+    <div className="grid gap-2">
+      <div className="overflow-x-auto rounded-md border border-line bg-surface">
+        <table className="w-full border-collapse text-left">
+          {(other || pay) && (
+            <caption className="caption-bottom px-3 py-2 text-left text-sm text-ink-muted">
+              {pay && 'Wypłata to szacunek brutto: godziny razy stawka, bez dodatków, podatku i składek. '}
+              {other &&
+                'Nadgodziny to tu godziny ponad grafik, nie nadgodziny z Kodeksu pracy. Do wypłaty sprawdź normy czasu pracy.'}
+            </caption>
+          )}
+          <thead>
+            <tr className="border-b-2 border-ink">
+              <th className="px-3 py-2">Osoba</th>
+              <th className="px-3 py-2 text-right">Zmiany</th>
+              {many && data.locations.map((l) => <th key={l.id} className="px-3 py-2 text-right">{l.name}</th>)}
+              {other && (
+                <>
+                  <th className="px-3 py-2 text-right">Nadgodziny</th>
+                  <th className="px-3 py-2 text-right">Krócej</th>
+                </>
+              )}
+              <th className="px-3 py-2 text-right">Razem godzin</th>
+              {pay && <th className="px-3 py-2 text-right">Wypłata</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row) => {
+              const by = new Map(row.by_location.map((h) => [h.location_id, h.hours]))
+              return (
+                <tr key={row.employee_id} className="border-b border-grid">
+                  <td className="px-3 py-2">
+                    <span className="font-semibold">{row.name}</span>
+                    <span className="block text-sm text-ink-muted">{row.home_location_name}</span>
+                    {row.elsewhere && (
+                      <span className="block text-sm font-semibold text-prefer-not">
+                        Pracuje też w lokalach, których nie prowadzisz, więc suma jest niepełna.
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{row.shifts}</td>
+                  {many &&
+                    data.locations.map((l) => (
+                      <td key={l.id} className="px-3 py-2 text-right tabular-nums">
+                        {by.has(l.id) ? hours(by.get(l.id)!) : '–'}
+                      </td>
+                    ))}
+                  {other && (
+                    <>
+                      <td className="px-3 py-2 text-right tabular-nums">{row.longer ? `+${hours(row.longer)}` : '–'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{row.shorter ? `−${hours(row.shorter)}` : '–'}</td>
+                    </>
                   )}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">{row.shifts}</td>
-                {many &&
-                  data.locations.map((l) => (
-                    <td key={l.id} className="px-3 py-2 text-right tabular-nums">
-                      {by.has(l.id) ? hours(by.get(l.id)!) : '–'}
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{hours(row.total)}</td>
+                  {pay && (
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      <span className="whitespace-nowrap font-semibold">{row.pay != null ? moneyText(row.pay) : '–'}</span>
+                      {(row.unpriced_hours ?? 0) > 0 && (
+                        <span className="block text-sm whitespace-nowrap text-prefer-not">{`${hours(row.unpriced_hours ?? 0)} h bez stawki`}</span>
+                      )}
                     </td>
-                  ))}
-                {other && (
-                  <>
-                    <td className="px-3 py-2 text-right tabular-nums">{row.longer ? `+${hours(row.longer)}` : '–'}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{row.shorter ? `−${hours(row.shorter)}` : '–'}</td>
-                  </>
-                )}
-                <td className="px-3 py-2 text-right font-semibold tabular-nums">{hours(row.total)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-ink">
-            <td
-              className="px-3 py-2 font-extrabold"
-              colSpan={2 + (many ? data.locations.length : 0) + (other ? 2 : 0)}
-            >
-              Razem
-            </td>
-            <td className="px-3 py-2 text-right font-extrabold tabular-nums">{hours(data.total)}</td>
-          </tr>
-        </tfoot>
-      </table>
+                  )}
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-ink">
+              <td
+                className="px-3 py-2 font-extrabold"
+                colSpan={2 + (many ? data.locations.length : 0) + (other ? 2 : 0)}
+              >
+                Razem
+              </td>
+              <td className="px-3 py-2 text-right font-extrabold tabular-nums">{hours(data.total)}</td>
+              {pay && (
+                <td className="px-3 py-2 text-right font-extrabold whitespace-nowrap tabular-nums">
+                  {moneyText(data.pay ?? 0)}
+                </td>
+              )}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {!pay && (
+        <p className="m-0 text-sm text-ink-muted">
+          Wpisz stawki przy stanowiskach w ustawieniach lokalu, a zobaczysz tu szacunek wypłat.
+        </p>
+      )}
     </div>
   )
 }

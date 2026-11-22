@@ -8,4 +8,6 @@
 export interface MonthHoursOut {
   month: string;
   hours: number;
+  pay?: number | null;
+  unpriced_hours?: number;
 }

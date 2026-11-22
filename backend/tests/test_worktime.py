@@ -555,8 +555,10 @@ def test_csv_has_overtime_and_shorter_columns(api, bakery):
     text = api.get(f"/api/reports/hours.csv?company_id={b['company'].id}&month={day:%Y-%m}").content.decode("utf-8-sig")
 
     header, line = text.strip().splitlines()
-    assert header.endswith(";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Uwagi")
-    assert line.split(";")[-4:] == ["9,25", "1,25", "0,00", ""]
+    assert header.endswith(
+        ";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Wypłata brutto, zł (szacunek);Godziny bez stawki;Uwagi"
+    )
+    assert line.split(";")[-6:] == ["9,25", "1,25", "0,00", "", "9,25", ""]  # no rates: no pay
 
 
 # ----------------------------------------------------------------------------------------------- who may do what

@@ -2029,7 +2029,7 @@
             }
           }
         },
-        "description": "My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month\n(approved other hours count instead of the schedule's). Works in read-only mode.",
+        "description": "My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month\n(approved other hours count instead of the schedule's) with the estimated pay. Works in read-only mode.",
         "tags": [
           "scheduling"
         ],
@@ -4368,6 +4368,7 @@
             }
           }
         },
+        "description": "The name, and the hourly rate when sent (null clears it). A new rate counts for every month's pay.",
         "tags": [
           "staffing"
         ],
@@ -5293,7 +5294,7 @@
             }
           }
         },
-        "description": "Name, positions, experience level, monthly maximum and target, or switching the person off\n(history stays).",
+        "description": "Name, positions, experience level, own hourly rates, monthly maximum and target, or switching the person off\n(history stays).",
         "tags": [
           "staffing"
         ],
@@ -5731,7 +5732,7 @@
             }
           }
         },
-        "description": "Hours of published shifts in a month, per person and location (the locations this manager runs). Approved\nother hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.",
+        "description": "Hours of published shifts in a month, per person and location (the locations this manager runs). Approved\nother hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.\n`pay` estimates what to pay (hours × the shift's rate, before tax); hours without a rate are `unpriced_hours`.",
         "tags": [
           "reports"
         ],
@@ -10104,6 +10105,22 @@
           "hours": {
             "title": "Hours",
             "type": "number"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          },
+          "unpriced_hours": {
+            "default": 0,
+            "title": "Unpriced Hours",
+            "type": "number"
           }
         },
         "required": [
@@ -12684,6 +12701,17 @@
           "employees": {
             "title": "Employees",
             "type": "integer"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
           }
         },
         "required": [
@@ -12894,6 +12922,17 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
           }
         },
         "required": [
@@ -13186,6 +13225,13 @@
             "title": "Position Experience",
             "type": "array"
           },
+          "position_rates": {
+            "items": {
+              "$ref": "#/components/schemas/PositionRate"
+            },
+            "title": "Position Rates",
+            "type": "array"
+          },
           "max_hours_month": {
             "anyOf": [
               {
@@ -13297,6 +13343,33 @@
         "title": "PositionLevel",
         "type": "object"
       },
+      "PositionRate": {
+        "description": "The person's own hourly rate on one position (instead of the position's); null = the position's rate.",
+        "properties": {
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          }
+        },
+        "required": [
+          "position_id",
+          "hourly_rate"
+        ],
+        "title": "PositionRate",
+        "type": "object"
+      },
       "EmployeeIn": {
         "properties": {
           "revision": {
@@ -13379,6 +13452,20 @@
               }
             ],
             "title": "Position Experience"
+          },
+          "position_rates": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PositionRate"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Rates"
           },
           "max_hours_month": {
             "anyOf": [
@@ -13779,6 +13866,22 @@
           "elsewhere": {
             "title": "Elsewhere",
             "type": "boolean"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          },
+          "unpriced_hours": {
+            "default": 0,
+            "title": "Unpriced Hours",
+            "type": "number"
           }
         },
         "required": [
@@ -13815,6 +13918,22 @@
           },
           "total": {
             "title": "Total",
+            "type": "number"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          },
+          "unpriced_hours": {
+            "default": 0,
+            "title": "Unpriced Hours",
             "type": "number"
           },
           "latest_month": {

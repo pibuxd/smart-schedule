@@ -30,12 +30,14 @@ const change = (over = {}) => ({
   ...over,
 })
 
-const report = (rows: unknown[] = []) => ({
+const report = (rows: unknown[] = [], pay: number | null = null) => ({
   month: '2026-11',
   locations: [{ id: 'l1', name: 'Rynek' }],
   rows,
   total: 0,
   latest_month: null,
+  pay,
+  unpriced_hours: 0,
 })
 
 const row = (over = {}) => ({
@@ -73,14 +75,19 @@ const handoverShift = (over = {}) => ({
   ...over,
 })
 
-function api({ pending = [change()], recent = [] as unknown[], rows = [row()] } = {}) {
+function api({
+  pending = [change()],
+  recent = [] as unknown[],
+  rows = [row()],
+  pay = null as number | null,
+} = {}) {
   return mockApi((method, path) => {
     if (path === '/api/manager/hours-changes') return [200, { pending, recent, waiting: pending.length }]
     if (method === 'POST' && path.endsWith('/approve')) return [200, change({ status: 'approved' })]
     if (method === 'POST' && path.endsWith('/reject')) return [200, change({ status: 'rejected' })]
     if (method === 'POST' && path === '/api/assignments/as1/hours')
       return [200, { assignment_id: 'as1', planned_start_time: '06:00', planned_end_time: '14:00', worked: null }]
-    if (path === '/api/reports/hours') return [200, report(rows)]
+    if (path === '/api/reports/hours') return [200, report(rows, pay)]
     if (path === '/api/manager/overview') return [200, { locations: [{ id: 'l1', name: 'Rynek' }] }]
     if (path === '/api/locations/l1/handover-shifts') return [200, [handoverShift()]]
     return [404, { detail: 'Nie ma.' }]
@@ -132,6 +139,34 @@ describe('HoursScreen: other hours', () => {
     await screen.findByRole('columnheader', { name: 'Razem godzin' })
     expect(screen.queryByRole('columnheader', { name: 'Nadgodziny' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Kodeksu pracy/)).not.toBeInTheDocument()
+  })
+
+  it('shows the estimated pay per person and in total once there are rates', async () => {
+    api({
+      pending: [],
+      rows: [
+        row({ longer: 0, pay: 2559.1, unpriced_hours: 0 }),
+        row({ employee_id: 'e2', name: 'Ewa Nowak', longer: 0, pay: null, unpriced_hours: 16, total: 16 }),
+      ],
+      pay: 2559.1,
+    })
+    show()
+    expect(await screen.findByRole('columnheader', { name: 'Wypłata' })).toBeInTheDocument()
+    const anna = screen.getByText('Anna Wróbel', { selector: 'span' }).closest('tr')!
+    expect(anna).toHaveTextContent(/2559,10\szł/)
+    const ewa = screen.getByText('Ewa Nowak').closest('tr')!
+    expect(ewa).toHaveTextContent('–16 h bez stawki')
+    expect(screen.getByText('Razem').closest('tr')).toHaveTextContent(/2559,10\szł/)
+    expect(screen.getByText(/Wypłata to szacunek brutto/)).toBeInTheDocument()
+    expect(screen.queryByText(/Wpisz stawki przy stanowiskach/)).not.toBeInTheDocument()
+  })
+
+  it('says where to set rates when no shift has one', async () => {
+    api({ pending: [], rows: [row({ longer: 0 })] })
+    show()
+    await screen.findByRole('columnheader', { name: 'Razem godzin' })
+    expect(screen.queryByRole('columnheader', { name: 'Wypłata' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Wpisz stawki przy stanowiskach w ustawieniach lokalu/)).toBeInTheDocument()
   })
 
   it('lets the manager set the hours of a published shift alone', async () => {

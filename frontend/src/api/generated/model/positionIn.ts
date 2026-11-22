@@ -11,4 +11,5 @@ export interface PositionIn {
      * @maxLength 100
      */
   name: string;
+  hourly_rate?: number | null;
 }

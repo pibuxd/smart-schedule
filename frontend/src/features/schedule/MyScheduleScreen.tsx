@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
-import type { MyScheduleOut, MyShiftOut } from '../../api/generated/model'
+import type { MonthHoursOut, MyScheduleOut, MyShiftOut } from '../../api/generated/model'
 import { useMySchedule } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Section } from '../../components/ui/field'
@@ -20,6 +20,7 @@ import {
   weekdayLong,
   weekdayShort,
 } from '../../lib/dates'
+import { moneyText } from '../../lib/money'
 import { GiveAwaySheet } from './GiveAwaySheet'
 import { differenceText } from './hours'
 import { HoursSheet } from './HoursSheet'
@@ -108,13 +109,7 @@ export function MyScheduleScreen({
       )}
       <div className="grid gap-2">
         {data.months.map((month) => (
-          <div
-            key={month.month}
-            className="flex items-center justify-between gap-3 rounded-md border-2 border-ink bg-surface px-4 py-3.5"
-          >
-            <span>Razem {inMonth(month.month)}</span>
-            <b className="text-xl tabular-nums">{hoursText(month.hours)}</b>
-          </div>
+          <MonthTotal key={month.month} month={month} />
         ))}
       </div>
       {recent.length > 0 && <PastShifts shifts={recent} onReport={report} />}
@@ -124,6 +119,32 @@ export function MyScheduleScreen({
         now={today}
         onClose={() => setReporting(null)}
       />
+    </div>
+  )
+}
+
+/** "Razem w listopadzie" and, once the manager has set rates, the estimated pay for the month's published shifts. */
+function MonthTotal({ month }: { month: MonthHoursOut }) {
+  const unpriced = month.unpriced_hours ?? 0
+  return (
+    <div className="grid gap-1 rounded-md border-2 border-ink bg-surface px-4 py-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <span>Razem {inMonth(month.month)}</span>
+        <b className="text-xl tabular-nums">{hoursText(month.hours)}</b>
+      </div>
+      {month.pay != null && (
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <span>Szacunkowa wypłata brutto</span>
+            <b className="tabular-nums">{moneyText(month.pay)}</b>
+          </div>
+          {unpriced > 0 && (
+            <p className="m-0 text-sm text-ink-muted">
+              {`Bez ${hoursText(unpriced)}, bo kierownik nie ustawił dla nich stawki.`}
+            </p>
+          )}
+        </>
+      )}
     </div>
   )
 }

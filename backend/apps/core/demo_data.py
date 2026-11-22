@@ -365,9 +365,20 @@ def _create_bakery_company(rng: random.Random, start: date, end: date) -> dict[s
     }
 
 
+# Hourly rates of the demo positions in złoty (the estimate of pay next to the hours).
+DEMO_RATES = {
+    "Sprzedawca": Decimal("31.40"),
+    "Piekarz": Decimal("36.00"),
+    "Kierownik zmiany": Decimal("40.00"),
+    "Kierowca": Decimal("34.00"),
+    "Barista": Decimal("32.50"),
+    "Kelner": Decimal("31.40"),
+}
+
+
 def _bakery_settings(location: Location, spec: BakerySpec, start: date, end: date):
     positions = {
-        name: Position.objects.create(location=location, name=name)
+        name: Position.objects.create(location=location, name=name, hourly_rate=DEMO_RATES[name])
         for name in ["Sprzedawca", "Piekarz", "Kierownik zmiany", *(["Kierowca"] if spec.drivers else [])]
     }
     night = ShiftType.objects.create(location=location, name="Nocna", start_time=TIME(22), end_time=TIME(6))
@@ -678,8 +689,8 @@ def _create_cafe_company(rng: random.Random, start: date, end: date) -> dict[str
     )
     owner.locations.add(location)
     WeightProfile.objects.create(location=location, manager_share=Decimal("0.90"))
-    barista = Position.objects.create(location=location, name="Barista")
-    waiter = Position.objects.create(location=location, name="Kelner")
+    barista = Position.objects.create(location=location, name="Barista", hourly_rate=DEMO_RATES["Barista"])
+    waiter = Position.objects.create(location=location, name="Kelner", hourly_rate=DEMO_RATES["Kelner"])
     opening = ShiftType.objects.create(location=location, name="Otwarcie", start_time=TIME(7), end_time=TIME(15))
     closing = ShiftType.objects.create(
         location=location, name="Zamknięcie", start_time=TIME(14), end_time=TIME(22), is_closing=True

@@ -93,6 +93,56 @@ describe('EmployeesScreen', () => {
     ])
   })
 
+  it('sets an own hourly rate on one position and leaves the other at the position’s rate', async () => {
+    const two = {
+      ...person('e1', 'Ala', 2),
+      position_ids: ['p1', 'p2'],
+      position_experience: [
+        { position_id: 'p1', experience: 2 },
+        { position_id: 'p2', experience: 2 },
+      ],
+      position_rates: [{ position_id: 'p2', hourly_rate: 35 }],
+    }
+    const positions = [
+      { id: 'p1', name: 'Kelner', employees: 2, hourly_rate: 31.4 },
+      { id: 'p2', name: 'Barista', employees: 1, hourly_rate: null },
+    ]
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) return [200, [two]]
+      if (path.endsWith('/setup')) return [200, { ...setup, positions }]
+      if (path.endsWith('/invitations')) return [200, []]
+      if (method === 'PATCH') return [200, two]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText('Barista: 35,00 zł/h')).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByText('Własna stawka'))
+    const waiter = within(sheet).getByLabelText('Kelner, zł/h')
+    expect(waiter).toHaveValue('')
+    expect(within(sheet).getByText(/Stanowisko: 31,40\szł\/h/)).toBeInTheDocument()
+    fireEvent.change(waiter, { target: { value: '3x' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
+    expect(await within(sheet).findByText('Wpisz stawkę w złotych, np. 31,40.')).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
+
+    fireEvent.change(waiter, { target: { value: '33,5' } })
+    fireEvent.change(within(sheet).getByLabelText('Barista, zł/h'), { target: { value: '' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    const body = calls.find((c) => c.method === 'PATCH')!.body as { position_rates: unknown }
+    expect(body.position_rates).toEqual([
+      { position_id: 'p1', hourly_rate: 33.5 },
+      { position_id: 'p2', hourly_rate: null },
+    ])
+  })
+
   it('lets a manager who also works shifts add themselves with one button', async () => {
     let added = false
     const me = { ...person('e9', 'Teresa', 2), phone: '+48500100100', is_manager: true }
