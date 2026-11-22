@@ -27,7 +27,9 @@ i wszystkim razem. Piotr zawsze na to patrzył w Kadromierzu.
   dnia” to pomysł na później). Przed podwyżką warto pobrać plik CSV za miesiąc, który nie jest jeszcze wypłacony.
   Własna stawka zostaje, gdy osoba traci stanowisko albo odchodzi z lokalu, żeby jej dawne zmiany liczyły się tak jak
   wcześniej.
-- Asystent czyta wypłatę z tych samych ekranów (pracownik tylko swoją), więc odpowie na „ile zarobię w listopadzie?”.
+- Asystent nie zna kwot: wypłaty i stawki nie trafiają do zewnętrznej usługi AI (uwaga z przeglądu Prelint z
+  22.11.2026: to dane wrażliwsze niż godziny, a ekrany o tym nie mówią). Na „ile zarobię w listopadzie?” odpowiada,
+  gdzie to sprawdzić.
 
 ## Asystent przez OpenRouter (decyzja Piotra z 21.11.2026)
 

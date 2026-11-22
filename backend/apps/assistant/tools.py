@@ -26,8 +26,11 @@ logger = logging.getLogger(__name__)
 
 # One tool result goes back to the model in full up to this size; larger ones are cut with a note.
 MAX_RESULT_CHARS = 40_000
-# Never sent to the model: phone numbers (personal data) and fields that only drive the screens.
-DROPPED_KEYS = frozenset({"phone", "phone_e164", "revision", "headers", "link"})
+# Never sent to the model: phone numbers (personal data), fields that only drive the screens, and money: estimated
+# pay and hourly rates stay in the app, out of the external AI service (docs/plan.md, section 35).
+DROPPED_KEYS = frozenset(
+    {"phone", "phone_e164", "revision", "headers", "link", "pay", "unpriced_hours", "hourly_rate", "position_rates"}
+)
 
 NULLABLE_DATE = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "YYYY-MM-DD albo null"}
 NULLABLE_ID = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Identyfikator (UUID) albo null"}
@@ -89,9 +92,7 @@ EMPLOYEE_TOOLS = (
         "Ekran „Mój grafik”: moje opublikowane zmiany, które się nie skończyły (shifts: data, godziny z grafiku, "
         "lokal, stanowisko, kto jest ze mną, czy oddaję zmianę), moje zmiany z ostatnich 14 dni (recent), przy "
         "zmianie godziny naprawdę zatwierdzone przez kierownika (worked) i moje zgłoszenie czekające na kierownika "
-        "(report), oraz suma moich godzin w każdym miesiącu (liczy zatwierdzone godziny) z szacunkową wypłatą brutto "
-        "(pay w zł: godziny razy stawka, bez podatku i składek; null = kierownik nie ustawił stawek; unpriced_hours = "
-        "godziny bez stawki, nie liczone w pay).",
+        "(report), oraz suma moich godzin w każdym miesiącu (liczy zatwierdzone godziny).",
         fixed=_company(),
         narrow=(Narrow("shifts", date="date"), Narrow("recent", date="date")),
     ),
@@ -215,8 +216,7 @@ MANAGER_TOOLS = (
         "hours_report",
         "/api/reports/hours",
         "Ekran „Godziny”: godziny z opublikowanych grafików w miesiącu na osobę i lokal (zatwierdzone inne godziny "
-        "liczą się zamiast grafiku; longer = nadgodziny, shorter = krótsze zmiany, w godzinach) i szacunek wypłaty "
-        "brutto (pay w zł: godziny razy stawka zmiany; null = brak stawek; unpriced_hours = godziny bez stawki).",
+        "liczą się zamiast grafiku; longer = nadgodziny, shorter = krótsze zmiany, w godzinach).",
         params={"month": {"type": "string", "description": "RRRR-MM"}},
         fixed=_company(),
         narrow=(Narrow("rows", person=("name",)),),

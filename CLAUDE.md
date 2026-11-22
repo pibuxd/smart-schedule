@@ -161,7 +161,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - Estimated pay ("Mój grafik", "Godziny", CSV): `apps/worktime/pay.py`, the hours from `worked_hours` times the shift's
   rate (the person's `PersonalRate` on that position, else `Position.hourly_rate`). Hours without a rate are
   `unpriced_hours`, never 0 zł, and `pay` is null when nothing had a rate (screens then show no pay). Rates are read as
-  they are now (no history) and only managers see them; the generator, validator and scores never read them.
+  they are now (no history) and only managers see them; the generator, validator and scores never read them, and
+  `assistant/tools.DROPPED_KEYS` keeps pay and rates away from the language model.
 - Assistant (a language model): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   On OpenRouter the structured answer is a call of the `final_answer` tool (never `response_format` next to tools:
   providers then force JSON on every round and no tool gets called); on Anthropic it is `output_config.format`.

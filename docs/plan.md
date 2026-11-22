@@ -1178,8 +1178,9 @@ wypłaty.
   „Godziny”: kolumna „Wypłata” i suma w stopce, podpis tabeli „Wypłata to szacunek brutto…”, a gdy w miesiącu nic
   nie ma stawki, jedno zdanie, że stawki ustawia się przy stanowiskach w ustawieniach lokalu. Kwoty
   `lib/money.ts` (`Intl.NumberFormat` pl-PL, PLN).
-- Asystent: opisy narzędzi `my_schedule` i `hours_report` mówią o `pay` i `unpriced_hours`, więc odpowiada o
-  wypłacie tak jak o godzinach. Pracownik widzi tylko swoją wypłatę (te same uprawnienia co ekran).
+- Asystent: `tools.DROPPED_KEYS` usuwa z wyników narzędzi `pay`, `unpriced_hours`, `hourly_rate` i
+  `position_rates`, więc kwoty nie trafiają do zewnętrznej usługi AI (uwaga Prelint z 22.11.2026). Przewodniki po
+  ekranach mówią, gdzie jest szacunek wypłaty i stawki, a asystent odsyła tam przy pytaniu o pieniądze.
 - Dane przykładowe (`seed_demo`) mają stawki stanowisk; firmy testowe (`seed_test_data`) nie, żeby było widać stan
   bez stawek.
 

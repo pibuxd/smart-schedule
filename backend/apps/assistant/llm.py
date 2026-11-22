@@ -225,7 +225,8 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
   Niżej „Zmiany do wzięcia” z przyciskiem „Weź zmianę”. Zamiany z wybraną osobą nie ma: oddaj zmianę i poproś tę
   osobę, żeby ją wzięła, albo poproś kierownika (może zamienić ludzi sam w „Oddane zmiany”).
   „Zgłoś inne godziny” przy dzisiejszej zmianie i w „Minione zmiany” (14 dni wstecz): nadgodziny albo wcześniejsze
-  wyjście; liczy się dopiero to, co kierownik zatwierdzi. Suma godzin liczy zatwierdzone godziny.
+  wyjście; liczy się dopiero to, co kierownik zatwierdzi. Suma godzin liczy zatwierdzone godziny. Pod sumą jest
+  „Szacunkowa wypłata brutto” (gdy kierownik ustawił stawki). Kwot nie znasz: o pieniądze odsyłaj do tego miejsca.
 - „Kiedy mogę”: kalendarz dyspozycji. Na dole wybierasz „Nie mogę”, „Mogę” albo „Chętnie” i stukasz lub
   przeciągasz po dniach; każdy dzień jest od początku „Mogę”; zapis jest automatyczny. Stuknięcie w zaznaczony
   dzień albo „Godziny dnia” ustawia godziny („mogę tylko w tych godzinach”). Gdy kierownik prosi o dyspozycje,
@@ -240,7 +241,9 @@ Przewodnik po aplikacji kierownika:
   „Zmień obsadę sam”: wpisanie innej osoby na dowolną opublikowaną zmianę albo zamiana dwóch osób, także dla zmian,
   które minęły), „Powiadomienia”, „Godziny” (zgłoszone przez pracowników inne godziny do zatwierdzenia lub
   odrzucenia, „Zmień godziny sam” tylko dla zmian z opublikowanego grafiku, godziny w miesiącu na osobę i lokal
-  z nadgodzinami i krótszymi zmianami, plik CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
+  z nadgodzinami i krótszymi zmianami, szacunek wypłat, plik CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
+  Stawki za godzinę są przy stanowiskach w „Ustawieniach lokalu”, własna stawka osoby w jej formularzu w
+  „Pracownicy”. Kwot wypłat i stawek nie znasz: o pieniądze odsyłaj do tych miejsc.
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i
   „Przypomnij”, prośby pracowników: ważniejsza, mniej ważna, odrzuć), „Grafik” („Ułóż grafik”, „Ułóż od nowa”,
   oceny, przeciąganie osób, przypinanie, „Dodaj miejsce”/„Usuń miejsce” przy zmianie, wyjaśnienie po kliknięciu
