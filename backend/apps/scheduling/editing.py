@@ -13,7 +13,7 @@
 - `add_seat` / `remove_seat`: one more or one fewer place on a shift of one day. The same number is saved as that
   date's staffing (`apps.staffing.day_staffing`), so arranging the schedule again keeps it.
 - `start_draft`: editing a published schedule starts a new draft copy (publishing makes it the published one).
-- `delete_draft`: "Usuń szkic" removes the newest draft and the unpublished versions since the last publication.
+- `delete_draft`: "Usuń szkic" removes only the newest draft; the version before it is current again.
 - `publish`: the draft becomes the published version, the previous one is kept as history, the history of
   assignments (`AssignmentEvent`) gets one row for every slot whose person changed, open offers of given-away
   shifts follow the slot (or end, when the giver lost it), and the employees of the location get an in-app notice.
@@ -755,9 +755,9 @@ def supersede_older_drafts(period: SchedulePeriod, newer_than: ScheduleVersion) 
 
 
 def delete_draft(version: ScheduleVersion) -> SchedulePeriod:
-    """ "Usuń szkic": the newest draft goes for good, with every unpublished version since the last publication
-    (drafts that arranging again turned into history; nobody saw them). Versions that were ever published stay. With
-    nothing published, the period goes back to collecting availability, as before the first arranging."""
+    """ "Usuń szkic": only the newest draft goes for good. The version before it is current again: an earlier
+    unpublished attempt becomes the editable draft, a published schedule stays as it is. With no version left,
+    the period goes back to collecting availability, as before the first arranging."""
     with transaction.atomic():
         lock_period(version)
         version = ScheduleVersion.objects.select_related("period").get(pk=version.pk)
@@ -767,14 +767,14 @@ def delete_draft(version: ScheduleVersion) -> SchedulePeriod:
         arranging = (GenerationRun.Status.QUEUED, GenerationRun.Status.RUNNING)
         if period.generation_runs.filter(status__in=arranging).exists():
             raise HttpError(409, "Grafik na ten okres właśnie się układa. Poczekaj albo przerwij układanie.")
-        versions = ScheduleVersion.objects.for_company(version.company_id).filter(period=period)
-        last_published = (
-            versions.filter(published_at__isnull=False).order_by("-number").values_list("number", flat=True).first()
-        )
-        versions.filter(published_at__isnull=True, number__gt=last_published or 0).delete()
-        if last_published is None:
+        version.delete()
+        previous = latest_version(period)
+        if previous is None:
             period.status = SchedulePeriod.Status.COLLECTING
             period.save(update_fields=["status"])
+        elif previous.published_at is None and previous.status == ScheduleVersion.Status.SUPERSEDED:
+            previous.status = ScheduleVersion.Status.DRAFT
+            previous.save(update_fields=["status"])
     return period
 
 

@@ -293,7 +293,7 @@ def test_correcting_a_published_schedule_starts_a_draft_copy(api, shop, draft):
     assert Notification.objects.filter(kind="schedule_published", payload__changed=True).exists()
 
 
-def test_deleting_a_draft_that_was_never_published_reopens_availability(api, shop, draft):
+def test_deleting_a_draft_brings_back_the_attempt_before_it(api, shop, draft):
     api.login(shop["manager"])
     newer = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
     draft.refresh_from_db()
@@ -302,7 +302,23 @@ def test_deleting_a_draft_that_was_never_published_reopens_availability(api, sho
     assert api.client.delete(url(draft)).status_code == 409  # only the newest draft
     assert api.client.delete(url(newer)).status_code == 204
 
-    assert not ScheduleVersion.objects.filter(period=shop["period"]).exists()  # the older attempt too
+    # Only the newest draft goes: the attempt before it is the editable draft again.
+    left = dict(ScheduleVersion.objects.filter(period=shop["period"]).values_list("number", "status"))
+    assert left == {draft.number: "draft"}
+    assert Shift.objects.filter(version=draft).exists() and not Shift.objects.filter(version_id=newer.pk).exists()
+    assert api.get(url(draft)).json()["editable"] is True
+    shop["period"].refresh_from_db()
+    assert shop["period"].status == SchedulePeriod.Status.DRAFT
+    period = api.get(f"/api/locations/{shop['location'].id}/periods").json()[0]
+    assert period["latest_version_id"] == str(draft.id)
+
+
+def test_deleting_the_only_draft_reopens_availability(api, shop, draft):
+    api.login(shop["manager"])
+
+    assert api.client.delete(url(draft)).status_code == 204
+
+    assert not ScheduleVersion.objects.filter(period=shop["period"]).exists()
     assert not Shift.objects.exists()
     shop["period"].refresh_from_db()
     assert shop["period"].status == SchedulePeriod.Status.COLLECTING
@@ -324,9 +340,12 @@ def test_deleting_corrections_brings_back_the_published_schedule(api, shop, draf
     assert api.client.delete(url(published)).status_code == 409  # a published schedule stays
     assert api.client.delete(url(again)).status_code == 204
 
-    # The unpublished versions since the publication go; the published one and the draft before it stay.
+    # Only the newest draft goes: the correction before it is the draft again.
     left = dict(ScheduleVersion.objects.filter(period=shop["period"]).values_list("number", "status"))
-    assert left == {1: "superseded", 2: "published"}
+    assert left == {1: "superseded", 2: "published", 3: "draft"}
+    assert api.client.delete(url(corrected)).status_code == 204
+    left = dict(ScheduleVersion.objects.filter(period=shop["period"]).values_list("number", "status"))
+    assert left == {1: "superseded", 2: "published"}  # never revives a version from before the publication
     assert Shift.objects.filter(version=published).count() == 12
     shop["period"].refresh_from_db()
     assert shop["period"].status == SchedulePeriod.Status.PUBLISHED

@@ -482,7 +482,7 @@ describe('ScheduleScreen', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/versions/v1')).toBe(true))
   })
 
-  it('warns that older unpublished attempts go too', async () => {
+  it('says the attempt before the draft comes back', async () => {
     const h = version.history[0]
     api({
       version: {
@@ -498,12 +498,24 @@ describe('ScheduleScreen', () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
     const sheet = await screen.findByRole('dialog')
-    expect(within(sheet).getByText(/Znikną też starsze wersje z historii, których nie opublikowano \(2\)/)).toBeInTheDocument()
+    expect(within(sheet).getByText(/Wróci poprzedni szkic, wersja 2\./)).toBeInTheDocument()
+    expect(within(sheet).queryByText(/okres wróci do zbierania dyspozycji/)).not.toBeInTheDocument()
     expect(within(sheet).getByText(/Obsada dni i zmiany w grafikach innych lokali zostają/)).toBeInTheDocument()
   })
 
   it('says the published schedule stays when deleting corrections', async () => {
-    api({ version: { ...version, number: 2, period: { ...period, status: 'published', published_version_id: 'v0' } } })
+    const h = version.history[0]
+    api({
+      version: {
+        ...version,
+        number: 2,
+        period: { ...period, status: 'published', published_version_id: 'v0' },
+        history: [
+          { ...h, number: 2 },
+          { ...h, id: 'v0', number: 1, status: 'published', published_at: '2026-11-26T10:00:00+01:00' },
+        ],
+      },
+    })
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
     const sheet = await screen.findByRole('dialog')

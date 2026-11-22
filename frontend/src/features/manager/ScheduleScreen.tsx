@@ -306,18 +306,17 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
   )
 }
 
-/** Older versions that "Usuń szkic" removes too: never published and newer than the last publication. */
-function unpublishedOlder(data: VersionOut): number {
-  const lastPublished = Math.max(0, ...data.history.filter((v) => v.published_at).map((v) => v.number))
-  return data.history.filter((v) => !v.published_at && v.number > lastPublished && v.number < data.number).length
+/** What is current after "Usuń szkic": the version just before this draft, if any. */
+function versionBefore(data: VersionOut) {
+  return data.history.filter((v) => v.number < data.number).sort((x, y) => y.number - x.number)[0]
 }
 
-/** "Usuń szkic": the draft goes for good; the published schedule stays, else the period collects availability again. */
+/** "Usuń szkic": only this draft goes; the version before it is current again, else the period collects availability. */
 function DeleteDraft({ data }: { data: VersionOut }) {
   const remove = useDeleteScheduleDraft()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
-  const older = unpublishedOlder(data)
+  const before = versionBefore(data)
   return (
     <>
       <button
@@ -350,17 +349,12 @@ function DeleteDraft({ data }: { data: VersionOut }) {
         }
       >
         <p className="m-0">
-          {data.period.published_version_id
-            ? 'Szkic zniknie na dobre razem z poprawkami. Zostaje opublikowany grafik, który widzą pracownicy.'
-            : 'Szkic zniknie na dobre razem z poprawkami, a okres wróci do zbierania dyspozycji.'}
+          {!before
+            ? 'Szkic zniknie na dobre razem z poprawkami, a okres wróci do zbierania dyspozycji.'
+            : before.published_at
+              ? 'Szkic zniknie na dobre razem z poprawkami. Zostaje opublikowany grafik, który widzą pracownicy.'
+              : `Szkic zniknie na dobre razem z poprawkami. Wróci poprzedni szkic, wersja ${before.number}.`}
         </p>
-        {older > 0 && (
-          <p className="m-0">
-            {older === 1
-              ? 'Zniknie też 1 starsza wersja z historii, której nie opublikowano.'
-              : `Znikną też starsze wersje z historii, których nie opublikowano (${older}).`}
-          </p>
-        )}
         <p className="m-0">Obsada dni i zmiany w grafikach innych lokali zostają.</p>
       </ConfirmSheet>
     </>
