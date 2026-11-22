@@ -928,6 +928,10 @@ Prośby Piotra z 20.11.2026: "niech »Niespełnione prośby« i »Jak grafik trz
    otwarte, gdy coś jest złamane (dziś prawie każdy grafik ma jakąś złamaną zasadę miękką, więc byłyby otwarte zawsze). Wiersz zasady rozwija się tylko wtedy, gdy ma przykłady
    złamań (wtedy ma strzałkę). Polecenia kierownika, których nie udało się spełnić, zostają widoczne nad zwiniętymi
    sekcjami. Zdanie "Chcesz coś zmienić…" pod nimi usunięto 22.11.2026 (zakładka "Zasady" jest obok).
+3. "Mój grafik" pracownika (prośba Piotra z 22.11.2026: "Weź zmianę" zajmowało za dużo miejsca): "Zmiany do wzięcia"
+   to `Section collapsible`, zwinięta na start, na tym samym miejscu nad najbliższą zmianą. Status: liczba zmian
+   ("2 zmiany") i, gdy osoba zgłosiła się do którejś, "czeka na kierownika: N". Napis "Zmiana jest Twoja." po
+   przejęciu bez zatwierdzania stoi nad sekcją, poza zwijanym miejscem. Gdy nie ma nic do wzięcia, sekcji nie ma.
 
 ## 29. Lepsze rozumienie próśb i robocik, który czyta (20.11.2026)
 
