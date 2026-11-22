@@ -612,6 +612,17 @@ describe('ScheduleScreen', () => {
     show()
     expect(await screen.findByText('Grafik nie jest jeszcze ułożony')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ułóż grafik' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ułóż inaczej' })).not.toBeInTheDocument()
+  })
+
+  it('offers a clearly different schedule next to arranging again', async () => {
+    api()
+    show()
+    expect(await screen.findByRole('button', { name: 'Ułóż od nowa' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ułóż inaczej' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Oba zostawiają przypięte zmiany, osoby wpisane mimo przeszkód i minione dni.'),
+    ).toBeInTheDocument()
   })
 
   it('has an error state', async () => {

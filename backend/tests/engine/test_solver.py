@@ -1,6 +1,7 @@
 """The generator (CP-SAT) checked against the independent validator. No database needed."""
 
 import itertools
+import math
 import random
 import time as clock
 from dataclasses import replace
@@ -17,7 +18,7 @@ from engine.problem import (
     shift_bounds,
 )
 from engine.scoring import penalty, score
-from engine.solver import SolveStatus, solve
+from engine.solver import SolveStatus, changed_shifts, solve
 from engine.validator import validate
 from tests.engine.factory import BAKER, LOC, SALES, employee, problem, slot
 
@@ -714,6 +715,62 @@ def test_second_variant_differs_by_at_least_15_percent():
     same = sum(1 for s, e in first.schedule.items() if e is not None and second.schedule[s] == e)
     filled = sum(1 for e in first.schedule.values() if e is not None)
     assert same <= 0.85 * filled
+
+
+# ----------------------------------------------------------------- "Ułóż inaczej"
+
+
+def test_arranging_differently_changes_the_asked_share_with_the_same_holes():
+    people = [employee(f"e{i}") for i in range(5)]
+    p = problem(people, week(places=2), rules=[RuleConfig("min_rest_between_shifts", LOC, rank=1)])
+    first, _ = solved(p)
+    second, report = solved(p, diversity_from=[first.schedule], min_difference=0.3)
+    changed, total = changed_shifts(p, first.schedule, second.schedule)
+    assert total == 28
+    assert changed >= math.ceil(0.3 * total)
+    assert second.holes == first.holes == 0
+    assert score(p, report).manager_rules == 100  # the difference did not cost a rule that could be kept
+
+
+def test_people_swapped_between_seats_of_one_shift_are_no_difference():
+    p = problem([employee("anna"), employee("ewa")], [slot("m.0", MON), slot("m.1", MON)])
+    assert changed_shifts(p, {"m.0": "anna", "m.1": "ewa"}, {"m.0": "ewa", "m.1": "anna"}) == (0, 2)
+    assert changed_shifts(p, {"m.0": "anna", "m.1": "ewa"}, {"m.0": "ewa", "m.1": None}) == (1, 2)
+
+
+def test_a_different_schedule_never_has_more_holes():
+    # Only Anna sells and only Jan bakes: the one full schedule is the one there was, so it stays.
+    people = [employee("anna"), employee("jan", positions=(BAKER,))]
+    slots = [slot(f"s{d}", day(d)) for d in range(3)] + [slot(f"b{d}", day(d), position=BAKER) for d in range(3)]
+    p = problem(people, slots)
+    first, _ = solved(p)
+    second, _ = solved(p, diversity_from=[first.schedule], min_difference=0.3)
+    assert second.holes == 0
+    assert changed_shifts(p, first.schedule, second.schedule) == (0, 6)
+
+
+def test_pinned_shifts_and_days_that_have_passed_stay_and_are_not_compared():
+    people = [employee(f"e{i}") for i in range(4)]
+    slots = week(days=3)
+    before = {s.id: f"e{n % 4}" for n, s in enumerate(slots)}
+    p = problem(people, slots, pinned={"a2.0": "e1"}, published=before, frozen_before=day(1), start=day(0), end=day(2))
+    second, _ = solved(p, diversity_from=[before], min_difference=0.5)
+    assert second.schedule["a2.0"] == "e1"
+    assert [second.schedule[k] for k in ("m0.0", "a0.0")] == [before["m0.0"], before["a0.0"]]
+    changed, total = changed_shifts(p, before, second.schedule)
+    assert total == 3  # day 1 and the morning of day 2
+    assert changed >= 2
+
+
+def test_arranging_differently_again_does_not_bring_back_the_one_before():
+    people = [employee(f"e{i}") for i in range(5)]
+    p = problem(people, week(places=2))
+    first, _ = solved(p)
+    second, _ = solved(p, diversity_from=[first.schedule], min_difference=0.3)
+    third, _ = solved(p, diversity_from=[second.schedule, first.schedule], min_difference=0.3)
+    for earlier in (first, second):
+        changed, total = changed_shifts(p, earlier.schedule, third.schedule)
+        assert changed >= math.ceil(0.3 * total)
 
 
 def test_weights_can_be_replaced_for_a_variant():

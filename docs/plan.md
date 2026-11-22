@@ -1145,3 +1145,44 @@ Założenia: pytanie czeka, dopóki asystent je pamięta (10 wiadomości; decyzj
 na następną wiadomość). Potem pierwsza wiadomość zostaje niezapisana, ale „Twoje prośby” pokazują ją jako czekającą
 (można ją napisać od nowa albo przekazać kierownikowi). Zgłoszenia innych godzin z
 wiadomości z pytaniem pokazują się jak dotąd, bo i tak wysyła je dopiero pracownik.
+
+## 35. Inny grafik na prośbę kierownika (22.11.2026)
+
+Prośba Piotra (spec.md, „Inny grafik na prośbę kierownika”): gdy ułożony grafik nie pasuje kierownikowi, da się
+ułożyć nowy, wyraźnie inny, także według jego prośby w czacie. Wcześniej „Ułóż od nowa” przy tych samych ustawieniach
+dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opublikowanej wersji).
+
+- Silnik: `solve(..., diversity_from=[...], min_difference=...)` nie dodaje już twardego ograniczenia w całym modelu.
+  Dla każdego wcześniejszego grafiku `_Builder._diversity` liczy, ile jego osobozmian nowy grafik zatrzymuje ponad
+  dozwolone `(1 − min_difference)` (zmienna `shortfall`). `solve` ma wtedy fazę między dziurami a karą: przy
+  `holes ≤ best` minimalizuje sumę `shortfall` (najwyżej `DIFFERENCE_SHARE` = 20 % limitu czasu, z podpowiedzią z
+  fazy 1), potem utrwala ją ograniczeniem i minimalizuje karę jak zawsze. Nigdy więcej dziur i nigdy sprzeczność.
+  Osobozmiana = osoba na zmianie danego dnia i stanowiska, bez numeru miejsca (`_shift_of`), więc zamiana dwóch osób
+  miejscami nie jest różnicą. Nie liczą się miejsca przypięte, minione dni ani osoba przypięta na innym miejscu tej
+  samej zmiany (`_compared`). `changed_shifts(problem, previous, schedule)` zwraca (zmienione, porównane) tą samą
+  miarą.
+- `GenerationRun.different` (migracja 0011). `POST /periods/generate` przyjmuje `different: true`;
+  `GenerationRunOut.different`. `run_generation` przy `different` czyta `COMPARED_VERSIONS` = 3 najnowsze wersje
+  okresu (`_earlier_versions`), woła solver z `min_difference=DIFFERENT_SHARE` (0,3) i dopisuje do `scores.notes`
+  nowego szkicu zdanie z `_difference_notes` (względem najnowszej z nich; gdy próg nie został osiągnięty, także
+  „Bardziej się nie dało…”).
+- Ekran „Grafik”: `ArrangeButton different` („Ułóż inaczej”, ikona Shuffle) obok „Ułóż od nowa”, gdy okres ma
+  wersję. Arkusz „Ułożyć inny grafik?” mówi o co trzeciej zmianie, ostrzega o ręcznych poprawkach jak zwykle, mówi o
+  koszu i ma „Napisz asystentowi, co ma być inaczej” (`openChat` z okresem i tekstem „Ułóż inny grafik, żeby ”).
+- Asystent: `llm.CommandPlan.arrange` (`no` / `again` / `different`, domyślnie `no`), opis w `COMMAND_SYSTEM`
+  (punkt 4) i w przewodniku kierownika. `services._checked_arrange` w `check_plan`: tylko okres ustaleń, który ma
+  wersję, lokal nie w archiwum, bez trwającego układania; inaczej uwaga i cały plan zablokowany. Plan dostaje
+  `arrange = {period_id, different}`, ostatni punkt „Po zatwierdzeniu ułożę nowy grafik na okres …, wyraźnie inny
+  niż obecny.” / „… ułożę grafik na okres … od nowa.” i uwagę o przypięciach, ręcznych poprawkach i koszu.
+  `has_changes` liczy `arranges(plan)`. `apply_command` po ustaleniach i godzinach woła `_apply_arrange` →
+  `request_generation` w tej samej transakcji; błąd (limit 429, trwające układanie 409, okres opublikowany) cofa
+  cały plan z dopiskiem „Nic z tego planu nie zapisałem.”. `AssistantCommand.generation_run` (migracja assistant
+  0004); `AssistantCommandOut.arranges`, `changes_agreements`, `run_id`. Czat po zatwierdzeniu pokazuje
+  `RunProgress` (postęp, „Anuluj”, „Zobacz szkic”).
+
+Założenia: próg 30 % i trzy wersje to propozycja do sprawdzenia w pilotażu (spec mówiła o 15 % dla przyszłych
+wariantów; „wyraźnie inny” po prośbie kierownika powinien być widać na pierwszy rzut oka). Asystent nie układa
+pierwszego grafiku okresu (to dalej przycisk z ostrzeżeniami o terminie i brakujących dyspozycjach). Okres
+opublikowany zamyka ustalenia, więc z czatu da się układać tylko przed publikacją; przycisk „Ułóż inaczej” działa
+też przy poprawkach opublikowanego grafiku (tak jak „Ułóż od nowa”). Linia planu nie podaje numeru wersji, bo do
+zatwierdzenia mogła powstać nowsza; numer podaje uwaga w nowym szkicu.

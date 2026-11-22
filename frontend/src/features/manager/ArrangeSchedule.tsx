@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Wand2 } from 'lucide-react'
+import { MessageCircle, Shuffle, Wand2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import type { ExperiencedShortOut, GenerationRunOut } from '../../api/generated/model'
@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
+import { useAssistantDrawer } from './assistant-drawer'
 import { useManager } from './ManagerContext'
 import { people, shifts, shortDay } from './words'
 
@@ -31,30 +32,41 @@ export type ArrangeTarget = {
  * "Ułóż grafik" (one location) or "Ułóż dla wszystkich" (each location arranged on its own). A deliberate action of
  * the manager: the sheet says who has not answered yet, that it is early when the deadline has not passed, and that
  * unpinned manual changes will be dropped. Nothing is ever arranged by itself.
+ * `different` is "Ułóż inaczej": a new schedule that gives about every third shift to someone else than the latest
+ * versions did (docs/plan.md section 35).
  */
 export function ArrangeButton({
   targets,
   label,
   variant = 'primary',
   disabled,
+  different = false,
   onStarted,
 }: {
   targets: ArrangeTarget[]
   label?: string
   variant?: 'primary' | 'secondary'
   disabled?: boolean
+  different?: boolean
   onStarted?: (runs: GenerationRunOut[]) => void
 }) {
   const [open, setOpen] = useState(false)
   if (targets.length === 0) return null
   const again = targets.length === 1 && targets[0].hasVersion
+  const Icon = different ? Shuffle : Wand2
   return (
     <>
       <Button variant={variant} size="normal" onClick={() => setOpen(true)} disabled={disabled}>
-        <Wand2 aria-hidden="true" size={20} />
-        {label ?? (again ? 'Ułóż od nowa' : 'Ułóż grafik')}
+        <Icon aria-hidden="true" size={20} />
+        {label ?? (different ? 'Ułóż inaczej' : again ? 'Ułóż od nowa' : 'Ułóż grafik')}
       </Button>
-      <ArrangeSheet open={open} onOpenChange={setOpen} targets={targets} onStarted={onStarted} />
+      <ArrangeSheet
+        open={open}
+        onOpenChange={setOpen}
+        targets={targets}
+        different={different}
+        onStarted={onStarted}
+      />
     </>
   )
 }
@@ -63,15 +75,18 @@ function ArrangeSheet({
   open,
   onOpenChange,
   targets,
+  different,
   onStarted,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   targets: ArrangeTarget[]
+  different: boolean
   onStarted?: (runs: GenerationRunOut[]) => void
 }) {
   const generate = useGenerateSchedule()
   const queryClient = useQueryClient()
+  const chat = useAssistantDrawer()
   const one = targets.length === 1
   const early = targets.filter((t) => !t.deadlinePassed && t.missing > 0)
   const missing = targets.filter((t) => t.missing > 0)
@@ -80,7 +95,7 @@ function ArrangeSheet({
 
   const start = () =>
     generate.mutate(
-      { data: { period_ids: targets.map((t) => t.periodId) } },
+      { data: { period_ids: targets.map((t) => t.periodId), ...(different ? { different: true } : {}) } },
       {
         onSuccess: (response) => {
           void queryClient.invalidateQueries()
@@ -94,10 +109,22 @@ function ArrangeSheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={one ? `Ułożyć grafik dla lokalu ${targets[0].locationName}?` : `Ułożyć grafik dla ${targets.length} lokali?`}
+      title={
+        different
+          ? 'Ułożyć inny grafik?'
+          : one
+            ? `Ułożyć grafik dla lokalu ${targets[0].locationName}?`
+            : `Ułożyć grafik dla ${targets.length} lokali?`
+      }
       description={one ? 'Trwa do pół minuty.' : 'Każdy lokal trwa do pół minuty.'}
     >
       <div className="grid gap-4">
+        {different && (
+          <p className="m-0">
+            Co trzecia zmiana dostanie inną osobę niż w ostatnich wersjach, o ile się da. Zasady i prośby liczą się jak
+            zawsze.
+          </p>
+        )}
         {early.length > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-prefer-not bg-prefer-not-soft px-3 py-2">
             {one
@@ -141,11 +168,35 @@ function ArrangeSheet({
         )}
         <p className="m-0 text-sm text-ink-muted">
           Dostaniesz szkic do poprawek. Pracownicy zobaczą grafik dopiero, gdy go opublikujesz.
+          {different && ' Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny.'}
         </p>
         {generate.isError && <InlineError>{errorMessage(generate.error, NETWORK_PROBLEM)}</InlineError>}
         <Button wide onClick={start} disabled={generate.isPending}>
-          {generate.isPending ? 'Zaczynam…' : one ? 'Ułóż grafik' : `Ułóż dla ${targets.length} lokali`}
+          {generate.isPending
+            ? 'Zaczynam…'
+            : different
+              ? 'Ułóż inny grafik'
+              : one
+                ? 'Ułóż grafik'
+                : `Ułóż dla ${targets.length} lokali`}
         </Button>
+        {different && one && chat && (
+          <Button
+            variant="quiet"
+            size="normal"
+            onClick={() => {
+              onOpenChange(false)
+              chat.openChat({
+                locationId: targets[0].locationId,
+                periodId: targets[0].periodId,
+                text: 'Ułóż inny grafik, żeby ',
+              })
+            }}
+          >
+            <MessageCircle aria-hidden="true" size={18} />
+            Napisz asystentowi, co ma być inaczej
+          </Button>
+        )}
       </div>
     </Sheet>
   )

@@ -9,6 +9,7 @@ import { AsManager } from './test-utils'
 const run = {
   id: 'r1',
   status: 'running',
+  different: false,
   solver_status: '',
   period_ids: ['p1'],
   created_at: '2026-11-13T10:00:00+01:00',
@@ -86,6 +87,44 @@ describe('ArrangeButton', () => {
 
     fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż grafik' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))).toBe(true))
+  })
+
+  it('arranges a clearly different schedule when asked to', async () => {
+    const calls = mockApi(() => [200, [run]])
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true, manualChanges: 2 }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(sheet).toHaveTextContent('Ułożyć inny grafik?')
+    expect(sheet).toHaveTextContent('Co trzecia zmiana dostanie inną osobę niż w ostatnich wersjach')
+    expect(sheet).toHaveTextContent('Stracisz ręczne poprawki bez przypięcia: 2.')
+    expect(sheet).toHaveTextContent('Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny.')
+
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż inny grafik' }))
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))
+      expect(post?.body).toEqual({ period_ids: ['p1'], different: true })
+    })
+  })
+
+  it('arranges again without asking for a different schedule', async () => {
+    const calls = mockApi(() => [200, [run]])
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż od nowa' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(sheet).not.toHaveTextContent('inną osobę')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż grafik' }))
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))
+      expect(post?.body).toEqual({ period_ids: ['p1'] })
+    })
   })
 
   it('says nothing about experience when there is enough of it', async () => {

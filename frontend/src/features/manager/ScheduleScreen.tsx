@@ -146,16 +146,27 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           {period.active_run_id ? (
             <RunProgress runId={period.active_run_id} />
           ) : (
-            <ArrangeButton
-              targets={[target]}
-              disabled={readOnly}
-              variant={period.latest_version_id ? 'secondary' : 'primary'}
-              onStarted={() => setViewing(null)}
-            />
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <ArrangeButton
+                targets={[target]}
+                disabled={readOnly}
+                variant={period.latest_version_id ? 'secondary' : 'primary'}
+                onStarted={() => setViewing(null)}
+              />
+              {period.latest_version_id && (
+                <ArrangeButton
+                  targets={[target]}
+                  disabled={readOnly}
+                  variant="secondary"
+                  different
+                  onStarted={() => setViewing(null)}
+                />
+              )}
+            </div>
           )}
           {period.latest_version_id && !period.active_run_id && (
-            <span className="max-w-[40ch] text-sm text-ink-muted sm:text-right">
-              „Ułóż od nowa” zostawia przypięte zmiany, osoby wpisane mimo przeszkód i minione dni.
+            <span className="max-w-[44ch] text-sm text-ink-muted sm:text-right">
+              Oba zostawiają przypięte zmiany, osoby wpisane mimo przeszkód i minione dni.
             </span>
           )}
         </div>

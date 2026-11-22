@@ -876,6 +876,47 @@ def _day_words(days: list[date]) -> str:
     return ", ".join(f"{d.day}.{d.month:02d}" for d in days[:6]) + (" i inne" if len(days) > 6 else "")
 
 
+# ------------------------------------------------------------------------- arranging again (the manager's chat)
+
+ARRANGE_NO_PERIOD = (
+    "Grafik ułożę tylko na okres, o którego dyspozycje już poprosiłeś. Ułożysz go sam w zakładce „Grafik” lokalu."
+)
+ARRANGE_BUSY = "Grafik na ten okres właśnie się układa. Poczekaj na wynik i napisz polecenie jeszcze raz."
+STALE_ARRANGE = "Grafiku z tego planu nie da się już ułożyć. Napisz polecenie jeszcze raz."
+
+
+def _checked_arrange(location: Location, period: SchedulePeriod | None, *, different: bool):
+    """(the plan's entry, its line, its note) when the period of the agreements can be arranged again, else
+    (None, "", why not). Only a period that already has a schedule: the first arranging stays a button press."""
+    from apps.scheduling.editing import latest_version, manual_changes
+    from apps.scheduling.generation import ACTIVE
+
+    if period is None:
+        return None, "", ARRANGE_NO_PERIOD
+    newest = latest_version(period)
+    if newest is None:
+        return (
+            None,
+            "",
+            f"Grafik na okres {_period_label(period)} nie jest jeszcze ułożony. Ułóż go przyciskiem „Ułóż grafik” "
+            "w zakładce „Grafik”, a potem napisz, co ma być inaczej.",
+        )
+    if location.archived_at is not None:
+        return None, "", f"Lokal {location.name} jest w archiwum. Przywróć go, żeby ułożyć grafik."
+    if period.generation_runs.filter(status__in=ACTIVE).exists():
+        return None, "", ARRANGE_BUSY
+    if different:
+        line = f"Po zatwierdzeniu ułożę nowy grafik na okres {_period_label(period)}, wyraźnie inny niż obecny."
+    else:
+        line = f"Po zatwierdzeniu ułożę grafik na okres {_period_label(period)} od nowa."
+    note = "Przypięte zmiany, osoby wpisane mimo przeszkód i minione dni zostają bez zmian."
+    lost = manual_changes(newest)
+    if lost:
+        note += f" Stracisz ręczne poprawki bez przypięcia: {lost}."
+    note += " Gdy nowy szkic będzie gorszy, usuń go koszem w „Grafik”, a wróci obecny."
+    return {"period_id": str(period.pk), "different": different}, line, note
+
+
 # ------------------------------------------------------------------------- other hours (the manager's chat)
 
 MAX_LISTED_REPORTS = 20
@@ -1283,12 +1324,23 @@ def check_plan(
             rejected = True
             lines = [line for line in lines if not line.startswith("Zasada „")]
             rule_changes = []
-    if answer.question and (rule_changes or new_instructions or removed or hours_changes or hours_decisions):
+    arrange = None
+    arrange_note = ""
+    if answer.arrange != "no" and not rejected:
+        arrange, line, arrange_note = _checked_arrange(location, period, different=answer.arrange == "different")
+        if arrange is None:
+            notes.append(arrange_note)
+            arrange_note = ""
+            rejected = True
+        else:
+            lines.append(line)
+    if answer.question and (rule_changes or new_instructions or removed or hours_changes or hours_decisions or arrange):
         rejected = True  # a clarification must not leave a partial plan available for acceptance
         notes.append("Najpierw odpowiedz na pytanie asystenta. Nie można jeszcze zatwierdzić tego planu.")
     if rejected:
         rule_changes, new_instructions, removed, lines, effects = [], [], [], [], []
         hours_changes, hours_decisions = [], []
+        arrange, arrange_note = None, ""
     if new_instructions or removed:
         effects.extend(_personal_effects(sc, location, new_instructions, removed, names, shift_names, period))
     hard = sum(1 for item in _changed_items(items, rule_changes) if item.enabled and item.is_hard)
@@ -1302,18 +1354,24 @@ def check_plan(
             "Polecenia mają kolejność: to wyżej wygrywa, gdy nie da się spełnić wszystkich. "
             "Kolejność możesz zmienić na liście poleceń."
         )
+    if arrange_note:
+        notes.insert(0, arrange_note)
     if new_instructions:
         # First, so the assistant's own words above can never read as a promise of a shift.
         notes.insert(
             0,
-            "Polecenia o osobach są preferencjami. Generator spróbuje je spełnić, ale nie gwarantują przydziału. "
-            "Zatwierdzenie nie zmienia dyspozycji ani gotowego grafiku i nie uruchamia układania.",
+            "Polecenia o osobach są preferencjami. Generator spróbuje je spełnić, ale nie gwarantują przydziału."
+            + (
+                " Zatwierdzenie nie zmienia dyspozycji."
+                if arrange
+                else " Zatwierdzenie nie zmienia dyspozycji ani gotowego grafiku i nie uruchamia układania."
+            ),
         )
     if hours_changes or hours_decisions:
         notes.insert(0, HOURS_NOTE)
     if already and not rejected:
         notes.insert(0, f"To już jest ustawione: {'; '.join(already)}.")
-    changes = bool(rule_changes or new_instructions or removed or hours_changes or hours_decisions)
+    changes = bool(rule_changes or new_instructions or removed or hours_changes or hours_decisions or arrange)
     reply = answer.reply.strip()[:1500]
     if rejected:
         reply = BLOCKED_REPLY
@@ -1334,6 +1392,7 @@ def check_plan(
         "remove_instructions": removed,
         "hours_changes": hours_changes,
         "hours_decisions": hours_decisions,
+        "arrange": arrange,
         "lines": lines,
         "effects": effects,
         "notes": notes,
@@ -1420,7 +1479,12 @@ def _changed_items(items: list, changes: list[dict[str, Any]]) -> list:
 
 
 def has_changes(plan: dict[str, Any] | None) -> bool:
-    return needs_rule_set(plan) or has_hours(plan)
+    return needs_rule_set(plan) or has_hours(plan) or arranges(plan)
+
+
+def arranges(plan: dict[str, Any] | None) -> bool:
+    """Accepting the plan arranges the schedule of the agreements' period again (docs/plan.md section 35)."""
+    return bool((plan or {}).get("arrange"))
 
 
 def needs_rule_set(plan: dict[str, Any] | None) -> bool:
@@ -1436,7 +1500,8 @@ def has_hours(plan: dict[str, Any] | None) -> bool:
 
 
 def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
-    """The manager accepted the plan: change the rule list, the instructions and the hours in one transaction."""
+    """The manager accepted the plan: change the rule list, the instructions and the hours, and queue the arranging
+    the plan asks for, in one transaction (when arranging cannot start, nothing is saved)."""
     with transaction.atomic():
         agreements.lock_location(command.location)
         locked = ctx.qs(AssistantCommand).select_for_update().get(pk=command.pk)
@@ -1449,10 +1514,32 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
         if needs_rule_set(plan):
             _apply_agreements(ctx, command, locked, location, plan)
         _apply_hours(ctx, location, plan)
+        if arranges(plan):
+            locked.generation_run = _apply_arrange(ctx, locked, location, plan["arrange"])
         locked.status = AssistantCommand.Status.APPLIED
         locked.decided_at = timezone.now()
-        locked.save(update_fields=["status", "decided_at"])
+        locked.save(update_fields=["status", "decided_at", "generation_run"])
     command.status, command.decided_at = locked.status, locked.decided_at
+    command.generation_run = locked.generation_run
+
+
+def _apply_arrange(ctx: TenantContext, command: AssistantCommand, location: Location, entry: dict[str, Any]):
+    """Queue the arranging of the plan (after its agreements, in the caller's transaction)."""
+    from apps.scheduling.editing import latest_version
+    from apps.scheduling.generation import request_generation
+
+    rule_set = command.rule_set
+    if rule_set is None or str(rule_set.period_id) != entry["period_id"]:
+        raise HttpError(409, STALE_ARRANGE)
+    agreements.require_open(rule_set)
+    period = ctx.qs(SchedulePeriod).filter(pk=entry["period_id"], location=location).first()
+    if period is None or latest_version(period) is None:
+        raise HttpError(409, STALE_ARRANGE)
+    try:
+        [run] = request_generation(ctx, [period], different=bool(entry.get("different")))
+    except HttpError as exc:
+        raise HttpError(exc.status_code, f"{exc.message} Nic z tego planu nie zapisałem.") from exc
+    return run
 
 
 def _apply_agreements(

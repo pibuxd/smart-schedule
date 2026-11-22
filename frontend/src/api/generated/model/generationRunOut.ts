@@ -11,6 +11,7 @@ import type { GenerationRunOutStatus } from './generationRunOutStatus';
 export interface GenerationRunOut {
   id: string;
   status: GenerationRunOutStatus;
+  different: boolean;
   solver_status: GenerationRunOutSolverStatus;
   period_ids: string[];
   created_at: string;

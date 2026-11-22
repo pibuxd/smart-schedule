@@ -11,4 +11,5 @@ export interface GenerateIn {
      * @maxItems 50
      */
   period_ids: string[];
+  different?: boolean;
 }

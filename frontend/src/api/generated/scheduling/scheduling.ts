@@ -735,6 +735,7 @@ export const getGenerateScheduleUrl = () => {
 
 /**
  * Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.
+ * With `different` each new schedule differs clearly from its period's latest versions ("Ułóż inaczej").
  * @summary Generate Schedule
  */
 export const generateSchedule = async (generateIn: GenerateIn, options?: Parameters<typeof apiFetch>[1]): Promise<generateScheduleResponse> => {
@@ -802,6 +803,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     /**
  * Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.
+ * With `different` each new schedule differs clearly from its period's latest versions ("Ułóż inaczej").
  * @summary Generate Schedule
  */
 export const useGenerateSchedule = <TError = ErrorOut,

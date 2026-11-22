@@ -81,6 +81,8 @@ class AskAvailabilityOut(Schema):
 class GenerateIn(Schema):
     # One period, or periods of several locations ("arrange all"): each location gets its own run.
     period_ids: list[UUID] = Field(min_length=1, max_length=50)
+    # "Ułóż inaczej": the new schedule has to differ clearly from the period's latest versions.
+    different: bool = False
 
 
 class ScoresOut(Schema):
@@ -109,6 +111,8 @@ class GeneratedVersionOut(Schema):
 class GenerationRunOut(Schema):
     id: UUID
     status: RunStatus
+    # Asked to differ clearly from the latest versions ("Ułóż inaczej").
+    different: bool
     solver_status: SolverStatus
     period_ids: list[UUID]
     created_at: datetime
@@ -168,6 +172,7 @@ def _run_out(run: GenerationRun) -> GenerationRunOut:
     return GenerationRunOut(
         id=run.id,
         status=run.status,
+        different=run.different,
         solver_status=run.solver_status,
         period_ids=sorted(run.periods.values_list("id", flat=True), key=str),
         created_at=run.created_at,
@@ -333,11 +338,12 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
     },
 )
 def generate_schedule(request, payload: GenerateIn):
-    """Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`."""
+    """Start arranging schedules, one run per location. Answers at once; poll `GET /generation-runs/{id}`.
+    With `different` each new schedule differs clearly from its period's latest versions ("Ułóż inaczej")."""
     ids = list(dict.fromkeys(payload.period_ids))
     ctx, first = context_for(request, SchedulePeriod, ids[0])
     periods = [first] + [ctx.get(SchedulePeriod, pk=pk) for pk in ids[1:]]
-    runs = request_generation(ctx, periods)
+    runs = request_generation(ctx, periods, different=payload.different)
     return Status(202, [_run_out(run) for run in runs])
 
 
