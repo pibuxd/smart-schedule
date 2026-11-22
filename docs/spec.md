@@ -43,19 +43,20 @@ dopytuje pracownika, a kierownikowi zostawia tylko to, czego po doprecyzowaniu n
   odpowie. Pole pisania podpowiada „Odpowiedz asystentowi…”. Pytanie nie trafia do kierownika, nie liczy się do
   limitu próśb i nie jest pomyłką w `assistant_misses`. Pod pytaniem zostaje „Niech przeczyta kierownik”, gdy
   pracownik woli nie odpowiadać.
-- Następna wiadomość pracownika w tej samej rozmowie jest zwykle odpowiedzią: asystent czyta ją razem z pierwszą
-  wiadomością i pytaniem, i zapisuje pełne prośby z obu. Gdy nowa wiadomość jest o czymś innym, pytanie zostaje bez
-  odpowiedzi i nic się z pierwszej wiadomości nie zapisuje.
+- Odpowiedź asystent czyta razem z pierwszą wiadomością i pytaniem, i zapisuje pełne prośby z obu. Pytanie czeka
+  (decyzja Piotra z 22.11.2026): pracownik może najpierw zapytać o grafik albo napisać inną prośbę, a odpowiedzieć
+  później. Czeka tak długo, jak asystent pamięta rozmowę (10 ostatnich wiadomości); asystent widzi wszystkie
+  czekające pytania z numerami i sam rozpoznaje, na które przyszła odpowiedź.
 - Żeby taka prośba nie przepadła po cichu (uwaga z przeglądu PR #64), okienko „Twoje prośby” pokazuje każdą wiadomość
-  z pytaniem bez odpowiedzi osobno, w przerywanej ramce: „Nie jest zapisana. Asystent pyta: …”. Przy najnowszej jest
-  „Odpowiedz” (otwiera czat), przy starszej „Napisz ją od nowa” (cała prośba razem z odpowiedzią; asystent czyta ją
-  od początku). Przy każdej jest też „Niech przeczyta kierownik”.
+  z pytaniem bez odpowiedzi osobno, w przerywanej ramce: „Nie jest zapisana. Asystent pyta: …”. Dopóki asystent
+  pamięta pytanie, jest przy niej „Odpowiedz” (otwiera czat); starszą zapisuje się przez „Napisz ją od nowa” (cała
+  prośba razem z odpowiedzią; asystent czyta ją od początku). Przy każdej jest też „Niech przeczyta kierownik”.
 - Pyta tylko raz. Czego po odpowiedzi nadal nie da się zapisać, trafia do kierownika jak dotąd (powód „asystent nie
   był pewny”), a kierownik widzi przy prośbie pierwszą wiadomość, pytanie asystenta i odpowiedź.
 - Pytanie zadaje także wtedy, gdy wiadomość łączy pytanie o grafik z niejasną prośbą: odpowiada na pytanie i dopytuje
   o prośbę. Zgłoszenia innych godzin z tej wiadomości (z przyciskiem „Wyślij kierownikowi”) pokazuje jak dotąd.
-- Działa tak samo przez OpenRouter i przez Claude: pytanie to pole odpowiedzi asystenta (`question`), a to, że
-  wiadomość odpowiada na pytanie, to drugie pole (`answers_question`).
+- Działa tak samo przez OpenRouter i przez Claude: pytanie to pole odpowiedzi asystenta (`question`), a numer
+  pytania, na które wiadomość odpowiada, to drugie pole (`answers_question`).
 
 ## Nadgodziny i krótsza zmiana (prośba Piotra z 20.11.2026)
 

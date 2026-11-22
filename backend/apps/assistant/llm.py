@@ -133,9 +133,10 @@ class EmployeeReply(BaseModel):
         description="One short question in Polish when you are not sure which day, person, shift or how much the "
         "person means, or one detail could make the wish fit a preference type; then preferences empty. Else null.",
     )
-    answers_question: bool = Field(
-        default=False,
-        description="true when this message answers your earlier question from the context; read both together.",
+    answers_question: int | None = Field(
+        default=None,
+        description="Number of your waiting question (from the context) this message answers; read both together. "
+        "Else null.",
     )
 
 
@@ -320,10 +321,11 @@ godzin albo dni w tygodniu chcesz pracować?”; „nie mogę z Anią”, gdy na
 osobę chodzi: Ania K. czy Ania M.?”; „po zabiegu kolana nie mogę dźwigać blach przez dwa tygodnie” → zapytaj, od
 kiedy i na których zmianach to przeszkadza (potem np. typ_zmiany bez tej zmiany w te dni). Na pytanie o grafik
 w tej samej wiadomości odpowiedz w answer, a w question dopytaj o prośbę. W answer nie powtarzaj pytania.
-Gdy w kontekście jest „Twoje pytanie do tej osoby”, nowa wiadomość jest zwykle odpowiedzią na nie: ustaw
-answers_question=true i odczytaj prośby z pierwszej wiadomości i odpowiedzi razem (pełne preferencje). Drugi raz
-nie pytaj: czego nadal nie da się wyrazić, zostaw kierownikowi. Gdy nowa wiadomość jest o czymś innym,
-answers_question=false.
+Gdy w kontekście są „Twoje pytania do tej osoby, które czekają na odpowiedź”, sprawdź, czy nowa wiadomość
+odpowiada na któreś z nich (zwykle na najnowsze; pytanie czeka także wtedy, gdy pracownik w międzyczasie pisał
+o czymś innym). Jeśli tak, podaj jego numer w answers_question i odczytaj prośby z tamtej wiadomości
+i odpowiedzi razem (pełne preferencje). O tę sprawę drugi raz nie pytaj: czego nadal nie da się wyrazić,
+zostaw kierownikowi. Gdy nowa wiadomość jest o czymś innym, answers_question=null, a pytanie dalej czeka.
 Gdy życzenia nie da się wyrazić tymi typami nawet po doprecyzowaniu (np. minimum godzin, zamiana z konkretną
 osobą na konkretny dzień, praca w innym lokalu, urlop), nie wymyślaj preferencji:
 ustaw leave_to_manager=true i powiedz w answer, że kierownik przeczyta to sam (i co pracownik może zrobić sam).

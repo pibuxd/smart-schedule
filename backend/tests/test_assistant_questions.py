@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
-from apps.assistant import llm, services
+from apps.assistant import context, llm, services
 from apps.assistant.management.commands.assistant_misses import misses
 from apps.availability.models import TextRequest
 from apps.scheduling.problem_builder import build_problem
@@ -20,8 +20,8 @@ def asking(question: str, answer: str = "", **preference) -> llm.EmployeeReply:
     return reply.model_copy(update={"question": question, "answer": answer, "leave_to_manager": False})
 
 
-def answering(reply: llm.EmployeeReply) -> llm.EmployeeReply:
-    return reply.model_copy(update={"answers_question": True})
+def answering(reply: llm.EmployeeReply, number: int = 1) -> llm.EmployeeReply:
+    return reply.model_copy(update={"answers_question": number})
 
 
 class Model:
@@ -78,7 +78,7 @@ def test_less_work_is_asked_about_and_the_answer_is_saved_with_the_first_message
     second = write(api, shop, "Najwyżej 30 godzin.")
     text, context = model.seen[1]
     assert text == "Najwyżej 30 godzin."
-    assert "Twoje pytanie do tej osoby" in context and "Chcę mniej pracować." in context
+    assert "Twoje pytania do tej osoby" in context and "Chcę mniej pracować." in context
     assert second.status == "interpreted" and second.answer_to_id == first.pk
     assert [r["waiting"] for r in my_requests(api, shop)] == [False, False]  # answered
     [request] = build_problem([shop["period"]]).problem.requests
@@ -168,18 +168,47 @@ def test_a_question_saves_nothing_even_of_what_the_model_was_sure_of(api, shop, 
     assert build_problem([shop["period"]]).problem.requests == ()
 
 
-def test_a_message_about_something_else_leaves_the_question_unanswered(api, shop, with_key, monkeypatch):
-    model = Model(monkeypatch, asking("Ile godzin?"), reading(), reading())
+def test_the_question_waits_while_the_person_writes_about_something_else(api, shop, with_key, monkeypatch):
+    model = Model(
+        monkeypatch,
+        asking("Ile godzin?"),
+        reading(),  # about something else: the question waits
+        answering(reading(type="limit_godzin", max_hours=30, hours_period="week", weekdays=[])),
+    )
     api.login(shop["worker"])
     first = write(api, shop, "Chcę mniej pracować.")
-    other = write(api, shop, "Wolałabym nie pracować w piątki.")  # the model did not take it as the answer
+    other = write(api, shop, "Wolałabym nie pracować w piątki.")
     assert other.status == "interpreted" and other.answer_to_id is None
-    assert "Twoje pytanie do tej osoby" in model.seen[1][1]
-    third = write(api, shop, "Wolałabym nie pracować w piątki.")
-    assert "Twoje pytanie do tej osoby" not in model.seen[2][1]  # only the newest message's question is open
-    assert first.pk not in {other.answer_to_id, third.answer_to_id}
-    # Still waiting: "Twoje prośby" lists it as not saved, so it is not lost quietly.
-    assert [r["waiting"] for r in my_requests(api, shop)] == [True, False, False]
+    assert "Twoje pytania do tej osoby" in model.seen[1][1]
+    assert [(r["waiting"], r["can_answer"]) for r in my_requests(api, shop)] == [(True, True), (False, False)]
+
+    third = write(api, shop, "Najwyżej 30 godzin.")
+    assert "Chcę mniej pracować." in model.seen[2][1] and "Twoje pytania do tej osoby" in model.seen[2][1]
+    assert third.status == "interpreted" and third.answer_to_id == first.pk
+    assert [r["waiting"] for r in my_requests(api, shop)] == [False, False, False]
+
+
+def test_a_question_waits_only_as_long_as_the_assistant_remembers_it(api, shop, with_key, monkeypatch):
+    model = Model(monkeypatch, asking("Ile godzin?"), *[reading()] * (context.MAX_CONVERSATION + 1))
+    api.login(shop["worker"])
+    write(api, shop, "Chcę mniej pracować.")
+    for _ in range(context.MAX_CONVERSATION - 1):
+        write(api, shop, "Wolałabym nie pracować w piątki.")
+    assert my_requests(api, shop)[0]["can_answer"] is True
+    write(api, shop, "Wolałabym nie pracować w piątki.")
+    assert "Twoje pytania do tej osoby" in model.seen[-1][1]  # the tenth message still saw it
+    [oldest, *_] = my_requests(api, shop)
+    assert oldest["waiting"] is True and oldest["can_answer"] is False  # written again from "Twoje prośby"
+    write(api, shop, "Wolałabym nie pracować w piątki.")
+    assert "Twoje pytania do tej osoby" not in model.seen[-1][1]
+
+
+def test_an_answer_to_an_unknown_question_number_is_read_as_a_new_message(api, shop, with_key, monkeypatch):
+    Model(monkeypatch, asking("Ile godzin?"), answering(reading(), number=5))
+    api.login(shop["worker"])
+    write(api, shop, "Chcę mniej pracować.")
+    second = write(api, shop, "Wolałabym nie pracować w piątki.")
+    assert second.status == "interpreted" and second.answer_to_id is None
 
 
 def test_the_question_can_go_to_the_manager_instead_and_is_reset_when_rewritten(api, shop, with_key, monkeypatch):

@@ -111,7 +111,7 @@ def request_context(
     text_request: TextRequest,
     today: date,
     previous: list[TextRequest] | None = None,
-    asked: TextRequest | None = None,
+    asked: list[TextRequest] | None = None,
 ) -> tuple[str, dict[str, str], dict[str, str]]:
     location = text_request.location
     start, end = request_span(text_request)
@@ -139,7 +139,7 @@ def request_context(
             f"Zmiany w lokalu: {_shift_lines(shift_types)}.",
             facts.request_history(previous if previous is not None else facts.prior_requests(text_request)),
             facts.conversation(text_request),
-            facts.open_question(asked) if asked is not None else "",
+            facts.open_questions(asked) if asked else "",
         ]
     )
     return context, people, {s.name: str(s.pk) for s in shift_types}
@@ -189,7 +189,7 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         toolbox = tools.employee_toolbox(row.employee.membership.user, row.company_id)
         try:
             previous = facts.prior_requests(row)
-            asked = waiting_question(row)
+            asked = waiting_questions(row)
             context, people, shift_types = request_context(row, today, previous, asked)
             reply = llm.read_request(row.text, context, toolbox)
             outcome = _checked_reply(reply, row, people, shift_types, previous, today, asked)
@@ -298,18 +298,21 @@ class _Outcome:
         self.answer_to: TextRequest | None = None
 
 
-def waiting_question(row: TextRequest) -> TextRequest | None:
-    """The assistant's question waiting for an answer: on the person's newest earlier message of the same chat
-    (period or month), when no other message answered it. The next message is read as the answer."""
-    last = (
+def waiting_questions(row: TextRequest) -> list[TextRequest]:
+    """The assistant's questions waiting for an answer, oldest first: on the person's earlier messages of the same
+    chat (period or month) that the assistant still remembers (`context.MAX_CONVERSATION`), when no other message
+    answered them. A question waits while the person writes about other things (Piotr, 22.11.2026)."""
+    rows = (
         TextRequest.objects.for_company(row.company_id)
         .filter(employee_id=row.employee_id, period_id=row.period_id, month=row.month, created_at__lt=row.created_at)
         .order_by("-created_at", "-pk")
-        .first()
+        .prefetch_related("answers")[: facts.MAX_CONVERSATION]
     )
-    if last is None or last.status != TextRequest.Status.ANSWERED or not last.question:
-        return None
-    return None if last.answers.exclude(pk=row.pk).exists() else last
+    return [
+        r
+        for r in reversed(rows)
+        if r.status == TextRequest.Status.ANSWERED and r.question and all(a.pk == row.pk for a in r.answers.all())
+    ]
 
 
 def _namesake_question(reply: llm.EmployeeReply, people: dict[str, str]) -> str:
@@ -332,7 +335,7 @@ def _checked_reply(
     shift_types: dict[str, str],
     previous: list[TextRequest],
     today: date | None = None,
-    asked: TextRequest | None = None,
+    asked: list[TextRequest] | None = None,
 ) -> _Outcome:
     raw = reply.model_dump(mode="json")
     answer = reply.answer.strip()[:2000]
@@ -344,7 +347,9 @@ def _checked_reply(
     hours, hours_notes = checked_hours(reply.hours_changes, row, today or timezone.localdate())
     # One question per request: the answer to it is read with the first message, and what is still unclear after
     # that goes to the manager.
-    answering = asked is not None and reply.answers_question
+    number = reply.answers_question
+    answered = asked[number - 1] if asked and isinstance(number, int) and 1 <= number <= len(asked) else None
+    answering = answered is not None
     question = (reply.question or "").strip() or ("" if answering else _namesake_question(reply, people))
     if question and not answering:
         # Nothing of this message is saved until the person answers (not even the parts the model was sure of).
@@ -357,7 +362,7 @@ def _checked_reply(
     else:
         outcome = _checked_preferences(reply, row, people, shift_types, previous, raw, answer, bool(hours))
     if answering:
-        outcome.answer_to = asked
+        outcome.answer_to = answered
     outcome.hours_reports = hours
     if hours_notes:
         outcome.reply = " ".join(filter(None, [outcome.reply, *hours_notes]))

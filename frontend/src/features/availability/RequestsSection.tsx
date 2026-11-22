@@ -543,7 +543,7 @@ function RequestsWindow({
                     Nie jest zapisana. Asystent pyta: {request.question}
                   </span>
                   <div className="flex flex-wrap gap-2">
-                    {request.id === last?.id ? (
+                    {request.can_answer ? (
                       <Button
                         variant="secondary"
                         size="normal"
@@ -741,11 +741,8 @@ export function RequestsChat({
   });
   const failure =
     update.error ?? remove.error ?? create.error ?? markCannot.error;
-  // The assistant asked about the newest message: the next one answers it.
-  const lastId = list.at(-1)?.id;
-  const asking = Boolean(
-    list.at(-1)?.status === "answered" && list.at(-1)?.question,
-  );
+  // A question the assistant still remembers waits for an answer: the next message may be it.
+  const asking = list.some((r) => r.can_answer);
 
   const feedRef = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -834,7 +831,7 @@ export function RequestsChat({
                 <RequestStatus
                   request={request}
                   editable={editable && request.status !== "superseded"}
-                  waiting={editable && request.id === lastId}
+                  waiting={editable && Boolean(request.can_answer)}
                   busy={update.isPending}
                   marking={markCannot.isPending}
                   onRewrite={(newText) => {

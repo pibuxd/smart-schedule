@@ -19,6 +19,7 @@ from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.assistant import llm
+from apps.assistant.context import MAX_CONVERSATION
 from apps.assistant.services import queue_request
 from apps.availability.models import (
     AvailabilityDay,
@@ -185,6 +186,9 @@ class MyRequestOut(Schema):
     question: str | None = None
     # The question has no answer yet: "Twoje prośby" lists the message as not saved, so it is not lost quietly.
     waiting: bool = False
+    # The assistant still remembers the question (it is among the last messages it reads), so the next message
+    # in the chat can answer it; an older one is written again instead.
+    can_answer: bool = False
 
 
 def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
@@ -501,10 +505,12 @@ class _Calendar:
         self.locked = _locked_days(ctx, profile, start, end)
 
 
-def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -> MyRequestOut:
+def _request_out(text_request: TextRequest, calendar: _Calendar | None = None, later: int = 0) -> MyRequestOut:
+    """`later`: how many messages of the same chat came after this one (the assistant reads the last few)."""
     unmarked, notes = _calendar_facts(text_request, calendar) if calendar is not None else ([], [])
     interpreted = text_request.status == TextRequest.Status.INTERPRETED
     question = (text_request.question or None) if text_request.status == TextRequest.Status.ANSWERED else None
+    waiting = bool(question) and not text_request.answers.all()
     return MyRequestOut(
         id=text_request.id,
         text=text_request.text,
@@ -516,7 +522,8 @@ def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -
         created_at=text_request.created_at,
         hours_reports=_hours_proposals(text_request),
         question=question,
-        waiting=bool(question) and not text_request.answers.all(),
+        waiting=waiting,
+        can_answer=waiting and later < MAX_CONVERSATION,
     )
 
 
@@ -644,7 +651,13 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
 
         spans = [request_span(r) for r in requests]
         calendar = _Calendar(ctx, profile, min(s for s, _ in spans), max(e for _, e in spans))
-    return [_request_out(r, calendar) for r in requests]
+    # Messages after each one in its own chat (a period, or a month without one): see `context.MAX_CONVERSATION`.
+    later, seen = [], {}
+    for r in reversed(requests):
+        chat = (r.period_id, r.month)
+        later.append(seen.get(chat, 0))
+        seen[chat] = seen.get(chat, 0) + 1
+    return [_request_out(r, calendar, n) for r, n in zip(requests, reversed(later), strict=True)]
 
 
 LIMIT_FULL = "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń albo popraw którąś."

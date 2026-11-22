@@ -168,8 +168,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   give it write tools; it says where in the app to do things. Off-topic messages get application-owned copy; mixed
   messages are answered and their preferences saved. When unsure (day, person, shift, how much) the employee's
   assistant asks one question (`EmployeeReply.question`, saved as `TextRequest.question` on an `answered` row, nothing
-  saved); the next message answers it (`answers_question`, `TextRequest.answer_to`), and a second question goes to the
-  manager. Without a key (`llm.is_enabled()`) requests go uninterpreted. Tests
+  saved); it waits while it is among the last `MAX_CONVERSATION` messages, a later message names it by number
+  (`answers_question`, `TextRequest.answer_to`), and a second question goes to the manager. Without a key (`llm.is_enabled()`) requests go uninterpreted. Tests
   replace `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
   `apps/assistant/context.py` supplies bounded history for corrections. Both structured outputs require a

@@ -19,4 +19,5 @@ export interface MyRequestOut {
   hours_reports?: HoursProposalOut[];
   question?: string | null;
   waiting?: boolean;
+  can_answer?: boolean;
 }

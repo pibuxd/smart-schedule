@@ -12081,6 +12081,11 @@
             "default": false,
             "title": "Waiting",
             "type": "boolean"
+          },
+          "can_answer": {
+            "default": false,
+            "title": "Can Answer",
+            "type": "boolean"
           }
         },
         "required": [

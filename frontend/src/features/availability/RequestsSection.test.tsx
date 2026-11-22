@@ -258,6 +258,7 @@ describe("RequestsSection", () => {
           summary: null,
           question: "Ile najwyżej godzin w tygodniu chcesz pracować?",
           waiting: true,
+          can_answer: true,
         }),
       ],
     ]);
@@ -291,7 +292,7 @@ describe("RequestsSection", () => {
     expect(screen.queryByRole("list", { name: "Zapisane prośby" })).toBeNull();
   });
 
-  it("lets an older unanswered question be written again from the window", async () => {
+  it("lets a question the assistant no longer remembers be written again", async () => {
     const calls = mockApi((method) =>
       method === "PATCH"
         ? [200, request({ status: "new", summary: null })]
@@ -316,7 +317,7 @@ describe("RequestsSection", () => {
     const waiting = await screen.findByRole("list", {
       name: "Czekają na Twoją odpowiedź",
     });
-    // Not the newest message: the chat would not take the next one as its answer.
+    // Older than the assistant remembers: the chat would not take the next message as its answer.
     expect(
       within(waiting).queryByRole("button", { name: "Odpowiedz" }),
     ).toBeNull();
