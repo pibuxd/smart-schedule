@@ -1343,3 +1343,39 @@ Założenia: domyślnie na stałe jest każda prośba bez dat, bo pracownik rzad
 i zmienia się jednym stuknięciem. Kierownik nie może zakończyć prośby w okresie, na który ją napisano (tam ją
 odrzuca); odrzucenie i ważność są wspólne dla wszystkich okresów prośby. Zakończenie zawsze od początku okresu
 (miesiąca) na ekranie. Prośby napisane przed zmianą zostają tylko na swój okres.
+
+## 38. Koszty asystenta (22.11.2026)
+
+Prośba Piotra (spec.md, „Koszty asystenta”): ile kosztuje OpenRouter na konto i na lokal, a u kierownika osobno
+rozmowy z asystentem i układanie grafiku.
+
+- Model językowy wołają tylko `llm.read_request` (wiadomość pracownika, `TextRequest`) i `llm.plan_command` (wiadomość
+  kierownika, `AssistantCommand`). Generator (`apps/scheduling/generation.py`, CP-SAT) nie woła żadnego API, więc jego
+  „koszt” to liczba uruchomień i czas solvera z `GenerationRun` (`time_ms`, `requested_by`, lokal albo grupa).
+- `llm.Usage`: backend, model, dostawcy, liczba zapytań (rund), tokeny wejścia i wyjścia, koszt w USD (`Decimal`;
+  na OpenRouter suma `usage.cost` z każdej rundy, przy Claude `None`, bo API nie podaje ceny), czas i `failed`.
+  `_converse` zbiera ją dla jednej odpowiedzi i dodaje do tej, którą podał `with llm.tracking(usage)` (zmienna
+  kontekstu), także gdy odpowiedź kończy się `AssistantError`: rundy przed błędem też kosztowały. Linia w logu
+  workera zostaje bez zmian.
+- `AssistantUsage` (migracja assistant 0005, firma jak każdy model firmy): `kind` (`employee`/`manager`), `location`
+  i `user` (`SET_NULL`, żeby koszt został po usunięciu), `message_id` (id `TextRequest` albo `AssistantCommand` bez
+  klucza obcego, z tego samego powodu), `backend`, `model`, `providers`, `calls`, `input_tokens`, `output_tokens`,
+  `cost_usd` (null = bez ceny), `failed`, `duration_ms`, `created_at`. Zapis tylko wtedy, gdy przyszła choć jedna
+  odpowiedź API (bez niej nic nie kosztowało; testy z podmienionym `llm.read_request` nie dodają zapisów).
+- `services.interpret_request` i `services.run_command` obejmują wywołanie modelu `llm.tracking` i zapisują koszt
+  (`costs.record`) przed zapisem wyniku, więc także gdy wiadomość w międzyczasie zmieniono („skipped”). Błąd zapisu
+  kosztu tylko trafia do logu i nie psuje odpowiedzi. Lokal wiadomości pracownika to `TextRequest.location` (lokal
+  okresu albo główny lokal osoby), kierownika `AssistantCommand.location`.
+- `apps/assistant/costs.py`: `summary(month, by)` z `by` = `company`, `location` albo `person` (osoba w firmie, czyli
+  użytkownik). Kolumny: wiadomości pracownika i ich koszt, wiadomości kierownika i ich koszt, razem, nieudane, bez
+  ceny, tokeny, liczba układań i minuty solvera. Miesiąc liczy się w czasie polskim (`TIME_ZONE`) po `created_at`.
+  Układanie grupy lokali liczy się raz w firmie i u osoby, w każdym lokalu grupy (lokale okresów uruchomienia), a jego
+  czas dzieli się po równo między te lokale. Liczą się uruchomienia, które wystartowały (`started_at`).
+- Admin Django: lista „Koszty asystenta” tylko do odczytu (filtry: rodzaj, nieudane, backend, firma, data) i strona
+  „Zestawienie miesiąca” (`admin:assistant_assistantusage_summary`, wybór miesiąca, trzy tabele: firmy, lokale,
+  osoby, i pobranie CSV każdej). `manage.py assistant_costs --month 2026-11 --by person` daje ten sam CSV.
+- Nic z tego nie trafia do API aplikacji ani do narzędzi asystenta: koszty widzi tylko superadmin.
+
+Założenia: „konto” to osoba z loginem w danej firmie (sumę firmy daje `--by company`). Koszt w dolarach, bo tak liczy
+OpenRouter; przeliczenie na złote zostaje Piotrowi. Czas solvera nie jest przeliczany na pieniądze, bo serwer kosztuje
+tyle samo bez względu na liczbę układań.

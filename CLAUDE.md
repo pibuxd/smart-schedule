@@ -49,6 +49,7 @@ uv run python manage.py seed_test_data [--reset|--delete]  # 3 test companies fo
 DJANGO_DEBUG=1 uv run python manage.py runserver          # API on :8000
 DJANGO_DEBUG=1 uv run python manage.py procrastinate worker   # all queues (in Docker: `worker` + `solver`)
 uv run python manage.py assistant_misses --days 30 > misses.csv   # what the assistant could not turn into settings
+uv run python manage.py assistant_costs --month 2026-11 --by person > costs.csv   # what the assistant cost (also --by location|company)
 uv run python manage.py generate_schedule --company 6a1e0000-0000-4000-8000-000000000001  # try the generator now
 uv run pytest                                             # tests (need Postgres)
 DJANGO_DEBUG=1 uv run pytest tests/engine                 # engine tests only, no database needed
@@ -204,4 +205,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   Agreements belong to one availability period (`apps/assistant/agreements.py`): a new period starts empty and the
   manager copies chosen ones from the previous period (`copy_from_previous`); nothing carries over by itself. An
   employee may forward a rejected message to the manager (`unread_reason="rejected"`); it is never scored.
+  Costs (Piotr 22.11.2026): every model call in `services` runs inside `with llm.tracking(usage)` and is saved by
+  `costs.record` as one `AssistantUsage` row (company, location, person, kind, tokens, dollars from OpenRouter's
+  `usage.cost`; Claude gives no price), also when the answer failed. Only the superadmin sees them (admin
+  "Koszty asystenta" → "Zestawienie miesiąca", `assistant_costs`); never put them in an endpoint or an assistant tool.
+  Schedule arranging calls no API: the summary counts it as runs and solver minutes from `GenerationRun`.
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest).

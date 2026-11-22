@@ -122,3 +122,53 @@ class AssistantCommand(CompanyOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.location}: {self.text[:60]}"
+
+
+class AssistantUsage(CompanyOwnedModel):
+    """What one message to the assistant cost: one row per message the language model read (docs/plan.md 38).
+
+    Kept when the message, the location or the person is gone, so a month's total never shrinks. Only the
+    superadmin sees these rows (Django admin, `assistant_costs`); no app endpoint or assistant tool reads them.
+    """
+
+    class Kind(models.TextChoices):
+        EMPLOYEE = "employee", "wiadomość pracownika"
+        MANAGER = "manager", "wiadomość kierownika"
+
+    company_from = "location"
+
+    kind = models.CharField("rodzaj", max_length=16, choices=Kind.choices)
+    location = models.ForeignKey(
+        Location, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", verbose_name="lokal"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", verbose_name="kto"
+    )
+    # The TextRequest or AssistantCommand, without a foreign key: deleting the message keeps what it cost.
+    message_id = models.UUIDField("wiadomość")
+    backend = models.CharField("usługa", max_length=16)
+    model = models.CharField("model", max_length=120)
+    providers = models.CharField("dostawcy", max_length=200, blank=True)
+    calls = models.PositiveSmallIntegerField("zapytania do API")
+    input_tokens = models.PositiveIntegerField("tokeny wejścia")
+    output_tokens = models.PositiveIntegerField("tokeny wyjścia")
+    cost_usd = models.DecimalField(
+        "koszt (USD)",
+        max_digits=14,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Puste = usługa nie podaje ceny.",
+    )
+    failed = models.BooleanField("nieudana", default=False)
+    duration_ms = models.PositiveIntegerField("czas (ms)")
+    created_at = models.DateTimeField("kiedy", default=timezone.now)
+
+    class Meta:
+        verbose_name = "koszt asystenta"
+        verbose_name_plural = "koszty asystenta"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["company", "created_at"]), models.Index(fields=["created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} {self.created_at:%Y-%m-%d %H:%M}"
