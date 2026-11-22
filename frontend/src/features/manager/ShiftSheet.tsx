@@ -271,7 +271,6 @@ function ShiftDetails({
             )}
             <li>dodać komuś to stanowisko w „Pracownicy” albo zostawić zmianę pustą.</li>
           </ul>
-          <span className="text-sm text-ink-muted">Powód przy każdej osobie jest niżej, w „Nie mogą wziąć tej zmiany”.</span>
         </div>
       )}
 

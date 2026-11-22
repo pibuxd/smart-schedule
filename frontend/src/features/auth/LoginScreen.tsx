@@ -218,9 +218,7 @@ function CodeStep({
         </p>
       ) : verify.isError ? (
         <InlineError>{errorMessage(verify.error, NETWORK_PROBLEM)}</InlineError>
-      ) : (
-        <p className="m-0 text-sm text-ink-muted">Po wpisaniu szóstej cyfry zalogujemy Cię od razu.</p>
-      )}
+      ) : null}
       {resend.isError && <InlineError>{errorMessage(resend.error, NETWORK_PROBLEM)}</InlineError>}
       <div className="mt-auto grid gap-1">
         {left > 0 && (

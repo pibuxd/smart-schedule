@@ -96,6 +96,22 @@ describe('RulesScreen', () => {
     expect(hard[0]).toBeEnabled()
   })
 
+  it('keeps the longer explanation behind the "i" button', async () => {
+    mockApi((_method, path) =>
+      path.endsWith('/instructions') ? [200, { assistant_enabled: false, items: [] }] : [200, rules],
+    )
+    renderScreen(
+      <AsManager>
+        <RulesScreen scope="location" scopeId="l1" />
+      </AsManager>,
+    )
+    expect(await screen.findByText('Im wyżej, tym ważniejsza zasada.')).toBeInTheDocument()
+    expect(screen.queryByText(/obowiązują też tutaj/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Wyjaśnij: zasady' }))
+    expect(screen.getByText(/Zasady z grupy „Piekarnie” obowiązują też tutaj/)).toBeInTheDocument()
+    expect(screen.getByText(/Grafikomat nie sprawdza Kodeksu pracy/)).toBeInTheDocument()
+  })
+
   it('switches handing over given-away shifts without approval and saves it at once', async () => {
     let location = { id: 'l1', name: 'Wieliczka', handover_without_approval: false }
     const waitingOffer = { id: 'o1', status: 'claimed', shift: { location_id: 'l1' }, claims: [] }

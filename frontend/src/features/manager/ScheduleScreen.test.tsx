@@ -486,7 +486,7 @@ describe('ScheduleScreen', () => {
     show()
     expect(await screen.findByRole('button', { name: 'Popraw grafik' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Opublikuj' })).not.toBeInTheDocument()
-    expect(screen.getByText(/Ten grafik widzą pracownicy w „Mój grafik”/)).toBeInTheDocument()
+    expect(screen.queryByText(/Ten grafik widzą pracownicy/)).not.toBeInTheDocument()
   })
 
   it('shows other hours on a published shift and lets the manager change them', async () => {

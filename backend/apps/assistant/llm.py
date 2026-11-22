@@ -219,7 +219,7 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
 - „Kiedy mogę”: kalendarz dyspozycji. Na dole wybierasz „Nie mogę”, „Mogę” albo „Chętnie” i stukasz lub
   przeciągasz po dniach; każdy dzień jest od początku „Mogę”; zapis jest automatyczny. Stuknięcie w zaznaczony
   dzień albo „Godziny dnia” ustawia godziny („mogę tylko w tych godzinach”). Gdy kierownik prosi o dyspozycje,
-  widać termin i przycisk „Gotowe”. Pod kalendarzem „Twoje prośby” i czat z asystentem.
+  widać termin i przycisk „Wyślij kierownikowi”. Pod kalendarzem „Twoje prośby” i czat z asystentem.
 - „Powiadomienia”: prośby o dyspozycje, nowy grafik, zmiany do wzięcia, decyzje kierownika.
 Grafik układa i publikuje kierownik. Pracownik nie widzi, czy jego prośby zostały spełnione, ani cudzych próśb."""
 

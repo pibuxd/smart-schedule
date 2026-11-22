@@ -96,8 +96,8 @@ EMPLOYEE_TOOLS = (
     ApiTool(
         "my_availability",
         "/api/me/availability",
-        "Okres, o który kierownik prosi o dyspozycje (daty, termin zaznaczania, czy wysłałem „Gotowe”) i moje "
-        "zaznaczenia w nim. Bez period_id: najbliższy okres, który zbiera dyspozycje.",
+        "Okres, o który kierownik prosi o dyspozycje (daty, termin zaznaczania, czy wysłałem je przyciskiem "
+        "„Wyślij kierownikowi”) i moje zaznaczenia w nim. Bez period_id: najbliższy okres, który zbiera dyspozycje.",
         params={"period_id": NULLABLE_ID},
         fixed=_company(),
         narrow=(Narrow("days", date="date"),),
@@ -165,7 +165,7 @@ MANAGER_TOOLS = (
         "availability_grid",
         "/api/periods/{period_id}/availability",
         "Zakładka „Dyspozycje”: kto co zaznaczył w okresie (cannot = nie może, prefer = chętnie, brak = może), "
-        "kto wysłał „Gotowe” (submitted_at) i zmiany po terminie.",
+        "kto wysłał dyspozycje przyciskiem „Wyślij kierownikowi” (submitted_at) i zmiany po terminie.",
         params={"period_id": ID},
         narrow=(Narrow("employees[].days", date="date"), Narrow("employees", person=("name",))),
     ),

@@ -103,8 +103,7 @@ export function MyScheduleScreen({
       )}
       {data.published_until && (
         <p className="m-0 text-ink-muted">
-          Grafik jest opublikowany do {weekdayGenitive(parseDate(data.published_until))} {dayAndMonth(parseDate(data.published_until))}. Dalsze dni pokażemy, gdy kierownik
-          opublikuje kolejny grafik.
+          Grafik jest opublikowany do {weekdayGenitive(parseDate(data.published_until))} {dayAndMonth(parseDate(data.published_until))}.
         </p>
       )}
       <div className="grid gap-2">
