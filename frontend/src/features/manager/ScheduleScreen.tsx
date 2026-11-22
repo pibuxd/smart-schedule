@@ -15,11 +15,9 @@ import { AlertTriangle, CalendarPlus, Clock, Hand, Pin, Plus, Send, ShieldAlert,
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
-import { useLocationInstructions } from '../../api/generated/assistant/assistant'
 import type {
   CheckOut,
   DropCheckOut,
-  InstructionsOut,
   PeriodOut,
   ScoresOut,
   ShiftFitOut,
@@ -137,7 +135,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
           </span>
           {period.status === 'collecting' && (
             <p className="m-0 text-sm text-ink-muted">
-              Dyspozycji nie wysłało jeszcze: {period.missing_availability}. Grafik układasz sam, kiedy chcesz.
+              Dyspozycji nie wysłało jeszcze: {period.missing_availability}.
             </p>
           )}
         </div>
@@ -220,7 +218,6 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
           <div className="grid gap-2">
             <RulesList data={data} />
             <UnmetRequests data={data} />
-            <ChangeRulesHint locationId={data.location_id} />
           </div>
           {data.notes.length > 0 && (
             <section className="grid gap-2">
@@ -255,13 +252,11 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
             {VERSION_STATUS[data.status]}
           </Tag>
         </div>
-        <span className="text-sm text-ink-muted">
-          {data.status === 'draft'
-            ? 'Pracownicy jeszcze tego nie widzą. Kliknij zmianę albo przeciągnij osobę na inną zmianę.'
-            : data.status === 'published'
-              ? 'Ten grafik widzą pracownicy w „Mój grafik”.'
-              : 'Starsza wersja, tylko do podglądu.'}
-        </span>
+        {data.status !== 'published' && (
+          <span className="text-sm text-ink-muted">
+            {data.status === 'draft' ? 'Pracownicy jeszcze tego nie widzą.' : 'Starsza wersja, tylko do podglądu.'}
+          </span>
+        )}
       </div>
       <div className="flex flex-wrap items-end gap-2">
         {data.history.length > 1 && (
@@ -357,9 +352,6 @@ function PublishSheet({ data, open, onOpenChange }: { data: VersionOut; open: bo
             powiedz im też sam, bo mogły już coś zaplanować.
           </p>
         )}
-        <p className="m-0 text-sm text-ink-muted">
-          Pracownicy dostaną powiadomienie tylko w aplikacji. Komuś, kto rzadko do niej zagląda, powiedz sam.
-        </p>
         {holes > 0 && (
           <p className="m-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2">
             W grafiku są dziury: {shiftsWord(holes)} bez obsady. Możesz go opublikować i obsadzić te zmiany później.
@@ -1054,19 +1046,5 @@ function UnmetRequests({ data }: { data: VersionOut }) {
         </>
       )}
     </Section>
-  )
-}
-
-function ChangeRulesHint({ locationId }: { locationId: string }) {
-  const instructions = useLocationInstructions(locationId)
-  const assistantOn = (instructions.data?.data as InstructionsOut | undefined)?.assistant_enabled ?? false
-  return (
-    <p className="m-0 rounded-sm border border-line bg-surface px-3 py-2">
-      Chcesz coś zmienić w tym, jak układa się grafik?{' '}
-      <Link to="/kierownik/lokal/$locationId/zasady" params={{ locationId }} className="font-semibold text-accent">
-        {assistantOn ? 'Napisz polecenie asystentowi' : 'Zmień zasady lokalu'}
-      </Link>
-      , a potem ułóż grafik od nowa.
-    </p>
   )
 }

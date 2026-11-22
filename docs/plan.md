@@ -918,7 +918,7 @@ Prośby Piotra z 20.11.2026: "niech »Niespełnione prośby« i »Jak grafik trz
    Do sprawdzenia w pilotażu: czy kierownicy otwierają zasady przed publikacją; jeśli nie, zasady mogą startować
    otwarte, gdy coś jest złamane (dziś prawie każdy grafik ma jakąś złamaną zasadę miękką, więc byłyby otwarte zawsze). Wiersz zasady rozwija się tylko wtedy, gdy ma przykłady
    złamań (wtedy ma strzałkę). Polecenia kierownika, których nie udało się spełnić, zostają widoczne nad zwiniętymi
-   sekcjami, a zdanie "Chcesz coś zmienić…" pod nimi.
+   sekcjami. Zdanie "Chcesz coś zmienić…" pod nimi usunięto 22.11.2026 (zakładka "Zasady" jest obok).
 
 ## 29. Lepsze rozumienie próśb i robocik, który czyta (20.11.2026)
 
@@ -1072,3 +1072,12 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
   (`context.command_history`) i wspólne zasady mówią teraz, że historia to stan z chwili tamtych wiadomości, a
   kierownik ma zawsze dostać `hours_changes`, gdy podaje godziny: to, czy nic się nie zmienia, ocenia serwer
   (`check_set`, „To już jest ustawione”).
+
+## 32. Mniej napisów (22.11.2026)
+
+Decyzja Piotra: bez stałych podpowiedzi, które powtarzają to, co widać na ekranie. Usunięte: notka "Asystent może się
+pomylić…" w obu czatach; w "Grafiku" zdanie przy opublikowanej wersji, instrukcja przeciągania przy szkicu, ramka
+"Chcesz coś zmienić…" i "Grafik układasz sam, kiedy chcesz."; w oknie publikowania zdanie o powiadomieniach tylko w
+aplikacji; drugie zdania podtytułów "Oddane zmiany" i "Godziny w miesiącu"; "Dalsze dni pokażemy…" w "Moim grafiku";
+"Po wpisaniu szóstej cyfry…" przy logowaniu; odsyłacz do powodów w arkuszu zmiany bez kandydatów. W "Zasadach" pod
+nagłówkiem zostaje "Im wyżej, tym ważniejsza zasada." i notka o Kodeksie pracy, reszta jest pod przyciskiem "i".

@@ -16,8 +16,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowDown, ArrowUp, GripVertical, Info } from 'lucide-react'
+import { useId, useState } from 'react'
 
 import { useManagerOffers } from '../../api/generated/marketplace/marketplace'
 import type { LocationOut, ManagerOffersOut, PreviewOut, RuleItemIn, RuleItemOut, RulesOut } from '../../api/generated/model'
@@ -162,6 +162,8 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
   const { readOnly } = useManager()
   const [items, setItems] = useState<Item[]>(data.items)
   const [checking, setChecking] = useState(false)
+  const [explained, setExplained] = useState(false)
+  const explanationId = useId()
   const preview = usePreviewScopeRules()
   const save = useSaveScopeRules()
   const queryClient = useQueryClient()
@@ -230,20 +232,29 @@ function RulesEditor({ data, scope, scopeId }: { data: RulesOut; scope: Scope; s
   return (
     <div className="grid gap-5">
       <div className="grid gap-2">
-        <h2 className="m-0 text-xl font-extrabold">
-          {scope === 'group' ? `Zasady wspólne: ${data.name}` : 'Zasady lokalu'}
-        </h2>
-        <p className="m-0 max-w-[75ch] text-ink-muted">
-          Im wyżej, tym ważniejsza zasada. „Bez wyjątków” zaznacz tam, gdzie wolisz zmianę bez obsady niż złamaną zasadę.
-        </p>
-        {scope === 'location' && data.group && (
-          <p className="m-0 max-w-[75ch] text-ink-muted">
-            Zasady z grupy „{data.group.name}” obowiązują też tutaj. Zasada zmieniona w tym lokalu przestaje iść za grupą.
-          </p>
-        )}
-        {scope === 'group' && (
-          <p className="m-0 max-w-[75ch] text-ink-muted">
-            Każdy lokal może je u siebie zmienić albo wyłączyć.
+        <div className="flex items-center gap-1">
+          <h2 className="m-0 text-xl font-extrabold">
+            {scope === 'group' ? `Zasady wspólne: ${data.name}` : 'Zasady lokalu'}
+          </h2>
+          <button
+            type="button"
+            aria-label="Wyjaśnij: zasady"
+            aria-expanded={explained}
+            aria-controls={explanationId}
+            onClick={() => setExplained((open) => !open)}
+            className="grid min-h-(--touch) min-w-(--touch) shrink-0 cursor-pointer place-items-center rounded-full text-accent hover:bg-accent-soft"
+          >
+            <Info aria-hidden="true" size={18} />
+          </button>
+        </div>
+        <p className="m-0 max-w-[75ch] text-ink-muted">Im wyżej, tym ważniejsza zasada.</p>
+        {explained && (
+          <p id={explanationId} className="m-0 max-w-[75ch] text-sm text-ink-muted">
+            „Bez wyjątków” zaznacz tam, gdzie wolisz zmianę bez obsady niż złamaną zasadę.
+            {scope === 'location' && data.group
+              ? ` Zasady z grupy „${data.group.name}” obowiązują też tutaj. Zasada zmieniona w tym lokalu przestaje iść za grupą.`
+              : ''}
+            {scope === 'group' ? ' Każdy lokal może je u siebie zmienić albo wyłączyć.' : ''}
           </p>
         )}
         <p className="m-0 max-w-[75ch] text-sm text-ink-muted">
