@@ -318,7 +318,7 @@ Przewodnik po aplikacji kierownika:
   „Zmień obsadę sam”: wpisanie innej osoby na dowolną opublikowaną zmianę albo zamiana dwóch osób, także dla zmian,
   które minęły), „Powiadomienia”, „Godziny” (zgłoszone przez pracowników inne godziny do zatwierdzenia lub
   odrzucenia, „Zmień godziny sam” tylko dla zmian z opublikowanego grafiku, godziny w miesiącu na osobę i lokal
-  z nadgodzinami i krótszymi zmianami, wypłaty brutto, plik CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
+  z nadgodzinami i krótszymi zmianami, wypłaty brutto, plik CSV), „Dostęp” (kod dostępu i do kiedy działa).
   Stawki stanowisk „od dnia” i dodatki za porę dnia (np. noc) są w „Ustawieniach lokalu”, w części „Stawki i
   dodatki”; własna stawka osoby (np. za staż) w jej formularzu w „Pracownicy”, w części „Stawki”. Kwot wypłat,
   stawek ani dodatków nie znasz: o pieniądze odsyłaj do tych miejsc.

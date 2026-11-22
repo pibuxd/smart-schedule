@@ -334,7 +334,6 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
         403: ErrorOut,
         404: ErrorOut,
         409: ErrorOut,
-        429: ErrorOut,
     },
 )
 def generate_schedule(request, payload: GenerateIn):

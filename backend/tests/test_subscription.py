@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.billing.codes import ALPHABET, format_code, generate_code, hash_code, normalize_code
-from apps.billing.models import AccessCode, CodeAttempt, CodeRedemption, GenerationUsage, Subscription
+from apps.billing.models import AccessCode, CodeAttempt, CodeRedemption, Subscription
 from apps.tenancy.models import Company, Invitation, Membership, Role
 
 pytestmark = pytest.mark.django_db
@@ -220,8 +220,6 @@ def test_company_without_a_code_is_read_only_and_keeps_its_data(api, make_compan
         "days_left": 0,
         "expiring_soon": False,
         "trial": False,
-        "generations_used": 0,
-        "generations_limit": 0,
     }
     assert api.get("/api/me").json()["companies"][0]["read_only"] is True
 
@@ -238,20 +236,6 @@ def test_expiry_blocks_changes_until_a_new_code_is_entered(api, make_company, su
     assert redeem(api, a["company"], make_code()).status_code == 200
     assert api.post(url, {"phone": "+48602300400"}).status_code == 201
     assert Invitation.objects.count() == 1
-
-
-def test_generation_usage_of_the_current_month_is_reported(api, make_company, subscribe, settings):
-    settings.GENERATION_MONTHLY_LIMIT = 30
-    a = make_company()
-    subscribe(a["company"])
-    this_month = timezone.localdate().replace(day=1)
-    GenerationUsage.objects.create(company=a["company"], month=this_month, count=4)
-    GenerationUsage.objects.create(company=a["company"], month=(this_month - DAY).replace(day=1), count=9)
-    api.login(a["manager"])
-
-    body = api.get(f"/api/companies/{a['company'].id}/subscription").json()
-
-    assert (body["generations_used"], body["generations_limit"]) == (4, 30)
 
 
 # --- registering a company ----------------------------------------------------------------------------

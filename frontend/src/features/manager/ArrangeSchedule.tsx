@@ -3,8 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { MessageCircle, Shuffle, Wand2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import { useSubscription } from '../../api/generated/billing/billing'
-import type { ExperiencedShortOut, GenerationRunOut, SubscriptionOut } from '../../api/generated/model'
+import type { ExperiencedShortOut, GenerationRunOut } from '../../api/generated/model'
 import { useCancelGenerationRun, useGenerateSchedule, useGenerationRun } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Sheet } from '../../components/ui/sheet'
@@ -90,12 +89,6 @@ function ArrangeSheet({
   const generate = useGenerateSchedule()
   const queryClient = useQueryClient()
   const chat = useAssistantDrawer()
-  const { companyId } = useManager()
-  const subscription = useSubscription(companyId, { query: { enabled: open, staleTime: 60_000 } })
-  const usage = subscription.data?.data as SubscriptionOut | undefined
-  // A monthly limit (off by default, 0) counts every arranging, "Ułóż inaczej" too: when on, say what is left.
-  const limit = typeof usage?.generations_limit === 'number' && usage.generations_limit > 0 ? usage.generations_limit : 0
-  const left = limit && usage ? Math.max(0, limit - usage.generations_used) : 0
   const one = targets.length === 1
   const early = targets.filter((t) => !t.deadlinePassed && t.missing > 0)
   const missing = targets.filter((t) => t.missing > 0)
@@ -180,18 +173,6 @@ function ArrangeSheet({
           {different &&
             ` Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny${manual.length > 0 ? ' razem z poprawkami' : ''}.`}
         </p>
-        {limit > 0 && (
-          <p
-            className={
-              left < targets.length
-                ? 'm-0 rounded-sm border-l-4 border-cannot bg-cannot-soft px-3 py-2 text-ink'
-                : 'm-0 text-sm text-ink-muted'
-            }
-          >
-            Zostało ułożeń w tym miesiącu: {left} z {limit}.
-            {left < targets.length && ' Nowe będą możliwe od pierwszego dnia kolejnego miesiąca.'}
-          </p>
-        )}
         {generate.isError && <InlineError>{errorMessage(generate.error, NETWORK_PROBLEM)}</InlineError>}
         <Button wide onClick={start} disabled={generate.isPending}>
           {generate.isPending

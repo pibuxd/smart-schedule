@@ -496,15 +496,10 @@ export type applyAssistantCommandResponse409 = {
   status: 409
 }
 
-export type applyAssistantCommandResponse429 = {
-  data: ErrorOut
-  status: 429
-}
-
 export type applyAssistantCommandResponseSuccess = (applyAssistantCommandResponse200) & {
   headers: Headers;
 };
-export type applyAssistantCommandResponseError = (applyAssistantCommandResponse400 | applyAssistantCommandResponse402 | applyAssistantCommandResponse403 | applyAssistantCommandResponse404 | applyAssistantCommandResponse409 | applyAssistantCommandResponse429) & {
+export type applyAssistantCommandResponseError = (applyAssistantCommandResponse400 | applyAssistantCommandResponse402 | applyAssistantCommandResponse403 | applyAssistantCommandResponse404 | applyAssistantCommandResponse409) & {
   headers: Headers;
 };
 
@@ -520,7 +515,7 @@ export const getApplyAssistantCommandUrl = (commandId: string,) => {
 
 /**
  * Accept the plan: the rule list, the instructions and the hours change as the plan's lines say, and the
- * arranging it asks for starts (429 when the month's arrangings are used up; then nothing is saved).
+ * arranging it asks for starts (when it cannot start, nothing is saved).
  * @summary Apply Assistant Command
  */
 export const applyAssistantCommand = async (commandId: string, options?: Parameters<typeof apiFetch>[1]): Promise<applyAssistantCommandResponse> => {
@@ -574,7 +569,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     /**
  * Accept the plan: the rule list, the instructions and the hours change as the plan's lines say, and the
- * arranging it asks for starts (429 when the month's arrangings are used up; then nothing is saved).
+ * arranging it asks for starts (when it cannot start, nothing is saved).
  * @summary Apply Assistant Command
  */
 export const useApplyAssistantCommand = <TError = ErrorOut,

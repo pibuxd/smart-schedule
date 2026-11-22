@@ -711,15 +711,10 @@ export type generateScheduleResponse409 = {
   status: 409
 }
 
-export type generateScheduleResponse429 = {
-  data: ErrorOut
-  status: 429
-}
-
 export type generateScheduleResponseSuccess = (generateScheduleResponse202) & {
   headers: Headers;
 };
-export type generateScheduleResponseError = (generateScheduleResponse402 | generateScheduleResponse403 | generateScheduleResponse404 | generateScheduleResponse409 | generateScheduleResponse429) & {
+export type generateScheduleResponseError = (generateScheduleResponse402 | generateScheduleResponse403 | generateScheduleResponse404 | generateScheduleResponse409) & {
   headers: Headers;
 };
 

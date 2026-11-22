@@ -12,6 +12,4 @@ export interface SubscriptionOut {
   days_left: number;
   expiring_soon: boolean;
   trial: boolean;
-  generations_used: number;
-  generations_limit: number;
 }

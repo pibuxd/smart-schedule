@@ -6,7 +6,6 @@ from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.assistant import services
 from apps.assistant.models import AssistantCommand, ManagerInstruction
-from apps.billing.models import GenerationUsage
 from apps.scheduling.models import GenerationRun, SchedulePeriod, ScheduleVersion
 from tests.test_assistant import instruction, plan, run
 from tests.test_assistant import shop as shop
@@ -53,7 +52,6 @@ def test_another_schedule_with_a_change_starts_arranging_only_on_acceptance(api,
     assert run_row.different and run_row.status == GenerationRun.Status.QUEUED
     assert list(run_row.periods.all()) == [shop["period"]]
     assert ProcrastinateJob.objects.filter(task_name="scheduling.solve_schedule").count() == 1
-    assert GenerationUsage.objects.get(company=shop["company"]).count == 1
     assert ManagerInstruction.objects.count() == 1
     assert api.get(f"/api/generation-runs/{run_row.pk}").json()["different"] is True
 
@@ -115,26 +113,19 @@ def test_arranging_already_under_way_blocks_the_plan(api, drafted, with_key, mon
     assert not body["can_apply"] and services.ARRANGE_BUSY in body["notes"]
 
 
-def test_when_arranging_cannot_start_on_acceptance_nothing_is_saved(api, drafted, with_key, monkeypatch, settings):
+def test_when_arranging_cannot_start_on_acceptance_nothing_is_saved(api, drafted, with_key, monkeypatch):
     shop = drafted
     api.login(shop["manager"])
     body = run(api, shop, monkeypatch, plan(new_instructions=[instruction()], arrange="different"))
-    settings.GENERATION_MONTHLY_LIMIT = 1
-    GenerationUsage.objects.create(company=shop["company"], month=timezone.localdate().replace(day=1), count=1)
-
-    response = api.post(f"/api/assistant-commands/{body['id']}/apply")
-
-    assert response.status_code == 429
-    assert response.json()["detail"].endswith(services.NOTHING_SAVED)
-    assert not ManagerInstruction.objects.exists() and not GenerationRun.objects.exists()
-    assert AssistantCommand.objects.get(pk=body["id"]).status == AssistantCommand.Status.READY
-
-    settings.GENERATION_MONTHLY_LIMIT = 10
     busy = GenerationRun.objects.create(location=shop["location"])
     busy.periods.set([shop["period"]])
+
     response = api.post(f"/api/assistant-commands/{body['id']}/apply")
+
     assert response.status_code == 409 and "już się układa" in response.json()["detail"]
-    assert not ManagerInstruction.objects.exists()
+    assert response.json()["detail"].endswith(services.NOTHING_SAVED)
+    assert not ManagerInstruction.objects.exists() and list(GenerationRun.objects.all()) == [busy]
+    assert AssistantCommand.objects.get(pk=body["id"]).status == AssistantCommand.Status.READY
 
 
 def test_a_question_and_an_arrangement_cannot_be_accepted_together(api, drafted, with_key, monkeypatch):

@@ -262,7 +262,7 @@ MANAGER_TOOLS = (
     ApiTool(
         "subscription",
         "/api/companies/{company_id}/subscription",
-        "Dostęp firmy: do kiedy, ile ułożeń grafiku zostało w tym miesiącu.",
+        "Dostęp firmy: do kiedy działa i czy to okres próbny.",
         fixed=_company(),
     ),
     ApiTool(

@@ -13,8 +13,6 @@ const trial = {
   days_left: 30,
   read_only: false,
   expiring_soon: false,
-  generations_used: 2,
-  generations_limit: 20,
 }
 
 describe('AccessScreen', () => {
@@ -30,7 +28,7 @@ describe('AccessScreen', () => {
       </AsManager>,
     )
     expect(await screen.findByText('Okres próbny: zostało 30 dni')).toBeInTheDocument()
-    expect(screen.getByText(/Ułożenia grafiku w tym miesiącu: 2 z 20./)).toBeInTheDocument()
+    expect(screen.queryByText(/Ułożenia grafiku/)).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Kod (12 znaków)'), { target: { value: 'ABCD-EFGH-JKMN' } })
     fireEvent.submit(screen.getByLabelText('Kod (12 znaków)').closest('form')!)
     await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true))
@@ -49,15 +47,5 @@ describe('AccessScreen', () => {
       </AsManager>,
     )
     expect(await screen.findByText('Błąd serwera.')).toBeInTheDocument()
-  })
-
-  it('says there is no limit when the limit is off', async () => {
-    mockApi(() => [200, { ...trial, generations_used: 41, generations_limit: 0 }])
-    renderScreen(
-      <AsManager>
-        <AccessScreen />
-      </AsManager>,
-    )
-    expect(await screen.findByText('Ułożenia grafiku w tym miesiącu: 41. Bez limitu.')).toBeInTheDocument()
   })
 })

@@ -1,14 +1,13 @@
 """Generating a schedule: asking for it (API), running it (worker) and saving the result as draft versions.
 
-- `request_generation` checks the manager, the read-only mode and the monthly limit, then saves one queued
+- `request_generation` checks the manager and the read-only mode, then saves one queued
   `GenerationRun` per location and defers its solver job in one transaction (no job without a run, no run
   without a job). Locations are independent, so each is arranged on its own.
 - `run_generation` is what the worker does: build the `Problem`, solve it within the time limit, check the result
   with the independent validator and save one draft `ScheduleVersion` per location. A schedule that breaks a hard
   rule is never saved. It is safe to run twice: only a queued run is started.
-- A run that fails gives its generation back to the monthly limit.
 - `cancel_generation` stops a queued or running run when the manager asks: the run is marked cancelled at once,
-  the worker's solver notices within about a second, nothing is saved and the generation is given back.
+  the worker's solver notices within about a second and nothing is saved.
 - A `different` run ("Ułóż inaczej", docs/plan.md section 36) asks the solver to give at least `DIFFERENT_SHARE`
   of the person-shifts of each earlier version of the period (up to `COMPARED_VERSIONS`) to someone else, without more
   holes; the new draft's notes say how different it came out.
@@ -24,11 +23,10 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import connection, transaction
-from django.db.models import F, Max
+from django.db.models import Max
 from django.utils import timezone
 from ninja.errors import HttpError
 
-from apps.billing.models import GenerationUsage
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuildError, BuiltProblem, build_problem
 from apps.tenancy.context import TenantContext
@@ -58,15 +56,11 @@ COMPARED_VERSIONS = 100  # every version in practice; only a bound on the solver
 ALREADY_FINISHED = "Układanie grafiku już się skończyło, więc nie ma czego anulować."
 
 
-def _month(now=None) -> date:
-    return timezone.localdate(now or timezone.now()).replace(day=1)
-
-
 def request_generation(
     ctx: TenantContext, periods: Sequence[SchedulePeriod], *, different: bool = False
 ) -> list[GenerationRun]:
     """Queue one generation per period. Locations are independent: each is arranged on its own, with its own
-    rules and weights, and each run counts toward the monthly limit ("arrange all" = one run per location).
+    rules and weights ("arrange all" = one run per location).
     `different`: the result has to differ clearly from the period's latest versions ("Ułóż inaczej")."""
     periods = list({p.pk: p for p in periods}.values())
     for period in periods:
@@ -76,22 +70,11 @@ def request_generation(
     ctx.require_writable()
 
     with transaction.atomic():
-        # The company row serialises generations of one company (limit and "already running" checks).
+        # The company row serialises generations of one company (the "already running" check).
         Company.objects.select_for_update().get(pk=ctx.company.pk)
         busy = ctx.qs(GenerationRun).filter(status__in=ACTIVE, periods__in=periods).exists()
         if busy:
             raise HttpError(409, "Grafik dla tego okresu już się układa. Poczekaj na wynik.")
-        usage, _ = ctx.qs(GenerationUsage).get_or_create(company=ctx.company, month=_month())
-        limit = settings.GENERATION_MONTHLY_LIMIT
-        if limit and usage.count + len(periods) > limit:
-            left = max(0, limit - usage.count)
-            raise HttpError(
-                429,
-                f"W tym miesiącu limit to {limit} ułożeń grafiku i zostało {left}, a potrzeba {len(periods)}. "
-                "Nowe będą możliwe od pierwszego dnia kolejnego miesiąca.",
-            )
-        usage.count = F("count") + len(periods)
-        usage.save(update_fields=["count"])
 
         from apps.scheduling.tasks import solve_schedule  # tasks import this module
 
@@ -106,14 +89,8 @@ def request_generation(
     return runs
 
 
-def _give_back_generation(run: GenerationRun) -> None:
-    GenerationUsage.objects.for_company(run.company_id).filter(month=_month(run.created_at), count__gt=0).update(
-        count=F("count") - 1
-    )
-
-
 def cancel_generation(ctx: TenantContext, run: GenerationRun) -> GenerationRun:
-    """Stop a queued or running generation. Nothing is saved; the generation does not count toward the limit."""
+    """Stop a queued or running generation. Nothing is saved."""
     for period in run.periods.select_related("location"):
         ctx.require_manager_of(period.location)
     ctx.require_writable()
@@ -124,7 +101,6 @@ def cancel_generation(ctx: TenantContext, run: GenerationRun) -> GenerationRun:
         run.status = GenerationRun.Status.CANCELLED
         run.finished_at = timezone.now()
         run.save(update_fields=["status", "finished_at"])
-        _give_back_generation(run)
     return run
 
 
@@ -163,7 +139,6 @@ def _fail(run: GenerationRun, message: str, solver_status: str = "") -> Generati
         run.solver_status = solver_status
         run.finished_at = timezone.now()
         run.save(update_fields=["status", "error", "solver_status", "finished_at", "time_ms"])
-        _give_back_generation(run)
     return run
 
 
