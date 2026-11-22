@@ -59,6 +59,35 @@ describe('MyScheduleScreen', () => {
     expect(next).toHaveTextContent('Z Tobą: Anna Wróbel, Marek Zając')
     expect(screen.getByText('Razem w listopadzie')).toBeInTheDocument()
     expect(screen.getByText('112 godz.')).toBeInTheDocument()
+    expect(screen.queryByText(/Wypłata to godziny razy stawka/)).not.toBeInTheDocument()
+  })
+
+  it('shows the pay under the hours only when the manager set rates', async () => {
+    mockApi((_method, path) => {
+      if (path === '/api/me/offers') return [200, []]
+      return [
+        200,
+        {
+          home_location_name: 'Wieliczka – Rynek',
+          shifts: [shift],
+          months: [
+            { month: '2026-11', hours: 112, pay: 3516.8, supplements_pay: 36, unpriced_hours: 0 },
+            { month: '2026-12', hours: 40, pay: 251.2, supplements_pay: 0, unpriced_hours: 32 },
+            { month: '2027-01', hours: 16, pay: null, unpriced_hours: 16 },
+          ],
+        },
+      ]
+    })
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
+    await screen.findByText('Razem w listopadzie')
+    const pay = screen.getAllByText('Wypłata brutto')
+    expect(pay).toHaveLength(2) // January has no rates at all: no pay line
+    expect(pay[0].parentElement).toHaveTextContent(/3516,80\szł/)
+    expect(pay[1].parentElement).toHaveTextContent(/251,20\szł/)
+    expect(screen.getByText('Bez 32 godz., bo kierownik nie ustawił dla nich stawki.')).toBeInTheDocument()
+    expect(screen.getAllByText(/W tym dodatki/)).toHaveLength(1) // November only: December has none
+    expect(screen.getByText(/W tym dodatki: 36,00\szł\./)).toBeInTheDocument()
+    expect(screen.queryByText(/szacun/i)).not.toBeInTheDocument()
   })
 
   it('keeps an ongoing shift visible without offering it and skips an ended shift', async () => {
@@ -92,10 +121,31 @@ describe('MyScheduleScreen', () => {
     expect(within(sheet).getByRole('button', { name: 'Jednak nie oddaję' })).toBeInTheDocument()
   })
 
+  /** "Zmiany do wzięcia" starts folded; open it the way a person does, by tapping its heading. */
+  async function openOffers() {
+    const heading = await screen.findByRole('heading', { name: 'Zmiany do wzięcia' })
+    const fold = heading.closest('details')!
+    fireEvent.click(heading)
+    await waitFor(() => expect(fold).toHaveAttribute('open'))
+    return fold
+  }
+
+  it('folds shifts to take under a heading that says how many there are', async () => {
+    schedule([shift], [offer, { ...offer, id: 'o2', my_claim_id: 'c2', my_claim_status: 'pending' }])
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
+    const heading = await screen.findByRole('heading', { name: 'Zmiany do wzięcia' })
+    const fold = heading.closest('details')!
+    expect(fold).not.toHaveAttribute('open')
+    expect(fold.querySelector('summary')).toHaveTextContent('2 zmiany · czeka na kierownika: 1')
+    await openOffers()
+    expect(within(fold).getByRole('button', { name: 'Weź zmianę' })).toBeInTheDocument()
+    expect(within(fold).getByText('Zgłoszone. Kierownik musi to zatwierdzić. Damy Ci znać.')).toBeInTheDocument()
+  })
+
   it('lists shifts to take and asks for one', async () => {
     const calls = schedule([shift], [offer])
     renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
-    const section = await screen.findByRole('region', { name: 'Zmiany do wzięcia' })
+    const section = await openOffers()
     expect(section).toHaveTextContent('Bochnia (inny lokal). Oddaje: Ola Kos')
     fireEvent.click(within(section).getByRole('button', { name: 'Weź zmianę' }))
     expect(calls.some((c) => c.url === '/api/offers/o1/claim')).toBe(false) // one more tap first
@@ -114,7 +164,7 @@ describe('MyScheduleScreen', () => {
       return [200, { home_location_name: 'Wieliczka – Rynek', shifts: [shift], months: [{ month: '2026-11', hours: 112 }] }]
     })
     renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
-    const section = await screen.findByRole('region', { name: 'Zmiany do wzięcia' })
+    const section = await openOffers()
     fireEvent.click(within(section).getByRole('button', { name: 'Weź zmianę' }))
     expect(within(section).getByText(/Od razu będzie Twoja/)).toBeInTheDocument()
     fireEvent.click(within(section).getByRole('button', { name: 'Tak, biorę' }))

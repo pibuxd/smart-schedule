@@ -6,7 +6,8 @@
  */
 
 /**
- * The person's earlier message and the assistant's question on it, which this request answers.
+ * The person's earlier message and the assistant's question on it, which this request answers (or an earlier
+ * question in a row about the same request).
  */
 export interface AskedOut {
   text: string;

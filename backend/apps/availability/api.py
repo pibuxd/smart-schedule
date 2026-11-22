@@ -204,6 +204,9 @@ class MyRequestOut(Schema):
     # The assistant still remembers the question (it is among the last messages it reads), so the next message
     # in the chat can answer it; an older one is written again instead.
     can_answer: bool = False
+    # This message answers the assistant's question(s): the earlier messages of the same request and the questions
+    # on them, oldest first (the assistant asks up to three times in a row).
+    exchange: list["AskedOut"] = Field(default_factory=list)
     # "Na stałe": it counts in later periods too, until someone ends it. `can_last`: the screen offers the choice
     # "Tylko ten okres" / "Na stałe" (not for a request only about concrete days).
     lasting: bool = False
@@ -558,6 +561,7 @@ def _request_out(
         question=question,
         waiting=waiting,
         can_answer=waiting and later < MAX_CONVERSATION,
+        exchange=_exchange(text_request),
         lasting=text_request.lasting,
         can_last=text_request.can_last,
         carried_from=text_request.starts_on if carried else None,
@@ -565,6 +569,16 @@ def _request_out(
         ended_by=text_request.ended_by_whom,
         ended=carried and text_request.ends_from is not None and text_request.ends_from <= carried_to,
     )
+
+
+def _exchange(row: TextRequest) -> list["AskedOut"]:
+    from apps.assistant.services import exchange
+
+    return [AskedOut(text=r.text, question=r.question) for r in exchange(row.answer_to if row.answer_to_id else None)]
+
+
+# Enough to read a whole exchange of questions (`services.MAX_QUESTIONS` = 3) without a query per message.
+EXCHANGE = "answer_to__answer_to__answer_to"
 
 
 def _hours_proposals(row: TextRequest) -> list[HoursProposalOut]:
@@ -687,7 +701,7 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
     requests = list(
         ctx.qs(TextRequest)
         .filter(scope, employee=profile)
-        .select_related("period", "employee__membership")
+        .select_related("period", "employee__membership", EXCHANGE)
         .prefetch_related("answers")
         .order_by("created_at")
     )
@@ -947,7 +961,8 @@ class AvailabilityGridOut(Schema):
 
 
 class AskedOut(Schema):
-    """The person's earlier message and the assistant's question on it, which this request answers."""
+    """The person's earlier message and the assistant's question on it, which this request answers (or an earlier
+    question in a row about the same request)."""
 
     text: str
     question: str
@@ -974,6 +989,8 @@ class ManagerRequestOut(Schema):
     created_at: datetime
     # This message answers the assistant's question on an earlier one: the earlier text and the question.
     asked: AskedOut | None = None
+    # All earlier messages of this request with the assistant's questions, oldest first (`asked` is the last one).
+    exchange: list[AskedOut] = Field(default_factory=list)
     # "Na stałe": it counts in later periods too, until someone ends it.
     lasting: bool = False
     # A lasting request written for an earlier period or month (its first day); None for one written for this
@@ -1070,6 +1087,7 @@ def _manager_request_out(row: TextRequest, period: SchedulePeriod | None = None)
         manager_rejected=row.manager_rejected,
         created_at=row.created_at,
         asked=AskedOut(text=row.answer_to.text, question=row.answer_to.question) if row.answer_to else None,
+        exchange=_exchange(row),
         lasting=row.lasting,
         carried_from=row.starts_on if carried else None,
         ended=carried and row.ends_from is not None and row.ends_from <= period.start,
@@ -1098,7 +1116,7 @@ def period_requests(request, period_id: UUID):
         .filter(TextRequest.for_periods([period]) | ended_here)
         .exclude(status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED])
         .exclude(interpretation__type="out_of_scope", interpretation__type__isnull=False)
-        .select_related("employee__membership__user", "answer_to", "period")
+        .select_related("employee__membership__user", "period", EXCHANGE)
     )
     return [_manager_request_out(r, period) for r in rows.order_by("created_at")]
 

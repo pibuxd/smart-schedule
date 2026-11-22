@@ -292,6 +292,33 @@ describe("RequestsSection", () => {
     expect(screen.queryByRole("list", { name: "Zapisane prośby" })).toBeNull();
   });
 
+  it("shows the earlier messages of a request the assistant asks about again", async () => {
+    mockApi(() => [
+      200,
+      [
+        request({
+          id: "q2",
+          text: "Trochę mniej.",
+          status: "answered",
+          summary: null,
+          question: "Ile najwyżej w tygodniu?",
+          waiting: true,
+          can_answer: true,
+          exchange: [{ text: "Chcę mniej pracować.", question: "Ile godzin?" }],
+        }),
+      ],
+    ]);
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    const waiting = await screen.findByRole("list", {
+      name: "Czekają na Twoją odpowiedź",
+    });
+    expect(waiting).toHaveTextContent(
+      "Chcę mniej pracować.Trochę mniej.Nie jest zapisana. Asystent pyta: Ile najwyżej w tygodniu?",
+    );
+  });
+
   it("lets a question the assistant no longer remembers be written again", async () => {
     const calls = mockApi((method) =>
       method === "PATCH"

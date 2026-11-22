@@ -656,6 +656,15 @@ function RequestsWindow({
                 />
               ) : (
                 <div className="grid gap-2 py-2 pr-2">
+                  {/* A second or third question: the earlier messages of the same request come first. */}
+                  {(request.exchange ?? []).map((earlier, i) => (
+                    <span
+                      key={i}
+                      className="text-sm text-ink-muted [overflow-wrap:anywhere]"
+                    >
+                      {earlier.text}
+                    </span>
+                  ))}
                   <span className="[overflow-wrap:anywhere]">
                     {request.text}
                   </span>

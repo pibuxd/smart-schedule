@@ -12,5 +12,8 @@ export interface HoursReportOut {
   locations: LocationColumnOut[];
   rows: EmployeeHoursOut[];
   total: number;
+  pay?: number | null;
+  supplements_pay?: number | null;
+  unpriced_hours?: number;
   latest_month: string | null;
 }

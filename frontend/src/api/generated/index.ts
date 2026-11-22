@@ -4,6 +4,7 @@ export * from './availability/availability';
 export * from './billing/billing';
 export * from './marketplace/marketplace';
 export * from './notifications/notifications';
+export * from './pay/pay';
 export * from './reports/reports';
 export * from './rules/rules';
 export * from './scheduling/scheduling';

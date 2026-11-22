@@ -158,6 +158,14 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   manager's hours plan applies on "Zatwierdź zmiany" and does not need an open rule set. A person who loses a shift
   loses its other hours for good (`expired`, never revived), so no time counts twice; gaining a shift that approved
   hours run into is a problem in `check_assignment` and expires them when forced (`person_got_shift`).
+- Pay ("Mój grafik", "Godziny", CSV; gross, never called an estimate): `apps/pay` (`services.PayRules` + `Pay`), the
+  hours from `worked_hours` times the shift's rate on `Shift.date`, plus `PaySupplement`s for the part of the shift
+  inside their hours. Rates are steps from a day (`PositionRate`, `PersonalRate`; `valid_from` null = from the start),
+  so a change never moves earlier months; a person's step without an amount means the position's rate again.
+  Supplement changes split the row at `change_from`. Hours without a rate are `unpriced_hours`, never 0 zł, get no
+  supplement, and `pay` is null when nothing had a rate (screens then show no pay). Only the location's managers see
+  rates; the generator, validator and scores never read them, and `assistant/tools.DROPPED_KEYS` keeps pay, rates
+  and supplements away from the language model.
 - Assistant (a language model): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   On OpenRouter the structured answer is a call of the `final_answer` tool (never `response_format` next to tools:
   providers then force JSON on every round and no tool gets called); on Anthropic it is `output_config.format`.
@@ -167,9 +175,11 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   existing `GET /api/...` endpoints run as the person who wrote (same permissions as the app, phones stripped). Never
   give it write tools; it says where in the app to do things. Off-topic messages get application-owned copy; mixed
   messages are answered and their preferences saved. When unsure (day, person, shift, how much) the employee's
-  assistant asks one question (`EmployeeReply.question`, saved as `TextRequest.question` on an `answered` row, nothing
+  assistant asks one question (`EmployeeReply.question`, or the app's own about a namesake, an unknown person or
+  shift, or a reading below `ASSISTANT_MIN_CONFIDENCE`; saved as `TextRequest.question` on an `answered` row, nothing
   saved); it waits while it is among the last `MAX_CONVERSATION` messages, a later message names it by number
-  (`answers_question`, `TextRequest.answer_to`), and a second question goes to the manager. Without a key (`llm.is_enabled()`) requests go uninterpreted. Tests
+  (`answers_question`, `TextRequest.answer_to`); it may ask again about an answer (a plain "tak" to "Czy dobrze rozumiem…" settles a doubt, `services.confirmed`), up to `services.MAX_QUESTIONS` (3)
+  in a row (`services.exchange`), and then the request goes to the manager. Without a key (`llm.is_enabled()`) requests go uninterpreted. Tests
   replace `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
   `apps/assistant/context.py` supplies bounded history for corrections. Both structured outputs require a

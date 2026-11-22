@@ -4,15 +4,18 @@ import { useState } from 'react'
 import { useAvailableOffers, useClaimOffer, useWithdrawMyClaim } from '../../api/generated/marketplace/marketplace'
 import type { AvailableOfferOut } from '../../api/generated/model'
 import { Button } from '../../components/ui/button'
+import { Section } from '../../components/ui/field'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { dayTitle, parseDate, shortTime } from '../../lib/dates'
+import { shifts as shiftsWord } from '../manager/words'
 
 /**
  * "Zmiany do wzięcia": shifts that colleagues give away and that I can take (the server checks my calendar,
  * my other shifts and the position). "Weź zmianę" asks the manager; the shift is mine only after they approve.
  * When the shift's location hands shifts over without approval (`at_once`), it is mine right away.
- * Hidden when there is nothing to take, so the schedule stays the first thing on the screen.
+ * Folded at first, with the count in the heading, so a long list does not push my own schedule down the screen
+ * (Piotr, 22.11.2026). Hidden when there is nothing to take.
  */
 export function OffersToTake({ companyId, readOnly }: { companyId: string; readOnly: boolean }) {
   const offers = useAvailableOffers({ company_id: companyId })
@@ -24,18 +27,32 @@ export function OffersToTake({ companyId, readOnly }: { companyId: string; readO
   }
   const list = offers.data.data as AvailableOfferOut[]
   if (list.length === 0) return note
+  const waiting = list.filter((offer) => offer.my_claim_status === 'pending').length
   return (
-    <section aria-labelledby="to-take" className="grid gap-3">
+    <>
       {note}
-      <h2 id="to-take" className="m-0 text-lg font-extrabold">
-        Zmiany do wzięcia
-      </h2>
-      <ul className="m-0 grid list-none gap-3 p-0">
-        {list.map((offer) => (
-          <OfferCard key={offer.id} offer={offer} readOnly={readOnly} onTaken={() => setTaken(true)} />
-        ))}
-      </ul>
-    </section>
+      <Section
+        collapsible
+        title="Zmiany do wzięcia"
+        status={
+          <>
+            <span className="font-semibold text-accent">{shiftsWord(list.length)}</span>
+            {waiting > 0 && (
+              <>
+                <span className="text-ink-muted"> · </span>
+                <span className="font-semibold text-prefer-not">czeka na kierownika: {waiting}</span>
+              </>
+            )}
+          </>
+        }
+      >
+        <ul className="m-0 grid list-none gap-3 p-0">
+          {list.map((offer) => (
+            <OfferCard key={offer.id} offer={offer} readOnly={readOnly} onTaken={() => setTaken(true)} />
+          ))}
+        </ul>
+      </Section>
+    </>
   )
 }
 

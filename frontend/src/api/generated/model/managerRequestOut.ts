@@ -24,6 +24,7 @@ export interface ManagerRequestOut {
   manager_rejected: boolean;
   created_at: string;
   asked?: AskedOut | null;
+  exchange?: AskedOut[];
   lasting?: boolean;
   carried_from?: string | null;
   ended?: boolean;

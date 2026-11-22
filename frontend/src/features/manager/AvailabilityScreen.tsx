@@ -520,11 +520,12 @@ export function RequestCard({ request, periodId }: { request: ManagerRequestOut;
           {rejected && <Tag tone="bad">Odrzucona</Tag>}
         </span>
       </div>
-      {request.asked && (
-        <p className="m-0 text-sm text-ink-muted">
-          Wcześniej: „{request.asked.text}” Asystent zapytał: „{request.asked.question}”
+      {/* The earlier messages of this request: the text below answers the assistant's last question. */}
+      {(request.exchange ?? []).map((earlier, i) => (
+        <p key={i} className="m-0 text-sm text-ink-muted">
+          {i === 0 ? 'Wcześniej' : 'Potem'}: „{earlier.text}” Asystent zapytał: „{earlier.question}”
         </p>
-      )}
+      ))}
       <p className={rejected ? 'm-0 text-ink-muted line-through' : 'm-0'}>„{request.text}”</p>
       <p className="m-0 text-sm text-ink-muted">{requestNote(request)}</p>
       {request.employee_corrected && request.summary && (
