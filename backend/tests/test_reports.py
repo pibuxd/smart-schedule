@@ -46,9 +46,11 @@ def test_csv_opens_in_a_polish_spreadsheet(api, shop, published):
     text = response.content.decode("utf-8-sig")
     header, *lines = text.strip().splitlines()
     assert header.startswith("Osoba;Lokal domowy;Zmiany;")
-    assert header.endswith(";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Uwagi")
-    assert len(lines) == 3 and all(line.split(";")[-4].endswith(",00") for line in lines)
-    assert all(line.split(";")[-3:-1] == ["0,00", "0,00"] for line in lines)  # nobody worked other hours
+    assert header.endswith(
+        ";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Wypłata brutto, zł;W tym dodatki, zł;Godziny bez stawki;Uwagi"
+    )
+    assert len(lines) == 3 and all(line.split(";")[-7].endswith(",00") for line in lines)
+    assert all(line.split(";")[-6:-4] == ["0,00", "0,00"] for line in lines)  # nobody worked other hours
 
 
 def test_bad_month_and_other_companies(api, shop, published, make_company):

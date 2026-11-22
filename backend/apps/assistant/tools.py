@@ -26,8 +26,23 @@ logger = logging.getLogger(__name__)
 
 # One tool result goes back to the model in full up to this size; larger ones are cut with a note.
 MAX_RESULT_CHARS = 40_000
-# Never sent to the model: phone numbers (personal data) and fields that only drive the screens.
-DROPPED_KEYS = frozenset({"phone", "phone_e164", "revision", "headers", "link"})
+# Never sent to the model: phone numbers (personal data), fields that only drive the screens, and money: pay,
+# hourly rates and supplements stay in the app, out of the external AI service (docs/plan.md, section 35).
+DROPPED_KEYS = frozenset(
+    {
+        "phone",
+        "phone_e164",
+        "revision",
+        "headers",
+        "link",
+        "pay",
+        "supplements_pay",
+        "unpriced_hours",
+        "hourly_rate",
+        "rates",
+        "supplements",
+    }
+)
 
 NULLABLE_DATE = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "YYYY-MM-DD albo null"}
 NULLABLE_ID = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Identyfikator (UUID) albo null"}

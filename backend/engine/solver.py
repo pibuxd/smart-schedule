@@ -6,7 +6,7 @@ Two phases, as in docs/plan.md section 3:
 2. with that many holes at most, minimise the penalty: manager rules and employee requests weighed by the
    location's weight profile (80 : 20 by default), plus a cost for every changed published assignment.
 
-With `diversity_from` ("Ułóż inaczej", docs/plan.md section 35) a phase runs between them: with no more holes, keep
+With `diversity_from` ("Ułóż inaczej", docs/plan.md section 36) a phase runs between them: with no more holes, keep
 as few of the earlier schedules' person-shifts beyond the allowed share as possible; the penalty phase then keeps
 that difference.
 

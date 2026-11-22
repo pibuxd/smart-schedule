@@ -451,7 +451,15 @@ class TestMySchedule:
         api.login(shop["worker"])
         body = api.get(path("/api/me/schedule", shop["company"])).json()
         assert body["shifts"] == []
-        assert body["months"] == [{"month": timezone.localdate().strftime("%Y-%m"), "hours": 0.0}]
+        assert body["months"] == [
+            {
+                "month": timezone.localdate().strftime("%Y-%m"),
+                "hours": 0.0,
+                "pay": None,
+                "supplements_pay": None,
+                "unpriced_hours": 0.0,
+            }
+        ]
         assert body["home_location_name"] == shop["location"].name
         assert body["published_until"] is None
 

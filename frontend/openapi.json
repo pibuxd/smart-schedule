@@ -2029,7 +2029,7 @@
             }
           }
         },
-        "description": "My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month\n(approved other hours count instead of the schedule's). Works in read-only mode.",
+        "description": "My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month\n(approved other hours count instead of the schedule's) with the pay. Works in read-only mode.",
         "tags": [
           "scheduling"
         ],
@@ -5810,7 +5810,7 @@
             }
           }
         },
-        "description": "Hours of published shifts in a month, per person and location (the locations this manager runs). Approved\nother hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.",
+        "description": "Hours of published shifts in a month, per person and location (the locations this manager runs). Approved\nother hours of a shift (overtime, a shorter shift) count instead of the schedule's; `longer`/`shorter` show them.\n`pay` is what to pay before tax (hours × the shift's rate on its day, plus supplements, `supplements_pay` of it);\nhours without a rate are `unpriced_hours`.",
         "tags": [
           "reports"
         ],
@@ -8605,6 +8605,695 @@
           }
         ]
       }
+    },
+    "/api/locations/{location_id}/pay-settings": {
+      "get": {
+        "operationId": "pay_settings",
+        "summary": "Pay Settings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaySettingsOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The location's positions with their rates by day, and its supplements (also ended ones, with dates).",
+        "tags": [
+          "pay"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/positions/{position_id}/rates": {
+      "post": {
+        "operationId": "set_position_rate",
+        "summary": "Set Position Rate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "position_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Position Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionRatesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The position's rate from `valid_from` on (a step on the same day is replaced). Shifts before that day keep\nthe rate they had.",
+        "tags": [
+          "pay"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/position-rates/{rate_id}": {
+      "delete": {
+        "operationId": "delete_position_rate",
+        "summary": "Delete Position Rate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rate_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Rate Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionRatesOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Removes one step (e.g. a mistake): the step before it counts again until the next one.",
+        "tags": [
+          "pay"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/personal-rates": {
+      "get": {
+        "operationId": "personal_rates",
+        "summary": "Personal Rates",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonalRateOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "People's own rates on this location's positions, by day.",
+        "tags": [
+          "pay"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/employees/{employee_id}/rates": {
+      "post": {
+        "operationId": "set_personal_rate",
+        "summary": "Set Personal Rate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Employee Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonalRateOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The person's own rate on one of their positions from `valid_from` on, e.g. a raise for a longer record.\nReturns the person's steps on that position.",
+        "tags": [
+          "pay"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalRateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/personal-rates/{rate_id}": {
+      "delete": {
+        "operationId": "delete_personal_rate",
+        "summary": "Delete Personal Rate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rate_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Rate Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pay"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/supplements": {
+      "post": {
+        "operationId": "create_supplement",
+        "summary": "Create Supplement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplementOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "A new supplement, e.g. nights 22:00–06:00 +6 zł an hour, from `valid_from` (null = for every shift).",
+        "tags": [
+          "pay"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplementIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/supplements/{supplement_id}": {
+      "patch": {
+        "operationId": "update_supplement",
+        "summary": "Update Supplement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supplement_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Supplement Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplementOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "A new name changes in place. Other changes count from `change_from`: the supplement ends the day before and\na new one starts with the changes, so earlier shifts keep what they had (unless it starts on that day or later,\nthen it changes in place). Returns the supplement that counts from `change_from`.",
+        "tags": [
+          "pay"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplementChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "end_supplement",
+        "summary": "End Supplement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supplement_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Supplement Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "end_from",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End From"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "No supplement from `end_from` on; shifts before keep it. Without a day, or when it would only start on that\nday or later, the supplement is deleted.",
+        "tags": [
+          "pay"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -10202,6 +10891,33 @@
           },
           "hours": {
             "title": "Hours",
+            "type": "number"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          },
+          "supplements_pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplements Pay"
+          },
+          "unpriced_hours": {
+            "default": 0,
+            "title": "Unpriced Hours",
             "type": "number"
           }
         },
@@ -13909,6 +14625,33 @@
           "elsewhere": {
             "title": "Elsewhere",
             "type": "boolean"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          },
+          "supplements_pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplements Pay"
+          },
+          "unpriced_hours": {
+            "default": 0,
+            "title": "Unpriced Hours",
+            "type": "number"
           }
         },
         "required": [
@@ -13945,6 +14688,33 @@
           },
           "total": {
             "title": "Total",
+            "type": "number"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          },
+          "supplements_pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplements Pay"
+          },
+          "unpriced_hours": {
+            "default": 0,
+            "title": "Unpriced Hours",
             "type": "number"
           },
           "latest_month": {
@@ -15319,6 +16089,466 @@
           "end_time"
         ],
         "title": "SetHoursIn",
+        "type": "object"
+      },
+      "PaySettingsOut": {
+        "properties": {
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/PositionRatesOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "supplements": {
+            "items": {
+              "$ref": "#/components/schemas/SupplementOut"
+            },
+            "title": "Supplements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "positions",
+          "supplements"
+        ],
+        "title": "PaySettingsOut",
+        "type": "object"
+      },
+      "PositionRatesOut": {
+        "properties": {
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rates": {
+            "items": {
+              "$ref": "#/components/schemas/RateStepOut"
+            },
+            "title": "Rates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "position_id",
+          "name",
+          "rates"
+        ],
+        "title": "PositionRatesOut",
+        "type": "object"
+      },
+      "RateStepOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          }
+        },
+        "required": [
+          "id",
+          "valid_from",
+          "hourly_rate"
+        ],
+        "title": "RateStepOut",
+        "type": "object"
+      },
+      "SupplementOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "start_time": {
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "weekdays": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Weekdays",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "amount",
+              "percent"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "all_positions": {
+            "title": "All Positions",
+            "type": "boolean"
+          },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Position Ids",
+            "type": "array"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "start_time",
+          "end_time",
+          "weekdays",
+          "kind",
+          "value",
+          "all_positions",
+          "position_ids",
+          "valid_from",
+          "valid_until"
+        ],
+        "title": "SupplementOut",
+        "type": "object"
+      },
+      "RateIn": {
+        "properties": {
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          }
+        },
+        "title": "RateIn",
+        "type": "object"
+      },
+      "PersonalRateOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "valid_from",
+          "hourly_rate",
+          "employee_id",
+          "position_id"
+        ],
+        "title": "PersonalRateOut",
+        "type": "object"
+      },
+      "PersonalRateIn": {
+        "properties": {
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "position_id": {
+            "format": "uuid",
+            "title": "Position Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position_id"
+        ],
+        "title": "PersonalRateIn",
+        "type": "object"
+      },
+      "SupplementIn": {
+        "properties": {
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "start_time": {
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "weekdays": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Weekdays",
+            "type": "array"
+          },
+          "kind": {
+            "default": "amount",
+            "enum": [
+              "amount",
+              "percent"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "all_positions": {
+            "default": true,
+            "title": "All Positions",
+            "type": "boolean"
+          },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Position Ids",
+            "type": "array"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          }
+        },
+        "required": [
+          "name",
+          "start_time",
+          "end_time",
+          "weekdays",
+          "value"
+        ],
+        "title": "SupplementIn",
+        "type": "object"
+      },
+      "SupplementChangeIn": {
+        "properties": {
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "start_time": {
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "weekdays": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Weekdays",
+            "type": "array"
+          },
+          "kind": {
+            "default": "amount",
+            "enum": [
+              "amount",
+              "percent"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "all_positions": {
+            "default": true,
+            "title": "All Positions",
+            "type": "boolean"
+          },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Position Ids",
+            "type": "array"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "change_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change From"
+          }
+        },
+        "required": [
+          "name",
+          "start_time",
+          "end_time",
+          "weekdays",
+          "value"
+        ],
+        "title": "SupplementChangeIn",
         "type": "object"
       }
     },

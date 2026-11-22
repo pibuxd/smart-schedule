@@ -231,7 +231,8 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
   Niżej „Zmiany do wzięcia” z przyciskiem „Weź zmianę”. Zamiany z wybraną osobą nie ma: oddaj zmianę i poproś tę
   osobę, żeby ją wzięła, albo poproś kierownika (może zamienić ludzi sam w „Oddane zmiany”).
   „Zgłoś inne godziny” przy dzisiejszej zmianie i w „Minione zmiany” (14 dni wstecz): nadgodziny albo wcześniejsze
-  wyjście; liczy się dopiero to, co kierownik zatwierdzi. Suma godzin liczy zatwierdzone godziny.
+  wyjście; liczy się dopiero to, co kierownik zatwierdzi. Suma godzin liczy zatwierdzone godziny. Pod sumą jest
+  „Wypłata brutto” z dodatkami (gdy kierownik ustawił stawki). Kwot nie znasz: o pieniądze odsyłaj do tego miejsca.
 - „Kiedy mogę”: kalendarz dyspozycji. Na dole wybierasz „Nie mogę”, „Mogę” albo „Chętnie” i stukasz lub
   przeciągasz po dniach; każdy dzień jest od początku „Mogę”; zapis jest automatyczny. Stuknięcie w zaznaczony
   dzień albo „Godziny dnia” ustawia godziny („mogę tylko w tych godzinach”). Gdy kierownik prosi o dyspozycje,
@@ -246,7 +247,10 @@ Przewodnik po aplikacji kierownika:
   „Zmień obsadę sam”: wpisanie innej osoby na dowolną opublikowaną zmianę albo zamiana dwóch osób, także dla zmian,
   które minęły), „Powiadomienia”, „Godziny” (zgłoszone przez pracowników inne godziny do zatwierdzenia lub
   odrzucenia, „Zmień godziny sam” tylko dla zmian z opublikowanego grafiku, godziny w miesiącu na osobę i lokal
-  z nadgodzinami i krótszymi zmianami, plik CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
+  z nadgodzinami i krótszymi zmianami, wypłaty brutto, plik CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
+  Stawki stanowisk „od dnia” i dodatki za porę dnia (np. noc) są w „Ustawieniach lokalu”, w części „Stawki i
+  dodatki”; własna stawka osoby (np. za staż) w jej formularzu w „Pracownicy”, w części „Stawki”. Kwot wypłat,
+  stawek ani dodatków nie znasz: o pieniądze odsyłaj do tych miejsc.
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i
   „Przypomnij”, prośby pracowników: ważniejsza, mniej ważna, odrzuć), „Grafik” („Ułóż grafik”, „Ułóż od nowa”,
   „Ułóż inaczej” (nowy grafik wyraźnie inny niż ostatnie wersje: inne osoby na mniej więcej co trzeciej

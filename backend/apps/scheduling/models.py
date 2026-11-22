@@ -77,7 +77,7 @@ class GenerationRun(CompanyOwnedModel):
     group = models.ForeignKey(LocationGroup, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     periods = models.ManyToManyField(SchedulePeriod, related_name="generation_runs")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
-    # "Ułóż inaczej": the result has to differ clearly from the period's latest versions (docs/plan.md section 35).
+    # "Ułóż inaczej": the result has to differ clearly from the period's latest versions (docs/plan.md section 36).
     different = models.BooleanField("inny niż ostatnie wersje", default=False)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(default=timezone.now)

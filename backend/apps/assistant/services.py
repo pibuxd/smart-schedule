@@ -1602,7 +1602,7 @@ def has_changes(plan: dict[str, Any] | None) -> bool:
 
 
 def arranges(plan: dict[str, Any] | None) -> bool:
-    """Accepting the plan arranges the schedule of the agreements' period again (docs/plan.md section 35)."""
+    """Accepting the plan arranges the schedule of the agreements' period again (docs/plan.md section 36)."""
     return bool((plan or {}).get("arrange"))
 
 

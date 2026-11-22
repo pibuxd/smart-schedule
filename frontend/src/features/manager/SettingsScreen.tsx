@@ -37,6 +37,7 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { dayTitle, parseDate, shortTime, spanHours, WEEKDAY_HEADERS } from '../../lib/dates'
 import { useManager } from './ManagerContext'
+import { PaySection } from './PayRates'
 import { StaffingCalendar } from './StaffingCalendar'
 
 const hhmm = (value: string | null | undefined) => (value ? value.slice(0, 5) : '')
@@ -77,6 +78,7 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
       <StaffingSection key={JSON.stringify(data.staffing)} locationId={locationId} setup={data} />
       <StaffingCalendar locationId={locationId} setup={data} />
       <ClosuresSection locationId={locationId} setup={data} />
+      <PaySection locationId={locationId} />
       <ArchiveSection location={info} />
     </div>
   )
