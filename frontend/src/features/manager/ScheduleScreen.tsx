@@ -11,7 +11,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Clock, Hand, Pin, Plus, Send, ShieldAlert, SquarePen } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Clock, Hand, Pin, Plus, Send, ShieldAlert, SquarePen, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
@@ -25,9 +25,11 @@ import type {
   VersionShiftOut,
 } from '../../api/generated/model'
 import {
+  getLocationPeriodsQueryKey,
   useAddScheduleSeat,
   useChangeAssignments,
   useCheckScheduleChanges,
+  useDeleteScheduleDraft,
   useEmployeeFit,
   useLocationPeriods,
   usePinShift,
@@ -37,6 +39,7 @@ import {
   useStartCorrecting,
 } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
+import { ConfirmSheet } from '../../components/ui/confirm'
 import { Disclosure } from '../../components/ui/disclosure'
 import { Section, SelectField, Tag } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
@@ -268,6 +271,7 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
             ))}
           </SelectField>
         )}
+        {data.editable && !data.period.active_run_id && <DeleteDraft data={data} />}
         {data.editable && (
           <Button size="normal" onClick={() => setPublishing(true)} disabled={data.hard_problems.length > 0}>
             <Send aria-hidden="true" size={20} />
@@ -299,6 +303,67 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
       {correct.isError && <InlineError>{errorMessage(correct.error, NETWORK_PROBLEM)}</InlineError>}
       <PublishSheet data={data} open={publishing} onOpenChange={setPublishing} />
     </section>
+  )
+}
+
+/** Older versions that "Usuń szkic" removes too: never published and newer than the last publication. */
+function unpublishedOlder(data: VersionOut): number {
+  const lastPublished = Math.max(0, ...data.history.filter((v) => v.published_at).map((v) => v.number))
+  return data.history.filter((v) => !v.published_at && v.number > lastPublished && v.number < data.number).length
+}
+
+/** "Usuń szkic": the draft goes for good; the published schedule stays, else the period collects availability again. */
+function DeleteDraft({ data }: { data: VersionOut }) {
+  const remove = useDeleteScheduleDraft()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const older = unpublishedOlder(data)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Usuń szkic"
+        title="Usuń szkic"
+        className="inline-flex min-h-(--touch) min-w-(--touch) cursor-pointer items-center justify-center rounded-md text-cannot hover:bg-cannot-soft"
+      >
+        <Trash2 aria-hidden="true" size={22} />
+      </button>
+      <ConfirmSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Usunąć szkic grafiku?"
+        confirmLabel="Tak, usuń szkic"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(
+            { versionId: data.id },
+            {
+              onSuccess: async () => {
+                // The periods first, so this draft's view is gone before its own data is asked for again.
+                await queryClient.invalidateQueries({ queryKey: getLocationPeriodsQueryKey(data.location_id) })
+                void queryClient.invalidateQueries()
+              },
+            },
+          )
+        }
+      >
+        <p className="m-0">
+          {data.period.published_version_id
+            ? 'Szkic zniknie na dobre razem z poprawkami. Zostaje opublikowany grafik, który widzą pracownicy.'
+            : 'Szkic zniknie na dobre razem z poprawkami, a okres wróci do zbierania dyspozycji.'}
+        </p>
+        {older > 0 && (
+          <p className="m-0">
+            {older === 1
+              ? 'Zniknie też 1 starsza wersja z historii, której nie opublikowano.'
+              : `Znikną też starsze wersje z historii, których nie opublikowano (${older}).`}
+          </p>
+        )}
+        <p className="m-0">Obsada dni i zmiany w grafikach innych lokali zostają.</p>
+      </ConfirmSheet>
+    </>
   )
 }
 

@@ -261,7 +261,7 @@ Grafik
 - `GET/POST /locations/{id}/periods` · `POST /periods/generate` (jeden lub kilka okresów; osobne `GenerationRun` dla każdego lokalu)
 - `GET /generation-runs/{id}` · `GET /versions/{id}` (zmiany, przypisania, ocena, zasady, niespełnione prośby, historia wersji)
 - `POST /versions/{id}/check` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena + `can_force`) · `GET /versions/{id}/shifts/{shift_id}/drops` (wynik upuszczenia osoby z tej zmiany na każdą inną zmianę, liczony raz na początku przeciągania) · `PATCH /versions/{id}/assignments` (wpisanie, zamiana, zostawienie bez obsady; `force` zapisuje mimo twardej reguły) · `GET /versions/{id}/employees/{employee_id}/fit` (dyspozycje osoby na zmianach, do podświetlania) · `POST /versions/{id}/shifts/{shift_id}/pin`
-- `POST /versions/{id}/draft` (poprawka opublikowanego grafiku) · `POST /versions/{id}/publish` · `GET /versions/{id}/shifts/{shift_id}/explain`
+- `POST /versions/{id}/draft` (poprawka opublikowanego grafiku) · `DELETE /versions/{id}` (usunięcie szkicu, sekcja 33) · `POST /versions/{id}/publish` · `GET /versions/{id}/shifts/{shift_id}/explain`
 - `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin, współpracownicy na zmianie)
 
 Oddawanie zmian i powiadomienia
@@ -1088,3 +1088,26 @@ pomylić…" w obu czatach; w "Grafiku" zdanie przy opublikowanej wersji, instru
 aplikacji; drugie zdania podtytułów "Oddane zmiany" i "Godziny w miesiącu"; "Dalsze dni pokażemy…" w "Moim grafiku";
 "Po wpisaniu szóstej cyfry…" przy logowaniu; odsyłacz do powodów w arkuszu zmiany bez kandydatów. W "Zasadach" pod
 nagłówkiem zostaje "Im wyżej, tym ważniejsza zasada." i notka o Kodeksie pracy, reszta jest pod przyciskiem "i".
+
+## 33. Usuwanie szkicu grafiku (22.11.2026)
+
+Prośba Piotra: przycisk, którym kierownik usuwa szkic grafiku. Wcześniej szkic znikał tylko z całym okresem
+(`DELETE /periods/{id}`, sekcja 25) albo przez ponowne układanie.
+
+- `DELETE /versions/{id}` (`delete_schedule_draft`, logika w `editing.delete_draft`): tylko najnowsza wersja, która
+  jest szkicem (`is_editable`); opublikowana albo starsza wersja daje 409. 409 także w trakcie układania tego okresu,
+  bo wynik i tak zapisałby nowy szkic. Kierownik lokalu, `require_writable`.
+- Usuwa szkic i wszystkie nieopublikowane wersje nowsze od ostatniej opublikowanej (szkice zastąpione przez
+  "Ułóż od nowa"; nikt ich nie widział). Wersje, które kiedyś były opublikowane, i szkice sprzed ostatniej publikacji
+  zostają w historii. Zmiany, przypisania (kaskada) i nic poza nimi: `AssignmentEvent` powstaje dopiero przy
+  publikacji, oddania zmian wiszą tylko na opublikowanych wersjach.
+- Gdy nic nie było opublikowane, okres wraca do `collecting` (pracownicy znów zmieniają dyspozycje, "Poproś o
+  dyspozycje" działa). Przy opublikowanym zostaje `published`, a bieżącą wersją jest znów opublikowana.
+- Ekran: czerwona ikona kosza "Usuń szkic" (sam kosz, opis w `aria-label`/`title`, prośba Piotra) obok "Opublikuj" przy edytowalnym szkicu, ukryty w trakcie układania;
+  `ConfirmSheet` "Usunąć szkic grafiku?" z jednym zdaniem o skutku, liczbą starszych nieopublikowanych wersji, które znikną (gdy są), i zdaniem "Obsada dni i zmiany w grafikach innych lokali zostają." i "Tak, usuń szkic" / "Zostaw".
+
+Założenia: usunięcie szkicu nie cofa tego, co poprawki w nim zrobiły poza nim samym: obsada dnia z "Dodaj
+miejsce" / "Usuń miejsce" (to ustawienie lokalu) i zdjęcie osoby z opublikowanego grafiku innego lokalu po
+potwierdzonym konflikcie (razem z jej innymi godzinami tamtej zmiany) zostają. Licznik ułożeń w miesiącu się nie
+zmienia. Ustalenia asystenta i inne godziny opublikowanych zmian zmieniają się dopiero przy publikacji, więc szkic
+niczego w nich nie zużył.

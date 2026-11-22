@@ -1239,6 +1239,20 @@ def start_correcting(request, version_id: UUID):
     return Status(201, next(v for v in _history(draft) if v.id == draft.id))
 
 
+@router.delete(
+    "/versions/{version_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
+)
+def delete_schedule_draft(request, version_id: UUID):
+    """ "Usuń szkic": remove the newest draft (and unpublished versions since the last publication). A published
+    schedule stays; with nothing published the period goes back to collecting availability."""
+    from apps.scheduling.editing import delete_draft
+
+    ctx, version = _version_context(request, version_id)
+    ctx.require_writable()
+    delete_draft(version)
+    return Status(204, None)
+
+
 @router.post(
     "/versions/{version_id}/publish",
     response={200: VersionSummaryOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
