@@ -57,6 +57,8 @@ PARTIAL_NOTE = "Części tej wiadomości nie da się zamienić na ustawienie. Ki
 MAX_QUESTIONS = 3
 # The app's own question when the assistant doubts its reading (confidence below ASSISTANT_MIN_CONFIDENCE).
 CONFIRM_QUESTION = "Czy dobrze rozumiem: {what}? Odpisz „tak” albo napisz, co poprawić."
+# An answer to the last question that is still not clear: the manager reads it, and the person is told why.
+STILL_UNSURE_REPLY = "Nadal nie wiem na pewno, o co chodzi, więc tego nie zapisuję. Kierownik przeczyta całą rozmowę."
 
 WEEKDAY_NAMES = ("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")
 WEEKDAY_SHORT = ("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
@@ -414,6 +416,9 @@ def _checked_reply(
         )
     if answering:
         outcome.answer_to = answered
+        if outcome.status == TextRequest.Status.NEEDS_MANAGER and not outcome.reply:
+            # The person answered and is still not understood: say why the manager reads it now (Prelint on #68).
+            outcome.reply = STILL_UNSURE_REPLY
     outcome.hours_reports = hours
     if hours_notes:
         outcome.reply = " ".join(filter(None, [outcome.reply, *hours_notes]))

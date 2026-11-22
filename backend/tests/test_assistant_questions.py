@@ -157,6 +157,7 @@ def test_the_assistant_asks_up_to_three_times_then_the_manager_reads_the_whole_e
     fourth = write(api, shop, "Nie wiem.")
     assert fourth.status == "needs_manager" and fourth.unread_reason == "unsure" and fourth.question == ""
     assert fourth.assistant_answer["why"] == "za dużo pytań" and fourth.answer_to_id == third.pk
+    assert fourth.reply == services.STILL_UNSURE_REPLY  # the person is told why the manager reads it now
     [listed] = manager_requests(api, shop)
     assert [e["text"] for e in listed["exchange"]] == ["Chcę mniej pracować.", "Trochę mniej.", "No mniej."]
     assert listed["asked"] == {"text": "No mniej.", "question": "Podaj liczbę godzin w tygodniu."}
@@ -315,7 +316,7 @@ def test_a_reading_still_doubtful_after_three_questions_goes_to_the_manager(api,
     assert write(api, shop, "może").question.startswith("Czy dobrze rozumiem")
     fourth = write(api, shop, "sam nie wiem")
     assert fourth.status == "needs_manager" and fourth.assistant_answer["why"] == "pewność 0.30"
-    assert fourth.question == ""
+    assert fourth.question == "" and fourth.reply == services.STILL_UNSURE_REPLY
 
 
 def test_an_unknown_name_in_an_answer_is_asked_about_again(api, shop, with_key, monkeypatch):

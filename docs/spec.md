@@ -58,7 +58,8 @@ dopytuje pracownika, a kierownikowi zostawia tylko to, czego po doprecyzowaniu n
   prośba razem z odpowiedzią; asystent czyta ją od początku). Przy każdej jest też „Niech przeczyta kierownik”.
 - Pyta, aż wie na pewno, najwyżej trzy razy z rzędu o jedną prośbę (decyzja Piotra z 22.11.2026; wcześniej tylko
   raz). Każdą odpowiedź czyta razem z wcześniejszymi wiadomościami tej prośby i pytaniami. Czego po trzecim pytaniu
-  nadal nie da się zapisać, trafia do kierownika jak dotąd (powód „asystent nie był pewny”), a kierownik widzi przy
+  nadal nie da się zapisać, trafia do kierownika jak dotąd (powód „asystent nie był pewny”); pracownik czyta wtedy
+  „Nadal nie wiem na pewno, o co chodzi, więc tego nie zapisuję. Kierownik przeczyta całą rozmowę.” Kierownik widzi przy
   prośbie wszystkie wcześniejsze wiadomości, pytania asystenta i ostatnią odpowiedź. W „Twoich prośbach” wiadomość
   z kolejnym pytaniem pokazuje nad sobą wcześniejsze wiadomości tej prośby.
 - Pytanie zadaje także wtedy, gdy wiadomość łączy pytanie o grafik z niejasną prośbą: odpowiada na pytanie i dopytuje
