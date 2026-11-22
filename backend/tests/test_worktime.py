@@ -556,9 +556,9 @@ def test_csv_has_overtime_and_shorter_columns(api, bakery):
 
     header, line = text.strip().splitlines()
     assert header.endswith(
-        ";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Wypłata brutto, zł (szacunek);Godziny bez stawki;Uwagi"
+        ";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Wypłata brutto, zł;W tym dodatki, zł;Godziny bez stawki;Uwagi"
     )
-    assert line.split(";")[-6:] == ["9,25", "1,25", "0,00", "", "9,25", ""]  # no rates: no pay
+    assert line.split(";")[-7:] == ["9,25", "1,25", "0,00", "", "", "9,25", ""]  # no rates: no pay
 
 
 # ----------------------------------------------------------------------------------------------- who may do what

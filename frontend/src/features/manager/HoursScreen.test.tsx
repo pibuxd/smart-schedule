@@ -30,13 +30,14 @@ const change = (over = {}) => ({
   ...over,
 })
 
-const report = (rows: unknown[] = [], pay: number | null = null) => ({
-  month: '2026-11',
+const report = (rows: unknown[] = [], pay: number | null = null, month = '2026-11') => ({
+  month,
   locations: [{ id: 'l1', name: 'Rynek' }],
   rows,
   total: 0,
   latest_month: null,
   pay,
+  supplements_pay: pay == null ? null : 36,
   unpriced_hours: 0,
 })
 
@@ -80,6 +81,7 @@ function api({
   recent = [] as unknown[],
   rows = [row()],
   pay = null as number | null,
+  month = '2026-11',
 } = {}) {
   return mockApi((method, path) => {
     if (path === '/api/manager/hours-changes') return [200, { pending, recent, waiting: pending.length }]
@@ -87,7 +89,7 @@ function api({
     if (method === 'POST' && path.endsWith('/reject')) return [200, change({ status: 'rejected' })]
     if (method === 'POST' && path === '/api/assignments/as1/hours')
       return [200, { assignment_id: 'as1', planned_start_time: '06:00', planned_end_time: '14:00', worked: null }]
-    if (path === '/api/reports/hours') return [200, report(rows, pay)]
+    if (path === '/api/reports/hours') return [200, report(rows, pay, month)]
     if (path === '/api/manager/overview') return [200, { locations: [{ id: 'l1', name: 'Rynek' }] }]
     if (path === '/api/locations/l1/handover-shifts') return [200, [handoverShift()]]
     return [404, { detail: 'Nie ma.' }]
@@ -141,33 +143,43 @@ describe('HoursScreen: other hours', () => {
     expect(screen.queryByText(/Kodeksu pracy/)).not.toBeInTheDocument()
   })
 
-  it('shows the estimated pay per person and in total once there are rates', async () => {
+  it('shows the pay per person and in total once there are rates', async () => {
     api({
       pending: [],
       rows: [
         row({ longer: 0, pay: 2559.1, unpriced_hours: 0 }),
-        row({ employee_id: 'e2', name: 'Ewa Nowak', longer: 0, pay: null, unpriced_hours: 16, total: 16, elsewhere: true }),
+        row({ employee_id: 'e2', name: 'Ewa Nowak', longer: 0, pay: 120, unpriced_hours: 16, total: 20, elsewhere: true }),
       ],
-      pay: 2559.1,
+      pay: 2679.1,
     })
     show()
-    expect(await screen.findByRole('columnheader', { name: 'Wypłata' })).toBeInTheDocument()
+    expect(await screen.findByRole('columnheader', { name: 'Wypłata brutto' })).toBeInTheDocument()
     const anna = screen.getByText('Anna Wróbel', { selector: 'span' }).closest('tr')!
     expect(anna).toHaveTextContent(/2559,10\szł/)
+    expect(anna).not.toHaveTextContent('bez innych lokali')
     const ewa = screen.getByText('Ewa Nowak').closest('tr')!
-    expect(ewa).toHaveTextContent('–16 h bez stawki')
-    expect(ewa).toHaveTextContent('więc godziny i wypłata są niepełne')
-    expect(screen.getByText('Razem').closest('tr')).toHaveTextContent(/2559,10\szł/)
-    expect(screen.getByText(/Wypłata to szacunek brutto/)).toBeInTheDocument()
-    expect(screen.queryByText(/Wpisz stawki przy stanowiskach/)).not.toBeInTheDocument()
+    expect(ewa).toHaveTextContent('16 h bez stawki')
+    expect(ewa).toHaveTextContent('bez innych lokali') // next to the amount: the other locations are missing
+    expect(screen.getByText('Razem').closest('tr')).toHaveTextContent(/2679,10\szł/)
+    expect(screen.getByText('Razem').closest('tr')).toHaveTextContent(/w tym dodatki 36,00\szł/)
+    expect(screen.getByText(/Miesiąc jeszcze trwa/)).toBeInTheDocument()
+    expect(screen.queryByText(/szacunek/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Wpisz stawki/)).not.toBeInTheDocument()
+  })
+
+  it('says nothing about shifts ahead in a month that has ended', async () => {
+    api({ pending: [], rows: [row({ longer: 0, pay: 2559.1 })], pay: 2559.1, month: '2026-10' })
+    show()
+    expect(await screen.findByRole('columnheader', { name: 'Wypłata brutto' })).toBeInTheDocument()
+    expect(screen.queryByText(/Miesiąc jeszcze trwa/)).not.toBeInTheDocument()
   })
 
   it('says where to set rates when no shift has one', async () => {
     api({ pending: [], rows: [row({ longer: 0 })] })
     show()
     await screen.findByRole('columnheader', { name: 'Razem godzin' })
-    expect(screen.queryByRole('columnheader', { name: 'Wypłata' })).not.toBeInTheDocument()
-    expect(screen.getByText(/Wpisz stawki przy stanowiskach w ustawieniach lokalu/)).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Wypłata brutto' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Wpisz stawki w ustawieniach lokalu/)).toBeInTheDocument()
   })
 
   it('lets the manager set the hours of a published shift alone', async () => {

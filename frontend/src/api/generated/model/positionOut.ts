@@ -9,5 +9,4 @@ export interface PositionOut {
   id: string;
   name: string;
   employees: number;
-  hourly_rate?: number | null;
 }

@@ -23,6 +23,7 @@ from apps.availability.models import (
     TextRequest,
 )
 from apps.billing.models import Subscription
+from apps.pay.models import PaySupplement, PositionRate
 from apps.rules.models import RuleSetting, WeightProfile
 from apps.scheduling.models import SchedulePeriod
 from apps.staffing.models import (
@@ -365,7 +366,7 @@ def _create_bakery_company(rng: random.Random, start: date, end: date) -> dict[s
     }
 
 
-# Hourly rates of the demo positions in złoty (the estimate of pay next to the hours).
+# Hourly rates of the demo positions in złoty (the pay next to the hours, apps.pay).
 DEMO_RATES = {
     "Sprzedawca": Decimal("31.40"),
     "Piekarz": Decimal("36.00"),
@@ -376,11 +377,20 @@ DEMO_RATES = {
 }
 
 
+def _priced_position(location: Location, name: str) -> Position:
+    position = Position.objects.create(location=location, name=name)
+    PositionRate.objects.create(position=position, hourly_rate=DEMO_RATES[name])
+    return position
+
+
 def _bakery_settings(location: Location, spec: BakerySpec, start: date, end: date):
     positions = {
-        name: Position.objects.create(location=location, name=name, hourly_rate=DEMO_RATES[name])
+        name: _priced_position(location, name)
         for name in ["Sprzedawca", "Piekarz", "Kierownik zmiany", *(["Kierowca"] if spec.drivers else [])]
     }
+    PaySupplement.objects.create(
+        location=location, name="Noc", start_time=TIME(22), end_time=TIME(6), value=Decimal("6.00")
+    )
     night = ShiftType.objects.create(location=location, name="Nocna", start_time=TIME(22), end_time=TIME(6))
     morning = ShiftType.objects.create(location=location, name="Ranna", start_time=TIME(6), end_time=TIME(14))
     afternoon = ShiftType.objects.create(
@@ -689,8 +699,8 @@ def _create_cafe_company(rng: random.Random, start: date, end: date) -> dict[str
     )
     owner.locations.add(location)
     WeightProfile.objects.create(location=location, manager_share=Decimal("0.90"))
-    barista = Position.objects.create(location=location, name="Barista", hourly_rate=DEMO_RATES["Barista"])
-    waiter = Position.objects.create(location=location, name="Kelner", hourly_rate=DEMO_RATES["Kelner"])
+    barista = _priced_position(location, "Barista")
+    waiter = _priced_position(location, "Kelner")
     opening = ShiftType.objects.create(location=location, name="Otwarcie", start_time=TIME(7), end_time=TIME(15))
     closing = ShiftType.objects.create(
         location=location, name="Zamknięcie", start_time=TIME(14), end_time=TIME(22), is_closing=True

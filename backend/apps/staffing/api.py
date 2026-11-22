@@ -1,10 +1,9 @@
-"""Location settings for the manager: positions (with hourly rates), shifts and their hours, staffing per weekday
-with date exceptions, and the location's employees (positions, own rates, hours, switched off)."""
+"""Location settings for the manager: positions, shifts and their hours, staffing per weekday with date
+exceptions, and the location's employees (positions, hours, switched off)."""
 
 import hashlib
 import json
 from datetime import date, time
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -22,7 +21,6 @@ from apps.staffing import day_staffing, removal
 from apps.staffing.models import (
     EmployeeProfile,
     LocationClosure,
-    PersonalRate,
     Position,
     PositionExperience,
     ShiftType,
@@ -42,23 +40,14 @@ ShiftKind = Literal["fixed", "flexible"]
 ExperienceLevel = Literal[1, 2, 3]
 
 
-# The highest hourly rate the app takes (złoty); anything above is surely a typo.
-MAX_RATE = Decimal(10_000)
-BAD_RATE = "Stawka za godzinę to kwota w złotych większa od zera, np. 31,40."
-
-
 class PositionIn(Schema):
     name: str = Field(min_length=1, max_length=100)
-    # Złoty per hour, for the estimate of pay next to the hours (docs/plan.md, section 35). Null = no rate. On
-    # PATCH the rate changes only when sent.
-    hourly_rate: float | None = None
 
 
 class PositionOut(Schema):
     id: UUID
     name: str
     employees: int
-    hourly_rate: float | None = None
 
 
 class ShiftTypeIn(Schema):
@@ -169,13 +158,6 @@ class PositionLevel(Schema):
     experience: ExperienceLevel
 
 
-class PositionRate(Schema):
-    """The person's own hourly rate on one position (instead of the position's); null = the position's rate."""
-
-    position_id: UUID
-    hourly_rate: float | None
-
-
 class EmployeeOut(Schema):
     revision: str
     id: UUID
@@ -186,8 +168,6 @@ class EmployeeOut(Schema):
     experience: ExperienceLevel
     # The level on each of the person's positions (the default `experience` unless set otherwise).
     position_experience: list[PositionLevel]
-    # The person's own hourly rates on their positions in the listed location (only where set). Managers only.
-    position_rates: list[PositionRate] = Field(default_factory=list)
     max_hours_month: int | None
     target_hours_month: int | None
     is_active: bool
@@ -217,9 +197,6 @@ class EmployeeIn(Schema):
     experience: ExperienceLevel | None = None
     # Levels for single positions; replaces what was set before. A position left out gets the default level.
     position_experience: list[PositionLevel] | None = None
-    # Own hourly rates on the listed positions (the person's positions in `location_id`): a number sets one, null
-    # brings back the position's rate. Positions left out keep what they have.
-    position_rates: list[PositionRate] | None = None
     # Send null to clear a limit.
     max_hours_month: int | None = Field(None, ge=1, le=400)
     target_hours_month: int | None = Field(None, ge=1, le=400)
@@ -253,30 +230,8 @@ def _positions(ctx: TenantContext, location: Location):
     return ctx.qs(Position).filter(location=location, removed_at__isnull=True)
 
 
-def _money(value: Decimal | None) -> float | None:
-    return float(value) if value is not None else None
-
-
-def _rate(value: float | None) -> Decimal | None:
-    """A rate from the API -> złoty with grosze; a Polish 400 for zero, a negative amount or a typo-sized one."""
-    if value is None:
-        return None
-    exact = Decimal(str(value))
-    if not exact.is_finite() or exact > MAX_RATE:
-        raise HttpError(400, BAD_RATE)
-    rate = exact.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    if rate <= 0:
-        raise HttpError(400, BAD_RATE)
-    return rate
-
-
 def _position_out(position: Position, counts: dict) -> PositionOut:
-    return PositionOut(
-        id=position.pk,
-        name=position.name,
-        employees=counts.get(position.pk, 0),
-        hourly_rate=_money(position.hourly_rate),
-    )
+    return PositionOut(id=position.pk, name=position.name, employees=counts.get(position.pk, 0))
 
 
 def _shift_type_out(st: ShiftType) -> ShiftTypeOut:
@@ -377,11 +332,8 @@ def create_position(request, location_id: UUID, payload: PositionIn):
     name = payload.name.strip()
     if not name:
         raise HttpError(400, "Podaj nazwę stanowiska.")
-    rate = _rate(payload.hourly_rate)
     position = _unique(
-        lambda: Position.objects.for_company(ctx.company).create(
-            company=ctx.company, location=location, name=name, hourly_rate=rate
-        ),
+        lambda: Position.objects.for_company(ctx.company).create(company=ctx.company, location=location, name=name),
         "Takie stanowisko już jest w tym lokalu.",
     )
     return Status(201, _position_out(position, {}))
@@ -392,17 +344,12 @@ def create_position(request, location_id: UUID, payload: PositionIn):
     response={200: PositionOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
 )
 def update_position(request, position_id: UUID, payload: PositionIn):
-    """The name, and the hourly rate when sent (null clears it). A new rate counts for every month's pay."""
     _, position, _ = _change(request, Position, position_id)
     name = payload.name.strip()
     if not name:
         raise HttpError(400, "Podaj nazwę stanowiska.")
     position.name = name
-    fields = ["name"]
-    if "hourly_rate" in payload.model_fields_set:
-        position.hourly_rate = _rate(payload.hourly_rate)
-        fields.append("hourly_rate")
-    _unique(lambda: position.save(update_fields=fields), "Takie stanowisko już jest w tym lokalu.")
+    _unique(lambda: position.save(update_fields=["name"]), "Takie stanowisko już jest w tym lokalu.")
     return _position_out(position, {})
 
 
@@ -599,13 +546,10 @@ def _employee_out(
     levels: dict | None = None,
     location: Location | None = None,
     here: set | None = None,
-    rates: dict | None = None,
 ) -> EmployeeOut:
     """`position_ids`: all of the person's positions (the revision covers them all). With `location`, only that
-    location's positions are shown. `rates`: the person's own rates (read here when not given)."""
+    location's positions are shown."""
     levels = levels or {}
-    if rates is None:
-        rates = _personal_rates([profile])[profile.pk]
     user = profile.membership.user
     # Include settings stored on the account and position links as well as the profile row.
     snapshot = (
@@ -616,7 +560,6 @@ def _employee_out(
         profile.max_hours_month,
         profile.target_hours_month,
         sorted((str(pid), levels.get(pid, profile.experience)) for pid in position_ids),
-        sorted((str(pid), str(rate)) for pid, rate in rates.items()),
     )
     home = profile.home_location
     if location is not None:
@@ -642,9 +585,6 @@ def _employee_out(
         experience=profile.experience,
         position_experience=[
             PositionLevel(position_id=pid, experience=levels.get(pid, profile.experience)) for pid in position_ids
-        ],
-        position_rates=[
-            PositionRate(position_id=pid, hourly_rate=_money(rates[pid])) for pid in position_ids if pid in rates
         ],
         max_hours_month=profile.max_hours_month,
         target_hours_month=profile.target_hours_month,
@@ -672,16 +612,6 @@ def _position_levels(profiles) -> dict:
     return result
 
 
-def _personal_rates(profiles) -> dict:
-    """profile id -> {position id -> the person's own hourly rate there}. Rates on positions the person no longer
-    has stay too: their past shifts there keep counting with them."""
-    result: dict = {p.pk: {} for p in profiles}
-    rows = PersonalRate.objects.filter(employee_id__in=list(result))  # tenant-ok: profiles read via ctx
-    for profile_id, position_id, rate in rows.values_list("employee_id", "position_id", "hourly_rate"):
-        result[profile_id][position_id] = rate
-    return result
-
-
 @router.get("/locations/{location_id}/employees", response={200: list[EmployeeOut], 403: ErrorOut, 404: ErrorOut})
 def location_employees(request, location_id: UUID):
     """People who work in this location (as their main location or an extra one): active first, then switched
@@ -696,12 +626,11 @@ def location_employees(request, location_id: UUID):
     )
     positions = _position_ids(profiles)
     levels = _position_levels(profiles)
-    rates = _personal_rates(profiles)
     drafts = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.DRAFT)
     published = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.PUBLISHED)
     here = set(_positions(ctx, location).values_list("pk", flat=True))
     return [
-        _employee_out(p, positions[p.pk], levels[p.pk], location, here, rates[p.pk]).model_copy(
+        _employee_out(p, positions[p.pk], levels[p.pk], location, here).model_copy(
             update={"draft_shifts": drafts.get(p.pk, 0), "published_shifts": published.get(p.pk, 0)}
         )
         for p in profiles
@@ -810,7 +739,7 @@ def _changed_account(ctx: TenantContext, profile: EmployeeProfile, payload: Empl
 )
 @transaction.atomic
 def update_employee(request, employee_id: UUID, payload: EmployeeIn):
-    """Name, positions, experience level, own hourly rates, monthly maximum and target, or switching the person off
+    """Name, positions, experience level, monthly maximum and target, or switching the person off
     (history stays)."""
     ctx, profile = context_for(request, EmployeeProfile, employee_id)
     profile = ctx.qs(EmployeeProfile).select_for_update().select_related("home_location").get(pk=profile.pk)
@@ -877,24 +806,10 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
         stale = ctx.qs(PositionExperience).filter(employee=profile)
         stale.exclude(position_id__in=own).delete()
         stale.filter(level=profile.experience).delete()
-        if "position_rates" in sent and payload.position_rates is not None:
-            _set_personal_rates(ctx, profile, payload.position_rates, own & here)
     profile = ctx.qs(EmployeeProfile).select_related("membership__user", "home_location").get(pk=profile.pk)
     return _employee_out(
         profile, _position_ids([profile])[profile.pk], _position_levels([profile])[profile.pk], location
     )
-
-
-def _set_personal_rates(ctx: TenantContext, profile: EmployeeProfile, wanted: list[PositionRate], allowed: set):
-    """Own rates on the listed positions of the person in this location; null brings back the position's rate.
-    Positions left out keep their rate (also hidden ones: a position taken away keeps its rate for past shifts)."""
-    rates = {item.position_id: _rate(item.hourly_rate) for item in wanted}
-    if not set(rates) <= allowed:
-        raise HttpError(400, "Własną stawkę można ustawić tylko na stanowisku, na którym ta osoba pracuje.")
-    ctx.qs(PersonalRate).filter(employee=profile, position_id__in=list(rates)).delete()
-    for position_id, rate in rates.items():
-        if rate is not None:
-            PersonalRate(employee=profile, position_id=position_id, hourly_rate=rate).save()
 
 
 @router.delete(

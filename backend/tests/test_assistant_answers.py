@@ -172,11 +172,12 @@ class TestTools:
         text = tools.fit(body, limit=400)
         assert len(text) < 600 and "Wynik przycięty" in text
         assert tools.clean({"phone": "+48 500", "name": "A", "x": None, "y": []}) == {"name": "A"}
-        # Money never reaches the external AI service: estimated pay and hourly rates are dropped too.
-        months = {"months": [{"month": "2026-12", "hours": 8, "pay": 251.2, "unpriced_hours": 0}]}
+        # Money never reaches the external AI service: pay, hourly rates and supplements are dropped too.
+        month = {"month": "2026-12", "hours": 8, "pay": 251.2, "supplements_pay": 12, "unpriced_hours": 0}
+        months = {"months": [month]}
         assert tools.clean(months) == {"months": [{"month": "2026-12", "hours": 8}]}
-        position = {"name": "Kasa", "hourly_rate": 31.4, "position_rates": [{"hourly_rate": 35}]}
-        assert tools.clean(position) == {"name": "Kasa"}
+        settings = {"positions": [{"name": "Kasa", "rates": [{"hourly_rate": 35}]}], "supplements": [{"value": 6}]}
+        assert tools.clean(settings) == {"positions": [{"name": "Kasa"}]}
 
 
 # ----------------------------------------------------------------- the conversation with the model

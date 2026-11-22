@@ -396,9 +396,11 @@ class MyShiftOut(Schema):
 class MonthHoursOut(Schema):
     month: str  # "2026-11"
     hours: float
-    # Estimated pay for the month's published shifts in złoty before tax (hours that count × the shift's rate,
-    # docs/plan.md section 35); None when none of them has a rate, so the screen shows no pay at all.
+    # Pay for the month's published shifts in złoty before tax (hours that count × the shift's rate on its day,
+    # plus supplements; docs/plan.md section 35); None when none of them has a rate, so the screen shows no pay.
     pay: float | None = None
+    # Of `pay`: the supplements (e.g. for nights).
+    supplements_pay: float | None = None
     # Hours of the month on shifts without a rate (not in `pay`).
     unpriced_hours: float = 0
 
@@ -422,8 +424,8 @@ def _hours(shift: Shift) -> float:
 @router.get("/me/schedule", response={200: MyScheduleOut, 404: ErrorOut})
 def my_schedule(request, company_id: UUID):
     """My published shifts from today on, who works with me, my shifts of the last two weeks, and my hours per month
-    (approved other hours count instead of the schedule's) with the estimated pay. Works in read-only mode."""
-    from apps.worktime.pay import Pay, shift_rates
+    (approved other hours count instead of the schedule's) with the pay. Works in read-only mode."""
+    from apps.pay.services import Pay, PayRules
     from apps.worktime.services import PAST_DAYS, pending_reports, worked_hours
 
     ctx, profile = employee_context(request, company_id)
@@ -509,12 +511,12 @@ def my_schedule(request, company_id: UUID):
     pay = {month: Pay() for month in months}
     first = date.fromisoformat(months[0] + "-01")
     in_months = list(published.filter(shift__date__gte=first))
-    counted, rates = worked_hours(in_months), shift_rates(in_months)
+    counted, rules = worked_hours(in_months), PayRules(in_months)
     for assignment in in_months:
         key = assignment.shift.date.strftime("%Y-%m")
         if key in totals:
             totals[key] += counted[assignment.pk].seconds
-            pay[key].add(counted[assignment.pk].seconds, rates[assignment.pk])
+            rules.add(pay[key], assignment, counted[assignment.pk])
     published_until = (
         ctx.qs(SchedulePeriod)
         .filter(
@@ -533,7 +535,13 @@ def my_schedule(request, company_id: UUID):
         recent=past,
         published_until=published_until,
         months=[
-            MonthHoursOut(month=m, hours=round(h / 3600, 2), pay=pay[m].amount, unpriced_hours=pay[m].unpriced_hours)
+            MonthHoursOut(
+                month=m,
+                hours=round(h / 3600, 2),
+                pay=pay[m].amount,
+                supplements_pay=pay[m].supplements,
+                unpriced_hours=pay[m].unpriced_hours,
+            )
             for m, h in totals.items()
         ],
     )

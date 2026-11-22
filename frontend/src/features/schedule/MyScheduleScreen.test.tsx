@@ -62,7 +62,7 @@ describe('MyScheduleScreen', () => {
     expect(screen.queryByText(/Wypłata to godziny razy stawka/)).not.toBeInTheDocument()
   })
 
-  it('shows the estimated pay under the hours only when the manager set rates', async () => {
+  it('shows the pay under the hours only when the manager set rates', async () => {
     mockApi((_method, path) => {
       if (path === '/api/me/offers') return [200, []]
       return [
@@ -71,8 +71,8 @@ describe('MyScheduleScreen', () => {
           home_location_name: 'Wieliczka – Rynek',
           shifts: [shift],
           months: [
-            { month: '2026-11', hours: 112, pay: 3516.8, unpriced_hours: 0 },
-            { month: '2026-12', hours: 40, pay: 251.2, unpriced_hours: 32 },
+            { month: '2026-11', hours: 112, pay: 3516.8, supplements_pay: 36, unpriced_hours: 0 },
+            { month: '2026-12', hours: 40, pay: 251.2, supplements_pay: 0, unpriced_hours: 32 },
             { month: '2027-01', hours: 16, pay: null, unpriced_hours: 16 },
           ],
         },
@@ -80,12 +80,14 @@ describe('MyScheduleScreen', () => {
     })
     renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
     await screen.findByText('Razem w listopadzie')
-    const pay = screen.getAllByText('Szacunkowa wypłata brutto')
+    const pay = screen.getAllByText('Wypłata brutto')
     expect(pay).toHaveLength(2) // January has no rates at all: no pay line
     expect(pay[0].parentElement).toHaveTextContent(/3516,80\szł/)
     expect(pay[1].parentElement).toHaveTextContent(/251,20\szł/)
     expect(screen.getByText('Bez 32 godz., bo kierownik nie ustawił dla nich stawki.')).toBeInTheDocument()
-    expect(screen.getAllByText('Wypłata to godziny razy stawka, przed podatkiem i składkami.')).toHaveLength(1)
+    expect(screen.getAllByText(/W tym dodatki/)).toHaveLength(1) // November only: December has none
+    expect(screen.getByText(/W tym dodatki: 36,00\szł\./)).toBeInTheDocument()
+    expect(screen.queryByText(/szacun/i)).not.toBeInTheDocument()
   })
 
   it('keeps an ongoing shift visible without offering it and skips an ended shift', async () => {

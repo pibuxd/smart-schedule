@@ -17,5 +17,6 @@ export interface EmployeeHoursOut {
   by_location: LocationHoursOut[];
   elsewhere: boolean;
   pay?: number | null;
+  supplements_pay?: number | null;
   unpriced_hours?: number;
 }

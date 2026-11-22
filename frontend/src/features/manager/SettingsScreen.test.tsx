@@ -20,6 +20,7 @@ it('keeps each weekday’s hours and experience quota when saving the staffing f
   const calls = mockApi((_method, path) => {
     if (path.endsWith('/setup') || path.endsWith('/staffing')) return [200, setup]
     if (path.endsWith('/overview')) return [200, { groups: [] }]
+    if (path.endsWith('/pay-settings')) return [200, { positions: [], supplements: [] }]
     return [200, { id: 'l', name: 'Lokal', address: '', schedule_period: 'month', availability_deadline_days: 7 }]
   })
   renderScreen(<AsManager><LocationSettingsScreen locationId="l" /></AsManager>)
@@ -64,37 +65,4 @@ it('shows each day’s staffing in a calendar and saves one day with other numbe
   fireEvent.click(screen.getByRole('button', { name: 'czwartek 24 grudnia: 1 os., inaczej niż zwykle' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Wróć do zwykłej obsady' }))
   await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')[1]?.body).toEqual({ cells: [], note: '' }))
-})
-
-it('shows a position’s hourly rate, changes it and refuses a typo before sending', async () => {
-  const setup = {
-    positions: [{ id: 'p', name: 'Kasa', employees: 1, hourly_rate: 31.4 }],
-    shift_types: [], staffing: [], closures: [], exceptions: [], arranged: [],
-  }
-  const calls = mockApi((method, path) => {
-    if (path.endsWith('/setup')) return [200, setup]
-    if (method === 'PATCH' && path === '/api/positions/p') return [200, { id: 'p', name: 'Kasa', employees: 1, hourly_rate: 33 }]
-    if (method === 'POST' && path === '/api/locations/l/positions') return [201, { id: 'q', name: 'Piec', employees: 0, hourly_rate: null }]
-    if (path.endsWith('/overview')) return [200, { groups: [] }]
-    return [200, { id: 'l', name: 'Lokal', address: '', schedule_period: 'month', availability_deadline_days: 7 }]
-  })
-  renderScreen(<AsManager><LocationSettingsScreen locationId="l" /></AsManager>)
-
-  expect(await screen.findByText(/31,40\szł\/h/)).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Zmień stanowisko Kasa' }))
-  const [rate] = screen.getAllByLabelText('Stawka, zł/h')
-  expect(rate).toHaveValue('31,40')
-  expect(screen.queryByText('Nowa stawka zmieni wypłatę także za minione miesiące.')).not.toBeInTheDocument()
-  fireEvent.change(rate, { target: { value: 'dużo' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
-  expect(await screen.findByText('Wpisz stawkę w złotych, np. 31,40.')).toBeInTheDocument()
-  expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
-  fireEvent.change(rate, { target: { value: '33,00' } })
-  expect(screen.getByRole('status')).toHaveTextContent('Nowa stawka zmieni wypłatę także za minione miesiące.')
-  fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
-  await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ name: 'Kasa', hourly_rate: 33 }))
-
-  fireEvent.change(screen.getByLabelText('Nowe stanowisko'), { target: { value: 'Piec' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Dodaj' }))
-  await waitFor(() => expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ name: 'Piec', hourly_rate: null }))
 })

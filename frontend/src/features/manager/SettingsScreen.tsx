@@ -36,8 +36,8 @@ import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { dayTitle, parseDate, shortTime, spanHours, WEEKDAY_HEADERS } from '../../lib/dates'
-import { BAD_RATE, parseRate, RATE_CHANGES_PAST, rateInput, rateText } from '../../lib/money'
 import { useManager } from './ManagerContext'
+import { PaySection } from './PayRates'
 import { StaffingCalendar } from './StaffingCalendar'
 
 const hhmm = (value: string | null | undefined) => (value ? value.slice(0, 5) : '')
@@ -78,6 +78,7 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
       <StaffingSection key={JSON.stringify(data.staffing)} locationId={locationId} setup={data} />
       <StaffingCalendar locationId={locationId} setup={data} />
       <ClosuresSection locationId={locationId} setup={data} />
+      <PaySection locationId={locationId} />
       <ArchiveSection location={info} />
     </div>
   )
@@ -245,28 +246,17 @@ function ArchiveSection({ location }: { location: LocationOut }) {
 function PositionsSection({ locationId, setup }: { locationId: string; setup: LocationSetupOut }) {
   const { readOnly } = useManager()
   const create = useCreatePosition()
-  const update = useUpdatePosition()
+  const rename = useUpdatePosition()
   const remove = useDeletePosition()
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
-  const [rate, setRate] = useState('')
-  const [editing, setEditing] = useState<{ id: string; name: string; rate: string } | null>(null)
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
   const [removing, setRemoving] = useState<{ id: string; name: string; employees: number } | null>(null)
-  const [badRate, setBadRate] = useState(false)
   const refresh = () => void queryClient.invalidateQueries()
-  const error = create.error ?? update.error
-  // "" = no rate; a typo is caught here, before anything is sent.
-  const readRate = (text: string): number | null | undefined => {
-    const value = parseRate(text)
-    setBadRate(Number.isNaN(value))
-    return Number.isNaN(value) ? undefined : value
-  }
+  const error = create.error ?? rename.error
 
   return (
-    <Section
-      title="Stanowiska"
-      description="Np. Sprzedawca, Kelner, Kucharz, Kierownik zmiany. Stawka za godzinę nie jest potrzebna do grafiku: liczy tylko szacunek wypłaty przy godzinach pracowników i na ekranie „Godziny”."
-    >
+    <Section title="Stanowiska" description="Np. Sprzedawca, Kelner, Kucharz, Kierownik zmiany.">
       <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
         {setup.positions.length === 0 && <li className="px-4 py-3 text-ink-muted">Nie ma jeszcze stanowisk.</li>}
         {setup.positions.map((p) => (
@@ -276,53 +266,25 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
                 className="flex flex-1 flex-wrap items-end gap-2"
                 onSubmit={(e) => {
                   e.preventDefault()
-                  const hourly = readRate(editing.rate)
-                  if (hourly === undefined) return
-                  update.mutate(
-                    { positionId: p.id, data: { name: editing.name, hourly_rate: hourly } },
-                    { onSuccess: () => { setEditing(null); refresh() } },
-                  )
+                  rename.mutate({ positionId: p.id, data: { name: editing.name } }, { onSuccess: () => { setEditing(null); refresh() } })
                 }}
               >
-                <TextField label="Nazwa" className="min-w-40 flex-1" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} required maxLength={100} />
-                <TextField
-                  label="Stawka, zł/h"
-                  className="w-32"
-                  inputMode="decimal"
-                  placeholder="bez stawki"
-                  value={editing.rate}
-                  onChange={(e) => setEditing({ ...editing, rate: e.target.value })}
-                />
-                <Button type="submit" size="normal" disabled={update.isPending}>
+                <TextField label="Nowa nazwa" className="flex-1" value={editing.name} onChange={(e) => setEditing({ id: p.id, name: e.target.value })} required />
+                <Button type="submit" size="normal" disabled={rename.isPending}>
                   Zapisz
                 </Button>
-                <Button variant="quiet" size="normal" onClick={() => { setEditing(null); setBadRate(false) }}>
+                <Button variant="quiet" size="normal" onClick={() => setEditing(null)}>
                   Anuluj
                 </Button>
-                {rateInput(p.hourly_rate) !== editing.rate.trim() && (
-                  <p role="status" className="m-0 basis-full text-sm text-prefer-not">
-                    {RATE_CHANGES_PAST}
-                  </p>
-                )}
               </form>
             ) : (
               <>
                 <span>
                   <b>{p.name}</b> <span className="text-sm text-ink-muted">({p.employees} os.)</span>
-                  {p.hourly_rate != null && <span className="block text-sm tabular-nums">{rateText(p.hourly_rate)}</span>}
                 </span>
                 <span className="flex gap-1">
-                  <Button
-                    variant="quiet"
-                    size="normal"
-                    disabled={readOnly}
-                    aria-label={`Zmień stanowisko ${p.name}`}
-                    onClick={() => {
-                      setBadRate(false)
-                      setEditing({ id: p.id, name: p.name, rate: rateInput(p.hourly_rate) })
-                    }}
-                  >
-                    Zmień
+                  <Button variant="quiet" size="normal" disabled={readOnly} onClick={() => setEditing({ id: p.id, name: p.name })}>
+                    Zmień nazwę
                   </Button>
                   <Button
                     variant="quiet"
@@ -347,29 +309,15 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
         className="flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault()
-          const hourly = readRate(rate)
-          if (hourly === undefined) return
-          create.mutate(
-            { locationId, data: { name, hourly_rate: hourly } },
-            { onSuccess: () => { setName(''); setRate(''); refresh() } },
-          )
+          create.mutate({ locationId, data: { name } }, { onSuccess: () => { setName(''); refresh() } })
         }}
       >
         <TextField label="Nowe stanowisko" className="min-w-48 flex-1" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} />
-        <TextField
-          label="Stawka, zł/h"
-          className="w-32"
-          inputMode="decimal"
-          placeholder="bez stawki"
-          value={rate}
-          onChange={(e) => setRate(e.target.value)}
-        />
         <Button type="submit" variant="secondary" size="normal" disabled={create.isPending || readOnly}>
           <Plus aria-hidden="true" size={20} />
           Dodaj
         </Button>
       </form>
-      {badRate && <InlineError>{BAD_RATE}</InlineError>}
       {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
       <ConfirmSheet
         open={removing !== null}

@@ -13,6 +13,7 @@ export interface HoursReportOut {
   rows: EmployeeHoursOut[];
   total: number;
   pay?: number | null;
+  supplements_pay?: number | null;
   unpriced_hours?: number;
   latest_month: string | null;
 }

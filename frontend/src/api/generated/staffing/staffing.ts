@@ -371,7 +371,6 @@ export const getUpdatePositionUrl = (positionId: string,) => {
 }
 
 /**
- * The name, and the hourly rate when sent (null clears it). A new rate counts for every month's pay.
  * @summary Update Position
  */
 export const updatePosition = async (positionId: string,
@@ -438,10 +437,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdatePositionMutationError = ErrorOut
     export type UpdatePositionMutationVariables = {positionId: string;data: PositionIn}
 
-    /**
- * The name, and the hourly rate when sent (null clears it). A new rate counts for every month's pay.
- * @summary Update Position
- */
+    /** @summary Update Position */
 export const useUpdatePosition = <TError = ErrorOut,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePosition>>, TError,UpdatePositionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
@@ -1710,7 +1706,7 @@ export const getUpdateEmployeeUrl = (employeeId: string,) => {
 }
 
 /**
- * Name, positions, experience level, own hourly rates, monthly maximum and target, or switching the person off
+ * Name, positions, experience level, monthly maximum and target, or switching the person off
  * (history stays).
  * @summary Update Employee
  */
@@ -1779,7 +1775,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateEmployeeMutationVariables = {employeeId: string;data: EmployeeIn}
 
     /**
- * Name, positions, experience level, own hourly rates, monthly maximum and target, or switching the person off
+ * Name, positions, experience level, monthly maximum and target, or switching the person off
  * (history stays).
  * @summary Update Employee
  */

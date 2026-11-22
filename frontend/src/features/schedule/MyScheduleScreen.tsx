@@ -111,9 +111,6 @@ export function MyScheduleScreen({
         {data.months.map((month) => (
           <MonthTotal key={month.month} month={month} />
         ))}
-        {data.months.some((month) => month.pay != null) && (
-          <p className="m-0 text-sm text-ink-muted">Wypłata to godziny razy stawka, przed podatkiem i składkami.</p>
-        )}
       </div>
       {recent.length > 0 && <PastShifts shifts={recent} onReport={report} />}
       <GiveAwaySheet shift={data.shifts.find((s) => s.id === giving) ?? null} onClose={() => setGiving(null)} />
@@ -126,7 +123,7 @@ export function MyScheduleScreen({
   )
 }
 
-/** "Razem w listopadzie" and, once the manager has set rates, the estimated pay for the month's published shifts. */
+/** "Razem w listopadzie" and, once the manager has set rates, the pay for the month's published shifts. */
 function MonthTotal({ month }: { month: MonthHoursOut }) {
   const unpriced = month.unpriced_hours ?? 0
   return (
@@ -138,9 +135,12 @@ function MonthTotal({ month }: { month: MonthHoursOut }) {
       {month.pay != null && (
         <>
           <div className="flex items-center justify-between gap-3">
-            <span>Szacunkowa wypłata brutto</span>
+            <span>Wypłata brutto</span>
             <b className="tabular-nums">{moneyText(month.pay)}</b>
           </div>
+          {(month.supplements_pay ?? 0) > 0 && (
+            <p className="m-0 text-sm text-ink-muted">{`W tym dodatki: ${moneyText(month.supplements_pay ?? 0)}.`}</p>
+          )}
           {unpriced > 0 && (
             <p className="m-0 text-sm text-ink-muted">
               {`Bez ${hoursText(unpriced)}, bo kierownik nie ustawił dla nich stawki.`}

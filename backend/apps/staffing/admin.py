@@ -3,7 +3,6 @@ from django.contrib import admin
 from apps.staffing.models import (
     EmployeeProfile,
     LocationClosure,
-    PersonalRate,
     Position,
     ShiftType,
     StaffingException,
@@ -14,17 +13,9 @@ from apps.tenancy.admin_base import CompanyOwnedAdmin
 
 @admin.register(Position)
 class PositionAdmin(CompanyOwnedAdmin):
-    list_display = ("name", "location", "hourly_rate", "company")
+    list_display = ("name", "location", "company")
     list_filter = ("company", "location")
     list_select_related = ("company", "location")
-
-
-@admin.register(PersonalRate)
-class PersonalRateAdmin(CompanyOwnedAdmin):
-    list_display = ("employee", "position", "hourly_rate", "company")
-    list_filter = ("company", "position__location")
-    list_select_related = ("company", "position__location", "employee__membership__user")
-    raw_id_fields = ("employee", "position")
 
 
 @admin.register(ShiftType)

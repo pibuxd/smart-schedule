@@ -6,7 +6,6 @@
  */
 import type { EmployeeInExperience } from './employeeInExperience';
 import type { PositionLevel } from './positionLevel';
-import type { PositionRate } from './positionRate';
 
 export interface EmployeeIn {
   revision?: string | null;
@@ -15,7 +14,6 @@ export interface EmployeeIn {
   position_ids?: string[] | null;
   experience?: EmployeeInExperience;
   position_experience?: PositionLevel[] | null;
-  position_rates?: PositionRate[] | null;
   max_hours_month?: number | null;
   target_hours_month?: number | null;
   is_active?: boolean | null;

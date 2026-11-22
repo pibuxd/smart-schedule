@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { moneyText, parseRate, rateInput, rateText } from './money'
+import { fullDay, moneyText, parseRate, rateInput, rateText, stepOn, stepsAfter } from './money'
 
 const plain = (text: string) => text.replace(/\s/g, ' ')
 
@@ -24,5 +24,19 @@ describe('money', () => {
   it('shows a rate in an input with grosze', () => {
     expect(rateInput(31.4)).toBe('31,40')
     expect(rateInput(null)).toBe('')
+  })
+
+  it('finds the rate of a day among its steps', () => {
+    const steps = [
+      { id: 'b', valid_from: '2026-12-01', hourly_rate: 34 },
+      { id: 'a', valid_from: null, hourly_rate: 30 },
+      { id: 'c', valid_from: '2027-01-01', hourly_rate: null },
+    ]
+    expect(stepOn(steps, '2026-11-30')?.id).toBe('a')
+    expect(stepOn(steps, '2026-12-01')?.id).toBe('b')
+    expect(stepOn(steps, '2027-02-01')?.hourly_rate).toBeNull()
+    expect(stepOn(steps.slice(0, 1), '2026-11-30')).toBeUndefined()
+    expect(stepsAfter(steps, '2026-11-30').map((s) => s.id)).toEqual(['b', 'c'])
+    expect(fullDay('2026-12-01')).toBe('1 grudnia 2026')
   })
 })
