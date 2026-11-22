@@ -320,10 +320,15 @@ function DeleteDraft({ data }: { data: VersionOut }) {
   const older = unpublishedOlder(data)
   return (
     <>
-      <Button variant="quiet" size="normal" onClick={() => setOpen(true)}>
-        <Trash2 aria-hidden="true" size={18} />
-        Usuń szkic
-      </Button>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Usuń szkic"
+        title="Usuń szkic"
+        className="inline-flex min-h-(--touch) min-w-(--touch) cursor-pointer items-center justify-center rounded-md text-cannot hover:bg-cannot-soft"
+      >
+        <Trash2 aria-hidden="true" size={22} />
+      </button>
       <ConfirmSheet
         open={open}
         onOpenChange={setOpen}
