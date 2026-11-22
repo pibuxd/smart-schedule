@@ -343,7 +343,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Firma założona bez kodu dostaje 30 dni okresu próbnego z pełnym dostępem (decyzja Piotra z 12.11.2026; 13.11.2026 wydłużone z 14 do 30 dni, żeby zmieścił się pełny miesięczny cykl: dyspozycje, termin, ułożenie, publikacja). Okres próbny dostaje tylko pierwsza firma zakładana przez daną osobę; limit ułożeń grafiku, gdy jest włączony, obowiązuje także wtedy (od 22.11.2026 domyślnie go nie ma). Po okresie próbnym firma jest tylko do odczytu, dopóki kierownik nie wpisze kodu; kod wpisany w okresie próbnym dolicza swoje dni do końca okresu próbnego, więc nic nie przepada.
 - W trybie tylko do odczytu każda zmiana danych firmy jest odrzucana (HTTP 402 z komunikatem po polsku); wyjątki: wpisanie kodu, odpowiedź zaproszonej osoby na zaproszenie oraz oznaczenie i usunięcie własnych powiadomień (pracownik nadal widzi grafik i powiadomienia; oddawać ani brać zmian nie można).
 - Limit prób wpisania kodu: 5 błędnych na konto i 20 na adres IP w ciągu godziny. Kod ma 12 znaków, pokazywany w grupach po 4 (ABCD-EFGH-JKMN); spacje i myślniki nie mają znaczenia. Jeden kod można użyć w danej firmie tylko raz. Kody widać w całości tylko raz, zaraz po wygenerowaniu; w bazie jest skrót i pierwsze 4 znaki.
-- Limit generowań grafiku na firmę (roboczo 30 na miesiąc), także w okresie darmowym.
+- Limit generowań grafiku na firmę: od 22.11.2026 domyślnie bez limitu (decyzja Piotra, żeby kierownik mógł klikać „Ułóż inaczej” do skutku; wcześniej roboczo 30 na miesiąc). Ułożenia dalej się liczą, a liczba w `.env` serwera (`GENERATION_MONTHLY_LIMIT`) włącza limit z powrotem, także w okresie darmowym.
 
 ## Stos
 
