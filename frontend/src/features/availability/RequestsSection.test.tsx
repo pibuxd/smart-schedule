@@ -670,3 +670,139 @@ describe("reports of other hours in the chat", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("requests that last", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const span = { start: "2027-01-01", end: "2027-01-31" };
+
+  it("switches a saved request between this month only and lasting", async () => {
+    const calls = mockApi((method, _path, body) =>
+      method === "PATCH"
+        ? [200, request({ can_last: true, ...(body as object) })]
+        : [200, [request({ can_last: true, lasting: false })]],
+    );
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" span={span} editable />,
+    );
+    const only = await screen.findByRole("button", {
+      name: "Tylko w styczniu",
+    });
+    expect(only).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Na stałe" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
+        lasting: true,
+      }),
+    );
+  });
+
+  it("offers no choice for a request about concrete days", async () => {
+    mockApi(() => [200, [request({ can_last: false })]]);
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" span={span} editable />,
+    );
+    expect(
+      await screen.findByText("Wolne w piątki, jeśli się da."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Na stałe" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lists a lasting request from an earlier month and ends it from this one", async () => {
+    const carried = { lasting: true, carried_from: "2026-12-01" };
+    let rows = [request(carried)];
+    const calls = mockApi((method) => {
+      if (method === "POST") {
+        rows = [
+          request({
+            ...carried,
+            ended: true,
+            ended_by: "employee",
+            ends_from: "2027-01-01",
+          }),
+        ];
+        return [200, rows[0]];
+      }
+      return [200, rows];
+    });
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" span={span} editable />,
+    );
+    expect(
+      await screen.findByText(/Na stałe od grudnia\. Asystent zrozumiał/),
+    ).toBeInTheDocument();
+    // It belongs to December: here it can only be ended, not edited or removed.
+    expect(
+      screen.queryByRole("button", { name: "Edytuj prośbę" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Zakończ" }));
+    expect(screen.getByText("Zakończyć od stycznia?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tak, zakończ" }));
+    expect(
+      await screen.findByText("Zakończona: nie obowiązuje od stycznia."),
+    ).toBeInTheDocument();
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.url).toContain("/api/me/requests/r1/end");
+    expect(post.body).toEqual({
+      company_id: "c1",
+      period_id: "p1",
+      ended: true,
+    });
+    expect(
+      screen.getByRole("button", { name: "Przywróć" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not bring back a request the manager ended", async () => {
+    mockApi(() => [
+      200,
+      [
+        request({
+          lasting: true,
+          carried_from: "2026-12-01",
+          ended: true,
+          ended_by: "manager",
+          ends_from: "2027-01-01",
+        }),
+      ],
+    ]);
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" span={span} editable />,
+    );
+    expect(
+      await screen.findByText(/Zakończył ją kierownik\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Przywróć" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps lasting requests from earlier months out of this month's chat", async () => {
+    mockApi(() => [
+      200,
+      [
+        request({
+          id: "old",
+          text: "Nie z Zuzanną.",
+          lasting: true,
+          carried_from: "2026-12-01",
+        }),
+        request({ id: "new", text: "Wolę ranne zmiany." }),
+      ],
+    ]);
+    renderSection(
+      <RequestsSection
+        companyId="c1"
+        periodId="p1"
+        span={span}
+        editable
+        assistantReads
+      />,
+    );
+    await openChat();
+    const chat = await screen.findByRole("log");
+    expect(within(chat).getByText("Wolę ranne zmiany.")).toBeInTheDocument();
+    expect(within(chat).queryByText("Nie z Zuzanną.")).not.toBeInTheDocument();
+  });
+});

@@ -39,6 +39,8 @@ import type {
   PeriodRefIn,
   RequestChangeIn,
   RequestDecisionIn,
+  RequestEndDecisionIn,
+  RequestEndIn,
   RequestIn
 } from '../model';
 
@@ -1454,6 +1456,132 @@ export const useDeleteMyRequest = <TError = ErrorOut,
       > => {
       return useMutation(getDeleteMyRequestMutationOptions(options), queryClient);
     }
+    export type endMyRequestResponse200 = {
+  data: MyRequestOut
+  status: 200
+}
+
+export type endMyRequestResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type endMyRequestResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type endMyRequestResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type endMyRequestResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type endMyRequestResponseSuccess = (endMyRequestResponse200) & {
+  headers: Headers;
+};
+export type endMyRequestResponseError = (endMyRequestResponse400 | endMyRequestResponse402 | endMyRequestResponse404 | endMyRequestResponse409) & {
+  headers: Headers;
+};
+
+export type endMyRequestResponse = (endMyRequestResponseSuccess | endMyRequestResponseError)
+
+export const getEndMyRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/me/requests/${requestId}/end`
+}
+
+/**
+ * "Zakończ": my lasting request written earlier stops counting from this period (or month) on; the earlier
+ * ones keep it. `ended: false` brings it back ("Przywróć") when I ended it from exactly here.
+ * @summary End My Request
+ */
+export const endMyRequest = async (requestId: string,
+    requestEndIn: RequestEndIn, options?: Parameters<typeof apiFetch>[1]): Promise<endMyRequestResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<endMyRequestResponse>(getEndMyRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(requestEndIn)
+  }
+);}
+
+
+
+
+
+export const getEndMyRequestMutationKey = () => ['endMyRequest'] as const;
+
+export const getEndMyRequestMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endMyRequest>>, TError,EndMyRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof endMyRequest>>, TError,EndMyRequestMutationVariables, TContext> => {
+
+const mutationKey = getEndMyRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof endMyRequest>>, EndMyRequestMutationVariables> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  endMyRequest(requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EndMyRequestMutationResult = NonNullable<Awaited<ReturnType<typeof endMyRequest>>>
+    export type EndMyRequestMutationBody = RequestEndIn
+    export type EndMyRequestMutationError = ErrorOut
+    export type EndMyRequestMutationVariables = {requestId: string;data: RequestEndIn}
+
+    /**
+ * "Zakończ": my lasting request written earlier stops counting from this period (or month) on; the earlier
+ * ones keep it. `ended: false` brings it back ("Przywróć") when I ended it from exactly here.
+ * @summary End My Request
+ */
+export const useEndMyRequest = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endMyRequest>>, TError,EndMyRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof endMyRequest>>,
+        TError,
+        EndMyRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEndMyRequestMutationOptions(options), queryClient);
+    }
     export type availabilityGridResponse200 = {
   data: AvailabilityGridOut
   status: 200
@@ -1728,7 +1856,135 @@ export function usePeriodRequests<TData = Awaited<ReturnType<typeof periodReques
 
 
 
-export type updateRequestResponse200 = {
+export type endRequestResponse200 = {
+  data: ManagerRequestOut
+  status: 200
+}
+
+export type endRequestResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type endRequestResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type endRequestResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type endRequestResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type endRequestResponseSuccess = (endRequestResponse200) & {
+  headers: Headers;
+};
+export type endRequestResponseError = (endRequestResponse402 | endRequestResponse403 | endRequestResponse404 | endRequestResponse409) & {
+  headers: Headers;
+};
+
+export type endRequestResponse = (endRequestResponseSuccess | endRequestResponseError)
+
+export const getEndRequestUrl = (periodId: string,
+    requestId: string,) => {
+
+
+
+
+  return `/api/periods/${periodId}/requests/${requestId}/end`
+}
+
+/**
+ * "Zakończ od tego okresu": a lasting request written earlier stops counting from this period on (the person
+ * gets a notification). `ended: false` brings back a manager's ending from exactly this period.
+ * @summary End Request
+ */
+export const endRequest = async (periodId: string,
+    requestId: string,
+    requestEndDecisionIn: RequestEndDecisionIn, options?: Parameters<typeof apiFetch>[1]): Promise<endRequestResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<endRequestResponse>(getEndRequestUrl(periodId,requestId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(requestEndDecisionIn)
+  }
+);}
+
+
+
+
+
+export const getEndRequestMutationKey = () => ['endRequest'] as const;
+
+export const getEndRequestMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endRequest>>, TError,EndRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof endRequest>>, TError,EndRequestMutationVariables, TContext> => {
+
+const mutationKey = getEndRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof endRequest>>, EndRequestMutationVariables> = (props) => {
+          const {periodId,requestId,data} = props ?? {};
+
+          return  endRequest(periodId,requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EndRequestMutationResult = NonNullable<Awaited<ReturnType<typeof endRequest>>>
+    export type EndRequestMutationBody = RequestEndDecisionIn
+    export type EndRequestMutationError = ErrorOut
+    export type EndRequestMutationVariables = {periodId: string;requestId: string;data: RequestEndDecisionIn}
+
+    /**
+ * "Zakończ od tego okresu": a lasting request written earlier stops counting from this period on (the person
+ * gets a notification). `ended: false` brings back a manager's ending from exactly this period.
+ * @summary End Request
+ */
+export const useEndRequest = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endRequest>>, TError,EndRequestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof endRequest>>,
+        TError,
+        EndRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEndRequestMutationOptions(options), queryClient);
+    }
+    export type updateRequestResponse200 = {
   data: ManagerRequestOut
   status: 200
 }

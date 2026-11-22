@@ -269,8 +269,8 @@ class Request:
     rank: int = 1
     weekly_hours: bool = False  # hours_limit / shifts_limit counted in each week (Monday–Sunday)
     daily_hours: bool = False  # hours_limit / shifts_limit counted on each day (wins over weekly_hours)
-    # The location the request belongs to (its period's, or the instruction's). None: a request for a month, about
-    # the person wherever they work; it counts in their main location in this problem.
+    # The location the request belongs to (its period's, or the instruction's). None: a request for a month or a
+    # lasting one, about the person wherever they work; it counts in their main location in this problem.
     location: str | None = None
 
     def windows(self, problem: Problem) -> list[tuple[date, date]]:

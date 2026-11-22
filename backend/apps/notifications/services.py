@@ -67,6 +67,15 @@ def _day(value: str | None) -> str:
     return f"{WEEKDAYS[day.weekday()]} {day:%d.%m}"
 
 
+def _date(value: str | None) -> str:
+    """ "1.12.2026" (no weekday: the first day of a period or month)."""
+    try:
+        day = date.fromisoformat(value or "")
+    except ValueError:
+        return value or ""
+    return f"{day.day}.{day:%m.%Y}"
+
+
 def _range(payload: dict) -> str:
     return f"{_day(payload.get('start'))} – {_day(payload.get('end'))}"
 
@@ -171,6 +180,12 @@ def notification_text(kind: str, payload: dict) -> str:
             return (
                 f"Nowa prośba do przeczytania. {p.get('employee_name') or 'Pracownik'} pisze: „{p.get('text', '')}”. "
                 f"Znajdziesz ją w zakładce „Dyspozycje”{where}."
+            )
+        case "request_ended":
+            where = f" ({p['location_name']})" if p.get("location_name") else ""
+            return (
+                f"Kierownik zakończył Twoją prośbę na stałe „{p.get('text', '')}”{where}. "
+                f"Od {_date(p.get('from'))} nie liczy się przy układaniu grafiku."
             )
         case "request_to_assistant":
             return (

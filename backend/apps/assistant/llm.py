@@ -94,6 +94,11 @@ class Preference(BaseModel):
         default=False,
         description="wolne_dni with dates only: true when the person says they CANNOT work then (not just prefer).",
     )
+    lasting: bool = Field(
+        default=False,
+        description="true = holds every month until the person ends it (a general wish without dates); false = "
+        "only the period of the message (concrete dates, 'w tym miesiącu', a passing reason).",
+    )
     level: LevelName
     confidence: float = Field(description="0–1: how sure you are that this is what the person meant.")
 
@@ -236,7 +241,9 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
 - „Kiedy mogę”: kalendarz dyspozycji. Na dole wybierasz „Nie mogę”, „Mogę” albo „Chętnie” i stukasz lub
   przeciągasz po dniach; każdy dzień jest od początku „Mogę”; zapis jest automatyczny. Stuknięcie w zaznaczony
   dzień albo „Godziny dnia” ustawia godziny („mogę tylko w tych godzinach”). Gdy kierownik prosi o dyspozycje,
-  widać termin i przycisk „Wyślij kierownikowi”. Pod kalendarzem „Twoje prośby” i czat z asystentem.
+  widać termin i przycisk „Wyślij kierownikowi”. Pod kalendarzem „Twoje prośby” i czat z asystentem. Przy
+  prośbie wybiera się „Tylko <miesiąc>” albo „Na stałe” (wtedy obowiązuje też w kolejnych miesiącach); prośbę na
+  stałe z wcześniejszego miesiąca kończy „Zakończ” w „Twoich prośbach” miesiąca, od którego ma nie obowiązywać.
 - „Powiadomienia”: prośby o dyspozycje, nowy grafik, zmiany do wzięcia, decyzje kierownika.
 Grafik układa i publikuje kierownik. Pracownik nie widzi, czy jego prośby zostały spełnione, ani cudzych próśb."""
 
@@ -263,6 +270,8 @@ Przewodnik po aplikacji kierownika:
   obsada na dni tygodnia, „Obsada w wybrane dni” np. Wigilia albo krótszy dzień, dni zamknięcia, okres grafiku i
   termin dyspozycji), „Zasady” (kolejność = ważność, „bez wyjątków”, przejęcie oddanej zmiany bez zatwierdzania).
 - Przycisk „Asystent” w nagłówku lokalu otwiera tę rozmowę.
+- Prośba pracownika „Na stałe” obowiązuje też w kolejnych okresach; w późniejszym okresie kierownik kończy ją
+  w zakładce „Dyspozycje” przyciskiem „Zakończ od tego okresu”.
 Kierownik może ręcznie wpisać osobę mimo „nie mogę” i zasad (aplikacja pyta „Zapisać mimo to?”). Aplikacja nie
 wysyła SMS-ów ani e-maili poza kodem logowania; powiadomienia są tylko w aplikacji. Grafik powstaje wyłącznie, gdy
 kierownik naciśnie „Ułóż grafik” (albo „Ułóż od nowa”, „Ułóż inaczej”) lub zatwierdzi plan z ułożeniem grafiku."""
@@ -348,9 +357,19 @@ egzamin, ślub, pogrzeb), wazne przy zwykłym zobowiązaniu, mile_widziane przy 
 Wykrzykniki, wielkie litery i słowa „bardzo ważne” bez powodu nie podnoszą poziomu.
 Daty preferencji muszą leżeć w okresie wiadomości z kontekstu; o dniach spoza niego powiedz w answer, że trzeba
 napisać prośbę w kalendarzu na tamten miesiąc.
+Na stałe (lasting): życzenie ogólne, bez dat (dni tygodnia, osoba, zmiana, limit: „nie pracuję w piątki”, „nie
+stawiajcie mnie z Zuzanną”), obowiązuje na stałe, we wszystkich kolejnych miesiącach, aż pracownik je zakończy:
+lasting=true, także gdy nie mówi „zawsze”. lasting=false, gdy są konkretne dni albo życzenie dotyczy tylko tego
+miesiąca („w grudniu”, „w tym miesiącu”, „do świąt”) albo chwilowego powodu (sesja, remont, choroba). Gdy pracownik
+sam mówi, że to na jakiś czas, a nie wiadomo, czy dłużej niż ten miesiąc („na razie”, „przez jakiś czas”), zapytaj
+w question: „Czy to tylko na <miesiąc>, czy na stałe?”. „Do odwołania” = na stałe.
 Korekta: jeśli pracownik wyraźnie poprawia jedną ze swoich wcześniejszych próśb („jednak nie piątki, tylko
 soboty”), podaj jej numer w replaces_request i pełną nową preferencję (nie samą różnicę). Nie łącz niezależnych
-próśb. Korekta nie cofa decyzji kierownika i nie zmienia kalendarza.
+próśb. Korekta nie cofa decyzji kierownika i nie zmienia kalendarza. Prośbę na stałe z wcześniejszego miesiąca
+(from_earlier_month) też poprawisz przez replaces_request: aplikacja zakończy ją od tego miesiąca i zapisze nową.
+Gdy pracownik pisze tylko, że prośba na stałe już nie obowiązuje, nie zapisuj preferencji, tylko powiedz, że
+zakończy ją przyciskiem „Zakończ” przy tej prośbie w „Twoich prośbach” (pod kalendarzem w „Kiedy mogę”, na ten
+miesiąc, od którego ma nie obowiązywać).
 
 {EMPLOYEE_GUIDE}"""
 

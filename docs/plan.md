@@ -183,7 +183,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `AvailabilityDay` | employee, date, state (cannot/neutral/prefer; neutral = dzień bez zaznaczenia, potrzebny tylko dla godzin "mogę tylko w tych godzinach"), from_time, to_time (opcjonalne), source (manual/pattern/copy) | unikalne (employee, date); brak wiersza = brak zgłoszenia |
 | `AvailabilityPattern` | employee, weekday, state, from/to, repeat_until | "powtarzaj co tydzień do [data]"; rozwijany do `AvailabilityDay` przy zapisie |
 | `AvailabilitySubmission` | employee, period, submitted_at | do listy "kto nie zgłosił" |
-| `TextRequest` | employee, period lub month, text, status (new/interpreted/needs_manager/rejected/answered/superseded), supersedes, interpretation (JSON), employee_corrected, text_edited_at (kiedy pracownik napisał treść od nowa; data wiadomości w pamięci asystenta to ta chwila, a bez poprawki created_at), manager_priority (lower/normal/higher), manager_rejected | interpretacja: type, subject_employee, shift_type, avoid, max_hours, dates, weekdays, level, confidence, summary; odpowiedzi informacyjne i zastąpione prośby nie trafiają do generatora |
+| `TextRequest` | employee, period lub month, text, status (new/interpreted/needs_manager/rejected/answered/superseded), supersedes, interpretation (JSON), employee_corrected, text_edited_at (kiedy pracownik napisał treść od nowa; data wiadomości w pamięci asystenta to ta chwila, a bez poprawki created_at), manager_priority (lower/normal/higher), manager_rejected, lasting („na stałe”), ends_from (pierwszy dzień okresu lub miesiąca, od którego zakończona prośba na stałe już się nie liczy), ended_by | interpretacja: type, subject_employee, shift_type, avoid, max_hours, dates, weekdays, level, confidence, summary; odpowiedzi informacyjne i zastąpione prośby nie trafiają do generatora |
 | `ManagerInstruction` | location, employee, data (JSON jak interpretacja prośby), position (kolejność), source_text, created_by | polecenie kierownika o osobie, przyjęte z planu asystenta (etap 10) |
 | `AssistantCommand` | location, text, status (queued/ready/unavailable/failed/applied/dismissed), plan (JSON), created_by, decided_at | polecenie kierownika dla asystenta i sprawdzony plan do akceptacji |
 
@@ -253,8 +253,8 @@ Ustawienia (menedżer)
 
 Dyspozycyjność i prośby
 - `GET /me/availability?period=` · `PUT /me/availability` (lista dni) · `POST /me/availability/pattern` · `POST /me/availability/copy-previous`
-- `POST /me/requests` · `PATCH /me/requests/{id}` (poprawka interpretacji) · `GET /me/requests`
-- `GET /periods/{id}/availability` (siatka, kto wysłał, zmiany po terminie) · `GET /periods/{id}/requests` · `PATCH /requests/{id}` (odrzuć / ważniejsza / mniej ważna)
+- `POST /me/requests` · `PATCH /me/requests/{id}` (poprawka interpretacji, „Tylko w grudniu” / „Na stałe”) · `GET /me/requests` · `POST /me/requests/{id}/end` („Zakończ” / „Przywróć” prośby na stałe z wcześniejszego miesiąca)
+- `GET /periods/{id}/availability` (siatka, kto wysłał, zmiany po terminie) · `GET /periods/{id}/requests` · `PATCH /requests/{id}` (odrzuć / ważniejsza / mniej ważna) · `POST /periods/{id}/requests/{rid}/end` („Zakończ od tego okresu” / „Przywróć”)
 
 Zasady
 - `GET /scopes/{type}/{id}/rules` · `PUT /scopes/{type}/{id}/rules` (cała lista z kolejnością) · `POST /scopes/{type}/{id}/rules/preview` (skutek zmiany na ostatnim okresie)
@@ -1297,3 +1297,49 @@ tylko, gdy jest większy od zera, a `GenerationUsage` dalej liczy ułożenia. �
 grafiku w tym miesiącu: N. Bez limitu.”, arkusz układania nie mówi o limicie. Liczba w `.env` serwera włącza limit z
 powrotem. Serwer, którego `.env` ma jeszcze `GENERATION_MONTHLY_LIMIT=30`, trzyma stary limit, dopóki tej linii nie
 zmienić na 0 albo usunąć.
+
+## 37. Prośby na stałe (22.11.2026)
+
+Prośba Piotra (spec.md, „Prośby na stałe”): prośba pracownika może obowiązywać we wszystkich kolejnych okresach.
+
+- `TextRequest.lasting`: prośba liczy się w swoim okresie (miesiącu) i w każdym okresie, który zaczyna się
+  później, w lokalach, w których osoba pracuje. `TextRequest.ends_from`: pierwszy dzień okresu (miesiąca), od którego
+  zakończona prośba się nie liczy; okres się liczy, gdy jego początek jest wcześniej. `ended_by`: kto zakończył
+  (pracownik albo kierownik). `ends_from` tylko przy `lasting` (ograniczenie w bazie).
+- `TextRequest.lasting_from(day)`: prośby na stałe (zrozumiane albo zostawione kierownikowi) napisane na okres lub
+  miesiąc zaczynający się najpóźniej `day` i niezakończone przed nim; `ended=True` daje zakończone dokładnie od `day`
+  (zostają na liście tego okresu jako zakończone). `for_periods` dokłada je dla osób, które pracują w lokalu okresu.
+  `is_own(periods | month)` odróżnia prośbę napisaną na ten okres od przeniesionej z wcześniejszego.
+- Generator (`problem_builder.requests`): prośba na stałe ma `location=None` (dotyczy osoby, jak prośba na miesiąc).
+  W przeniesionej liczą się tylko części z `lasting` (każda część interpretacji ma ten klucz; konkretne daty nigdy
+  nie są na stałe, a dni spoza okresu i tak odpadają).
+- Asystent: `llm.Preference.lasting` (domyślnie false, więc działa tak samo przez OpenRouter i Claude); prompt mówi,
+  że życzenie ogólne bez dat jest na stałe, a z datami, „w tym miesiącu” albo z chwilowym powodem tylko na ten okres;
+  przy „na razie” bez końca asystent pyta. `_checked_preference` zapisuje `lasting` przy części (false przy datach),
+  wiadomość jest na stałe, gdy którakolwiek część jest. `context.prior_requests` dokłada prośby na stałe
+  z wcześniejszych miesięcy, a `request_history` oznacza je `from_earlier_month`; korekta takiej prośby
+  (`replaces_request`) nie zastępuje jej, tylko kończy od okresu nowej wiadomości (`ends_from`, `ended_by` =
+  pracownik) i łączy przez `supersedes`. Nowa treść czytana od nowa ustawia `lasting` z odczytu; odpowiedź
+  i odrzucenie nie są na stałe.
+- API pracownika: `MyRequestOut.lasting`, `can_last` (zapisana i nie tylko o konkretnych dniach), `carried_from`
+  (pierwszy dzień okresu/miesiąca, na który ją napisano, gdy jest z wcześniejszego), `ends_from`, `ended_by`
+  (`employee`/`manager`), `ended` (zakończona dokładnie od okresu na ekranie). `GET /me/requests` dla okresu albo
+  miesiąca zwraca też przeniesione i zakończone tam prośby. `PATCH /me/requests/{id}` z `lasting` (tylko w otwartym
+  okresie prośby, 409 przy samych datach) zaczyna od nowa: czyści zakończenie. `POST /me/requests/{id}/end`
+  (`company_id`, `period_id` albo `month`, `ended`): okres musi zbierać dyspozycje, a miesiąc nie może minąć;
+  „Przywróć” tylko własne zakończenie dokładnie od tego okresu.
+- API kierownika: `ManagerRequestOut.lasting`, `carried_from`, `ended`, `ended_by`; lista okresu ma też prośby
+  zakończone od niego. `POST /periods/{id}/requests/{rid}/end` (`ended`): tylko prośba na stałe z wcześniejszego
+  okresu; zakończenie wysyła pracownikowi powiadomienie `request_ended`, a przywrócić można tylko zakończenie
+  kierownika.
+- Ekrany: w „Twoich prośbach” pod zapisaną prośbą przyciski „Tylko w grudniu” (albo dni okresu) i „Na stałe”
+  (też pod odczytem w czacie, który mówi „także w kolejnych miesiącach”); przeniesione prośby w osobnej liście:
+  „Na stałe od grudnia.” z „Zakończ” → „Zakończyć od stycznia?” → „Tak, zakończ”; zakończone: „Zakończona: nie
+  obowiązuje od stycznia.” z „Przywróć” albo „Zakończył ją kierownik.”. Czat miesiąca nie pokazuje przeniesionych
+  próśb. Karta prośby u kierownika: znacznik „Na stałe” / „Na stałe od grudnia”, „Zakończ od tego okresu” obok
+  „Odrzuć prośbę”; zakończona: przerywana ramka, „Zakończona”, kto zakończył i „Przywróć prośbę”.
+
+Założenia: domyślnie na stałe jest każda prośba bez dat, bo pracownik rzadko dopisuje „zawsze”, a wybór widać
+i zmienia się jednym stuknięciem. Kierownik nie może zakończyć prośby w okresie, na który ją napisano (tam ją
+odrzuca); odrzucenie i ważność są wspólne dla wszystkich okresów prośby. Zakończenie zawsze od początku okresu
+(miesiąca) na ekranie. Prośby napisane przed zmianą zostają tylko na swój okres.

@@ -3922,6 +3922,95 @@
         ]
       }
     },
+    "/api/me/requests/{request_id}/end": {
+      "post": {
+        "operationId": "end_my_request",
+        "summary": "End My Request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyRequestOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "\"Zakończ\": my lasting request written earlier stops counting from this period (or month) on; the earlier\nones keep it. `ended: false` brings it back (\"Przywróć\") when I ended it from exactly here.",
+        "tags": [
+          "availability"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEndIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/periods/{period_id}/availability": {
       "get": {
         "operationId": "availability_grid",
@@ -4037,6 +4126,105 @@
         "tags": [
           "availability"
         ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/periods/{period_id}/requests/{request_id}/end": {
+      "post": {
+        "operationId": "end_request",
+        "summary": "End Request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "period_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Period Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerRequestOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "\"Zakończ od tego okresu\": a lasting request written earlier stops counting from this period on (the person\ngets a notification). `ended: false` brings back a manager's ending from exactly this period.",
+        "tags": [
+          "availability"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEndDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
         "security": [
           {
             "SessionAuth": []
@@ -12944,6 +13132,55 @@
             },
             "title": "Exchange",
             "type": "array"
+          },
+          "lasting": {
+            "default": false,
+            "title": "Lasting",
+            "type": "boolean"
+          },
+          "can_last": {
+            "default": false,
+            "title": "Can Last",
+            "type": "boolean"
+          },
+          "carried_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carried From"
+          },
+          "ends_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends From"
+          },
+          "ended_by": {
+            "default": "",
+            "enum": [
+              "",
+              "employee",
+              "manager"
+            ],
+            "title": "Ended By",
+            "type": "string"
+          },
+          "ended": {
+            "default": false,
+            "title": "Ended",
+            "type": "boolean"
           }
         },
         "required": [
@@ -13029,9 +13266,64 @@
               }
             ],
             "title": "Understood"
+          },
+          "lasting": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lasting"
           }
         },
         "title": "RequestChangeIn",
+        "type": "object"
+      },
+      "RequestEndIn": {
+        "description": "End my lasting request from a later period (or month with no period yet) on, or bring it back there.",
+        "properties": {
+          "company_id": {
+            "format": "uuid",
+            "title": "Company Id",
+            "type": "string"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
+          },
+          "month": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month"
+          },
+          "ended": {
+            "default": true,
+            "title": "Ended",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "company_id"
+        ],
+        "title": "RequestEndIn",
         "type": "object"
       },
       "AvailabilityGridOut": {
@@ -13351,6 +13643,38 @@
             },
             "title": "Exchange",
             "type": "array"
+          },
+          "lasting": {
+            "default": false,
+            "title": "Lasting",
+            "type": "boolean"
+          },
+          "carried_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carried From"
+          },
+          "ended": {
+            "default": false,
+            "title": "Ended",
+            "type": "boolean"
+          },
+          "ended_by": {
+            "default": "",
+            "enum": [
+              "",
+              "employee",
+              "manager"
+            ],
+            "title": "Ended By",
+            "type": "string"
           }
         },
         "required": [
@@ -13368,6 +13692,17 @@
           "created_at"
         ],
         "title": "ManagerRequestOut",
+        "type": "object"
+      },
+      "RequestEndDecisionIn": {
+        "properties": {
+          "ended": {
+            "default": true,
+            "title": "Ended",
+            "type": "boolean"
+          }
+        },
+        "title": "RequestEndDecisionIn",
         "type": "object"
       },
       "RequestDecisionIn": {

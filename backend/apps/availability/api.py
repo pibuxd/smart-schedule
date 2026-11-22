@@ -144,6 +144,21 @@ class RequestChangeIn(Schema):
     # New wording (read again by the assistant), or `understood: false` = "that is not what I meant".
     text: str | None = Field(default=None, min_length=1, max_length=1000)
     understood: bool | None = None
+    # "Na stałe" (true) or "Tylko ten okres" (false): only while the request's own period (month) is open.
+    lasting: bool | None = None
+
+
+class RequestEndIn(Schema):
+    """End my lasting request from a later period (or month with no period yet) on, or bring it back there."""
+
+    company_id: UUID
+    period_id: UUID | None = None
+    month: date | None = None
+    # false = "Przywróć": take back my own ending from exactly this period (month).
+    ended: bool = True
+
+
+EndedByName = Literal["", "employee", "manager"]
 
 
 class HoursProposalOut(Schema):
@@ -192,6 +207,18 @@ class MyRequestOut(Schema):
     # This message answers the assistant's question(s): the earlier messages of the same request and the questions
     # on them, oldest first (the assistant asks up to three times in a row).
     exchange: list["AskedOut"] = Field(default_factory=list)
+    # "Na stałe": it counts in later periods too, until someone ends it. `can_last`: the screen offers the choice
+    # "Tylko ten okres" / "Na stałe" (not for a request only about concrete days).
+    lasting: bool = False
+    can_last: bool = False
+    # A lasting request written for an earlier period or month (its first day): it is not part of this chat and
+    # can only be ended here ("Zakończ"). None for a request written here.
+    carried_from: date | None = None
+    # The first day it no longer counts (ended from that period or month), and who ended it.
+    ends_from: date | None = None
+    ended_by: EndedByName = ""
+    # Ended from exactly the period (month) on screen: listed there as ended, with "Przywróć" for the person's own.
+    ended: bool = False
 
 
 def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
@@ -508,9 +535,16 @@ class _Calendar:
         self.locked = _locked_days(ctx, profile, start, end)
 
 
-def _request_out(text_request: TextRequest, calendar: _Calendar | None = None, later: int = 0) -> MyRequestOut:
-    """`later`: how many messages of the same chat came after this one (the assistant reads the last few)."""
-    unmarked, notes = _calendar_facts(text_request, calendar) if calendar is not None else ([], [])
+def _request_out(
+    text_request: TextRequest,
+    calendar: _Calendar | None = None,
+    later: int = 0,
+    carried_to: date | None = None,
+) -> MyRequestOut:
+    """`later`: how many messages of the same chat came after this one (the assistant reads the last few).
+    `carried_to`: the first day of the period (month) on screen when the request is a lasting one written earlier."""
+    carried = carried_to is not None
+    unmarked, notes = _calendar_facts(text_request, calendar) if calendar is not None and not carried else ([], [])
     interpreted = text_request.status == TextRequest.Status.INTERPRETED
     question = (text_request.question or None) if text_request.status == TextRequest.Status.ANSWERED else None
     waiting = bool(question) and not text_request.answers.all()
@@ -528,6 +562,12 @@ def _request_out(text_request: TextRequest, calendar: _Calendar | None = None, l
         waiting=waiting,
         can_answer=waiting and later < MAX_CONVERSATION,
         exchange=_exchange(text_request),
+        lasting=text_request.lasting,
+        can_last=text_request.can_last,
+        carried_from=text_request.starts_on if carried else None,
+        ends_from=text_request.ends_from,
+        ended_by=text_request.ended_by_whom,
+        ended=carried and text_request.ends_from is not None and text_request.ends_from <= carried_to,
     )
 
 
@@ -646,24 +686,31 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
     """My requests for a period, or (without `period_id`) the ones I wrote for a month with no period yet."""
     ctx, profile = employee_context(request, company_id)
     if period_id is not None:
-        # Also the ones I wrote for its months before the manager asked: they count here too.
-        scope = TextRequest.for_periods([_my_period(ctx, profile, period_id)])
+        # Also the ones I wrote for its months before the manager asked, and lasting ones: they count here too.
+        period = _my_period(ctx, profile, period_id)
+        first_day, own = period.start, lambda r: r.is_own([period])
+        scope = TextRequest.for_periods([period])
     elif month is not None:
-        scope = Q(period=None, month=month.replace(day=1))
+        first_day = month.replace(day=1)
+        own = lambda r: r.is_own(month=first_day)  # noqa: E731
+        scope = Q(period=None, month=first_day) | TextRequest.lasting_from(first_day)
     else:
         raise HttpError(400, "Wybierz miesiąc.")
+    # A lasting request ended from exactly this period (month) stays on the list as ended, to bring it back.
+    scope |= TextRequest.lasting_from(first_day, ended=True)
     requests = list(
         ctx.qs(TextRequest)
         .filter(scope, employee=profile)
-        .select_related("period", EXCHANGE)
+        .select_related("period", "employee__membership", EXCHANGE)
         .prefetch_related("answers")
         .order_by("created_at")
     )
+    carried = {r.pk for r in requests if not own(r)}
     calendar = None
-    if requests:
+    if any(r.pk not in carried for r in requests):
         from apps.assistant.services import request_span
 
-        spans = [request_span(r) for r in requests]
+        spans = [request_span(r) for r in requests if r.pk not in carried]
         calendar = _Calendar(ctx, profile, min(s for s, _ in spans), max(e for _, e in spans))
     # Messages after each one in its own chat (a period, or a month without one): see `context.MAX_CONVERSATION`.
     later, seen = [], {}
@@ -671,7 +718,10 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
         chat = (r.period_id, r.month)
         later.append(seen.get(chat, 0))
         seen[chat] = seen.get(chat, 0) + 1
-    return [_request_out(r, calendar, n) for r, n in zip(requests, reversed(later), strict=True)]
+    return [
+        _request_out(r, calendar, n, carried_to=first_day if r.pk in carried else None)
+        for r, n in zip(requests, reversed(later), strict=True)
+    ]
 
 
 LIMIT_FULL = "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń albo popraw którąś."
@@ -810,7 +860,57 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
                 update_fields=["status", "interpretation", "unread_reason", "employee_corrected", "updated_at"]
             )
             _tell_managers(ctx, text_request)
+        elif payload.lasting is not None and payload.lasting != text_request.lasting:
+            if text_request.status not in TextRequest.SAVED or not text_request.can_last:
+                raise HttpError(409, "Ta prośba dotyczy tylko konkretnych dni, więc nie może być na stałe.")
+            text_request.set_lasting(payload.lasting)
+            text_request.save(update_fields=["lasting", "ends_from", "ended_by", "interpretation", "updated_at"])
     return _request_out(text_request)
+
+
+@router.post(
+    "/me/requests/{request_id}/end",
+    response={200: MyRequestOut, 400: ErrorOut, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def end_my_request(request, request_id: UUID, payload: RequestEndIn):
+    """ "Zakończ": my lasting request written earlier stops counting from this period (or month) on; the earlier
+    ones keep it. `ended: false` brings it back ("Przywróć") when I ended it from exactly here."""
+    ctx, profile = employee_context(request, payload.company_id)
+    text_request = ctx.qs(TextRequest).filter(pk=request_id, employee=profile).select_related("period").first()
+    if text_request is None:
+        raise HttpError(404, "Nie znaleziono.")
+    if payload.period_id is not None:
+        period = _editable_period(ctx, profile, payload.period_id)
+        first_day, own = period.start, text_request.is_own([period])
+    elif payload.month is not None:
+        ctx.require_writable()
+        first_day = _request_month(payload.month)
+        own = text_request.is_own(month=first_day)
+    else:
+        raise HttpError(400, "Wybierz miesiąc.")
+    with transaction.atomic():
+        text_request = (
+            ctx.qs(TextRequest)
+            .select_for_update(of=("self",))
+            .select_related("period", "employee__membership")
+            .get(pk=request_id)
+        )
+        if own or not text_request.lasting or text_request.status not in TextRequest.SAVED:
+            raise HttpError(409, "Tę prośbę poprawisz albo usuniesz w miesiącu, na który ją napisano.")
+        if text_request.starts_on > first_day:
+            raise HttpError(409, "Ta prośba zaczyna obowiązywać później. Odśwież stronę.")
+        if payload.ended:
+            if text_request.ends_from is not None and text_request.ends_from <= first_day:
+                raise HttpError(409, "Ta prośba jest już zakończona. Odśwież stronę.")
+            text_request.ends_from, text_request.ended_by = first_day, ctx.user
+        else:
+            if text_request.ends_from != first_day:
+                raise HttpError(409, "Tej prośby nie zakończono od tego miesiąca. Odśwież stronę.")
+            if text_request.ended_by_whom != "employee":
+                raise HttpError(409, "Tę prośbę zakończył kierownik. Napisz nową, jeśli nadal jest aktualna.")
+            text_request.ends_from, text_request.ended_by = None, None
+        text_request.save(update_fields=["ends_from", "ended_by", "updated_at"])
+    return _request_out(text_request, carried_to=first_day)
 
 
 @router.delete("/me/requests/{request_id}", response={204: None, 402: ErrorOut, 404: ErrorOut, 409: ErrorOut})
@@ -891,11 +991,24 @@ class ManagerRequestOut(Schema):
     asked: AskedOut | None = None
     # All earlier messages of this request with the assistant's questions, oldest first (`asked` is the last one).
     exchange: list[AskedOut] = Field(default_factory=list)
+    # "Na stałe": it counts in later periods too, until someone ends it.
+    lasting: bool = False
+    # A lasting request written for an earlier period or month (its first day); None for one written for this
+    # period. Only such a request can be ended from this period ("Zakończ od tego okresu").
+    carried_from: date | None = None
+    # Ended from exactly this period (no longer counts here), and who ended it.
+    ended: bool = False
+    ended_by: EndedByName = ""
 
 
 class RequestDecisionIn(Schema):
     manager_priority: PriorityName | None = None
     manager_rejected: bool | None = None
+
+
+class RequestEndDecisionIn(Schema):
+    # false = "Przywróć": take back a manager's ending from exactly this period.
+    ended: bool = True
 
 
 def _managed_period(request, period_id: UUID) -> tuple[TenantContext, SchedulePeriod]:
@@ -954,7 +1067,9 @@ def availability_grid(request, period_id: UUID):
     )
 
 
-def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
+def _manager_request_out(row: TextRequest, period: SchedulePeriod | None = None) -> ManagerRequestOut:
+    """`period`: the period on screen (whether the request was written for it, or carried over and maybe ended)."""
+    carried = period is not None and not row.is_own([period])
     summary = _summary(row)
     if summary and row.status == TextRequest.Status.INTERPRETED and (row.interpretation or {}).get("partial"):
         summary += " Resztę wiadomości asystent zostawił Tobie do przeczytania."
@@ -973,6 +1088,10 @@ def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
         created_at=row.created_at,
         asked=AskedOut(text=row.answer_to.text, question=row.answer_to.question) if row.answer_to else None,
         exchange=_exchange(row),
+        lasting=row.lasting,
+        carried_from=row.starts_on if carried else None,
+        ended=carried and row.ends_from is not None and row.ends_from <= period.start,
+        ended_by=row.ended_by_whom,
     )
 
 
@@ -989,14 +1108,60 @@ def _can_reread(row: TextRequest) -> bool:
 def period_requests(request, period_id: UUID):
     """Requests in words for this period, oldest first. Only managers see them."""
     ctx, period = _managed_period(request, period_id)
+    # A lasting request ended from exactly this period stays on its list as ended (who ended it, "Przywróć").
+    person = works_in_q(period.location_id, prefix="employee__")
+    ended_here = Q(person, TextRequest.lasting_from(period.start, ended=True))
     rows = (
         ctx.qs(TextRequest)
-        .filter(TextRequest.for_periods([period]))
+        .filter(TextRequest.for_periods([period]) | ended_here)
         .exclude(status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED])
         .exclude(interpretation__type="out_of_scope", interpretation__type__isnull=False)
-        .select_related("employee__membership__user", EXCHANGE)
+        .select_related("employee__membership__user", "period", EXCHANGE)
     )
-    return [_manager_request_out(r) for r in rows.order_by("created_at")]
+    return [_manager_request_out(r, period) for r in rows.order_by("created_at")]
+
+
+@router.post(
+    "/periods/{period_id}/requests/{request_id}/end",
+    response={200: ManagerRequestOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+)
+def end_request(request, period_id: UUID, request_id: UUID, payload: RequestEndDecisionIn):
+    """ "Zakończ od tego okresu": a lasting request written earlier stops counting from this period on (the person
+    gets a notification). `ended: false` brings back a manager's ending from exactly this period."""
+    ctx, period = _managed_period(request, period_id)
+    ctx.require_writable()
+    with transaction.atomic():
+        row = (
+            ctx.qs(TextRequest)
+            .select_for_update(of=("self",))
+            .filter(pk=request_id)
+            .filter(works_in_q(period.location_id, prefix="employee__"))
+            .select_related("period", "employee__membership__user")
+            .first()
+        )
+        if row is None:
+            raise HttpError(404, "Nie znaleziono tej prośby.")
+        if row.is_own([period]) or not row.lasting or row.status not in TextRequest.SAVED:
+            raise HttpError(409, "Od tego okresu można zakończyć tylko prośbę na stałe z wcześniejszego okresu.")
+        if row.starts_on > period.start:
+            raise HttpError(409, "Ta prośba zaczyna obowiązywać później. Odśwież stronę.")
+        if payload.ended:
+            if row.ends_from is not None and row.ends_from <= period.start:
+                raise HttpError(409, "Ta prośba jest już zakończona. Odśwież stronę.")
+            row.ends_from, row.ended_by = period.start, ctx.user
+        else:
+            if row.ends_from != period.start or row.ended_by_whom != "manager":
+                raise HttpError(409, "Tej prośby nie da się tu przywrócić. Odśwież stronę.")
+            row.ends_from, row.ended_by = None, None
+        row.save(update_fields=["ends_from", "ended_by", "updated_at"])
+        if payload.ended:
+            notify(
+                ctx.company.pk,
+                [row.employee.membership.user_id],
+                "request_ended",
+                {"text": row.text[:80], "from": period.start.isoformat(), "location_name": period.location.name},
+            )
+    return _manager_request_out(row, period)
 
 
 @router.patch(

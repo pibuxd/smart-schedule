@@ -197,6 +197,10 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   (`useScreenChatScope`), else the requested period or this month. Approved results live in a separate editable window:
   `AssistantRulesTable` ("Ustalenia") for managers, the saved list in `RequestsSection` for employees. Never show a
   chat inline in a page. Layouts that show the corner button leave room for it at the bottom.
+  Employee requests may be lasting (`TextRequest.lasting`, Piotr 22.11.2026): they count in later periods
+  (`TextRequest.lasting_from`, part of `for_periods`) until ended from a period or month (`ends_from`); only their
+  undated parts with `lasting` carry over, they never move to another chat, and a correction from a later month ends
+  the old one instead of superseding it.
   Agreements belong to one availability period (`apps/assistant/agreements.py`): a new period starts empty and the
   manager copies chosen ones from the previous period (`copy_from_previous`); nothing carries over by itself. An
   employee may forward a rejected message to the manager (`unread_reason="rejected"`); it is never scored.

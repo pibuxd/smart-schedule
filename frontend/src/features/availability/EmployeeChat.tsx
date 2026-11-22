@@ -8,7 +8,7 @@ import { AssistantFab } from '../../components/assistant/AssistantFab'
 import { Drawer } from '../../components/ui/drawer'
 import { ErrorState, Loading } from '../../components/ui/status'
 import { cn } from '../../lib/cn'
-import { monthName, periodWords, toIsoDate } from '../../lib/dates'
+import { monthLocative, monthName, parseDate, periodWords, toIsoDate } from '../../lib/dates'
 import { EmployeeChatContext, useEmployeeChat, type ChatScope } from './employee-chat'
 import { RequestsChat } from './RequestsSection'
 
@@ -25,6 +25,13 @@ function scopeLine(scope: ChatScope, period: AvailabilityPeriodOut | null | unde
   if (!period || period.id !== scope.periodId) return null
   const words = periodWords(period.start, period.end)
   return `Prośby na ${words.startsWith('w ') ? month(period.start) : words}.`
+}
+
+/** "w grudniu" (or "1–7 grudnia"): the month or period of the chat, for the choice "Tylko w grudniu" / "Na stałe". */
+function onlyWords(scope: ChatScope, period: AvailabilityPeriodOut | null | undefined): string {
+  if (scope.month) return `w ${monthLocative(parseDate(scope.month))}`
+  if (period && period.id === scope.periodId) return periodWords(period.start, period.end)
+  return 'ten okres'
 }
 
 /**
@@ -104,6 +111,7 @@ export function EmployeeChatProvider({
             month={scope.month}
             editable={scope.editable}
             assistantReads={assistantReads}
+            only={onlyWords(scope, data?.period)}
             text={drafts[key] ?? ''}
             onTextChange={(text) => setDrafts((old) => ({ ...old, [key]: text }))}
           />

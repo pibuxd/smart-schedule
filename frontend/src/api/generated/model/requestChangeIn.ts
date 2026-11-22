@@ -8,4 +8,5 @@
 export interface RequestChangeIn {
   text?: string | null;
   understood?: boolean | null;
+  lasting?: boolean | null;
 }

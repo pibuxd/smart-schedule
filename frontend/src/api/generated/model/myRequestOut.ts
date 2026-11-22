@@ -6,6 +6,7 @@
  */
 import type { AskedOut } from './askedOut';
 import type { HoursProposalOut } from './hoursProposalOut';
+import type { MyRequestOutEndedBy } from './myRequestOutEndedBy';
 import type { MyRequestOutStatus } from './myRequestOutStatus';
 
 export interface MyRequestOut {
@@ -22,4 +23,10 @@ export interface MyRequestOut {
   waiting?: boolean;
   can_answer?: boolean;
   exchange?: AskedOut[];
+  lasting?: boolean;
+  can_last?: boolean;
+  carried_from?: string | null;
+  ends_from?: string | null;
+  ended_by?: MyRequestOutEndedBy;
+  ended?: boolean;
 }
