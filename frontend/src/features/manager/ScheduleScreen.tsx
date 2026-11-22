@@ -271,7 +271,9 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
             ))}
           </SelectField>
         )}
-        {data.editable && !data.period.active_run_id && <DeleteDraft data={data} />}
+        {!data.published_at && !readOnly && !(isNewest && data.period.active_run_id) && (
+          <DeleteDraft data={data} current={isNewest} onDeleted={() => onShowVersion(null)} />
+        )}
         {data.editable && (
           <Button size="normal" onClick={() => setPublishing(true)} disabled={data.hard_problems.length > 0}>
             <Send aria-hidden="true" size={20} />
@@ -311,8 +313,9 @@ function versionBefore(data: VersionOut) {
   return data.history.filter((v) => v.number < data.number).sort((x, y) => y.number - x.number)[0]
 }
 
-/** "Usuń szkic": only this draft goes; the version before it is current again, else the period collects availability. */
-function DeleteDraft({ data }: { data: VersionOut }) {
+/** "Usuń szkic": the version on screen goes. After the current draft the one before it is current again (else the
+ * period collects availability); an older attempt just leaves the history. */
+function DeleteDraft({ data, current, onDeleted }: { data: VersionOut; current: boolean; onDeleted: () => void }) {
   const remove = useDeleteScheduleDraft()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -340,6 +343,7 @@ function DeleteDraft({ data }: { data: VersionOut }) {
             { versionId: data.id },
             {
               onSuccess: async () => {
+                onDeleted()
                 // The periods first, so this draft's view is gone before its own data is asked for again.
                 await queryClient.invalidateQueries({ queryKey: getLocationPeriodsQueryKey(data.location_id) })
                 void queryClient.invalidateQueries()
@@ -348,14 +352,20 @@ function DeleteDraft({ data }: { data: VersionOut }) {
           )
         }
       >
-        <p className="m-0">
-          {!before
-            ? 'Szkic zniknie na dobre razem z poprawkami, a okres wróci do zbierania dyspozycji.'
-            : before.published_at
-              ? 'Szkic zniknie na dobre razem z poprawkami. Zostaje opublikowany grafik, który widzą pracownicy.'
-              : `Szkic zniknie na dobre razem z poprawkami. Wróci poprzedni szkic, wersja ${before.number}.`}
-        </p>
-        <p className="m-0">Obsada dni i zmiany w grafikach innych lokali zostają.</p>
+        {current ? (
+          <>
+            <p className="m-0">
+              {!before
+                ? 'Szkic zniknie na dobre razem z poprawkami, a okres wróci do zbierania dyspozycji.'
+                : before.published_at
+                  ? 'Szkic zniknie na dobre razem z poprawkami. Zostaje opublikowany grafik, który widzą pracownicy.'
+                  : `Szkic zniknie na dobre razem z poprawkami. Wróci poprzedni szkic, wersja ${before.number}.`}
+            </p>
+            <p className="m-0">Obsada dni i zmiany w grafikach innych lokali zostają.</p>
+          </>
+        ) : (
+          <p className="m-0">{`Wersja ${data.number} zniknie na dobre z historii. Bieżący grafik zostaje bez zmian.`}</p>
+        )}
       </ConfirmSheet>
     </>
   )

@@ -13,7 +13,7 @@
 - `add_seat` / `remove_seat`: one more or one fewer place on a shift of one day. The same number is saved as that
   date's staffing (`apps.staffing.day_staffing`), so arranging the schedule again keeps it.
 - `start_draft`: editing a published schedule starts a new draft copy (publishing makes it the published one).
-- `delete_draft`: "Usuń szkic" removes only the newest draft; the version before it is current again.
+- `delete_draft`: "Usuń szkic" removes the chosen unpublished version; after the newest one, the one before is current.
 - `publish`: the draft becomes the published version, the previous one is kept as history, the history of
   assignments (`AssignmentEvent`) gets one row for every slot whose person changed, open offers of given-away
   shifts follow the slot (or end, when the giver lost it), and the employees of the location get an in-app notice.
@@ -755,19 +755,23 @@ def supersede_older_drafts(period: SchedulePeriod, newer_than: ScheduleVersion) 
 
 
 def delete_draft(version: ScheduleVersion) -> SchedulePeriod:
-    """ "Usuń szkic": only the newest draft goes for good. The version before it is current again: an earlier
-    unpublished attempt becomes the editable draft, a published schedule stays as it is. With no version left,
-    the period goes back to collecting availability, as before the first arranging."""
+    """ "Usuń szkic": the version the manager is looking at goes for good, if it was never published. Deleting
+    the newest draft makes the version before it current again: an earlier unpublished attempt becomes the editable
+    draft, a published schedule stays as it is. An older attempt from the history just disappears. With no version
+    left, the period goes back to collecting availability, as before the first arranging."""
     with transaction.atomic():
         lock_period(version)
         version = ScheduleVersion.objects.select_related("period").get(pk=version.pk)
-        if not is_editable(version):
-            raise HttpError(409, "Usunąć można tylko najnowszy szkic grafiku. Opublikowany grafik zostaje.")
+        if version.published_at is not None:
+            raise HttpError(409, "Opublikowanego grafiku nie da się usunąć. Usunąć można tylko szkic.")
         period = version.period
+        was_current = latest_version(period).pk == version.pk
         arranging = (GenerationRun.Status.QUEUED, GenerationRun.Status.RUNNING)
-        if period.generation_runs.filter(status__in=arranging).exists():
+        if was_current and period.generation_runs.filter(status__in=arranging).exists():
             raise HttpError(409, "Grafik na ten okres właśnie się układa. Poczekaj albo przerwij układanie.")
         version.delete()
+        if not was_current:
+            return period
         previous = latest_version(period)
         if previous is None:
             period.status = SchedulePeriod.Status.COLLECTING

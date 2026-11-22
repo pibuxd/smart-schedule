@@ -299,7 +299,6 @@ def test_deleting_a_draft_brings_back_the_attempt_before_it(api, shop, draft):
     draft.refresh_from_db()
     assert draft.status == "superseded"
 
-    assert api.client.delete(url(draft)).status_code == 409  # only the newest draft
     assert api.client.delete(url(newer)).status_code == 204
 
     # Only the newest draft goes: the attempt before it is the editable draft again.
@@ -311,6 +310,19 @@ def test_deleting_a_draft_brings_back_the_attempt_before_it(api, shop, draft):
     assert shop["period"].status == SchedulePeriod.Status.DRAFT
     period = api.get(f"/api/locations/{shop['location'].id}/periods").json()[0]
     assert period["latest_version_id"] == str(draft.id)
+
+
+def test_deleting_an_older_attempt_leaves_the_current_draft(api, shop, draft):
+    api.login(shop["manager"])
+    newer = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+
+    assert api.client.delete(url(draft)).status_code == 204  # the version on screen, not the newest
+
+    left = dict(ScheduleVersion.objects.filter(period=shop["period"]).values_list("number", "status"))
+    assert left == {newer.number: "draft"}
+    assert api.get(url(newer)).json()["editable"] is True
+    shop["period"].refresh_from_db()
+    assert shop["period"].status == SchedulePeriod.Status.DRAFT
 
 
 def test_deleting_the_only_draft_reopens_availability(api, shop, draft):

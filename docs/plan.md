@@ -1094,18 +1094,18 @@ nagłówkiem zostaje "Im wyżej, tym ważniejsza zasada." i notka o Kodeksie pra
 Prośba Piotra: przycisk, którym kierownik usuwa szkic grafiku. Wcześniej szkic znikał tylko z całym okresem
 (`DELETE /periods/{id}`, sekcja 25) albo przez ponowne układanie.
 
-- `DELETE /versions/{id}` (`delete_schedule_draft`, logika w `editing.delete_draft`): tylko najnowsza wersja, która
-  jest szkicem (`is_editable`); opublikowana albo starsza wersja daje 409. 409 także w trakcie układania tego okresu,
-  bo wynik i tak zapisałby nowy szkic. Kierownik lokalu, `require_writable`.
-- Usuwa tylko ten szkic (poprawka 22.11.2026: wcześniej znikały też starsze nieopublikowane wersje, a Piotr
-  odebrał to jako usunięcie wszystkich szkiców). Zmiany i przypisania idą kaskadą; `AssignmentEvent` powstaje dopiero
+- `DELETE /versions/{id}` (`delete_schedule_draft`, logika w `editing.delete_draft`): wersja, którą kierownik ogląda,
+  o ile nigdy nie była opublikowana (`published_at` puste); inaczej 409. Bieżący szkic daje 409 także w trakcie
+  układania tego okresu, bo wynik i tak zapisałby nowy szkic. Kierownik lokalu, `require_writable`.
+- Usuwa tylko tę wersję (poprawka 22.11.2026: wcześniej znikały też starsze nieopublikowane wersje, a Piotr
+  odebrał to jako usunięcie wszystkich szkiców). Starsza wersja z historii po prostu znika; bieżący grafik bez zmian. Zmiany i przypisania idą kaskadą; `AssignmentEvent` powstaje dopiero
   przy publikacji, oddania zmian wiszą tylko na opublikowanych wersjach.
-- Bieżąca jest znów wersja sprzed niego: nieopublikowana zastąpiona (`superseded`, `published_at` puste) wraca do
+- Po usunięciu bieżącego szkicu bieżąca jest znów wersja sprzed niego: nieopublikowana zastąpiona (`superseded`, `published_at` puste) wraca do
   `draft` i da się ją edytować; opublikowana zostaje opublikowana (okres `published`). Wersja sprzed ostatniej
   publikacji nigdy nie wraca, bo najnowsza zostająca jest wtedy opublikowana. Gdy nie zostaje żadna wersja, okres
   wraca do `collecting` (pracownicy znów zmieniają dyspozycje, "Poproś o dyspozycje" działa).
-- Ekran: czerwona ikona kosza "Usuń szkic" (sam kosz, opis w `aria-label`/`title`, prośba Piotra) obok "Opublikuj" przy edytowalnym szkicu, ukryty w trakcie układania;
-  `ConfirmSheet` "Usunąć szkic grafiku?" z jednym zdaniem o skutku (wraca poprzedni szkic, wersja N / zostaje opublikowany grafik / okres wraca do zbierania dyspozycji) i zdaniem "Obsada dni i zmiany w grafikach innych lokali zostają." i "Tak, usuń szkic" / "Zostaw".
+- Ekran: czerwona ikona kosza "Usuń szkic" (sam kosz, opis w `aria-label`/`title`, prośba Piotra) przy każdej nieopublikowanej wersji (przy bieżącym szkicu ukryty w trakcie układania);
+  `ConfirmSheet` "Usunąć szkic grafiku?" z jednym zdaniem o skutku (wraca poprzedni szkic, wersja N / zostaje opublikowany grafik / okres wraca do zbierania dyspozycji / przy starszej wersji: "Wersja N zniknie na dobre z historii. Bieżący grafik zostaje bez zmian.") i zdaniem "Obsada dni i zmiany w grafikach innych lokali zostają." i "Tak, usuń szkic" / "Zostaw".
 
 Założenia: usunięcie szkicu nie cofa tego, co poprawki w nim zrobiły poza nim samym: obsada dnia z "Dodaj
 miejsce" / "Usuń miejsce" (to ustawienie lokalu) i zdjęcie osoby z opublikowanego grafiku innego lokalu po
