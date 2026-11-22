@@ -1243,8 +1243,9 @@ def start_correcting(request, version_id: UUID):
     "/versions/{version_id}", response={204: None, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut}
 )
 def delete_schedule_draft(request, version_id: UUID):
-    """ "Usuń szkic": remove the newest draft (and unpublished versions since the last publication). A published
-    schedule stays; with nothing published the period goes back to collecting availability."""
+    """ "Usuń szkic": remove the chosen version if it was never published. After the newest draft the version before
+    it is current again (an earlier draft is editable again, a published schedule stays); an older attempt just goes.
+    With no version left the period goes back to collecting."""
     from apps.scheduling.editing import delete_draft
 
     ctx, version = _version_context(request, version_id)

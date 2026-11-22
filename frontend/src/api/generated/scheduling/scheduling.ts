@@ -1371,8 +1371,9 @@ export const getDeleteScheduleDraftUrl = (versionId: string,) => {
 }
 
 /**
- * "Usuń szkic": remove the newest draft (and unpublished versions since the last publication). A published
- * schedule stays; with nothing published the period goes back to collecting availability.
+ * "Usuń szkic": remove the chosen version if it was never published. After the newest draft the version before
+ * it is current again (an earlier draft is editable again, a published schedule stays); an older attempt just goes.
+ * With no version left the period goes back to collecting.
  * @summary Delete Schedule Draft
  */
 export const deleteScheduleDraft = async (versionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deleteScheduleDraftResponse> => {
@@ -1425,8 +1426,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeleteScheduleDraftMutationVariables = {versionId: string}
 
     /**
- * "Usuń szkic": remove the newest draft (and unpublished versions since the last publication). A published
- * schedule stays; with nothing published the period goes back to collecting availability.
+ * "Usuń szkic": remove the chosen version if it was never published. After the newest draft the version before
+ * it is current again (an earlier draft is editable again, a published schedule stays); an older attempt just goes.
+ * With no version left the period goes back to collecting.
  * @summary Delete Schedule Draft
  */
 export const useDeleteScheduleDraft = <TError = ErrorOut,

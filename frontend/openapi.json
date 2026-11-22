@@ -2158,7 +2158,7 @@
             }
           }
         },
-        "description": "\"Usuń szkic\": remove the newest draft (and unpublished versions since the last publication). A published\nschedule stays; with nothing published the period goes back to collecting availability.",
+        "description": "\"Usuń szkic\": remove the chosen version if it was never published. After the newest draft the version before\nit is current again (an earlier draft is editable again, a published schedule stays); an older attempt just goes.\nWith no version left the period goes back to collecting.",
         "tags": [
           "scheduling"
         ],

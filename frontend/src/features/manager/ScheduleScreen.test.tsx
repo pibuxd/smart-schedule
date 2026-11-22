@@ -482,14 +482,14 @@ describe('ScheduleScreen', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/versions/v1')).toBe(true))
   })
 
-  it('warns that older unpublished attempts go too', async () => {
+  it('says the attempt before the draft comes back', async () => {
     const h = version.history[0]
     api({
       version: {
         ...version,
         number: 3,
         history: [
-          { ...h, id: 'v3', number: 3 },
+          { ...h, number: 3 },
           { ...h, id: 'v2', number: 2, status: 'superseded' },
           { ...h, id: 'v1old', number: 1, status: 'superseded' },
         ],
@@ -498,12 +498,44 @@ describe('ScheduleScreen', () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
     const sheet = await screen.findByRole('dialog')
-    expect(within(sheet).getByText(/Znikną też starsze wersje z historii, których nie opublikowano \(2\)/)).toBeInTheDocument()
+    expect(within(sheet).getByText(/Wróci poprzedni szkic, wersja 2 z .*, z jego poprawkami i przypięciami\./)).toBeInTheDocument()
+    expect(within(sheet).queryByText(/okres wróci do zbierania dyspozycji/)).not.toBeInTheDocument()
     expect(within(sheet).getByText(/Obsada dni i zmiany w grafikach innych lokali zostają/)).toBeInTheDocument()
   })
 
+  it('deletes the older version on screen, not the current draft', async () => {
+    const h = version.history[0]
+    const calls = api({
+      version: {
+        ...version,
+        id: 'v1',
+        number: 1,
+        status: 'superseded',
+        editable: false,
+        history: [{ ...h, id: 'v2', number: 2 }, { ...h, number: 1, status: 'superseded' }],
+      },
+    })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText(/Wersja 1 zniknie na dobre z historii\. Bieżący grafik zostaje bez zmian/)).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Tak, usuń szkic' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/versions/v1')).toBe(true))
+  })
+
   it('says the published schedule stays when deleting corrections', async () => {
-    api({ version: { ...version, number: 2, period: { ...period, status: 'published', published_version_id: 'v0' } } })
+    const h = version.history[0]
+    api({
+      version: {
+        ...version,
+        number: 2,
+        period: { ...period, status: 'published', published_version_id: 'v0' },
+        history: [
+          { ...h, number: 2 },
+          { ...h, id: 'v0', number: 1, status: 'published', published_at: '2026-11-26T10:00:00+01:00' },
+        ],
+      },
+    })
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
     const sheet = await screen.findByRole('dialog')
@@ -522,7 +554,13 @@ describe('ScheduleScreen', () => {
 
   it('a published schedule can be looked at but corrected only through a new draft', async () => {
     api({
-      version: { ...version, status: 'published', editable: false, history: [{ ...version.history[0], status: 'published' }] },
+      version: {
+        ...version,
+        status: 'published',
+        editable: false,
+        published_at: '2026-11-26T10:00:00+01:00',
+        history: [{ ...version.history[0], status: 'published', published_at: '2026-11-26T10:00:00+01:00' }],
+      },
     })
     show()
     expect(await screen.findByRole('button', { name: 'Popraw grafik' })).toBeInTheDocument()
