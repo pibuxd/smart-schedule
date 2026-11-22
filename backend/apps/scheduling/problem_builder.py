@@ -521,9 +521,13 @@ class _Reader:
                 continue
             data = readings.saved_reading(row.interpretation, row.text)
             interpreted = row.status == TextRequest.Status.INTERPRETED
+            # A lasting request carried over from an earlier month keeps only its lasting wishes here.
+            carried = not row.is_own(self.periods)
             # One message may hold several wishes: the first at the top, the others in `more` (ids "<pk>:2", …).
             parts = [data, *(data.get("more") or [])] if interpreted else [data]
             for number, part in enumerate(parts, start=1):
+                if carried and part.get("lasting") is False:
+                    continue
                 request = self._text_request(row, part, interpreted, employee_ids)
                 if request is not None:
                     if number > 1:
@@ -560,8 +564,8 @@ class _Reader:
             min_days=_min_days(data),
             shifts_per_day=_shifts_per_day(data),
             summary=str(data.get("part_summary") or data.get("summary") or row.text[:200]),
-            # A request for a month (no period) is about the person: it counts where they work.
-            location=str(row.period.location_id) if row.period_id else None,
+            # A request for a month (no period) or a lasting one is about the person: it counts where they work.
+            location=str(row.period.location_id) if row.period_id and not row.lasting else None,
         )
 
     def instructions(self, employee_ids: set[str]) -> list[Request]:

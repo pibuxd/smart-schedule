@@ -128,6 +128,7 @@ def request_context(
             f"Miesiąc tej wiadomości (bez okresu grafiku; prośba będzie czekać na niego): od {start.isoformat()} "
             f"do {end.isoformat()}."
         )
+    span += " Prośba z lasting=true obowiązuje od tego okresu także we wszystkich kolejnych."
     context = "\n".join(
         [
             _today_line(today),
@@ -137,7 +138,10 @@ def request_context(
             f"Twoje stanowiska: {', '.join(positions) or '(brak)'}.",
             f"Współpracownicy: {', '.join(people) or '(brak)'}.",
             f"Zmiany w lokalu: {_shift_lines(shift_types)}.",
-            facts.request_history(previous if previous is not None else facts.prior_requests(text_request)),
+            facts.request_history(
+                previous if previous is not None else facts.prior_requests(text_request),
+                (text_request.period_id, text_request.month),
+            ),
             facts.conversation(text_request),
             facts.open_questions(asked) if asked else "",
         ]
@@ -208,21 +212,30 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         if locked is None:
             return "skipped"
         replacement = outcome.replacement
+        # A lasting request from an earlier month is not replaced but ended from this one: it still counts there.
+        carried = replacement is not None and (replacement.period_id, replacement.month) != (row.period_id, row.month)
         if replacement is not None:
+            first_day = request_span(row)[0]
+            same = (
+                {"period_id": row.period_id, "month": row.month}
+                if not carried
+                else {"lasting": True, "status__in": TextRequest.SAVED}
+            )
             old = (
-                rows.select_for_update()
-                .filter(
-                    pk=replacement.pk,
-                    employee_id=row.employee_id,
-                    period_id=row.period_id,
-                    month=row.month,
-                    updated_at=replacement.updated_at,
-                )
+                rows.select_for_update(of=("self",))
+                .select_related("period")
+                .filter(pk=replacement.pk, employee_id=row.employee_id, updated_at=replacement.updated_at, **same)
                 .exclude(
                     status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.NEW, TextRequest.Status.ANSWERED]
                 )
                 .first()
             )
+            if (
+                old is not None
+                and carried
+                and (old.starts_on >= first_day or (old.ends_from is not None and old.ends_from <= first_day))
+            ):
+                old = None
             if old is None:
                 outcome.status, outcome.interpretation = TextRequest.Status.NEEDS_MANAGER, None
                 outcome.reason = TextRequest.UnreadReason.UNSURE
@@ -235,8 +248,12 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
                     # A newer manager decision on the correction itself takes precedence.
                     locked.manager_priority = old.manager_priority
                     locked.manager_rejected = old.manager_rejected or old.status == TextRequest.Status.REJECTED
-                old.status = TextRequest.Status.SUPERSEDED
-                old.save(update_fields=["status", "updated_at"])
+                if carried:
+                    old.ends_from, old.ended_by = first_day, row.employee.membership.user
+                    old.save(update_fields=["ends_from", "ended_by", "updated_at"])
+                else:
+                    old.status = TextRequest.Status.SUPERSEDED
+                    old.save(update_fields=["status", "updated_at"])
         limit = settings.TEXT_REQUESTS_PER_PERIOD
         if (
             limit
@@ -251,6 +268,10 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
             outcome.reply = " ".join(filter(None, [outcome.reply, LIMIT_REPLY.format(limit=limit)]))
         locked.status = outcome.status
         locked.interpretation = outcome.interpretation
+        lasting = locked.lasting if outcome.lasting is None else outcome.lasting
+        locked.lasting = lasting and outcome.status in TextRequest.SAVED
+        if not locked.lasting:
+            locked.ends_from, locked.ended_by = None, None
         locked.unread_reason = outcome.reason
         locked.assistant_answer = outcome.answer
         locked.reply = outcome.reply[:2000]
@@ -274,6 +295,9 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
                 "employee_corrected",
                 "manager_priority",
                 "manager_rejected",
+                "lasting",
+                "ends_from",
+                "ended_by",
             ]
         )
     return outcome.status
@@ -296,6 +320,8 @@ class _Outcome:
         self.question = ""
         # The earlier message whose question this one answers.
         self.answer_to: TextRequest | None = None
+        # "Na stałe" as read from the message; None keeps what the request had (a rewrite left to the manager).
+        self.lasting: bool | None = None
 
 
 def waiting_questions(row: TextRequest) -> list[TextRequest]:
@@ -410,6 +436,7 @@ def _checked_preferences(
     if parts:
         outcome = _Outcome(TextRequest.Status.INTERPRETED)
         outcome.interpretation = _combined(parts, row)
+        outcome.lasting = any(part["lasting"] for part in parts)
         if reply.leave_to_manager:
             # Part of the message is no setting: what could be set is saved, the rest the manager reads.
             outcome.interpretation["partial"] = True
@@ -565,6 +592,8 @@ def _checked_preference(
         return None, f"pewność {confidence:.2f}"
     if preference.cannot and data["type"] == "wolne_dni" and data["dates"]:
         data["cannot"] = True
+    # Concrete days belong to their month: only a wish without them carries over to later periods.
+    data["lasting"] = bool(preference.lasting) and not data["dates"]
     summary = readings.describe(
         data,
         "Ty" if data["type"] in ("unikaj_osoby", "preferuj_osobe") else "",

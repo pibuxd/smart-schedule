@@ -6,6 +6,7 @@ import {
   getMyRequestsQueryKey,
   useCreateMyRequest,
   useDeleteMyRequest,
+  useEndMyRequest,
   useMyRequests,
   useSaveMyCalendar,
   useUpdateMyRequest,
@@ -20,6 +21,7 @@ import { Button } from "../../components/ui/button";
 import { Disclosure } from "../../components/ui/disclosure";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
+import { periodWords, sinceWords } from "../../lib/dates";
 import { useEmployeeChat, useScreenChatScope } from "./employee-chat";
 import { HoursProposals } from "./HoursProposals";
 
@@ -29,6 +31,9 @@ const isSaved = (request: MyRequestOut) =>
 
 // How long a fresh request is shown as "being read" before we stop asking the server.
 const READING_MS = 60_000;
+
+/** A lasting request written for an earlier month: it counts here too, but belongs to that month's chat. */
+const isCarried = (request: MyRequestOut) => Boolean(request.carried_from);
 
 /** "14.12" for "2026-12-14". */
 const shortDate = (iso: string) =>
@@ -73,6 +78,52 @@ function Notes({ notes }: { notes: string[] }) {
       ))}
     </ul>
   ) : null;
+}
+
+/**
+ * "Tylko w grudniu" / "Na stałe": how long a saved request counts. "Na stałe" carries it over to every later month
+ * until the person (or the manager) ends it there.
+ */
+function LastingChoice({
+  lasting,
+  only,
+  disabled,
+  onChange,
+}: {
+  lasting: boolean;
+  /** "w grudniu", or the days of the period ("1–7 grudnia"). */
+  only: string;
+  disabled: boolean;
+  onChange: (lasting: boolean) => void;
+}) {
+  const options = [
+    { value: false, label: `Tylko ${only}` },
+    { value: true, label: "Na stałe" },
+  ];
+  return (
+    <fieldset
+      className="m-0 flex flex-wrap gap-1 border-0 p-0"
+      disabled={disabled}
+    >
+      <legend className="sr-only">Jak długo obowiązuje prośba</legend>
+      {options.map((option) => (
+        <button
+          key={option.label}
+          type="button"
+          aria-pressed={lasting === option.value}
+          onClick={() => lasting !== option.value && onChange(option.value)}
+          className={
+            "min-h-(--touch) cursor-pointer rounded-sm border-2 px-3 text-sm font-semibold " +
+            (lasting === option.value
+              ? "border-accent bg-accent text-accent-ink"
+              : "border-line bg-surface text-ink hover:border-accent")
+          }
+        >
+          {option.label}
+        </button>
+      ))}
+    </fieldset>
+  );
 }
 
 /**
@@ -161,9 +212,11 @@ function RequestStatus({
   waiting = false,
   busy,
   marking,
+  only,
   onRewrite,
   onToManager,
   onMarkCannot,
+  onLasting,
 }: {
   request: MyRequestOut;
   editable: boolean;
@@ -171,9 +224,12 @@ function RequestStatus({
   waiting?: boolean;
   busy: boolean;
   marking: boolean;
+  /** "w grudniu": the month (or days of the period) of this chat, for "Tylko w grudniu". */
+  only: string;
   onRewrite: (text: string) => void;
   onToManager: () => void;
   onMarkCannot: (days: string[]) => void;
+  onLasting: (lasting: boolean) => void;
 }) {
   if (request.status === "rejected")
     return (
@@ -242,8 +298,18 @@ function RequestStatus({
           {request.summary}
         </p>
         <p className="m-0 text-sm text-ink-muted">
-          Generator grafiku spróbuje to spełnić. Kalendarz się nie zmienia.
+          {request.lasting
+            ? "Generator grafiku spróbuje to spełnić, także w kolejnych miesiącach. Kalendarz się nie zmienia."
+            : "Generator grafiku spróbuje to spełnić. Kalendarz się nie zmienia."}
         </p>
+        {editable && request.can_last && (
+          <LastingChoice
+            lasting={Boolean(request.lasting)}
+            only={only}
+            disabled={busy}
+            onChange={onLasting}
+          />
+        )}
         <Notes notes={request.notes} />
         {editable && days.length > 0 && (
           <div className="grid gap-2 rounded-md border border-line p-3">
@@ -421,23 +487,61 @@ function RemoveControl({
   );
 }
 
+/** "Zakończ" for a lasting request from an earlier month, and a second tap to be sure. */
+function EndControl({
+  since,
+  asking,
+  busy,
+  onAsk,
+  onCancel,
+  onEnd,
+}: {
+  /** "od stycznia": the month on screen, from which it stops counting. */
+  since: string;
+  asking: boolean;
+  busy: boolean;
+  onAsk: () => void;
+  onCancel: () => void;
+  onEnd: () => void;
+}) {
+  return asking ? (
+    <span className="flex flex-wrap items-center gap-1">
+      <span className="text-sm font-semibold">Zakończyć {since}?</span>
+      <Button variant="quiet" size="normal" disabled={busy} onClick={onEnd}>
+        Tak, zakończ
+      </Button>
+      <Button variant="quiet" size="normal" onClick={onCancel}>
+        Nie
+      </Button>
+    </span>
+  ) : (
+    <Button variant="quiet" size="normal" onClick={onAsk}>
+      Zakończ
+    </Button>
+  );
+}
+
 /**
  * "Twoje prośby" under the calendar: only the requests that count (understood by the assistant, or left for the
  * manager to read); each can be corrected or removed here. The conversation itself is in the chat that slides in
  * from the right (`EmployeeChatProvider`); while this window is on screen, the "Asystent" button opens it on this
  * window's month too. A request belongs to the period the manager asked for (`periodId`), or, before that, to the
  * month on the screen (`month`, its first day): the manager sees it in every period that covers that month.
+ * Lasting requests from earlier months are listed too ("Na stałe od grudnia"), with "Zakończ" instead of editing.
  */
 function RequestsWindow({
   companyId,
   periodId,
   month,
+  span,
   editable,
   assistantReads = false,
 }: {
   companyId: string;
   periodId?: string;
   month?: string;
+  /** The first and last day of the period (month) on screen. */
+  span?: { start: string; end: string };
   editable: boolean;
   assistantReads?: boolean;
 }) {
@@ -451,24 +555,40 @@ function RequestsWindow({
   const remove = useDeleteMyRequest({ mutation: { onSuccess: refresh } });
   const [removing, setRemoving] = useState<string | null>(null);
   const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } });
+  const finish = useEndMyRequest({ mutation: { onSuccess: refresh } });
+  const [ending, setEnding] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(
     null,
   );
   const chatOpen = chat?.open ?? false;
   const openChat = () => chat?.openChat({ periodId, month, editable });
-  const saved = list.filter(isSaved);
+  const own = list.filter((r) => !isCarried(r));
+  const saved = own.filter(isSaved);
+  const carried = list.filter(isCarried);
+  const only = span ? periodWords(span.start, span.end) : "ten okres";
+  const since = span ? sinceWords(span.start) : "od tego okresu";
   // Messages the assistant asked about and nobody answered: listed apart, so a request is never lost quietly.
-  const waiting = editable ? list.filter((r) => r.waiting) : [];
-  const reading = assistantReads && list.some((r) => r.status === "new");
+  const waiting = editable ? own.filter((r) => r.waiting) : [];
+  const reading = assistantReads && own.some((r) => r.status === "new");
   // The newest message left a trace only in the chat: say so in the window, so it does not look lost.
-  const last = list.at(-1);
+  const last = own.at(-1);
   const notSaved =
     last &&
     !waiting.includes(last) &&
     (last.status === "rejected" || last.status === "answered")
       ? last
       : undefined;
-  const failure = update.error ?? remove.error;
+  const failure = update.error ?? remove.error ?? finish.error;
+  const endRequest = (request: MyRequestOut, ended: boolean) =>
+    finish.mutate(
+      {
+        requestId: request.id,
+        data: periodId
+          ? { company_id: companyId, period_id: periodId, ended }
+          : { company_id: companyId, month, ended },
+      },
+      { onSettled: () => setEnding(null) },
+    );
 
   return (
     <section
@@ -585,6 +705,7 @@ function RequestsWindow({
       {!requests.isPending &&
         !requests.isError &&
         saved.length === 0 &&
+        carried.length === 0 &&
         waiting.length === 0 && (
           <p className="m-0 text-sm text-ink-muted">
             {editable
@@ -636,7 +757,25 @@ function RequestsWindow({
                       ) : (
                         "Kierownik przeczyta ją sam."
                       )}
+                      {!editable && request.lasting && " Na stałe."}
+                      {request.ends_from &&
+                        ` Nie obowiązuje ${sinceWords(request.ends_from)}.`}
                     </span>
+                    {editable && request.can_last && (
+                      <span className="mt-1 block">
+                        <LastingChoice
+                          lasting={Boolean(request.lasting)}
+                          only={only}
+                          disabled={update.isPending}
+                          onChange={(lasting) =>
+                            update.mutate({
+                              requestId: request.id,
+                              data: { lasting },
+                            })
+                          }
+                        />
+                      </span>
+                    )}
                   </span>
                   {editable && (
                     <span className="ml-auto flex shrink-0 items-center">
@@ -674,6 +813,75 @@ function RequestsWindow({
           ))}
         </ul>
       )}
+      {carried.length > 0 && (
+        <ul
+          className="m-0 grid list-none gap-2 p-0"
+          aria-label="Prośby na stałe z wcześniejszych miesięcy"
+        >
+          {carried.map((request) => (
+            <li
+              key={request.id}
+              className={
+                request.ended
+                  ? "rounded-md border border-dashed border-line py-1 pr-1 pl-3"
+                  : "rounded-md border border-grid py-1 pr-1 pl-3"
+              }
+            >
+              <div className="flex flex-wrap items-center gap-x-2">
+                <span className="min-w-0 flex-1 basis-48 py-2">
+                  <span
+                    className={
+                      request.ended
+                        ? "block text-ink-muted [overflow-wrap:anywhere]"
+                        : "block [overflow-wrap:anywhere]"
+                    }
+                  >
+                    {request.text}
+                  </span>
+                  <span className="block text-sm text-ink-muted">
+                    {request.ended
+                      ? `Zakończona: nie obowiązuje ${since}.${request.ended_by === "manager" ? " Zakończył ją kierownik." : ""}`
+                      : `Na stałe ${sinceWords(request.carried_from!)}.${request.summary ? ` Asystent zrozumiał: ${request.summary}` : " Kierownik przeczyta ją sam."}`}
+                  </span>
+                </span>
+                {editable && !request.ended && (
+                  <span
+                    className={
+                      // The question and its two answers need the whole width of a phone.
+                      ending === request.id
+                        ? "flex basis-full items-center pb-1"
+                        : "ml-auto flex shrink-0 items-center"
+                    }
+                  >
+                    <EndControl
+                      since={since}
+                      asking={ending === request.id}
+                      busy={finish.isPending}
+                      onAsk={() => setEnding(request.id)}
+                      onCancel={() => setEnding(null)}
+                      onEnd={() => endRequest(request, true)}
+                    />
+                  </span>
+                )}
+                {editable &&
+                  request.ended &&
+                  request.ended_by === "employee" && (
+                    <span className="ml-auto flex shrink-0 items-center">
+                      <Button
+                        variant="quiet"
+                        size="normal"
+                        disabled={finish.isPending}
+                        onClick={() => endRequest(request, false)}
+                      >
+                        Przywróć
+                      </Button>
+                    </span>
+                  )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       {reading && <ChatTyping>Asystent czyta Twoją prośbę…</ChatTyping>}
       {notSaved && !chatOpen && (
         <p className="m-0 text-sm text-ink-muted">
@@ -707,6 +915,7 @@ export function RequestsChat({
   month,
   editable,
   assistantReads = false,
+  only = "ten okres",
   text,
   onTextChange,
 }: {
@@ -715,15 +924,16 @@ export function RequestsChat({
   month?: string;
   editable: boolean;
   assistantReads?: boolean;
+  /** "w grudniu": the month (or days of the period) of this chat, for "Tylko w grudniu" / "Na stałe". */
+  only?: string;
   /** The message being written; kept outside, so closing the chat does not lose it. */
   text: string;
   onTextChange: (text: string) => void;
 }) {
-  const { requests, list, params, refresh } = useRequests({
-    companyId,
-    periodId,
-    month,
-  });
+  const scoped = useRequests({ companyId, periodId, month });
+  const { requests, params, refresh } = scoped;
+  // Lasting requests from earlier months belong to those months' chats ("Twoje prośby" lists them here too).
+  const list = scoped.list.filter((r) => !isCarried(r));
   const queryClient = useQueryClient();
   const create = useCreateMyRequest({ mutation: { onSuccess: refresh } });
   const remove = useDeleteMyRequest({ mutation: { onSuccess: refresh } });
@@ -834,6 +1044,10 @@ export function RequestsChat({
                   waiting={editable && Boolean(request.can_answer)}
                   busy={update.isPending}
                   marking={markCannot.isPending}
+                  only={only}
+                  onLasting={(lasting) =>
+                    update.mutate({ requestId: request.id, data: { lasting } })
+                  }
                   onRewrite={(newText) => {
                     follow.current = true;
                     update.mutate({
@@ -911,7 +1125,9 @@ export function RequestsChat({
         >
           <p className="mt-0 mb-2 leading-relaxed">
             W jednej wiadomości możesz zapytać o coś i napisać do trzech próśb.
-            Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w kalendarzu.{" "}
+            Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w kalendarzu.
+            Prośba „Na stałe” liczy się też w kolejnych miesiącach, dopóki jej
+            nie zakończysz w „Twoich prośbach”.{" "}
             {!periodId &&
               "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
             {assistantReads

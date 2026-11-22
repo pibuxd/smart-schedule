@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AskedOut } from './askedOut';
+import type { ManagerRequestOutEndedBy } from './managerRequestOutEndedBy';
 import type { ManagerRequestOutManagerPriority } from './managerRequestOutManagerPriority';
 import type { ManagerRequestOutStatus } from './managerRequestOutStatus';
 import type { ManagerRequestOutUnreadReason } from './managerRequestOutUnreadReason';
@@ -23,4 +24,8 @@ export interface ManagerRequestOut {
   manager_rejected: boolean;
   created_at: string;
   asked?: AskedOut | null;
+  lasting?: boolean;
+  carried_from?: string | null;
+  ended?: boolean;
+  ended_by?: ManagerRequestOutEndedBy;
 }

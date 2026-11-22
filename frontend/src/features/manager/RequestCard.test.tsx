@@ -24,11 +24,11 @@ function request(changes: Partial<ManagerRequestOut> = {}): ManagerRequestOut {
   }
 }
 
-const card = (r: ManagerRequestOut) =>
+const card = (r: ManagerRequestOut, periodId?: string) =>
   renderScreen(
     <AsManager>
       <ul>
-        <RequestCard request={r} />
+        <RequestCard request={r} periodId={periodId} />
       </ul>
     </AsManager>,
   )
@@ -80,5 +80,36 @@ describe('RequestCard', () => {
     card(request({ unread_reason: 'rejected', employee_corrected: true, can_reread: false }))
     expect(await screen.findByText(/Pracownik przekazał ją Tobie do oceny/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Daj asystentowi do przeczytania' })).not.toBeInTheDocument()
+  })
+
+  it('marks a lasting request and ends one from an earlier period from this one', async () => {
+    const calls = mockApi(() => [200, {}])
+    card(request({ lasting: true, carried_from: '2026-12-01', summary: 'Wolne w piątki.' }), 'p2')
+    expect(await screen.findByText('Na stałe od grudnia')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Zakończ od tego okresu' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true))
+    const post = calls.find((c) => c.method === 'POST')!
+    expect(post.url).toContain('/api/periods/p2/requests/r1/end')
+    expect(post.body).toEqual({ ended: true })
+  })
+
+  it('cannot end a lasting request in the period it was written for', async () => {
+    mockApi(() => [200, {}])
+    card(request({ lasting: true, summary: 'Wolne w piątki.' }), 'p1')
+    expect(await screen.findByText('Na stałe')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Zakończ od tego okresu' })).not.toBeInTheDocument()
+  })
+
+  it('shows who ended a lasting request and lets the manager bring back their own ending', async () => {
+    mockApi(() => [200, {}])
+    const ended = { lasting: true, carried_from: '2026-12-01', ended: true }
+    const first = card(request({ ...ended, ended_by: 'manager' }), 'p2')
+    expect(await screen.findByText('Zakończona')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Przywróć prośbę' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Odrzuć prośbę' })).not.toBeInTheDocument()
+    first.unmount()
+    card(request({ ...ended, ended_by: 'employee' }), 'p2')
+    expect(await screen.findByText(/Pracownik zakończył tę prośbę od tego okresu/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Przywróć prośbę' })).not.toBeInTheDocument()
   })
 })

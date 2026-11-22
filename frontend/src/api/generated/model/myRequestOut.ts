@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { HoursProposalOut } from './hoursProposalOut';
+import type { MyRequestOutEndedBy } from './myRequestOutEndedBy';
 import type { MyRequestOutStatus } from './myRequestOutStatus';
 
 export interface MyRequestOut {
@@ -20,4 +21,10 @@ export interface MyRequestOut {
   question?: string | null;
   waiting?: boolean;
   can_answer?: boolean;
+  lasting?: boolean;
+  can_last?: boolean;
+  carried_from?: string | null;
+  ends_from?: string | null;
+  ended_by?: MyRequestOutEndedBy;
+  ended?: boolean;
 }

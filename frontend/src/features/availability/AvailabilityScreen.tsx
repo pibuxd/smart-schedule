@@ -435,6 +435,7 @@ function AvailabilityEditor({
         <RequestsSection
           companyId={companyId}
           periodId={period.id}
+          span={{ start: period.start, end: period.end }}
           editable={!readOnly && period.editable}
           assistantReads={assistantReads}
         />
@@ -442,6 +443,7 @@ function AvailabilityEditor({
         <RequestsSection
           companyId={companyId}
           month={initial.start}
+          span={{ start: initial.start, end: initial.end }}
           editable={!readOnly && initial.end >= today}
           assistantReads={assistantReads}
         />

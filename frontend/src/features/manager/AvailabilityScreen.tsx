@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import {
   useAvailabilityGrid,
+  useEndRequest,
   usePeriodRequests,
   useRereadRequest,
   useUpdateRequest,
@@ -29,6 +30,7 @@ import { Section, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { sinceWords } from '../../lib/dates'
 import { AssistantRulesTable } from './AssistantRulesTable'
 import { AskAvailabilityButton } from './AskAvailabilityButton'
 import { AvailabilityGrid, GridLegend } from './AvailabilityGrid'
@@ -412,7 +414,7 @@ function RequestsSection({ periodId }: { periodId: string }) {
       ) : (
         <ul className="m-0 grid list-none gap-3 p-0 lg:grid-cols-2">
           {list.map((r) => (
-            <RequestCard key={r.id} request={r} />
+            <RequestCard key={r.id} request={r} periodId={periodId} />
           ))}
         </ul>
       )}
@@ -442,7 +444,49 @@ function requestNote(request: ManagerRequestOut): string {
   return `Asystent przeczytał tę prośbę, ale nie umiał zamienić jej na coś, co generator sprawdzi sam. ${canYourself}`
 }
 
-export function RequestCard({ request }: { request: ManagerRequestOut }) {
+/**
+ * A request "na stałe" written for an earlier period: it counts here too, and the manager can end it from this
+ * period on. Once ended from here it stays on the list, with "Przywróć" when a manager ended it.
+ */
+function LastingControls({ request, periodId }: { request: ManagerRequestOut; periodId: string }) {
+  const end = useEndRequest()
+  const queryClient = useQueryClient()
+  const { readOnly } = useManager()
+  const send = (ended: boolean) =>
+    end.mutate(
+      { periodId, requestId: request.id, data: { ended } },
+      { onSuccess: () => void queryClient.invalidateQueries() },
+    )
+  if (request.ended) {
+    return (
+      <div className="grid gap-2">
+        <p className="m-0 text-sm text-ink-muted">
+          {request.ended_by === 'manager'
+            ? 'Zakończona od tego okresu: generator już jej nie bierze pod uwagę. Pracownik dostał powiadomienie.'
+            : 'Pracownik zakończył tę prośbę od tego okresu: generator już jej nie bierze pod uwagę.'}
+        </p>
+        {request.ended_by === 'manager' && (
+          <div>
+            <Button variant="quiet" size="normal" disabled={readOnly || end.isPending} onClick={() => send(false)}>
+              Przywróć prośbę
+            </Button>
+          </div>
+        )}
+        {end.isError && <InlineError>{errorMessage(end.error, NETWORK_PROBLEM)}</InlineError>}
+      </div>
+    )
+  }
+  return (
+    <>
+      <Button variant="quiet" size="normal" disabled={readOnly || end.isPending} onClick={() => send(true)}>
+        Zakończ od tego okresu
+      </Button>
+      {end.isError && <InlineError>{errorMessage(end.error, NETWORK_PROBLEM)}</InlineError>}
+    </>
+  )
+}
+
+export function RequestCard({ request, periodId }: { request: ManagerRequestOut; periodId?: string }) {
   const update = useUpdateRequest()
   const reread = useRereadRequest()
   const queryClient = useQueryClient()
@@ -450,11 +494,31 @@ export function RequestCard({ request }: { request: ManagerRequestOut }) {
   const change = (data: { manager_priority?: ManagerRequestOutManagerPriority; manager_rejected?: boolean }) =>
     update.mutate({ requestId: request.id, data }, { onSuccess: () => void queryClient.invalidateQueries() })
   const rejected = request.manager_rejected
+  const carried = Boolean(request.carried_from) && periodId !== undefined
+  const ended = carried && Boolean(request.ended)
+  if (ended)
+    return (
+      <li className="grid gap-3 rounded-md border border-dashed border-line bg-paper p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <b>{request.employee_name}</b>
+          <Tag>Zakończona</Tag>
+        </div>
+        <p className="m-0 text-ink-muted">„{request.text}”</p>
+        <LastingControls request={request} periodId={periodId!} />
+      </li>
+    )
   return (
     <li className={rejected ? 'grid gap-3 rounded-md border border-dashed border-line bg-paper p-4' : 'grid gap-3 rounded-md border border-line bg-surface p-4'}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <b>{request.employee_name}</b>
-        {rejected && <Tag tone="bad">Odrzucona</Tag>}
+        <span className="flex flex-wrap gap-1">
+          {request.lasting && (
+            <Tag tone="accent">
+              {request.carried_from ? `Na stałe ${sinceWords(request.carried_from)}` : 'Na stałe'}
+            </Tag>
+          )}
+          {rejected && <Tag tone="bad">Odrzucona</Tag>}
+        </span>
       </div>
       {request.asked && (
         <p className="m-0 text-sm text-ink-muted">
@@ -507,7 +571,7 @@ export function RequestCard({ request }: { request: ManagerRequestOut }) {
           ))}
         </fieldset>
       )}
-      <div>
+      <div className="flex flex-wrap gap-2">
         <Button
           variant={rejected ? 'quiet' : 'danger'}
           size="normal"
@@ -516,6 +580,7 @@ export function RequestCard({ request }: { request: ManagerRequestOut }) {
         >
           {rejected ? 'Przywróć prośbę' : 'Odrzuć prośbę'}
         </Button>
+        {carried && request.lasting && <LastingControls request={request} periodId={periodId!} />}
       </div>
       {update.isError && <InlineError>{errorMessage(update.error, NETWORK_PROBLEM)}</InlineError>}
     </li>

@@ -111,6 +111,12 @@ export function periodWords(startIso: string, endIso: string): string {
   return `${dayAndMonth(start)} – ${dayAndMonth(end)}`
 }
 
+/** "od grudnia" for the first day of a month, else "od 15 grudnia": since when a request counts or stops. */
+export function sinceWords(iso: string): string {
+  const day = parseDate(iso)
+  return day.getDate() === 1 ? `od ${monthGenitive(day)}` : `od ${dayAndMonth(day)}`
+}
+
 /** Hours from `from` to `to`, going past midnight when `to` is earlier ("20:00"–"16:00" = 20). */
 export function spanHours(from: string, to: string): number {
   const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5))
