@@ -85,7 +85,8 @@ export function ReadingRobot() {
   )
 }
 
-export function ChatTyping({ children = 'Przygotowuję odpowiedź…' }: { children?: ReactNode }) {
+// Every wait for the assistant reads „Myślę…” (Piotr, 22.11.2026).
+export function ChatTyping({ children = 'Myślę…' }: { children?: ReactNode }) {
   return (
     <p role="status" className="m-0 flex items-center gap-2 py-1 text-sm text-ink-muted">
       <ReadingRobot />
