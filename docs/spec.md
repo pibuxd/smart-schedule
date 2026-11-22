@@ -13,17 +13,26 @@ bo generator znowu szukał najlepszego, a najlepszy się nie zmienił.
 - „Ułóż inaczej” w zakładce „Grafik”, obok „Ułóż od nowa” (gdy okres ma już grafik). Działa jak „Ułóż od nowa”:
   zostają przypięte zmiany, osoby wpisane mimo przeszkód i minione dni, nieprzypięte ręczne poprawki znikają, to jedno
   ułożenie z miesięcznego limitu, „Anuluj” działa. Do tego generator dostaje warunek: co najmniej 30% zmian każdej
-  z trzech ostatnich wersji okresu (bez przypiętych i minionych) ma w nowym grafiku inną osobę. Liczy się, kto
+  wcześniejszej wersji okresu (bez przypiętych i minionych) ma w nowym grafiku inną osobę. Liczy się, kto
   pracuje danego dnia na danej zmianie i stanowisku; dwie osoby zamienione miejscami na tej samej zmianie to nie
-  różnica. Trzy wersje, żeby kolejne „Ułóż inaczej” nie wracało do grafiku sprzed chwili.
+  różnica. Porównanie ze wszystkimi wersjami (technicznie do 100 najnowszych), bo kierownik może klikać „Ułóż
+  inaczej” do skutku, aż grafik mu się spodoba: każde kliknięcie ma dać nowy grafik, a nie wracać do dwóch czy
+  trzech tych samych (Piotr, 22.11.2026: 30% zostaje).
 - Kolejność ważności: najpierw jak najmniej zmian bez obsady (nigdy więcej niż przy zwykłym układaniu), potem różnica
   (do 30%), potem zasady i prośby jak zawsze. Twarde reguły i zasady „bez wyjątków” obowiązują jak zawsze. Gdy 30%
   się nie da (np. tylko jedna osoba umie piec), grafik jest tak inny, jak się da.
 - „Uwagi” nowego szkicu mówią, ile zmian ma inne osoby niż w wersji, którą kierownik widział („Ułożony inaczej niż
-  wersja 3: inne osoby na 31 z 90 zmian.”), a gdy 30% się nie udało, że bardziej się nie dało przy tych ustawieniach.
+  wersja 3: inne osoby na 31 z 90 zmian.”), czy od starszych wersji też różni się co najmniej co trzecią zmianą (albo
+  od której mniej), a gdy 30% się nie udało, że bardziej się nie dało przy tych ustawieniach.
+- Wszystkie szkice zostają (Piotr, 22.11.2026): każda ułożona wersja jest na liście „Wersje”, a usuwa ją tylko kosz.
+  Do starszego szkicu da się wrócić przyciskiem „Wróć do tej wersji”: aplikacja robi z niego nowy szkic (kolejny
+  numer, na liście „jak wersja 5”), z jego osobami, przypięciami i ręcznymi poprawkami, a obecny szkic zostaje na
+  liście. Dotyczy szkiców ułożonych po ostatniej publikacji (do szkicu sprzed publikacji się nie wraca, bo minione
+  dni opublikowanego grafiku już się wydarzyły) i nie działa w trakcie układania.
 - Okno przed ułożeniem mówi to jednym zdaniem, ostrzega o ręcznych poprawkach jak przy „Ułóż od nowa” i mówi, że
-  gorszy szkic można usunąć koszem, a wtedy wraca obecny. Ma też „Napisz asystentowi”, który otwiera czat z tym
-  okresem, gdy kierownik wie, co ma być inaczej.
+  gorszy szkic można usunąć koszem, a wtedy wraca obecny (razem z ręcznymi poprawkami, bo zostają w obecnej
+  wersji). Przed publikacją ma też „Napisz asystentowi”, który otwiera czat z tym okresem, gdy kierownik wie, co ma
+  być inaczej (po publikacji ustalenia okresu są zamknięte, więc czat by odmówił).
 - Według prośby kierownika: w czacie kierownik pisze np. „Ten grafik mi nie pasuje, ułóż inny, żeby Ania miała mniej
   porannych zmian”. Plan ma wtedy zwykłe zmiany (polecenie o Ani, zasady) i ostatni punkt „Po zatwierdzeniu ułożę
   nowy grafik na okres …, wyraźnie inny niż obecny.” Po „Zatwierdź zmiany” ustalenia się zapisują i od razu rusza
@@ -33,7 +42,8 @@ bo generator znowu szukał najlepszego, a najlepszy się nie zmienił.
 - Asystent nadal niczego nie układa sam: punkt o układaniu dodaje tylko na wyraźną prośbę kierownika, a układanie
   rusza dopiero po „Zatwierdź zmiany”. Dotyczy wyłącznie okresu ustaleń, który ma już grafik. Gdy okres nie ma
   jeszcze grafiku, grafik właśnie się układa albo ustalenia nie mają okresu, plan nie przechodzi w całości (jak każda
-  niewykonalna część), a asystent mówi, co zrobić. Gdy przy zatwierdzeniu układanie nie może ruszyć (limit, trwa inne
+  niewykonalna część), a asystent mówi, co zrobić. Gdy lokal ma opublikowany grafik, który jeszcze trwa, mówi też,
+  że ten grafik ułoży inaczej przycisk „Ułóż inaczej” w zakładce „Grafik”. Gdy przy zatwierdzeniu układanie nie może ruszyć (limit, trwa inne
   układanie), nic z planu się nie zapisuje.
 
 ## Asystent przez OpenRouter (decyzja Piotra z 21.11.2026)

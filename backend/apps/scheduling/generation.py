@@ -10,7 +10,7 @@
 - `cancel_generation` stops a queued or running run when the manager asks: the run is marked cancelled at once,
   the worker's solver notices within about a second, nothing is saved and the generation is given back.
 - A `different` run ("Ułóż inaczej", docs/plan.md section 35) asks the solver to give at least `DIFFERENT_SHARE`
-  of the person-shifts of each of the period's `COMPARED_VERSIONS` newest versions to someone else, without more
+  of the person-shifts of each earlier version of the period (up to `COMPARED_VERSIONS`) to someone else, without more
   holes; the new draft's notes say how different it came out.
 """
 
@@ -54,7 +54,7 @@ STALE = "Układanie grafiku zostało przerwane. Spróbuj ponownie."
 # "Ułóż inaczej": the share of person-shifts that should get someone else, compared with this many newest versions
 # (more than one, so arranging differently again does not bring back the schedule from a moment ago).
 DIFFERENT_SHARE = 0.3
-COMPARED_VERSIONS = 3
+COMPARED_VERSIONS = 100  # every version in practice; only a bound on the solver's work
 ALREADY_FINISHED = "Układanie grafiku już się skończyło, więc nie ma czego anulować."
 
 
@@ -217,7 +217,7 @@ def run_generation(
             if not _still_active(run):  # cancelled while the result was being checked
                 run.refresh_from_db()
                 return run
-            notes = {pk: _difference_notes(built, versions[0], result.schedule) for pk, versions in earlier.items()}
+            notes = {pk: _difference_notes(built, versions, result.schedule) for pk, versions in earlier.items()}
             _save_versions(run, built, result.schedule, report, notes)
             run.status = GenerationRun.Status.SUCCEEDED
             run.solver_status = result.status
@@ -233,23 +233,27 @@ def run_generation(
 
 
 def _earlier_versions(periods: Sequence[SchedulePeriod]) -> dict:
-    """Period id -> its newest versions (newest first) with their schedules (slot key -> employee id or None)."""
+    """Period id -> its versions (newest first, at most COMPARED_VERSIONS) with their schedules (slot key -> employee
+    id or None). All of them, so that clicking "Ułóż inaczej" again and again keeps giving new schedules."""
     earlier = {}
     for period in periods:
-        versions = ScheduleVersion.objects.for_company(period.company_id).filter(period=period).order_by("-number")
-        rows = []
-        for version in versions[:COMPARED_VERSIONS]:
-            assignments = Assignment.objects.for_company(period.company_id).filter(shift__version=version)
-            schedule = {key: str(e) if e else None for key, e in assignments.values_list("shift__slot_key", "employee")}
-            rows.append((version, schedule))
-        if rows:
-            earlier[period.pk] = rows
+        versions = list(
+            ScheduleVersion.objects.for_company(period.company_id)
+            .filter(period=period)
+            .order_by("-number")[:COMPARED_VERSIONS]
+        )
+        schedules: dict = {version.pk: {} for version in versions}
+        rows = Assignment.objects.for_company(period.company_id).filter(shift__version__in=versions)
+        for version_id, key, employee in rows.values_list("shift__version", "shift__slot_key", "employee"):
+            schedules[version_id][key] = str(employee) if employee else None
+        if versions:
+            earlier[period.pk] = [(version, schedules[version.pk]) for version in versions]
     return earlier
 
 
-def _difference_notes(built: BuiltProblem, newest, schedule) -> list[str]:
-    """What "Ułóż inaczej" achieved, compared with the version the manager saw."""
-    version, before = newest
+def _difference_notes(built: BuiltProblem, versions, schedule) -> list[str]:
+    """What "Ułóż inaczej" achieved: compared with the version the manager saw, then with the older ones."""
+    version, before = versions[0]
     changed, total = changed_shifts(built.problem, before, schedule)
     if total == 0:
         return [
@@ -257,7 +261,20 @@ def _difference_notes(built: BuiltProblem, newest, schedule) -> list[str]:
             "są przypięte albo minęły."
         ]
     note = f"Ułożony inaczej niż wersja {version.number}: inne osoby na {changed} z {total} {_shifts_of(total)}."
-    if changed < math.ceil(DIFFERENT_SHARE * total):
+    reached = changed >= math.ceil(DIFFERENT_SHARE * total)
+    older = []
+    for other, shifts in versions[1:]:
+        other_changed, other_total = changed_shifts(built.problem, shifts, schedule)
+        if other_total:
+            older.append((other_changed / other_total, other.number, other_changed, other_total))
+    if older:
+        _share, number, least, out_of = min(older)
+        if least >= math.ceil(DIFFERENT_SHARE * out_of):
+            note += " Od starszych wersji też różni się co najmniej co trzecią zmianą."
+        else:
+            reached = False
+            note += f" Od wersji {number} różni się mniej: inne osoby na {least} z {out_of} {_shifts_of(out_of)}."
+    if not reached:
         note += " Bardziej się nie dało przy tych dyspozycjach i zasadach bez zostawiania zmian bez obsady."
     return [note]
 

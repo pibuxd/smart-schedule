@@ -95,6 +95,7 @@ const version = {
   unmet_request_count: 1,
   notes: ['Grafik ułożony w 12 s.'],
   changed_people: [] as string[],
+  restorable: false,
   today: '2026-11-26',
   history: [
     { id: 'v1', number: 1, status: 'draft', created_at: '2026-11-25T10:00:00+01:00', published_at: null, generated: true, created_by_name: 'Teresa Gawlik' },
@@ -192,6 +193,7 @@ function api(overrides: Record<string, unknown> = {}) {
     if (method === 'PATCH') return [200, fine]
     if (method === 'POST' && path.endsWith('/publish')) return [200, version.history[0]]
     if (method === 'POST' && path.endsWith('/pin')) return [200, { ok: true }]
+    if (method === 'POST' && path.endsWith('/restore')) return [201, { ...version.history[0], id: 'v4', number: 4 }]
     if (method === 'POST' && path.endsWith('/seats')) return [201, shift('s4', '2026-12-02', null)]
     if (method === 'DELETE') return [204, null]
     return [404, { detail: 'Nie ma.' }]
@@ -521,6 +523,33 @@ describe('ScheduleScreen', () => {
     expect(within(sheet).getByText(/Wersja 1 zniknie na dobre z historii\. Bieżący grafik zostaje bez zmian/)).toBeInTheDocument()
     fireEvent.click(within(sheet).getByRole('button', { name: 'Tak, usuń szkic' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/versions/v1')).toBe(true))
+  })
+
+  it('goes back to an older draft without deleting the newer ones', async () => {
+    const h = version.history[0]
+    const calls = api({
+      version: {
+        ...version,
+        id: 'v1',
+        number: 1,
+        status: 'superseded',
+        editable: false,
+        restorable: true,
+        history: [
+          { ...h, id: 'v3', number: 3, restored_from: 2, generated: false },
+          { ...h, id: 'v2', number: 2, status: 'superseded' },
+          { ...h, number: 1, status: 'superseded' },
+        ],
+      },
+    })
+    show()
+    expect(await screen.findByText('Starsza wersja. Możesz do niej wrócić.')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Wersja 3: szkic, jak wersja 2' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Wróć do tej wersji' }))
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url === '/api/versions/v1/restore')).toBe(true),
+    )
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
   })
 
   it('says the published schedule stays when deleting corrections', async () => {

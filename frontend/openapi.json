@@ -2928,6 +2928,85 @@
         ]
       }
     },
+    "/api/versions/{version_id}/restore": {
+      "post": {
+        "operationId": "restore_version",
+        "summary": "Restore Version",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionSummaryOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "\"Wróć do tej wersji\": an older draft becomes a new draft (the next number); the current one stays as history.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/versions/{version_id}/publish": {
       "post": {
         "operationId": "publish_schedule",
@@ -10713,6 +10792,10 @@
             "title": "History",
             "type": "array"
           },
+          "restorable": {
+            "title": "Restorable",
+            "type": "boolean"
+          },
           "today": {
             "format": "date",
             "title": "Today",
@@ -10747,6 +10830,7 @@
           "unmet_request_count",
           "notes",
           "history",
+          "restorable",
           "today",
           "changed_people"
         ],
@@ -10969,6 +11053,17 @@
           "created_by_name": {
             "title": "Created By Name",
             "type": "string"
+          },
+          "restored_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From"
           }
         },
         "required": [
@@ -10978,7 +11073,8 @@
           "created_at",
           "published_at",
           "generated",
-          "created_by_name"
+          "created_by_name",
+          "restored_from"
         ],
         "title": "VersionSummaryOut",
         "type": "object"

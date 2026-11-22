@@ -120,6 +120,8 @@ class ScheduleVersion(CompanyOwnedModel):
     is_complete = models.BooleanField("kompletny (bez dziur)", default=False)
     created_at = models.DateTimeField(default=timezone.now)
     published_at = models.DateTimeField(null=True, blank=True)
+    # "Wróć do tej wersji": the number of the older draft this one is a copy of.
+    restored_from = models.PositiveIntegerField("kopia wersji", null=True, blank=True)
 
     class Meta:
         verbose_name = "wersja grafiku"

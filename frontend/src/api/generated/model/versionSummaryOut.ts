@@ -14,4 +14,5 @@ export interface VersionSummaryOut {
   published_at: string | null;
   generated: boolean;
   created_by_name: string;
+  restored_from: number | null;
 }

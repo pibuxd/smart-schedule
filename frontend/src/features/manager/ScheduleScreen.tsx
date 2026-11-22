@@ -11,7 +11,19 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Clock, Hand, Pin, Plus, Send, ShieldAlert, SquarePen, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  CalendarPlus,
+  Clock,
+  Hand,
+  Pin,
+  Plus,
+  RotateCcw,
+  Send,
+  ShieldAlert,
+  SquarePen,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
@@ -23,6 +35,7 @@ import type {
   ShiftFitOut,
   VersionOut,
   VersionShiftOut,
+  VersionSummaryOut,
 } from '../../api/generated/model'
 import {
   getLocationPeriodsQueryKey,
@@ -34,6 +47,7 @@ import {
   useLocationPeriods,
   usePinShift,
   usePublishSchedule,
+  useRestoreVersion,
   useScheduleVersion,
   useShiftDropChecks,
   useStartCorrecting,
@@ -125,6 +139,7 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
     deadlinePassed: daysUntil(period.deadline, today) < 0,
     manualChanges: period.manual_changes,
     hasVersion: period.latest_version_id !== null,
+    published: period.status === 'published',
     experiencedShort: period.experienced_short,
   }
 
@@ -252,6 +267,7 @@ function VersionView({ versionId, onShowVersion }: { versionId: string; onShowVe
 function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersion: (id: string | null) => void }) {
   const { readOnly } = useManager()
   const correct = useStartCorrecting()
+  const restore = useRestoreVersion()
   const queryClient = useQueryClient()
   const [publishing, setPublishing] = useState(false)
   const newest = data.history[0]
@@ -268,7 +284,11 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
         </div>
         {data.status !== 'published' && (
           <span className="text-sm text-ink-muted">
-            {data.status === 'draft' ? 'Pracownicy jeszcze tego nie widzą.' : 'Starsza wersja, tylko do podglądu.'}
+            {data.status === 'draft'
+              ? 'Pracownicy jeszcze tego nie widzą.'
+              : data.restorable
+                ? 'Starsza wersja. Możesz do niej wrócić.'
+                : 'Starsza wersja, tylko do podglądu.'}
           </span>
         )}
       </div>
@@ -277,10 +297,31 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
           <SelectField label="Wersje" value={data.id} onChange={(e) => onShowVersion(e.target.value)}>
             {data.history.map((v) => (
               <option key={v.id} value={v.id}>
-                {`Wersja ${v.number}: ${VERSION_STATUS[v.status].toLowerCase()}${v.generated ? '' : ', poprawiona ręcznie'}`}
+                {`Wersja ${v.number}: ${VERSION_STATUS[v.status].toLowerCase()}${versionOrigin(v)}`}
               </option>
             ))}
           </SelectField>
+        )}
+        {data.restorable && !readOnly && (
+          <Button
+            variant="secondary"
+            size="normal"
+            disabled={restore.isPending}
+            onClick={() =>
+              restore.mutate(
+                { versionId: data.id },
+                {
+                  onSuccess: () => {
+                    void queryClient.invalidateQueries()
+                    onShowVersion(null)
+                  },
+                },
+              )
+            }
+          >
+            <RotateCcw aria-hidden="true" size={20} />
+            Wróć do tej wersji
+          </Button>
         )}
         {!data.published_at && !readOnly && !(isNewest && data.period.active_run_id) && (
           <DeleteDraft data={data} current={isNewest} onDeleted={() => onShowVersion(null)} />
@@ -314,6 +355,7 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
         )}
       </div>
       {correct.isError && <InlineError>{errorMessage(correct.error, NETWORK_PROBLEM)}</InlineError>}
+      {restore.isError && <InlineError>{errorMessage(restore.error, NETWORK_PROBLEM)}</InlineError>}
       <PublishSheet data={data} open={publishing} onOpenChange={setPublishing} />
     </section>
   )
@@ -321,6 +363,12 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
 
 const madeAt = (iso: string) =>
   new Date(iso).toLocaleString('pl-PL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+/** After the status on the "Wersje" list: a copy made by "Wróć do tej wersji", or a version changed by hand. */
+function versionOrigin(v: VersionSummaryOut) {
+  if (v.restored_from) return `, jak wersja ${v.restored_from}`
+  return v.generated ? '' : ', poprawiona ręcznie'
+}
 
 /** What is current after "Usuń szkic": the version just before this draft, if any. */
 function versionBefore(data: VersionOut) {

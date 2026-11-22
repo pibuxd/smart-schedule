@@ -2646,6 +2646,115 @@ export const useStartCorrecting = <TError = ErrorOut,
       > => {
       return useMutation(getStartCorrectingMutationOptions(options), queryClient);
     }
+    export type restoreVersionResponse201 = {
+  data: VersionSummaryOut
+  status: 201
+}
+
+export type restoreVersionResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type restoreVersionResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type restoreVersionResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type restoreVersionResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type restoreVersionResponseSuccess = (restoreVersionResponse201) & {
+  headers: Headers;
+};
+export type restoreVersionResponseError = (restoreVersionResponse402 | restoreVersionResponse403 | restoreVersionResponse404 | restoreVersionResponse409) & {
+  headers: Headers;
+};
+
+export type restoreVersionResponse = (restoreVersionResponseSuccess | restoreVersionResponseError)
+
+export const getRestoreVersionUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}/restore`
+}
+
+/**
+ * "Wróć do tej wersji": an older draft becomes a new draft (the next number); the current one stays as history.
+ * @summary Restore Version
+ */
+export const restoreVersion = async (versionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<restoreVersionResponse> => {
+
+  return apiFetch<restoreVersionResponse>(getRestoreVersionUrl(versionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreVersionMutationKey = () => ['restoreVersion'] as const;
+
+export const getRestoreVersionMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreVersion>>, TError,RestoreVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreVersion>>, TError,RestoreVersionMutationVariables, TContext> => {
+
+const mutationKey = getRestoreVersionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreVersion>>, RestoreVersionMutationVariables> = (props) => {
+          const {versionId} = props ?? {};
+
+          return  restoreVersion(versionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreVersionMutationResult = NonNullable<Awaited<ReturnType<typeof restoreVersion>>>
+
+    export type RestoreVersionMutationError = ErrorOut
+    export type RestoreVersionMutationVariables = {versionId: string}
+
+    /**
+ * "Wróć do tej wersji": an older draft becomes a new draft (the next number); the current one stays as history.
+ * @summary Restore Version
+ */
+export const useRestoreVersion = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreVersion>>, TError,RestoreVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restoreVersion>>,
+        TError,
+        RestoreVersionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRestoreVersionMutationOptions(options), queryClient);
+    }
     export type publishScheduleResponse200 = {
   data: VersionSummaryOut
   status: 200

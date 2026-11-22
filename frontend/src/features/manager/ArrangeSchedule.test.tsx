@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExperiencedShortOut } from '../../api/generated/model'
 import { mockApi, renderScreen } from '../../test/render'
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
+import { AssistantDrawerContext } from './assistant-drawer'
 import { AsManager } from './test-utils'
 
 const run = {
@@ -101,13 +102,43 @@ describe('ArrangeButton', () => {
     expect(sheet).toHaveTextContent('Ułożyć inny grafik?')
     expect(sheet).toHaveTextContent('Co trzecia zmiana dostanie inną osobę niż w ostatnich wersjach')
     expect(sheet).toHaveTextContent('Stracisz ręczne poprawki bez przypięcia: 2.')
-    expect(sheet).toHaveTextContent('Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny.')
+    expect(sheet).toHaveTextContent('Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny razem z poprawkami.')
 
     fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż inny grafik' }))
     await waitFor(() => {
       const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))
       expect(post?.body).toEqual({ period_ids: ['p1'], different: true })
     })
+  })
+
+  it('offers the chat for a draft, but not for a published schedule whose agreements are closed', async () => {
+    mockApi(() => [200, [run]])
+    const openChat = vi.fn()
+    const drawer = { openChat, showLocation: vi.fn() }
+    const { unmount } = renderScreen(
+      <AsManager>
+        <AssistantDrawerContext.Provider value={drawer}>
+          <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+        </AssistantDrawerContext.Provider>
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(sheet).toHaveTextContent('Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny.')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Napisz asystentowi, co ma być inaczej' }))
+    expect(openChat).toHaveBeenCalledWith({ locationId: 'l1', periodId: 'p1', text: 'Ułóż inny grafik, żeby ' })
+    unmount()
+
+    renderScreen(
+      <AsManager>
+        <AssistantDrawerContext.Provider value={drawer}>
+          <ArrangeButton targets={[{ ...target, hasVersion: true, published: true }]} different />
+        </AssistantDrawerContext.Provider>
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Napisz asystentowi, co ma być inaczej' })).not.toBeInTheDocument()
   })
 
   it('arranges again without asking for a different schedule', async () => {

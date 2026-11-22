@@ -24,6 +24,8 @@ export type ArrangeTarget = {
   // Manual changes in the newest version that arranging again drops (pins stay).
   manualChanges: number
   hasVersion: boolean
+  // A published period: its agreements are closed, so the chat cannot arrange it (only the buttons can).
+  published?: boolean
   // Positions where one shift needs more experienced people than the location has.
   experiencedShort: ExperiencedShortOut[]
 }
@@ -168,7 +170,8 @@ function ArrangeSheet({
         )}
         <p className="m-0 text-sm text-ink-muted">
           Dostaniesz szkic do poprawek. Pracownicy zobaczą grafik dopiero, gdy go opublikujesz.
-          {different && ' Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny.'}
+          {different &&
+            ` Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny${manual.length > 0 ? ' razem z poprawkami' : ''}.`}
         </p>
         {generate.isError && <InlineError>{errorMessage(generate.error, NETWORK_PROBLEM)}</InlineError>}
         <Button wide onClick={start} disabled={generate.isPending}>
@@ -180,7 +183,7 @@ function ArrangeSheet({
                 ? 'Ułóż grafik'
                 : `Ułóż dla ${targets.length} lokali`}
         </Button>
-        {different && one && chat && (
+        {different && one && chat && !targets[0].published && (
           <Button
             variant="quiet"
             size="normal"

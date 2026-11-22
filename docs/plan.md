@@ -1162,10 +1162,18 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
   samej zmiany (`_compared`). `changed_shifts(problem, previous, schedule)` zwraca (zmienione, porównane) tą samą
   miarą.
 - `GenerationRun.different` (migracja 0011). `POST /periods/generate` przyjmuje `different: true`;
-  `GenerationRunOut.different`. `run_generation` przy `different` czyta `COMPARED_VERSIONS` = 3 najnowsze wersje
-  okresu (`_earlier_versions`), woła solver z `min_difference=DIFFERENT_SHARE` (0,3) i dopisuje do `scores.notes`
-  nowego szkicu zdanie z `_difference_notes` (względem najnowszej z nich; gdy próg nie został osiągnięty, także
-  „Bardziej się nie dało…”).
+  `GenerationRunOut.different`. `run_generation` przy `different` czyta wszystkie wersje okresu (najnowsze
+  `COMPARED_VERSIONS` = 100, jednym zapytaniem, `_earlier_versions`), woła solver z `min_difference=DIFFERENT_SHARE`
+  (0,3) i dopisuje do `scores.notes` nowego szkicu zdanie z `_difference_notes`: różnica względem najnowszej, potem
+  „Od starszych wersji też różni się co najmniej co trzecią zmianą.” albo wersja, od której różni się najmniej; gdy
+  próg nie został osiągnięty, także „Bardziej się nie dało…”.
+- Powrót do starszego szkicu: `editing.restore_version(version, user)` kopiuje wersję (zmiany, osoby, przypięcia,
+  ręczne poprawki, uwagi) jako nowy szkic o kolejnym numerze z `ScheduleVersion.restored_from` = numer źródła
+  (migracja 0012), poprzedni szkic staje się historią, ocena liczy się od nowa. 409, gdy wersja była opublikowana,
+  jest najnowsza, powstała przed ostatnią publikacją albo okres się układa. `POST /versions/{id}/restore`
+  (`restore_version`, 201 `VersionSummaryOut`); `VersionOut.restorable`, `VersionSummaryOut.restored_from`. Ekran:
+  „Wróć do tej wersji” przy starszej wersji, lista „Wersje” pisze „jak wersja 5”. Wspólne kopiowanie z
+  `start_draft` w `_copy_version`.
 - Ekran „Grafik”: `ArrangeButton different` („Ułóż inaczej”, ikona Shuffle) obok „Ułóż od nowa”, gdy okres ma
   wersję. Arkusz „Ułożyć inny grafik?” mówi o co trzeciej zmianie, ostrzega o ręcznych poprawkach jak zwykle, mówi o
   koszu i ma „Napisz asystentowi, co ma być inaczej” (`openChat` z okresem i tekstem „Ułóż inny grafik, żeby ”).
@@ -1180,9 +1188,11 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
   0004); `AssistantCommandOut.arranges`, `changes_agreements`, `run_id`. Czat po zatwierdzeniu pokazuje
   `RunProgress` (postęp, „Anuluj”, „Zobacz szkic”).
 
-Założenia: próg 30 % i trzy wersje to propozycja do sprawdzenia w pilotażu (spec mówiła o 15 % dla przyszłych
-wariantów; „wyraźnie inny” po prośbie kierownika powinien być widać na pierwszy rzut oka). Asystent nie układa
+Piotr (22.11.2026): 30 % zostaje; „Ułóż inaczej” ma dawać ciągle nowe grafiki (kierownik klika do skutku), więc
+porównanie obejmuje wszystkie wersje zamiast trzech, a wszystkie szkice zostają i da się do nich wrócić.
+Założenia: asystent nie układa
 pierwszego grafiku okresu (to dalej przycisk z ostrzeżeniami o terminie i brakujących dyspozycjach). Okres
 opublikowany zamyka ustalenia, więc z czatu da się układać tylko przed publikacją; przycisk „Ułóż inaczej” działa
-też przy poprawkach opublikowanego grafiku (tak jak „Ułóż od nowa”). Linia planu nie podaje numeru wersji, bo do
+też przy poprawkach opublikowanego grafiku (tak jak „Ułóż od nowa”), a odmowa czatu go wskazuje
+(`ARRANGE_PUBLISHED`), arkusz nie pokazuje wtedy „Napisz asystentowi”. Linia planu nie podaje numeru wersji, bo do
 zatwierdzenia mogła powstać nowsza; numer podaje uwaga w nowym szkicu.

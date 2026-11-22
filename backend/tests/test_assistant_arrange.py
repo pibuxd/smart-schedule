@@ -1,12 +1,13 @@
 """The manager asks the assistant for another schedule: the plan says so, and arranging starts only on acceptance."""
 
 import pytest
+from django.utils import timezone
 from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.assistant import services
 from apps.assistant.models import AssistantCommand, ManagerInstruction
 from apps.billing.models import GenerationUsage
-from apps.scheduling.models import GenerationRun, ScheduleVersion
+from apps.scheduling.models import GenerationRun, SchedulePeriod, ScheduleVersion
 from tests.test_assistant import instruction, plan, run
 from tests.test_assistant import shop as shop
 from tests.test_assistant import with_key as with_key
@@ -92,6 +93,18 @@ def test_agreements_waiting_for_a_period_cannot_arrange(api, drafted, with_key, 
     assert services.ARRANGE_NO_PERIOD in body["notes"]
 
 
+def test_a_published_schedule_is_arranged_differently_with_the_button_not_the_chat(api, drafted, with_key, monkeypatch):
+    shop = drafted
+    ScheduleVersion.objects.filter(period=shop["period"]).update(published_at=timezone.now())
+    shop["period"].status = SchedulePeriod.Status.PUBLISHED
+    shop["period"].save()
+    api.login(shop["manager"])
+    body = run(api, shop, monkeypatch, plan(arrange="different"), text="Ułóż inny grafik.")
+
+    assert not body["can_apply"] and body["lines"] == []
+    assert services.ARRANGE_PUBLISHED.format(label=label(shop["period"])) in body["notes"]
+
+
 def test_arranging_already_under_way_blocks_the_plan(api, drafted, with_key, monkeypatch):
     shop = drafted
     busy = GenerationRun.objects.create(location=shop["location"])
@@ -111,7 +124,7 @@ def test_when_arranging_cannot_start_on_acceptance_nothing_is_saved(api, drafted
     response = api.post(f"/api/assistant-commands/{body['id']}/apply")
 
     assert response.status_code == 429
-    assert response.json()["detail"].endswith("Nic z tego planu nie zapisałem.")
+    assert response.json()["detail"].endswith(services.NOTHING_SAVED)
     assert not ManagerInstruction.objects.exists() and not GenerationRun.objects.exists()
     assert AssistantCommand.objects.get(pk=body["id"]).status == AssistantCommand.Status.READY
 

@@ -879,10 +879,16 @@ def _day_words(days: list[date]) -> str:
 # ------------------------------------------------------------------------- arranging again (the manager's chat)
 
 ARRANGE_NO_PERIOD = (
-    "Grafik ułożę tylko na okres, o którego dyspozycje już poprosiłeś. Ułożysz go sam w zakładce „Grafik” lokalu."
+    "Z czatu ułożę grafik tylko na okres, na który zbierasz już dyspozycje. Inne okresy ułożysz w zakładce „Grafik” "
+    "lokalu."
+)
+ARRANGE_PUBLISHED = (
+    "Opublikowanego grafiku na okres {label} nie układam z czatu. Inny grafik na ten okres da przycisk „Ułóż inaczej” "
+    "w zakładce „Grafik”."
 )
 ARRANGE_BUSY = "Grafik na ten okres właśnie się układa. Poczekaj na wynik i napisz polecenie jeszcze raz."
 STALE_ARRANGE = "Grafiku z tego planu nie da się już ułożyć. Napisz polecenie jeszcze raz."
+NOTHING_SAVED = "Nic z tego planu się nie zapisało."
 
 
 def _checked_arrange(location: Location, period: SchedulePeriod | None, *, different: bool):
@@ -892,14 +898,14 @@ def _checked_arrange(location: Location, period: SchedulePeriod | None, *, diffe
     from apps.scheduling.generation import ACTIVE
 
     if period is None:
-        return None, "", ARRANGE_NO_PERIOD
+        return None, "", _published_hint(location).strip() or ARRANGE_NO_PERIOD
     newest = latest_version(period)
     if newest is None:
         return (
             None,
             "",
             f"Grafik na okres {_period_label(period)} nie jest jeszcze ułożony. Ułóż go przyciskiem „Ułóż grafik” "
-            "w zakładce „Grafik”, a potem napisz, co ma być inaczej.",
+            "w zakładce „Grafik”, a potem napisz, co ma być inaczej." + _published_hint(location),
         )
     if location.archived_at is not None:
         return None, "", f"Lokal {location.name} jest w archiwum. Przywróć go, żeby ułożyć grafik."
@@ -913,8 +919,22 @@ def _checked_arrange(location: Location, period: SchedulePeriod | None, *, diffe
     lost = manual_changes(newest)
     if lost:
         note += f" Stracisz ręczne poprawki bez przypięcia: {lost}."
-    note += " Gdy nowy szkic będzie gorszy, usuń go koszem w „Grafik”, a wróci obecny."
+    # Deleting the new draft makes the current one editable again, with its manual changes (editing.delete_draft).
+    note += " Gdy nowy szkic będzie gorszy, usuń go koszem w „Grafik”, a wróci obecny"
+    note += " razem z poprawkami." if lost else "."
     return {"period_id": str(period.pk), "different": different}, line, note
+
+
+def _published_hint(location: Location) -> str:
+    """When the location has a published schedule that has not ended, where the manager arranges it differently: the
+    chat cannot (its agreements are closed), the button in "Grafik" can."""
+    published = (
+        SchedulePeriod.objects.for_company(location.company_id)
+        .filter(location=location, status=SchedulePeriod.Status.PUBLISHED, end__gte=timezone.localdate())
+        .order_by("start")
+        .first()
+    )
+    return " " + ARRANGE_PUBLISHED.format(label=_period_label(published)) if published else ""
 
 
 # ------------------------------------------------------------------------- other hours (the manager's chat)
@@ -1538,7 +1558,7 @@ def _apply_arrange(ctx: TenantContext, command: AssistantCommand, location: Loca
     try:
         [run] = request_generation(ctx, [period], different=bool(entry.get("different")))
     except HttpError as exc:
-        raise HttpError(exc.status_code, f"{exc.message} Nic z tego planu nie zapisałem.") from exc
+        raise HttpError(exc.status_code, f"{exc.message} {NOTHING_SAVED}") from exc
     return run
 
 
@@ -1647,7 +1667,7 @@ def _apply_hours(ctx: TenantContext, location: Location, plan: dict[str, Any]) -
                 seen=worktime.Seen.from_dict(entry.get("seen")),
             )
     except HttpError as exc:
-        raise HttpError(409, f"{exc.message} Nic z tego planu nie zapisałem. Napisz polecenie jeszcze raz.") from exc
+        raise HttpError(409, f"{exc.message} {NOTHING_SAVED} Napisz polecenie jeszcze raz.") from exc
 
 
 def renumber(rows: list[ManagerInstruction]) -> None:

@@ -519,8 +519,36 @@ def test_arranging_differently_gives_other_people_and_says_how_many(shop):
         assert changed >= math.ceil(DIFFERENT_SHARE * 12)
     assert third.scores["holes"] == 0
     changed = len(_person_shifts(again) - _person_shifts(third))
-    assert f"Ułożony inaczej niż wersja 2: inne osoby na {changed} z 12 zmian." in third.scores["notes"]
+    assert (
+        f"Ułożony inaczej niż wersja 2: inne osoby na {changed} z 12 zmian. "
+        "Od starszych wersji też różni się co najmniej co trzecią zmianą."
+    ) in third.scores["notes"]
     assert not any("inaczej" in note for note in again.scores["notes"])
+
+
+@pytest.mark.django_db
+def test_arranging_differently_again_and_again_compares_with_every_version(shop, monkeypatch):
+    # Clicking "Ułóż inaczej" until it fits: each new schedule is kept away from all earlier ones, not the last three.
+    from apps.scheduling import generation
+
+    period = shop["period"]
+    versions = [run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get() for _ in range(5)]
+    given = {}
+    solve = generation.solve
+
+    def spy(*args, **kwargs):
+        given.update(kwargs)
+        return solve(*args, **kwargs)
+
+    monkeypatch.setattr(generation, "solve", spy)
+    run_generation(request_generation(_ctx(shop), [period], different=True)[0].pk, **FAST)
+
+    def schedule(version):
+        rows = Assignment.objects.filter(shift__version=version).values_list("shift__slot_key", "employee")
+        return {key: str(e) if e else None for key, e in rows}
+
+    assert given["diversity_from"] == [schedule(v) for v in reversed(versions)]
+    assert given["min_difference"] == DIFFERENT_SHARE
 
 
 @pytest.mark.django_db

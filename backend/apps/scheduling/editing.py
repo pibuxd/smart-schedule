@@ -28,6 +28,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 from ninja.errors import HttpError
 
@@ -706,45 +707,86 @@ def start_draft(version: ScheduleVersion, user) -> ScheduleVersion:
         newest = latest_version(version.period)
         if newest is not None and newest.status == ScheduleVersion.Status.DRAFT:
             return newest
-        number = (newest.number if newest else 0) + 1
-        copy = ScheduleVersion.objects.create(
-            company_id=version.company_id,
-            period=version.period,
-            number=number,
-            created_by=user,
-            scores=version.scores,
-            is_complete=version.is_complete,
+        return _copy_version(version, (newest.number if newest else 0) + 1, user)
+
+
+def restore_version(version: ScheduleVersion, user) -> ScheduleVersion:
+    """ "Wróć do tej wersji": an older draft comes back as a new draft (the next number), with its people, pins and
+    manual changes; the current draft becomes history, so every attempt stays on the list. Only drafts made after the
+    last publication: the days of a published schedule that have passed really happened."""
+    with transaction.atomic():
+        lock_period(version)
+        version = ScheduleVersion.objects.select_related("period").get(pk=version.pk)
+        reason = restore_refusal(version)
+        if reason:
+            raise HttpError(409, reason)
+        newest = latest_version(version.period)
+        copy = _copy_version(version, newest.number + 1, user, restored=True)
+        supersede_older_drafts(version.period, copy)
+        save_scores(copy, load_version(copy).scores)  # the rules may have changed since
+    return copy
+
+
+def restore_refusal(version: ScheduleVersion) -> str:
+    """Why the manager cannot go back to `version` ("" when they can)."""
+    period = version.period
+    if version.published_at is not None:
+        return "Do opublikowanej wersji nie wracasz. Popraw obecny grafik albo ułóż go od nowa."
+    newest = latest_version(period)
+    if newest is None or newest.pk == version.pk:
+        return "To już jest obecna wersja."
+    published = (
+        ScheduleVersion.objects.for_company(period.company_id)
+        .filter(period=period, published_at__isnull=False)
+        .aggregate(n=Max("number"))["n"]
+    )
+    if published is not None and version.number < published:
+        return "Ta wersja powstała przed publikacją, więc nie da się do niej wrócić."
+    if period.generation_runs.filter(status__in=(GenerationRun.Status.QUEUED, GenerationRun.Status.RUNNING)).exists():
+        return "Grafik na ten okres właśnie się układa. Poczekaj albo przerwij układanie."
+    return ""
+
+
+def _copy_version(version: ScheduleVersion, number: int, user, *, restored: bool = False) -> ScheduleVersion:
+    """A new version `number` of the same period with the same shifts and assignments (caller holds the lock)."""
+    copy = ScheduleVersion.objects.create(
+        company_id=version.company_id,
+        period=version.period,
+        number=number,
+        created_by=user,
+        scores=version.scores,
+        is_complete=version.is_complete,
+        restored_from=version.number if restored else None,
+    )
+    shifts = list(Shift.objects.for_company(version.company_id).filter(version=version).select_related("assignment"))
+    new_shifts = Shift.objects.bulk_create(
+        Shift(
+            company_id=s.company_id,
+            version=copy,
+            location_id=s.location_id,
+            date=s.date,
+            shift_type_id=s.shift_type_id,
+            position_id=s.position_id,
+            start_at=s.start_at,
+            end_at=s.end_at,
+            slot_key=s.slot_key,
+            needs_experienced=s.needs_experienced,
         )
-        shifts = Shift.objects.for_company(version.company_id).filter(version=version).select_related("assignment")
-        shifts = list(shifts)
-        new_shifts = Shift.objects.bulk_create(
-            Shift(
-                company_id=s.company_id,
-                version=copy,
-                location_id=s.location_id,
-                date=s.date,
-                shift_type_id=s.shift_type_id,
-                position_id=s.position_id,
-                start_at=s.start_at,
-                end_at=s.end_at,
-                slot_key=s.slot_key,
-                needs_experienced=s.needs_experienced,
-            )
-            for s in shifts
+        for s in shifts
+    )
+    old = {s.slot_key: s.assignment for s in shifts}
+    Assignment.objects.bulk_create(
+        Assignment(
+            company_id=s.company_id,
+            shift=s,
+            employee_id=old[s.slot_key].employee_id,
+            pinned=old[s.slot_key].pinned,
+            borrowed=old[s.slot_key].borrowed,
+            manual=old[s.slot_key].manual,
+            forced=old[s.slot_key].forced,
         )
-        old = {s.slot_key: s.assignment for s in shifts}
-        Assignment.objects.bulk_create(
-            Assignment(
-                company_id=s.company_id,
-                shift=s,
-                employee_id=old[s.slot_key].employee_id,
-                pinned=old[s.slot_key].pinned,
-                borrowed=old[s.slot_key].borrowed,
-                manual=old[s.slot_key].manual,
-                forced=old[s.slot_key].forced,
-            )
-            for s in new_shifts
-        )
+        for s in new_shifts
+    )
     return copy
 
 
