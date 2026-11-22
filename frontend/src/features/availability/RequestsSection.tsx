@@ -45,7 +45,13 @@ function Reply({ request }: { request: MyRequestOut }) {
  * The assistant's question back: it was not sure what the person meant and saves nothing until they answer.
  * `waiting`: it is about the newest message, so the next one answers it.
  */
-function Question({ question, waiting }: { question: string; waiting: boolean }) {
+function Question({
+  question,
+  waiting,
+}: {
+  question: string;
+  waiting: boolean;
+}) {
   return (
     <div className="grid gap-1">
       <p className="m-0 font-semibold whitespace-pre-wrap">{question}</p>
@@ -312,6 +318,71 @@ function useRequests({ companyId, periodId, month }: Scope) {
   return { requests, list, params, refresh };
 }
 
+/** Writing a request again: the assistant reads the new text from the start. */
+function EditForm({
+  request,
+  text,
+  busy,
+  assistantReads,
+  onChange,
+  onCancel,
+  onSave,
+}: {
+  request: MyRequestOut;
+  text: string;
+  busy: boolean;
+  assistantReads: boolean;
+  onChange: (text: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="py-2 pr-2">
+      <form
+        className="grid gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave();
+        }}
+      >
+        <label className="grid gap-1">
+          Treść prośby
+          <textarea
+            className="rounded-md border-2 border-ink p-2"
+            maxLength={1000}
+            rows={3}
+            value={text}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        </label>
+        <p className="m-0 text-sm text-ink-muted">
+          {request.waiting
+            ? "Napisz całą prośbę razem z odpowiedzią na pytanie."
+            : "Kierownik zobaczy poprawioną treść. Jego wcześniejsza decyzja i nadana prośbie ważność pozostaną w mocy."}{" "}
+          {assistantReads &&
+            "Po zmianie tekstu zewnętrzny asystent AI przeczyta prośbę ponownie."}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="submit"
+            disabled={busy || !text.trim() || text.trim() === request.text}
+          >
+            Zapisz prośbę
+          </Button>
+          <Button
+            type="button"
+            variant="quiet"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Anuluj
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /** The bin, and a second tap to be sure. */
 function RemoveControl({
   asking,
@@ -386,11 +457,15 @@ function RequestsWindow({
   const chatOpen = chat?.open ?? false;
   const openChat = () => chat?.openChat({ periodId, month, editable });
   const saved = list.filter(isSaved);
+  // Messages the assistant asked about and nobody answered: listed apart, so a request is never lost quietly.
+  const waiting = editable ? list.filter((r) => r.waiting) : [];
   const reading = assistantReads && list.some((r) => r.status === "new");
   // The newest message left a trace only in the chat: say so in the window, so it does not look lost.
   const last = list.at(-1);
   const notSaved =
-    last && (last.status === "rejected" || last.status === "answered")
+    last &&
+    !waiting.includes(last) &&
+    (last.status === "rejected" || last.status === "answered")
       ? last
       : undefined;
   const failure = update.error ?? remove.error;
@@ -431,13 +506,92 @@ function RequestsWindow({
           </button>
         </InlineError>
       )}
-      {!requests.isPending && !requests.isError && saved.length === 0 && (
-        <p className="m-0 text-sm text-ink-muted">
-          {editable
-            ? "Nie masz jeszcze próśb. Napisz, czego kalendarz nie powie, na przykład: „W piątki wolę pracować rano”."
-            : "Nie masz próśb na ten okres."}
-        </p>
+      {waiting.length > 0 && (
+        <ul
+          className="m-0 grid list-none gap-2 p-0"
+          aria-label="Czekają na Twoją odpowiedź"
+        >
+          {waiting.map((request) => (
+            <li
+              key={request.id}
+              className="rounded-md border border-dashed border-line py-1 pr-1 pl-3"
+            >
+              {editing?.id === request.id ? (
+                <EditForm
+                  request={request}
+                  text={editing.text}
+                  busy={update.isPending}
+                  assistantReads={assistantReads}
+                  onChange={(text) => setEditing({ id: request.id, text })}
+                  onCancel={() => setEditing(null)}
+                  onSave={() =>
+                    update.mutate(
+                      {
+                        requestId: request.id,
+                        data: { text: editing.text.trim() },
+                      },
+                      { onSuccess: () => setEditing(null) },
+                    )
+                  }
+                />
+              ) : (
+                <div className="grid gap-2 py-2 pr-2">
+                  <span className="[overflow-wrap:anywhere]">
+                    {request.text}
+                  </span>
+                  <span className="text-sm text-ink-muted">
+                    Nie jest zapisana. Asystent pyta: {request.question}
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {request.id === last?.id ? (
+                      <Button
+                        variant="secondary"
+                        size="normal"
+                        onClick={openChat}
+                      >
+                        Odpowiedz
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="normal"
+                        onClick={() =>
+                          setEditing({ id: request.id, text: request.text })
+                        }
+                      >
+                        Napisz ją od nowa
+                      </Button>
+                    )}
+                    <Button
+                      variant="quiet"
+                      size="normal"
+                      disabled={update.isPending}
+                      onClick={() =>
+                        update.mutate({
+                          requestId: request.id,
+                          data: { understood: false },
+                        })
+                      }
+                    >
+                      Niech przeczyta kierownik
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
+      {!requests.isPending &&
+        !requests.isError &&
+        saved.length === 0 &&
+        waiting.length === 0 && (
+          <p className="m-0 text-sm text-ink-muted">
+            {editable
+              ? "Nie masz jeszcze próśb. Napisz, czego kalendarz nie powie, na przykład: „W piątki wolę pracować rano”."
+              : "Nie masz próśb na ten okres."}
+          </p>
+        )}
       {saved.length > 0 && (
         <ul
           className="m-0 grid list-none gap-2 p-0"
@@ -449,62 +603,23 @@ function RequestsWindow({
               className="rounded-md border border-grid py-1 pr-1 pl-3"
             >
               {editable && editing?.id === request.id ? (
-                <div className="py-2 pr-2">
-                  <form
-                    className="grid gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      update.mutate(
-                        {
-                          requestId: request.id,
-                          data: { text: editing.text.trim() },
-                        },
-                        {
-                          onSuccess: () => setEditing(null),
-                        },
-                      );
-                    }}
-                  >
-                    <label className="grid gap-1">
-                      Treść prośby
-                      <textarea
-                        className="rounded-md border-2 border-ink p-2"
-                        maxLength={1000}
-                        rows={3}
-                        value={editing.text}
-                        onChange={(e) =>
-                          setEditing({ id: request.id, text: e.target.value })
-                        }
-                      />
-                    </label>
-                    <p className="m-0 text-sm text-ink-muted">
-                      Kierownik zobaczy poprawioną treść. Jego wcześniejsza
-                      decyzja i nadana prośbie ważność pozostaną w mocy.{" "}
-                      {assistantReads &&
-                        "Po zmianie tekstu zewnętrzny asystent AI przeczyta prośbę ponownie."}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="submit"
-                        disabled={
-                          update.isPending ||
-                          !editing.text.trim() ||
-                          editing.text.trim() === request.text
-                        }
-                      >
-                        Zapisz prośbę
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="quiet"
-                        disabled={update.isPending}
-                        onClick={() => setEditing(null)}
-                      >
-                        Anuluj
-                      </Button>
-                    </div>
-                  </form>
-                </div>
+                <EditForm
+                  request={request}
+                  text={editing.text}
+                  busy={update.isPending}
+                  assistantReads={assistantReads}
+                  onChange={(text) => setEditing({ id: request.id, text })}
+                  onCancel={() => setEditing(null)}
+                  onSave={() =>
+                    update.mutate(
+                      {
+                        requestId: request.id,
+                        data: { text: editing.text.trim() },
+                      },
+                      { onSuccess: () => setEditing(null) },
+                    )
+                  }
+                />
               ) : (
                 <div className="flex flex-wrap items-center gap-x-2">
                   <span className="min-w-0 flex-1 basis-48 py-2">
@@ -564,15 +679,13 @@ function RequestsWindow({
         <p className="m-0 text-sm text-ink-muted">
           {notSaved.status === "rejected"
             ? "Twoja ostatnia wiadomość została odrzucona i nie jest prośbą."
-            : notSaved.question
-              ? "Asystent ma pytanie do Twojej ostatniej wiadomości."
-              : "Asystent odpowiedział na Twoją ostatnią wiadomość."}{" "}
+            : "Asystent odpowiedział na Twoją ostatnią wiadomość."}{" "}
           <button
             type="button"
             className="min-h-(--touch) cursor-pointer font-semibold text-accent underline"
             onClick={openChat}
           >
-            {notSaved.question ? "Odpowiedz" : "Pokaż odpowiedź"}
+            Pokaż odpowiedź
           </button>
         </p>
       )}
@@ -694,13 +807,13 @@ export function RequestsChat({
                     ? "Asystent dopytuje"
                     : request.status === "answered"
                       ? "Odpowiedź asystenta"
-                    : request.status === "superseded"
-                      ? "Historia prośby"
-                      : request.status === "rejected"
-                        ? "Odrzucona"
-                        : request.status === "new" && assistantReads
-                          ? "Wysłane"
-                          : "Zapisane w Twoich prośbach"}
+                      : request.status === "superseded"
+                        ? "Historia prośby"
+                        : request.status === "rejected"
+                          ? "Odrzucona"
+                          : request.status === "new" && assistantReads
+                            ? "Wysłane"
+                            : "Zapisane w Twoich prośbach"}
                 </span>
                 {editable && !isSaved(request) && (
                   <RemoveControl
@@ -800,9 +913,8 @@ export function RequestsChat({
           summary="O prośbach i Twoich danych"
         >
           <p className="mt-0 mb-2 leading-relaxed">
-            W jednej wiadomości możesz zapytać o coś i napisać do trzech
-            próśb. Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w
-            kalendarzu.{" "}
+            W jednej wiadomości możesz zapytać o coś i napisać do trzech próśb.
+            Napisz też powód, jeśli jest ważny. Dyspozycje zaznacz w kalendarzu.{" "}
             {!periodId &&
               "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
             {assistantReads

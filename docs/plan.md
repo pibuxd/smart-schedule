@@ -1133,10 +1133,12 @@ asystent raz dopytuje pracownika.
   na którą odpowiada prośba). Nowa treść prośby („Popraw”) czyści pytanie. `assistant_misses` pokazuje odpowiedź
   razem z pierwszą wiadomością i pytaniem.
 - Czat pracownika: pytanie pogrubione pod odpowiedzią, etykieta „Asystent dopytuje”, pod najnowszym „Odpowiedz niżej.
-  Do tego czasu niczego nie zapisuję.”, pole pisania „Odpowiedz asystentowi…”; okienko „Twoje prośby” mówi „Asystent
-  ma pytanie do Twojej ostatniej wiadomości.” z „Odpowiedz”. Karta prośby u kierownika: „Wcześniej: „…” Asystent
+  Do tego czasu niczego nie zapisuję.”, pole pisania „Odpowiedz asystentowi…”. `MyRequestOut.waiting` (pytanie bez
+  odpowiedzi): okienko „Twoje prośby” wypisuje takie wiadomości osobno („Nie jest zapisana. Asystent pyta: …”) z
+  „Odpowiedz” przy najnowszej, „Napisz ją od nowa” przy starszych i „Niech przeczyta kierownik”. Karta prośby u kierownika: „Wcześniej: „…” Asystent
   zapytał: „…””.
 
 Założenia: pytanie czeka tylko na następną wiadomość; gdy pracownik napisze o czymś innym, pierwsza wiadomość
-zostaje niezapisana (widać ją w historii czatu i można ją przekazać kierownikowi). Zgłoszenia innych godzin z
+zostaje niezapisana, ale „Twoje prośby” pokazują ją jako czekającą (można ją napisać od nowa albo przekazać
+kierownikowi). Zgłoszenia innych godzin z
 wiadomości z pytaniem pokazują się jak dotąd, bo i tak wysyła je dopiero pracownik.

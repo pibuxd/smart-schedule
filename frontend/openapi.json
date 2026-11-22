@@ -12076,6 +12076,11 @@
               }
             ],
             "title": "Question"
+          },
+          "waiting": {
+            "default": false,
+            "title": "Waiting",
+            "type": "boolean"
           }
         },
         "required": [

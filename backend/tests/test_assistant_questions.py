@@ -71,7 +71,7 @@ def test_less_work_is_asked_about_and_the_answer_is_saved_with_the_first_message
     # Nothing is saved: no request for the generator, nothing for the manager.
     assert build_problem([shop["period"]]).problem.requests == ()
     [shown] = my_requests(api, shop)
-    assert shown["question"] == first.question and shown["summary"] is None
+    assert shown["question"] == first.question and shown["summary"] is None and shown["waiting"] is True
     assert manager_requests(api, shop) == []
 
     api.login(shop["worker"])
@@ -80,6 +80,7 @@ def test_less_work_is_asked_about_and_the_answer_is_saved_with_the_first_message
     assert text == "Najwyżej 30 godzin."
     assert "Twoje pytanie do tej osoby" in context and "Chcę mniej pracować." in context
     assert second.status == "interpreted" and second.answer_to_id == first.pk
+    assert [r["waiting"] for r in my_requests(api, shop)] == [False, False]  # answered
     [request] = build_problem([shop["period"]]).problem.requests
     assert request.type == "hours_limit" and request.max_hours == 30
     [listed] = manager_requests(api, shop)
@@ -177,6 +178,8 @@ def test_a_message_about_something_else_leaves_the_question_unanswered(api, shop
     third = write(api, shop, "Wolałabym nie pracować w piątki.")
     assert "Twoje pytanie do tej osoby" not in model.seen[2][1]  # only the newest message's question is open
     assert first.pk not in {other.answer_to_id, third.answer_to_id}
+    # Still waiting: "Twoje prośby" lists it as not saved, so it is not lost quietly.
+    assert [r["waiting"] for r in my_requests(api, shop)] == [True, False, False]
 
 
 def test_the_question_can_go_to_the_manager_instead_and_is_reset_when_rewritten(api, shop, with_key, monkeypatch):

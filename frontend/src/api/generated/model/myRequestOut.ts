@@ -18,4 +18,5 @@ export interface MyRequestOut {
   created_at: string;
   hours_reports?: HoursProposalOut[];
   question?: string | null;
+  waiting?: boolean;
 }

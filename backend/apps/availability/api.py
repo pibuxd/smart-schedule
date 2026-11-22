@@ -183,6 +183,8 @@ class MyRequestOut(Schema):
     hours_reports: list[HoursProposalOut] = Field(default_factory=list)
     # The assistant was not sure what the person meant and asks them this (nothing is saved until they answer).
     question: str | None = None
+    # The question has no answer yet: "Twoje prośby" lists the message as not saved, so it is not lost quietly.
+    waiting: bool = False
 
 
 def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
@@ -502,6 +504,7 @@ class _Calendar:
 def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -> MyRequestOut:
     unmarked, notes = _calendar_facts(text_request, calendar) if calendar is not None else ([], [])
     interpreted = text_request.status == TextRequest.Status.INTERPRETED
+    question = (text_request.question or None) if text_request.status == TextRequest.Status.ANSWERED else None
     return MyRequestOut(
         id=text_request.id,
         text=text_request.text,
@@ -512,7 +515,8 @@ def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -
         notes=[*((text_request.interpretation or {}).get("notes") or [] if interpreted else []), *notes],
         created_at=text_request.created_at,
         hours_reports=_hours_proposals(text_request),
-        question=(text_request.question or None) if text_request.status == TextRequest.Status.ANSWERED else None,
+        question=question,
+        waiting=bool(question) and not text_request.answers.all(),
     )
 
 
@@ -627,7 +631,13 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
         scope = Q(period=None, month=month.replace(day=1))
     else:
         raise HttpError(400, "Wybierz miesiąc.")
-    requests = list(ctx.qs(TextRequest).filter(scope, employee=profile).select_related("period").order_by("created_at"))
+    requests = list(
+        ctx.qs(TextRequest)
+        .filter(scope, employee=profile)
+        .select_related("period")
+        .prefetch_related("answers")
+        .order_by("created_at")
+    )
     calendar = None
     if requests:
         from apps.assistant.services import request_span

@@ -121,8 +121,9 @@ describe("RequestsSection", () => {
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
     await openChat();
-    const reading = (await screen.findByText("Czytamy Twoją wiadomość…"))
-      .closest("[role=status]") as HTMLElement;
+    const reading = (
+      await screen.findByText("Czytamy Twoją wiadomość…")
+    ).closest("[role=status]") as HTMLElement;
     expect(within(reading).getByTestId("reading-robot")).toBeInTheDocument();
   });
 
@@ -256,20 +257,27 @@ describe("RequestsSection", () => {
           status: "answered",
           summary: null,
           question: "Ile najwyżej godzin w tygodniu chcesz pracować?",
+          waiting: true,
         }),
       ],
     ]);
     renderSection(
       <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
     );
+    // "Twoje prośby" says it is not saved yet, so it is not lost quietly.
+    const waiting = await screen.findByRole("list", {
+      name: "Czekają na Twoją odpowiedź",
+    });
     expect(
-      await screen.findByText(
-        "Asystent ma pytanie do Twojej ostatniej wiadomości.",
+      within(waiting).getByText(
+        "Nie jest zapisana. Asystent pyta: Ile najwyżej godzin w tygodniu chcesz pracować?",
       ),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Odpowiedz" }));
+    fireEvent.click(within(waiting).getByRole("button", { name: "Odpowiedz" }));
     expect(
-      await screen.findByText("Ile najwyżej godzin w tygodniu chcesz pracować?"),
+      await screen.findByText(
+        "Ile najwyżej godzin w tygodniu chcesz pracować?",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Asystent dopytuje")).toBeInTheDocument();
     expect(
@@ -281,6 +289,52 @@ describe("RequestsSection", () => {
     );
     // Not saved until the answer: nothing in "Twoje prośby".
     expect(screen.queryByRole("list", { name: "Zapisane prośby" })).toBeNull();
+  });
+
+  it("lets an older unanswered question be written again from the window", async () => {
+    const calls = mockApi((method) =>
+      method === "PATCH"
+        ? [200, request({ status: "new", summary: null })]
+        : [
+            200,
+            [
+              request({
+                id: "q",
+                text: "Chcę mniej pracować.",
+                status: "answered",
+                summary: null,
+                question: "Ile godzin?",
+                waiting: true,
+              }),
+              request({ id: "later", created_at: "2026-11-02T10:00:00Z" }),
+            ],
+          ],
+    );
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    const waiting = await screen.findByRole("list", {
+      name: "Czekają na Twoją odpowiedź",
+    });
+    // Not the newest message: the chat would not take the next one as its answer.
+    expect(
+      within(waiting).queryByRole("button", { name: "Odpowiedz" }),
+    ).toBeNull();
+    fireEvent.click(
+      within(waiting).getByRole("button", { name: "Napisz ją od nowa" }),
+    );
+    fireEvent.change(screen.getByLabelText("Treść prośby"), {
+      target: { value: "Najwyżej 30 godzin w tygodniu." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz prośbę" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
+        text: "Najwyżej 30 godzin w tygodniu.",
+      }),
+    );
+    expect(calls.find((c) => c.method === "PATCH")!.url).toContain(
+      "/api/me/requests/q",
+    );
   });
 
   it("lets the employee forward a misclassified question to the manager", async () => {
@@ -514,7 +568,12 @@ describe("reports of other hours in the chat", () => {
       ];
     });
     renderSection(
-      <RequestsSection companyId="c1" month="2026-11-01" editable assistantReads />,
+      <RequestsSection
+        companyId="c1"
+        month="2026-11-01"
+        editable
+        assistantReads
+      />,
     );
     await openChat();
     const card = await screen.findByRole("list", {
@@ -534,8 +593,9 @@ describe("reports of other hours in the chat", () => {
       await within(card).findByText("Wysłane. Czeka na kierownika."),
     ).toBeInTheDocument();
     expect(
-      calls.find((c) => c.method === "POST" && c.url === "/api/me/hours-changes")!
-        .body,
+      calls.find(
+        (c) => c.method === "POST" && c.url === "/api/me/hours-changes",
+      )!.body,
     ).toEqual({
       assignment_id: "as1",
       start_time: "06:00",
@@ -561,11 +621,18 @@ describe("reports of other hours in the chat", () => {
       ],
     ]);
     renderSection(
-      <RequestsSection companyId="c1" month="2026-11-01" editable assistantReads />,
+      <RequestsSection
+        companyId="c1"
+        month="2026-11-01"
+        editable
+        assistantReads
+      />,
     );
     await openChat();
     expect(
-      await screen.findByText(/nie masz już tej zmiany, więc tego zgłoszenia nie wyślesz/),
+      await screen.findByText(
+        /nie masz już tej zmiany, więc tego zgłoszenia nie wyślesz/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Kierownik zatwierdził te godziny."),

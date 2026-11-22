@@ -46,6 +46,10 @@ dopytuje pracownika, a kierownikowi zostawia tylko to, czego po doprecyzowaniu n
 - Następna wiadomość pracownika w tej samej rozmowie jest zwykle odpowiedzią: asystent czyta ją razem z pierwszą
   wiadomością i pytaniem, i zapisuje pełne prośby z obu. Gdy nowa wiadomość jest o czymś innym, pytanie zostaje bez
   odpowiedzi i nic się z pierwszej wiadomości nie zapisuje.
+- Żeby taka prośba nie przepadła po cichu (uwaga z przeglądu PR #64), okienko „Twoje prośby” pokazuje każdą wiadomość
+  z pytaniem bez odpowiedzi osobno, w przerywanej ramce: „Nie jest zapisana. Asystent pyta: …”. Przy najnowszej jest
+  „Odpowiedz” (otwiera czat), przy starszej „Napisz ją od nowa” (cała prośba razem z odpowiedzią; asystent czyta ją
+  od początku). Przy każdej jest też „Niech przeczyta kierownik”.
 - Pyta tylko raz. Czego po odpowiedzi nadal nie da się zapisać, trafia do kierownika jak dotąd (powód „asystent nie
   był pewny”), a kierownik widzi przy prośbie pierwszą wiadomość, pytanie asystenta i odpowiedź.
 - Pytanie zadaje także wtedy, gdy wiadomość łączy pytanie o grafik z niejasną prośbą: odpowiada na pytanie i dopytuje
