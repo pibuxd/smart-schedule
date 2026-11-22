@@ -54,8 +54,7 @@ NOT_UNDERSTOOD_REPLY = "Nie wiem, jak na to odpowiedzieć. Napisz to inaczej alb
 MAX_PREFERENCES = 3
 PARTIAL_NOTE = "Części tej wiadomości nie da się zamienić na ustawienie. Kierownik przeczyta ją sam."
 # Questions in a row about one request (the assistant's or the app's) before the manager reads it (Piotr, 22.11.2026:
-# the assistant asks until it is sure; three, proposed in PR #68 and awaiting his decision, keeps a person from being
-# asked forever).
+# the assistant asks until it is sure, at most three times so a person is not asked forever).
 MAX_QUESTIONS = 3
 # The app's own question when the assistant doubts its reading (confidence below ASSISTANT_MIN_CONFIDENCE).
 CONFIRM_QUESTION = "Czy dobrze rozumiem: {what}? Odpisz „tak” albo napisz, co poprawić."

@@ -1116,7 +1116,7 @@ niczego w nich nie zużył.
 ## 34. Asystent pracownika dopytuje (22.11.2026)
 
 Prośba Piotra (spec.md, „Asystent pracownika dopytuje”): zamiast od razu oddawać kierownikowi niepewną prośbę,
-asystent dopytuje pracownika (wcześniej raz; PR #68 proponuje najwyżej trzy razy z rzędu, czeka na decyzję Piotra).
+asystent dopytuje pracownika (od 22.11.2026 najwyżej trzy razy z rzędu, decyzja Piotra; wcześniej raz).
 
 - `llm.EmployeeReply.question` (jedno pytanie albo null) i `answers_question` (numer czekającego pytania z
   kontekstu, na które odpowiada ta wiadomość, albo null). Oba mają wartości domyślne, więc działają tak samo na OpenRouter (argumenty `final_answer`) i na
