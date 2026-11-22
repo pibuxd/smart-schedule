@@ -9,6 +9,7 @@ export * from './agreedRuleOut';
 export * from './arrangedOut';
 export * from './askAvailabilityIn';
 export * from './askAvailabilityOut';
+export * from './askedOut';
 export * from './assistantCommandOut';
 export * from './assistantCommandOutStatus';
 export * from './availabilityDayOut';

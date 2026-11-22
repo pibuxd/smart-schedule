@@ -1112,3 +1112,36 @@ miejsce" / "Usuń miejsce" (to ustawienie lokalu) i zdjęcie osoby z opublikowan
 potwierdzonym konflikcie (razem z jej innymi godzinami tamtej zmiany) zostają. Licznik ułożeń w miesiącu się nie
 zmienia. Ustalenia asystenta i inne godziny opublikowanych zmian zmieniają się dopiero przy publikacji, więc szkic
 niczego w nich nie zużył.
+
+## 34. Asystent pracownika dopytuje (22.11.2026)
+
+Prośba Piotra (spec.md, „Asystent pracownika dopytuje”): zamiast od razu oddawać kierownikowi niepewną prośbę,
+asystent raz dopytuje pracownika.
+
+- `llm.EmployeeReply.question` (jedno pytanie albo null) i `answers_question` (numer czekającego pytania z
+  kontekstu, na które odpowiada ta wiadomość, albo null). Oba mają wartości domyślne, więc działają tak samo na OpenRouter (argumenty `final_answer`) i na
+  Claude (`output_config.format`).
+- `TextRequest.question`: pytanie przy wiadomości, która ma status `answered` (nic z niej nie trafia do generatora,
+  kierownika ani limitu próśb). `TextRequest.answer_to`: wiadomość, na której pytanie odpowiada ta.
+- `services.waiting_questions(row)`: czekające pytania to pytania bez odpowiedzi przy wiadomościach tej osoby z tej
+  samej rozmowy (okres albo miesiąc), które asystent pamięta (`context.MAX_CONVERSATION` = 10). Kontekst dostaje je
+  z numerami, wiadomością i pytaniem (`context.open_questions`); `conversation` pokazuje też pytania z historii.
+  Numer spoza listy znaczy „nowa wiadomość”.
+- `_checked_reply`: pytanie modelu (albo pytanie aplikacji o imię kilku osób, `_namesake_question`) daje `answered`
+  z pytaniem i bez interpretacji, nawet gdy model podał też preferencje. Odpowiedź (`answers_question` przy otwartym
+  pytaniu) dostaje `answer_to` i przechodzi zwykłe sprawdzenie; drugie pytanie zamiast odczytu daje
+  `needs_manager` / `unsure` z powodem „drugie pytanie”.
+- API: `MyRequestOut.question` (tylko przy `answered`), `ManagerRequestOut.asked` (`text`, `question` wiadomości,
+  na którą odpowiada prośba). Nowa treść prośby („Popraw”) czyści pytanie. `assistant_misses` pokazuje odpowiedź
+  razem z pierwszą wiadomością i pytaniem.
+- Czat pracownika: pytanie pogrubione pod odpowiedzią, etykieta „Asystent dopytuje”, pod najnowszym „Odpowiedz niżej.
+  Do tego czasu niczego nie zapisuję.”, pole pisania „Odpowiedz asystentowi…”. `MyRequestOut.waiting` (pytanie bez
+  odpowiedzi) i `can_answer` (po niej mniej niż 10 wiadomości tej rozmowy): okienko „Twoje prośby” wypisuje takie
+  wiadomości osobno („Nie jest zapisana. Asystent pyta: …”) z „Odpowiedz” przy `can_answer`, inaczej „Napisz ją od
+  nowa”, i „Niech przeczyta kierownik”. Karta prośby u kierownika: „Wcześniej: „…” Asystent
+  zapytał: „…””.
+
+Założenia: pytanie czeka, dopóki asystent je pamięta (10 wiadomości; decyzja Piotra z 22.11.2026, wcześniej tylko
+na następną wiadomość). Potem pierwsza wiadomość zostaje niezapisana, ale „Twoje prośby” pokazują ją jako czekającą
+(można ją napisać od nowa albo przekazać kierownikowi). Zgłoszenia innych godzin z
+wiadomości z pytaniem pokazują się jak dotąd, bo i tak wysyła je dopiero pracownik.

@@ -166,6 +166,14 @@ class TextRequest(CompanyOwnedModel):
     # Each: assignment_id, date, start_time, end_time, planned_start_time, planned_end_time, location_name,
     # position_name, reason.
     hours_reports = models.JSONField("zgłoszenia godzin do wysłania", null=True, blank=True)
+    # The assistant was not sure what the person meant and asked them one question back (status `answered`): nothing
+    # of this message is saved until they answer. Their next message is read together with it (`answer_to`).
+    question = models.TextField("pytanie asystenta do pracownika", max_length=500, blank=True, default="")
+    # This message answers the assistant's question on that earlier one: its reading covers both messages, and the
+    # manager sees the earlier text and the question with it.
+    answer_to = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="answers", verbose_name="odpowiedź na"
+    )
     employee_corrected = models.BooleanField("poprawiona przez pracownika", default=False)
     supersedes = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="corrections")
     manager_priority = models.CharField(

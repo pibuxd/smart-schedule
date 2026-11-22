@@ -17,4 +17,7 @@ export interface MyRequestOut {
   notes: string[];
   created_at: string;
   hours_reports?: HoursProposalOut[];
+  question?: string | null;
+  waiting?: boolean;
+  can_answer?: boolean;
 }

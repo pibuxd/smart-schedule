@@ -19,6 +19,7 @@ from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.assistant import llm
+from apps.assistant.context import MAX_CONVERSATION
 from apps.assistant.services import queue_request
 from apps.availability.models import (
     AvailabilityDay,
@@ -181,6 +182,13 @@ class MyRequestOut(Schema):
     created_at: datetime
     # Reports of other hours the assistant prepared from this message, to send with "Wyślij kierownikowi".
     hours_reports: list[HoursProposalOut] = Field(default_factory=list)
+    # The assistant was not sure what the person meant and asks them this (nothing is saved until they answer).
+    question: str | None = None
+    # The question has no answer yet: "Twoje prośby" lists the message as not saved, so it is not lost quietly.
+    waiting: bool = False
+    # The assistant still remembers the question (it is among the last messages it reads), so the next message
+    # in the chat can answer it; an older one is written again instead.
+    can_answer: bool = False
 
 
 def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
@@ -497,9 +505,12 @@ class _Calendar:
         self.locked = _locked_days(ctx, profile, start, end)
 
 
-def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -> MyRequestOut:
+def _request_out(text_request: TextRequest, calendar: _Calendar | None = None, later: int = 0) -> MyRequestOut:
+    """`later`: how many messages of the same chat came after this one (the assistant reads the last few)."""
     unmarked, notes = _calendar_facts(text_request, calendar) if calendar is not None else ([], [])
     interpreted = text_request.status == TextRequest.Status.INTERPRETED
+    question = (text_request.question or None) if text_request.status == TextRequest.Status.ANSWERED else None
+    waiting = bool(question) and not text_request.answers.all()
     return MyRequestOut(
         id=text_request.id,
         text=text_request.text,
@@ -510,6 +521,9 @@ def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -
         notes=[*((text_request.interpretation or {}).get("notes") or [] if interpreted else []), *notes],
         created_at=text_request.created_at,
         hours_reports=_hours_proposals(text_request),
+        question=question,
+        waiting=waiting,
+        can_answer=waiting and later < MAX_CONVERSATION,
     )
 
 
@@ -624,14 +638,26 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
         scope = Q(period=None, month=month.replace(day=1))
     else:
         raise HttpError(400, "Wybierz miesiąc.")
-    requests = list(ctx.qs(TextRequest).filter(scope, employee=profile).select_related("period").order_by("created_at"))
+    requests = list(
+        ctx.qs(TextRequest)
+        .filter(scope, employee=profile)
+        .select_related("period")
+        .prefetch_related("answers")
+        .order_by("created_at")
+    )
     calendar = None
     if requests:
         from apps.assistant.services import request_span
 
         spans = [request_span(r) for r in requests]
         calendar = _Calendar(ctx, profile, min(s for s, _ in spans), max(e for _, e in spans))
-    return [_request_out(r, calendar) for r in requests]
+    # Messages after each one in its own chat (a period, or a month without one): see `context.MAX_CONVERSATION`.
+    later, seen = [], {}
+    for r in reversed(requests):
+        chat = (r.period_id, r.month)
+        later.append(seen.get(chat, 0))
+        seen[chat] = seen.get(chat, 0) + 1
+    return [_request_out(r, calendar, n) for r, n in zip(requests, reversed(later), strict=True)]
 
 
 LIMIT_FULL = "Masz już tyle próśb, ile można wysłać na jeden okres. Usuń albo popraw którąś."
@@ -731,9 +757,18 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
             text_request.text_edited_at = timezone.now()
             text_request.status = TextRequest.Status.NEW
             text_request.interpretation = None
+            text_request.question = ""
             text_request.employee_corrected = True
             text_request.save(
-                update_fields=["text", "text_edited_at", "status", "interpretation", "employee_corrected", "updated_at"]
+                update_fields=[
+                    "text",
+                    "text_edited_at",
+                    "status",
+                    "interpretation",
+                    "question",
+                    "employee_corrected",
+                    "updated_at",
+                ]
             )
             queue_request(text_request)
         elif payload.understood is False and text_request.status in (
@@ -811,6 +846,13 @@ class AvailabilityGridOut(Schema):
     employees: list[GridEmployeeOut]
 
 
+class AskedOut(Schema):
+    """The person's earlier message and the assistant's question on it, which this request answers."""
+
+    text: str
+    question: str
+
+
 class ManagerRequestOut(Schema):
     id: UUID
     employee_id: UUID
@@ -830,6 +872,8 @@ class ManagerRequestOut(Schema):
     manager_priority: PriorityName
     manager_rejected: bool
     created_at: datetime
+    # This message answers the assistant's question on an earlier one: the earlier text and the question.
+    asked: AskedOut | None = None
 
 
 class RequestDecisionIn(Schema):
@@ -910,6 +954,7 @@ def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
         manager_priority=row.manager_priority,
         manager_rejected=row.manager_rejected,
         created_at=row.created_at,
+        asked=AskedOut(text=row.answer_to.text, question=row.answer_to.question) if row.answer_to else None,
     )
 
 
@@ -931,7 +976,7 @@ def period_requests(request, period_id: UUID):
         .filter(TextRequest.for_periods([period]))
         .exclude(status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED])
         .exclude(interpretation__type="out_of_scope", interpretation__type__isnull=False)
-        .select_related("employee__membership__user")
+        .select_related("employee__membership__user", "answer_to")
     )
     return [_manager_request_out(r) for r in rows.order_by("created_at")]
 
