@@ -12022,6 +12022,25 @@
         "title": "PeriodRefIn",
         "type": "object"
       },
+      "AskedOut": {
+        "description": "The person's earlier message and the assistant's question on it, which this request answers (or an earlier\nquestion in a row about the same request).",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "question"
+        ],
+        "title": "AskedOut",
+        "type": "object"
+      },
       "HoursProposalOut": {
         "description": "A report of other hours of my published shift, prepared by the assistant (nothing is sent by itself).",
         "properties": {
@@ -12202,6 +12221,13 @@
             "default": false,
             "title": "Can Answer",
             "type": "boolean"
+          },
+          "exchange": {
+            "items": {
+              "$ref": "#/components/schemas/AskedOut"
+            },
+            "title": "Exchange",
+            "type": "array"
           }
         },
         "required": [
@@ -12513,25 +12539,6 @@
         "title": "GridPeriodOut",
         "type": "object"
       },
-      "AskedOut": {
-        "description": "The person's earlier message and the assistant's question on it, which this request answers.",
-        "properties": {
-          "text": {
-            "title": "Text",
-            "type": "string"
-          },
-          "question": {
-            "title": "Question",
-            "type": "string"
-          }
-        },
-        "required": [
-          "text",
-          "question"
-        ],
-        "title": "AskedOut",
-        "type": "object"
-      },
       "ManagerRequestOut": {
         "properties": {
           "id": {
@@ -12621,6 +12628,13 @@
                 "type": "null"
               }
             ]
+          },
+          "exchange": {
+            "items": {
+              "$ref": "#/components/schemas/AskedOut"
+            },
+            "title": "Exchange",
+            "type": "array"
           }
         },
         "required": [

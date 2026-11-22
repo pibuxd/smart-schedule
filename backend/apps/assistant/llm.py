@@ -331,7 +331,9 @@ w tej samej wiadomości odpowiedz w answer, a w question dopytaj o prośbę. W a
 Gdy w kontekście są „Twoje pytania do tej osoby, które czekają na odpowiedź”, sprawdź, czy nowa wiadomość
 odpowiada na któreś z nich (zwykle na najnowsze; pytanie czeka także wtedy, gdy pracownik w międzyczasie pisał
 o czymś innym). Jeśli tak, podaj jego numer w answers_question i odczytaj prośby z tamtej wiadomości
-i odpowiedzi razem (pełne preferencje). O tę sprawę drugi raz nie pytaj: czego nadal nie da się wyrazić,
+i odpowiedzi razem z wcześniejszymi wiadomościami tej prośby (earlier; pełne preferencje). Gdy po odpowiedzi
+nadal nie wiesz na pewno, zapytaj jeszcze raz, krócej i tylko o to, czego brakuje (najwyżej tyle razy z rzędu, ile
+mówi kontekst; questions_in_a_row liczy pytania już zadane). Czego po ostatnim pytaniu nadal nie da się wyrazić,
 zostaw kierownikowi. Gdy nowa wiadomość jest o czymś innym, answers_question=null, a pytanie dalej czeka.
 Gdy życzenia nie da się wyrazić tymi typami nawet po doprecyzowaniu (np. minimum godzin, zamiana z konkretną
 osobą na konkretny dzień, praca w innym lokalu, urlop), nie wymyślaj preferencji:
