@@ -308,6 +308,26 @@ def test_a_doubtful_reading_is_confirmed_before_it_is_saved(api, shop, with_key,
     assert second.status == "interpreted" and second.answer_to_id == first.pk
 
 
+@pytest.mark.parametrize("yes", ["tak", "Tak, dokładnie!", "no tak, o to mi chodzi", "zgadza się"])
+def test_a_plain_yes_to_a_confirmation_saves_the_reading_even_if_the_model_still_doubts_it(
+    api, shop, with_key, monkeypatch, yes
+):
+    Model(monkeypatch, reading(confidence=0.4), answering(reading(confidence=0.4)))
+    api.login(shop["worker"])
+    first = write(api, shop, "piątki raczej nie")
+    second = write(api, shop, yes)
+    assert second.status == "interpreted" and second.question == "" and second.answer_to_id == first.pk
+    assert second.interpretation["summary"].startswith("Wolne w piątki")
+
+
+def test_a_yes_with_a_correction_is_read_again(api, shop, with_key, monkeypatch):
+    Model(monkeypatch, reading(confidence=0.4), answering(reading(confidence=0.4)))
+    api.login(shop["worker"])
+    write(api, shop, "piątki raczej nie")
+    second = write(api, shop, "tak, ale tylko w lutym")
+    assert second.status == "answered" and second.question.startswith("Czy dobrze rozumiem")
+
+
 def test_a_reading_still_doubtful_after_three_questions_goes_to_the_manager(api, shop, with_key, monkeypatch):
     Model(monkeypatch, *[reading(confidence=0.4)], *[answering(reading(confidence=0.3))] * 3)
     api.login(shop["worker"])

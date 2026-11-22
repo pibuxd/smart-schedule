@@ -857,7 +857,7 @@ class TestMisses:
         assert TextRequest.objects.get(pk=first).question.startswith("Czy dobrze rozumiem")
         doubtful = reading(confidence=0.2).model_copy(update={"answers_question": 1})
         monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: doubtful)
-        for text in ("chyba tak", "może", "tak"):  # asked up to three times in a row
+        for text in ("chyba tak", "może", "nie wiem"):  # asked up to three times in a row
             unsure = send_request(api, shop, text).json()["id"]
             services.interpret_request(unsure)
         row = TextRequest.objects.get(pk=unsure)
@@ -896,7 +896,7 @@ class TestMisses:
                             "poprawić."
                             for text in ("coś niejasnego", "chyba tak", "może")
                         ),
-                        "odpowiedź: tak",
+                        "odpowiedź: nie wiem",
                     ]
                 ),
                 "unsure",
@@ -904,4 +904,4 @@ class TestMisses:
             ("request", "prośba przy błędzie", "failed"),
             ("command", "zrób coś", "question"),
         }
-        assert "pewność 0.20" in next(r for r in rows if r["text"].endswith("odpowiedź: tak"))["assistant_answer"]
+        assert "pewność 0.20" in next(r for r in rows if r["text"].endswith("odpowiedź: nie wiem"))["assistant_answer"]

@@ -9,6 +9,7 @@ against the location's own data, and the sentences the manager sees are built he
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -53,10 +54,15 @@ NOT_UNDERSTOOD_REPLY = "Nie wiem, jak na to odpowiedzieć. Napisz to inaczej alb
 MAX_PREFERENCES = 3
 PARTIAL_NOTE = "Części tej wiadomości nie da się zamienić na ustawienie. Kierownik przeczyta ją sam."
 # Questions in a row about one request (the assistant's or the app's) before the manager reads it (Piotr, 22.11.2026:
-# the assistant asks until it is sure; three keeps a person from being asked forever).
+# the assistant asks until it is sure; three, proposed in PR #68 and awaiting his decision, keeps a person from being
+# asked forever).
 MAX_QUESTIONS = 3
 # The app's own question when the assistant doubts its reading (confidence below ASSISTANT_MIN_CONFIDENCE).
 CONFIRM_QUESTION = "Czy dobrze rozumiem: {what}? Odpisz „tak” albo napisz, co poprawić."
+# A plain "yes" to a confirmation question settles the doubt: the reading is saved, never asked about again
+# (Prelint on #68). Any other word ("tak, ale tylko w soboty") is a correction and is read as usual.
+YES_STARTERS = frozenset({"tak", "dokładnie", "zgadza", "ok", "okej", "dobrze", "jasne", "racja", "potwierdzam"})
+YES_WORDS = YES_STARTERS | {"się", "o", "to", "mi", "chodzi", "właśnie", "no"}
 # An answer to the last question that is still not clear: the manager reads it, and the person is told why.
 STILL_UNSURE_REPLY = "Nadal nie wiem na pewno, o co chodzi, więc tego nie zapisuję. Kierownik przeczyta całą rozmowę."
 
@@ -332,6 +338,14 @@ def exchange(asked: TextRequest | None) -> list[TextRequest]:
     return rows[::-1]
 
 
+def confirmed(answered: TextRequest | None, text: str) -> bool:
+    """True when `text` only says "yes" to a "Czy dobrze rozumiem: …?" question (the app's or the model's)."""
+    if answered is None or not answered.question.startswith(CONFIRM_QUESTION.split("{", 1)[0]):
+        return False
+    words = set(re.findall(r"\w+", text.casefold()))
+    return bool(words & YES_STARTERS) and words <= YES_WORDS
+
+
 def _namesake_question(reply: llm.EmployeeReply, people: dict[str, str]) -> str:
     """A question the app asks by itself when a preference names a first name that several co-workers share
     ("Ania" with Ania K. and Ania M. on the list): never guess which one."""
@@ -411,8 +425,9 @@ def _checked_reply(
         outcome.reply = answer
         outcome.answer, outcome.raw = {"why": "za dużo pytań", **raw}, raw
     else:
+        sure = confirmed(answered, row.text)
         outcome = _checked_preferences(
-            reply, row, people, shift_types, previous, raw, answer, bool(hours), can_ask=can_ask
+            reply, row, people, shift_types, previous, raw, answer, bool(hours), can_ask=can_ask, sure=sure
         )
     if answering:
         outcome.answer_to = answered
@@ -437,7 +452,7 @@ def _asking(question: str, answer: str, raw: dict[str, Any], why: str = "") -> _
     outcome = _Outcome(TextRequest.Status.ANSWERED)
     outcome.question, outcome.reply, outcome.raw = question, answer, raw
     if why:
-        outcome.answer = {"why": why, "question": question, **raw}
+        outcome.answer = {"why": why, **raw, "question": question}
     return outcome
 
 
@@ -457,9 +472,10 @@ def _checked_preferences(
     answer: str,
     has_hours: bool,
     can_ask: bool = False,
+    sure: bool = False,
 ) -> _Outcome:
     """`can_ask`: the app may ask the person to confirm a reading the assistant doubts (fewer than `MAX_QUESTIONS`
-    questions in a row so far)."""
+    questions in a row so far). `sure`: the person has just said "yes" to such a question, so a doubt is settled."""
     span = request_span(row)
     parts, why, doubt = [], "", ""
     if len(reply.preferences) > MAX_PREFERENCES:
@@ -472,7 +488,7 @@ def _checked_preferences(
             why = problem
         else:
             parts.append(data)
-            doubt = doubt or problem
+            doubt = doubt or ("" if sure else problem)
     if doubt and not can_ask:
         why = why or doubt  # asked enough times: the manager reads it
     replacement = None

@@ -1116,7 +1116,7 @@ niczego w nich nie zużył.
 ## 34. Asystent pracownika dopytuje (22.11.2026)
 
 Prośba Piotra (spec.md, „Asystent pracownika dopytuje”): zamiast od razu oddawać kierownikowi niepewną prośbę,
-asystent dopytuje pracownika (od 22.11.2026 najwyżej trzy razy z rzędu, wcześniej raz).
+asystent dopytuje pracownika (wcześniej raz; PR #68 proponuje najwyżej trzy razy z rzędu, czeka na decyzję Piotra).
 
 - `llm.EmployeeReply.question` (jedno pytanie albo null) i `answers_question` (numer czekającego pytania z
   kontekstu, na które odpowiada ta wiadomość, albo null). Oba mają wartości domyślne, więc działają tak samo na OpenRouter (argumenty `final_answer`) i na
@@ -1142,7 +1142,9 @@ asystent dopytuje pracownika (od 22.11.2026 najwyżej trzy razy z rzędu, wcześ
   litery, najwyżej 4) i przy zmianie spoza listy (lista zmian lokalu); `CONFIRM_QUESTION` („Czy dobrze rozumiem:
   <opis>? …”), gdy któraś preferencja ma pewność poniżej `ASSISTANT_MIN_CONFIDENCE` (`_checked_preference` zwraca
   wtedy dane i powód). `assistant_answer.why` mówi, czemu aplikacja zapytała („osoba lub zmiana”, „pewność 0.40”).
-  W odpowiedzi na pytanie pyta tak samo, dopóki pytań z rzędu jest mniej niż `MAX_QUESTIONS`.
+  W odpowiedzi na pytanie pyta tak samo, dopóki pytań z rzędu jest mniej niż `MAX_QUESTIONS`. Wyjątek:
+  `services.confirmed(answered, text)` = odpowiedź na „Czy dobrze rozumiem…” to samo „tak” (słowa z `YES_WORDS`, w tym
+  któreś z `YES_STARTERS`); wtedy `_checked_preferences(sure=True)` pomija wątpliwość i zapisuje odczyt.
 - API: `MyRequestOut.question` (tylko przy `answered`), `ManagerRequestOut.asked` (`text`, `question` wiadomości,
   na którą odpowiada prośba). Nowa treść prośby („Popraw”) czyści pytanie. `assistant_misses` pokazuje odpowiedź
   razem z pierwszą wiadomością i pytaniem.

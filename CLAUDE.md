@@ -170,7 +170,7 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   assistant asks one question (`EmployeeReply.question`, or the app's own about a namesake, an unknown person or
   shift, or a reading below `ASSISTANT_MIN_CONFIDENCE`; saved as `TextRequest.question` on an `answered` row, nothing
   saved); it waits while it is among the last `MAX_CONVERSATION` messages, a later message names it by number
-  (`answers_question`, `TextRequest.answer_to`); it may ask again about an answer, up to `services.MAX_QUESTIONS` (3)
+  (`answers_question`, `TextRequest.answer_to`); it may ask again about an answer (a plain "tak" to "Czy dobrze rozumiem…" settles a doubt, `services.confirmed`), up to `services.MAX_QUESTIONS` (3)
   in a row (`services.exchange`), and then the request goes to the manager. Without a key (`llm.is_enabled()`) requests go uninterpreted. Tests
   replace `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
