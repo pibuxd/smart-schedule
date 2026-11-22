@@ -225,7 +225,8 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
   Niżej „Zmiany do wzięcia” z przyciskiem „Weź zmianę”. Zamiany z wybraną osobą nie ma: oddaj zmianę i poproś tę
   osobę, żeby ją wzięła, albo poproś kierownika (może zamienić ludzi sam w „Oddane zmiany”).
   „Zgłoś inne godziny” przy dzisiejszej zmianie i w „Minione zmiany” (14 dni wstecz): nadgodziny albo wcześniejsze
-  wyjście; liczy się dopiero to, co kierownik zatwierdzi. Suma godzin liczy zatwierdzone godziny.
+  wyjście; liczy się dopiero to, co kierownik zatwierdzi. Suma godzin liczy zatwierdzone godziny. Pod sumą jest
+  „Wypłata brutto” z dodatkami (gdy kierownik ustawił stawki). Kwot nie znasz: o pieniądze odsyłaj do tego miejsca.
 - „Kiedy mogę”: kalendarz dyspozycji. Na dole wybierasz „Nie mogę”, „Mogę” albo „Chętnie” i stukasz lub
   przeciągasz po dniach; każdy dzień jest od początku „Mogę”; zapis jest automatyczny. Stuknięcie w zaznaczony
   dzień albo „Godziny dnia” ustawia godziny („mogę tylko w tych godzinach”). Gdy kierownik prosi o dyspozycje,
@@ -240,7 +241,10 @@ Przewodnik po aplikacji kierownika:
   „Zmień obsadę sam”: wpisanie innej osoby na dowolną opublikowaną zmianę albo zamiana dwóch osób, także dla zmian,
   które minęły), „Powiadomienia”, „Godziny” (zgłoszone przez pracowników inne godziny do zatwierdzenia lub
   odrzucenia, „Zmień godziny sam” tylko dla zmian z opublikowanego grafiku, godziny w miesiącu na osobę i lokal
-  z nadgodzinami i krótszymi zmianami, plik CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
+  z nadgodzinami i krótszymi zmianami, wypłaty brutto, plik CSV), „Dostęp” (kod dostępu, liczba ułożeń w miesiącu).
+  Stawki stanowisk „od dnia” i dodatki za porę dnia (np. noc) są w „Ustawieniach lokalu”, w części „Stawki i
+  dodatki”; własna stawka osoby (np. za staż) w jej formularzu w „Pracownicy”, w części „Stawki”. Kwot wypłat,
+  stawek ani dodatków nie znasz: o pieniądze odsyłaj do tych miejsc.
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i
   „Przypomnij”, prośby pracowników: ważniejsza, mniej ważna, odrzuć), „Grafik” („Ułóż grafik”, „Ułóż od nowa”,
   oceny, przeciąganie osób, przypinanie, „Dodaj miejsce”/„Usuń miejsce” przy zmianie, wyjaśnienie po kliknięciu
@@ -324,7 +328,9 @@ w tej samej wiadomości odpowiedz w answer, a w question dopytaj o prośbę. W a
 Gdy w kontekście są „Twoje pytania do tej osoby, które czekają na odpowiedź”, sprawdź, czy nowa wiadomość
 odpowiada na któreś z nich (zwykle na najnowsze; pytanie czeka także wtedy, gdy pracownik w międzyczasie pisał
 o czymś innym). Jeśli tak, podaj jego numer w answers_question i odczytaj prośby z tamtej wiadomości
-i odpowiedzi razem (pełne preferencje). O tę sprawę drugi raz nie pytaj: czego nadal nie da się wyrazić,
+i odpowiedzi razem z wcześniejszymi wiadomościami tej prośby (earlier; pełne preferencje). Gdy po odpowiedzi
+nadal nie wiesz na pewno, zapytaj jeszcze raz, krócej i tylko o to, czego brakuje (najwyżej tyle razy z rzędu, ile
+mówi kontekst; questions_in_a_row liczy pytania już zadane). Czego po ostatnim pytaniu nadal nie da się wyrazić,
 zostaw kierownikowi. Gdy nowa wiadomość jest o czymś innym, answers_question=null, a pytanie dalej czeka.
 Gdy życzenia nie da się wyrazić tymi typami nawet po doprecyzowaniu (np. minimum godzin, zamiana z konkretną
 osobą na konkretny dzień, praca w innym lokalu, urlop), nie wymyślaj preferencji:

@@ -167,12 +167,14 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 
 | Model | Pola | Uwagi |
 |---|---|---|
-| `Position` | location, name | np. Sprzedawca, Piekarz, Kierownik zmiany |
+| `Position` | location, name | np. Sprzedawca, Piekarz, Kierownik zmiany; stawki w `pay.PositionRate` (sekcja 35) |
 | `ShiftType` | location, name, start_time, end_time, kind (fixed/flexible), is_closing | koniec przed początkiem = przez północ |
 | `StaffingRule` | location, weekday, shift_type, position, count, start/end (tylko dla zmian z dowolnymi godzinami) | unikalne (location, weekday, shift_type, position) |
 | `StaffingException` | location, date, shift_type, position, count, start/end (opcjonalnie inne godziny) | np. Wigilia, dzień bez obsady (count=0) |
 | `EmployeeProfile` | membership, home_location, positions (M2M), experience (1 początkujący / 2 samodzielny / 3 doświadczony), max_hours_month, target_hours_month, is_active | zlecenie domyślne, stopień 2; stopnia nie widzi pracownik |
 | `PositionExperience` | employee, position, level (1–3) | stopień inny niż domyślny na jednym stanowisku; jeden wiersz na parę |
+| `pay.PositionRate`, `pay.PersonalRate` | position (+ employee), valid_from, hourly_rate | stawka stanowiska i własna stawka osoby na stanowisku od dnia (sekcja 35) |
+| `pay.PaySupplement` | location, name, start_time, end_time, weekdays, kind, value, positions, valid_from, valid_until | dodatek za porę dnia i dni tygodnia (sekcja 35) |
 
 ### Dyspozycyjność i prośby
 
@@ -262,7 +264,7 @@ Grafik
 - `GET /generation-runs/{id}` · `GET /versions/{id}` (zmiany, przypisania, ocena, zasady, niespełnione prośby, historia wersji)
 - `POST /versions/{id}/check` (proponowana zmiana; odpowiedź: naruszenia + nowa ocena + `can_force`) · `GET /versions/{id}/shifts/{shift_id}/drops` (wynik upuszczenia osoby z tej zmiany na każdą inną zmianę, liczony raz na początku przeciągania) · `PATCH /versions/{id}/assignments` (wpisanie, zamiana, zostawienie bez obsady; `force` zapisuje mimo twardej reguły) · `GET /versions/{id}/employees/{employee_id}/fit` (dyspozycje osoby na zmianach, do podświetlania) · `POST /versions/{id}/shifts/{shift_id}/pin`
 - `POST /versions/{id}/draft` (poprawka opublikowanego grafiku) · `DELETE /versions/{id}` (usunięcie szkicu, sekcja 33) · `POST /versions/{id}/publish` · `GET /versions/{id}/shifts/{shift_id}/explain`
-- `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin, współpracownicy na zmianie)
+- `GET /me/schedule` (tylko opublikowany grafik na najbliższy okres, suma godzin i wypłata brutto w miesiącu, współpracownicy na zmianie)
 
 Oddawanie zmian i powiadomienia
 - `POST /me/shifts/{assignment_id}/offer` · `POST /offers/{id}/cancel` · `GET /me/offers?company_id=` · `POST /offers/{id}/claim` · `POST /claims/{id}/withdraw`
@@ -270,7 +272,7 @@ Oddawanie zmian i powiadomienia
 - `GET /me/notifications?company_id=` · `POST /me/notifications/read`
 
 Raporty
-- `GET /reports/hours?company_id=&month=` · `GET /reports/hours.csv?company_id=&month=`
+- `GET /reports/hours?company_id=&month=` · `GET /reports/hours.csv?company_id=&month=` (godziny i wypłaty brutto, sekcja 35)
 
 Admin Django: kody subskrypcji (generowanie partii, podgląd użyć), firmy, profile wag.
 
@@ -279,7 +281,7 @@ Admin Django: kody subskrypcji (generowanie partii, podgląd użyć), firmy, pro
 Pracownik (telefon)
 1. Logowanie: numer telefonu → kod (duże pola, automatyczne przejście, "wyślij ponownie" z odliczaniem).
 2. Zaproszenie: nazwa firmy i lokalu, Akceptuj / Odrzuć.
-3. Mój grafik: lista najbliższych zmian (data, lokal, godziny, stanowisko, kto ze mną), suma godzin, "Oddaj zmianę", sekcja "Zmiany do wzięcia" z przyciskiem "Biorę".
+3. Mój grafik: lista najbliższych zmian (data, lokal, godziny, stanowisko, kto ze mną), suma godzin i wypłata brutto, "Oddaj zmianę", sekcja "Zmiany do wzięcia" z przyciskiem "Biorę".
 4. Kiedy mogę: kalendarz okresu z czterema stanami (kolor + ikona + wzór, podpis na przyciskach pędzla), wybór stanu "pędzlem" na dole, potem stuknięcie lub przeciągnięcie po dniach, "Powtarzaj co tydzień do…", "Skopiuj z poprzedniego miesiąca", termin zgłoszenia; na dole "Coś jeszcze?" na prośbę tekstem i pokazanie, jak system ją zrozumiał.
 
 Menedżer (komputer)
@@ -291,7 +293,7 @@ Menedżer (komputer)
 6. Zasady: jedna lista do przeciągania, przełącznik włącz/wyłącz, "bez wyjątków", parametry, podgląd skutku przed zapisaniem.
 7. Grafik: siatka dni × zmiany, trzy wartości oceny, dziury wyraźnie oznaczone, przeciąganie i przypinanie z walidacją na żywo, wyjaśnienia po kliknięciu, publikacja i historia wersji.
 8. Oddane zmiany: lista do zatwierdzenia.
-9. Godziny: podsumowanie miesiąca z podziałem na lokale, eksport CSV.
+9. Godziny: podsumowanie miesiąca z podziałem na lokale i wypłatami brutto, eksport CSV.
 
 Każdy ekran ma stan pusty, ładowania i błędu.
 
@@ -1120,7 +1122,7 @@ niczego w nich nie zużył.
 ## 34. Asystent pracownika dopytuje (22.11.2026)
 
 Prośba Piotra (spec.md, „Asystent pracownika dopytuje”): zamiast od razu oddawać kierownikowi niepewną prośbę,
-asystent raz dopytuje pracownika.
+asystent dopytuje pracownika (od 22.11.2026 najwyżej trzy razy z rzędu, decyzja Piotra; wcześniej raz).
 
 - `llm.EmployeeReply.question` (jedno pytanie albo null) i `answers_question` (numer czekającego pytania z
   kontekstu, na które odpowiada ta wiadomość, albo null). Oba mają wartości domyślne, więc działają tak samo na OpenRouter (argumenty `final_answer`) i na
@@ -1133,8 +1135,22 @@ asystent raz dopytuje pracownika.
   Numer spoza listy znaczy „nowa wiadomość”.
 - `_checked_reply`: pytanie modelu (albo pytanie aplikacji o imię kilku osób, `_namesake_question`) daje `answered`
   z pytaniem i bez interpretacji, nawet gdy model podał też preferencje. Odpowiedź (`answers_question` przy otwartym
-  pytaniu) dostaje `answer_to` i przechodzi zwykłe sprawdzenie; drugie pytanie zamiast odczytu daje
-  `needs_manager` / `unsure` z powodem „drugie pytanie”.
+  pytaniu) dostaje `answer_to` i przechodzi zwykłe sprawdzenie. Odpowiedź może dostać kolejne pytanie (znów
+  `answered` z pytaniem i `answer_to`): `services.exchange(row)` idzie po `answer_to` i daje wiadomości z pytaniami
+  tej prośby, a `MAX_QUESTIONS = 3` ogranicza je do trzech z rzędu. Czwarte pytanie zamiast odczytu daje
+  `needs_manager` / `unsure` z powodem „za dużo pytań” (wcześniej „drugie pytanie” już przy drugim).
+  `context.open_questions` podaje przy czekającym pytaniu wcześniejsze wiadomości i pytania (`earlier`) oraz
+  `questions_in_a_row`. API: `MyRequestOut.exchange` i `ManagerRequestOut.exchange` (wszystkie wcześniejsze
+  wiadomości z pytaniami, od najstarszej; `asked` zostaje = ostatnia z nich). Karta kierownika: „Wcześniej: …”, potem
+  „Potem: …” przy kolejnych. `assistant_misses` łączy całą wymianę.
+- Pytania aplikacji (dopisane 22.11.2026, gdy wiadomość nie odpowiada na pytanie): `_unknown_name_question` przy
+  `unikaj_osoby` / `preferuj_osobe` bez osoby albo z osobą spoza listy (podobne imiona = te same dwie pierwsze
+  litery, najwyżej 4) i przy zmianie spoza listy (lista zmian lokalu); `CONFIRM_QUESTION` („Czy dobrze rozumiem:
+  <opis>? …”), gdy któraś preferencja ma pewność poniżej `ASSISTANT_MIN_CONFIDENCE` (`_checked_preference` zwraca
+  wtedy dane i powód). `assistant_answer.why` mówi, czemu aplikacja zapytała („osoba lub zmiana”, „pewność 0.40”).
+  W odpowiedzi na pytanie pyta tak samo, dopóki pytań z rzędu jest mniej niż `MAX_QUESTIONS`. Wyjątek:
+  `services.confirmed(answered, text)` = odpowiedź na „Czy dobrze rozumiem…” to samo „tak” (słowa z `YES_WORDS`, w tym
+  któreś z `YES_STARTERS`); wtedy `_checked_preferences(sure=True)` pomija wątpliwość i zapisuje odczyt.
 - API: `MyRequestOut.question` (tylko przy `answered`), `ManagerRequestOut.asked` (`text`, `question` wiadomości,
   na którą odpowiada prośba). Nowa treść prośby („Popraw”) czyści pytanie. `assistant_misses` pokazuje odpowiedź
   razem z pierwszą wiadomością i pytaniem.
@@ -1149,3 +1165,74 @@ Założenia: pytanie czeka, dopóki asystent je pamięta (10 wiadomości; decyzj
 na następną wiadomość). Potem pierwsza wiadomość zostaje niezapisana, ale „Twoje prośby” pokazują ją jako czekającą
 (można ją napisać od nowa albo przekazać kierownikowi). Zgłoszenia innych godzin z
 wiadomości z pytaniem pokazują się jak dotąd, bo i tak wysyła je dopiero pracownik.
+
+## 35. Wypłata przy godzinach (22.11.2026)
+
+Prośby Piotra (spec.md, „Oczekiwana wypłata”): przy godzinach pracownik widzi wypłatę, a kierownik sumy do wypłaty;
+stawka zmienia się „od dnia”; stawka zależy od stanowiska, pory dnia i doświadczenia na stanowisku; bez słowa
+„szacunek”, bo to dokładne wyliczenie.
+
+Research (22.11.2026, strony pomocy):
+- Kadromierz: domyślna stawka godzinowa stanowiska i indywidualna stawka pracownika na stanowisku („jeśli … pracownicy
+  … posiadają np. inny staż pracy”); historia stawek w kontraktach z datą rozpoczęcia, poprzedni kontrakt kończy się
+  sam. Strony o stanowiskach, profilu i kontraktach nie opisują dodatków za porę dnia.
+- 7shifts: stawka na rolę u pracownika, zmiana z datą obowiązywania (z góry albo do 30 dni wstecz); rozliczone wypłaty
+  się nie zmieniają. Deputy: rekordy płacy z datą początku, koszt liczony według dnia zmiany, awans za staż to nowy
+  rekord od dnia (ręcznie); reguła za godziny poza zwykłymi liczy tylko część zmiany w oknie. Planday: dodatki w kwocie
+  albo procencie za porę dnia, dni tygodnia i święta, z okresem obowiązywania, dla grup pracowników; dodatek za staż
+  jako kwota miesięczna. Sling: stawka stanowiska, indywidualna stawka osoby na stanowisku wygrywa.
+- Wniosek: stawki od dnia na stanowisku i na osobie na stanowisku (jak Kadromierz), dodatki za porę dnia i dni
+  tygodnia w złotych albo procentach, z datami (jak Planday i Deputy), staż przez własną stawkę od dnia (nikt z nich
+  nie podnosi stawki sam; stopień doświadczenia w Grafikomacie nie ma daty, więc nie zmienia stawki).
+
+Model: aplikacja `apps/pay` (migracja `pay.0001`; staffing bez pól stawek).
+- `PositionRate` (stanowisko, `valid_from`, `hourly_rate`) i `PersonalRate` (osoba, stanowisko, `valid_from`,
+  `hourly_rate`): kroki stawki. `valid_from` = null to „od początku” (pierwsza stawka), jeden krok na dzień
+  (`nulls_distinct=False`). Krok bez kwoty znaczy od tego dnia „bez stawki” (stanowisko) albo „stawka stanowiska”
+  (osoba). Stawka zmiany: ostatni krok osoby na stanowisku zmiany z `valid_from` ≤ `Shift.date`, gdy ma kwotę, inaczej
+  ostatni taki krok stanowiska, inaczej brak.
+- `PaySupplement` (lokal, nazwa, `start_time`–`end_time`: koniec ≤ początek = przez północ, równe = cała doba,
+  `weekdays` jako maska bitów 0 = poniedziałek, `kind` `amount` zł/h albo `percent` stawki zmiany, `value`,
+  `positions` puste = wszystkie, `valid_from`/`valid_until` null = bez granicy). Dodatek liczy sekundy części zmiany
+  (z `worked_hours`) w oknach dnia w strefie lokalu; dzień tygodnia to dzień początku okna, ważność według dnia zmiany.
+  Dodatki się sumują i dotyczą tylko godzin ze stawką.
+- Liczenie: `apps/pay/services.py`: `PayRules(assignments)` czyta stawki i dodatki raz (potrzebuje
+  `shift__location`), `rate(assignment)` i `supplement(assignment, start_at, end_at, rate)`; `Pay` dodaje kwoty w `Decimal` i zaokrągla
+  do grosza raz na końcu (ROUND_HALF_UP), osobno sumę i „w tym dodatki”. Godziny bez stawki idą osobno
+  (`unpriced_hours`), nigdy jako 0 zł. Suma raportu to suma zaokrąglonych kwot osób.
+- API (tylko kierownik lokalu; zapis także `require_writable`): `GET /locations/{id}/pay-settings` (stanowiska z
+  krokami i dodatki), `POST /positions/{id}/rates` i `DELETE /position-rates/{id}`, `GET /locations/{id}/personal-rates`,
+  `POST /employees/{id}/rates` (stanowisko osoby w tym lokalu, inaczej 400) i `DELETE /personal-rates/{id}`,
+  `POST /locations/{id}/supplements`, `PATCH /supplements/{id}` (zmiana kwoty, godzin, dni albo stanowisk od dnia
+  `change_from`: dodatek do dnia przed zostaje, od tego dnia jest nowy; sama nazwa zmienia się w miejscu) i
+  `DELETE /supplements/{id}?end_from=` (kończy dodatek dzień wcześniej; dodatek zaczęty od tego dnia albo później
+  znika). Zapis kroku z tym samym dniem go zastępuje. Kwoty to liczby (złote), stawka spoza 0,01–10 000 zł, dodatek
+  spoza 0,01–10 000 zł albo 1–1000% daje 400 z polskim zdaniem. `MonthHoursOut`, `EmployeeHoursOut` i `HoursReportOut`
+  mają `pay`, `supplements_pay` i `unpriced_hours`; CSV ma „Wypłata brutto, zł”, „W tym dodatki, zł” i „Godziny bez
+  stawki” przed „Uwagi”. `pay` = null, gdy żadna godzina nie miała stawki.
+- Własne stawki nie znikają, gdy osoba traci stanowisko albo odchodzi: dawne zmiany liczą się dalej. Stanowisko
+  usunięte całkiem (bez zmian w grafikach) zabiera kroki kaskadą.
+- UI: ustawienia lokalu, sekcja „Stawki i dodatki”: przy każdym stanowisku stawka dziś i zaplanowana zmiana, „Zmień
+  stawkę” z polem „Od dnia” (domyślnie dziś; pierwsza stawka stanowiska bez daty, własna stawka osoby zawsze z datą),
+  lista kroków w zwijanej części z „Usuń” (krok sprzed bieżącego miesiąca pyta najpierw, a dzień w minionym miesiącu
+  pokazuje „To zmieni wypłatę za minione miesiące.”, też przy dodatkach); dodatki z formularzem (nazwa, od–do albo cała
+  doba, dni, zł/h albo %, stanowiska) i „Zakończ od dnia”. Formularz pracownika: zwijane „Stawki” z tym samym edytorem
+  kroków dla każdego zaznaczonego stanowiska. „Mój grafik”: „Wypłata brutto” i „w tym dodatki” w ramce miesiąca.
+  „Godziny”: kolumna „Wypłata brutto”, suma w stopce, w trwającym miesiącu zdanie, że kwota obejmuje zmiany, które
+  dopiero będą, a przy osobie z innymi lokalami „bez innych lokali” pod kwotą. Kwoty `lib/money.ts` (`Intl.NumberFormat`
+  pl-PL, PLN).
+- Asystent: `tools.DROPPED_KEYS` usuwa z wyników narzędzi `pay`, `supplements_pay`, `unpriced_hours`, `hourly_rate`,
+  `rates` i `supplements`, więc kwoty nie trafiają do zewnętrznej usługi AI (uwaga Prelint z 22.11.2026). Przewodniki
+  po ekranach mówią, gdzie jest wypłata i stawki, a asystent odsyła tam przy pytaniu o pieniądze.
+- Dane przykładowe (`seed_demo`) mają stawki stanowisk i dodatek nocny w piekarniach; firmy testowe
+  (`seed_test_data`) nie, żeby było widać stan bez stawek.
+
+Założenia: kwota jest brutto, bez podatku, składek i premii (aplikacja nie zna umowy, sekcja 17), bo stawkę za godzinę
+zwykle podaje się brutto. Pracownik widzi wypłatę za cały miesiąc z opublikowanych zmian, także przyszłych, bo o to
+chodzi w „oczekiwanej” wypłacie. Dodatku za święto nie ma, bo aplikacja nie zna kalendarza świąt. Każdy kierownik
+lokalu widzi i ustawia stawki tego lokalu.
+Do sprawdzenia w pilotażu (uwagi Prelinta do #66): czy pracownicy czytają kwotę za cały miesiąc jako pewną wypłatę,
+choć część zmian jest jeszcze przed nimi; czy właściciele chcą, żeby stawki widział tylko właściciel, a nie każdy
+kierownik lokalu (jeśli odpowiedzi będą różne, najpierw przełącznik w lokalu); czy kierownicy chcą zamknąć minione
+miesiące zamiast samego ostrzeżenia; czy zmiana stopnia doświadczenia ma proponować nową stawkę; czy dodatek za święto
+jest potrzebny od razu.

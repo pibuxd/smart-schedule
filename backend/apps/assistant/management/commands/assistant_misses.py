@@ -19,6 +19,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.assistant.models import AssistantCommand
+from apps.assistant.services import exchange
 from apps.availability.models import TextRequest
 
 COLUMNS = ("created_at", "kind", "company", "location", "text", "reason", "assistant_answer")
@@ -44,14 +45,16 @@ def misses(since):
         TextRequest.objects.filter(  # superadmin
             created_at__gte=since, status__in=[TextRequest.Status.NEEDS_MANAGER, TextRequest.Status.REJECTED]
         )
-        .select_related("company", "period__location", "employee__home_location", "answer_to")
+        .select_related("company", "period__location", "employee__home_location", "answer_to__answer_to__answer_to")
         .order_by("created_at")
     )
     for r in requests:
         text = r.text
         if r.answer_to:
-            # An answer to the assistant's question makes sense only with the first message and the question.
-            text = f"{r.answer_to.text} | pytanie: {r.answer_to.question} | odpowiedź: {r.text}"
+            # An answer to the assistant's question makes sense only with the earlier messages and the questions.
+            text = " | ".join(
+                [*(f"{m.text} | pytanie: {m.question}" for m in exchange(r.answer_to)), f"odpowiedź: {r.text}"]
+            )
         if r.status == TextRequest.Status.REJECTED:
             reason = "unrelated"
         elif r.employee_corrected and not r.unread_reason and r.interpretation is None:
