@@ -471,6 +471,27 @@ describe('ScheduleScreen', () => {
     expect(calls.find((c) => c.url.endsWith('/pin'))).toMatchObject({ body: { pinned: true } })
   })
 
+  it('deletes the draft after asking, and the period collects availability again', async () => {
+    const calls = api()
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Usunąć szkic grafiku?' })
+    expect(within(sheet).getByText(/okres wróci do zbierania dyspozycji/)).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Tak, usuń szkic' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/versions/v1')).toBe(true))
+  })
+
+  it('says the published schedule stays when deleting corrections', async () => {
+    api({ version: { ...version, number: 2, period: { ...period, status: 'published', published_version_id: 'v0' } } })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText(/Zostaje opublikowany grafik, który widzą pracownicy/)).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zostaw' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it('names the people a correction changes before publishing', async () => {
     api({ version: { ...version, changed_people: ['Anna Wróbel', 'Marek Zając'] } })
     show()
@@ -486,6 +507,7 @@ describe('ScheduleScreen', () => {
     show()
     expect(await screen.findByRole('button', { name: 'Popraw grafik' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Opublikuj' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Usuń szkic' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Ten grafik widzą pracownicy/)).not.toBeInTheDocument()
   })
 

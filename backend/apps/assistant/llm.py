@@ -234,8 +234,9 @@ Przewodnik po aplikacji kierownika:
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i
   „Przypomnij”, prośby pracowników: ważniejsza, mniej ważna, odrzuć), „Grafik” („Ułóż grafik”, „Ułóż od nowa”,
   oceny, przeciąganie osób, przypinanie, „Dodaj miejsce”/„Usuń miejsce” przy zmianie, wyjaśnienie po kliknięciu
-  zmiany, „Opublikuj”; opublikowany grafik zmienia się przez „Popraw grafik” i ponowną publikację), „Ustalenia”
-  (to, co zatwierdzono w rozmowie z asystentem dla okresu; kopiowanie z poprzedniego okresu), „Pracownicy”
+  zmiany, „Opublikuj”, „Usuń szkic”; opublikowany grafik zmienia się przez „Popraw grafik” i ponowną
+  publikację), „Ustalenia” (to, co zatwierdzono w rozmowie z asystentem dla okresu; kopiowanie z poprzedniego
+  okresu), „Pracownicy”
   (zaproszenie po numerze telefonu, stanowiska, stopień doświadczenia, maksimum i cel godzin, wyłączenie z
   grafiku, „Usuń z lokalu”, „Dodaj siebie do grafiku”), „Ustawienia lokalu” (stanowiska, zmiany i godziny,
   obsada na dni tygodnia, „Obsada w wybrane dni” np. Wigilia albo krótszy dzień, dni zamknięcia, okres grafiku i

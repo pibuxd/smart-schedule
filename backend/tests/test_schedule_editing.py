@@ -293,6 +293,65 @@ def test_correcting_a_published_schedule_starts_a_draft_copy(api, shop, draft):
     assert Notification.objects.filter(kind="schedule_published", payload__changed=True).exists()
 
 
+def test_deleting_a_draft_that_was_never_published_reopens_availability(api, shop, draft):
+    api.login(shop["manager"])
+    newer = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    draft.refresh_from_db()
+    assert draft.status == "superseded"
+
+    assert api.client.delete(url(draft)).status_code == 409  # only the newest draft
+    assert api.client.delete(url(newer)).status_code == 204
+
+    assert not ScheduleVersion.objects.filter(period=shop["period"]).exists()  # the older attempt too
+    assert not Shift.objects.exists()
+    shop["period"].refresh_from_db()
+    assert shop["period"].status == SchedulePeriod.Status.COLLECTING
+    period = api.get(f"/api/locations/{shop['location'].id}/periods").json()[0]
+    assert period["latest_version_id"] is None and period["status"] == "collecting"
+    asked = api.post(f"/api/periods/{shop['period'].id}/ask-availability", {"only_missing": False})
+    assert asked.status_code == 200
+
+
+def test_deleting_corrections_brings_back_the_published_schedule(api, shop, draft):
+    api.login(shop["manager"])
+    published = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+    assert api.post(url(published, "/publish")).status_code == 200
+    corrected = ScheduleVersion.objects.get(pk=api.post(url(published, "/draft")).json()["id"])
+    taken = shift_of(corrected, MON)
+    api.patch(url(corrected, "/assignments"), {"changes": [{"shift_id": str(taken.shift_id)}]})
+    again = run_generation(request_generation(_ctx(shop), [shop["period"]])[0].pk, **FAST).versions.get()
+
+    assert api.client.delete(url(published)).status_code == 409  # a published schedule stays
+    assert api.client.delete(url(again)).status_code == 204
+
+    # The unpublished versions since the publication go; the published one and the draft before it stay.
+    left = dict(ScheduleVersion.objects.filter(period=shop["period"]).values_list("number", "status"))
+    assert left == {1: "superseded", 2: "published"}
+    assert Shift.objects.filter(version=published).count() == 12
+    shop["period"].refresh_from_db()
+    assert shop["period"].status == SchedulePeriod.Status.PUBLISHED
+    period = api.get(f"/api/locations/{shop['location'].id}/periods").json()[0]
+    assert period["latest_version_id"] == period["published_version_id"] == str(published.id)
+    assert api.post(url(published, "/draft")).json()["number"] == 3  # correcting starts over from the published one
+
+
+def test_draft_cannot_be_deleted_while_arranging(api, shop, draft):
+    api.login(shop["manager"])
+    request_generation(_ctx(shop), [shop["period"]])
+
+    response = api.client.delete(url(draft))
+
+    assert response.status_code == 409 and "układa" in response.json()["detail"]
+    assert ScheduleVersion.objects.filter(pk=draft.pk).exists()
+
+
+def test_employee_cannot_delete_the_draft(api, shop, draft):
+    api.login(shop["worker"])
+
+    assert api.client.delete(url(draft)).status_code == 403
+    assert ScheduleVersion.objects.filter(pk=draft.pk).exists()
+
+
 def test_days_that_have_passed_can_be_corrected_and_the_correction_stays(api, shop, draft, monkeypatch):
     """Someone swapped outside the app: the manager fixes the past shift so the hours are counted as worked."""
     api.login(shop["manager"])
@@ -459,6 +518,7 @@ def test_read_only_company_can_look_but_not_change(api, shop, draft, subscribe):
     assert api.patch(url(draft, "/assignments"), forced).status_code == 402
     assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 402
     assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 402
+    assert api.client.delete(url(draft)).status_code == 402
 
 
 def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
@@ -478,6 +538,8 @@ def test_other_company_gets_404_everywhere(api, shop, draft, make_company):
     assert api.post(url(draft, "/publish")).status_code == 404
     assert api.post(url(draft, "/seats"), seat(shop, MON)).status_code == 404
     assert api.client.delete(url(draft, f"/shifts/{taken.shift_id}")).status_code == 404
+    assert api.client.delete(url(draft)).status_code == 404
+    assert ScheduleVersion.objects.filter(pk=draft.pk).exists()
 
 
 def test_person_from_another_company_cannot_be_put_in(api, shop, draft, make_company):

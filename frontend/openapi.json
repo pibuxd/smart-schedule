@@ -2097,6 +2097,76 @@
             "SessionAuth": []
           }
         ]
+      },
+      "delete": {
+        "operationId": "delete_schedule_draft",
+        "summary": "Delete Schedule Draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "\"Usuń szkic\": remove the newest draft (and unpublished versions since the last publication). A published\nschedule stays; with nothing published the period goes back to collecting availability.",
+        "tags": [
+          "scheduling"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
       }
     },
     "/api/versions/{version_id}/shifts/{shift_id}/explain": {

@@ -1328,7 +1328,118 @@ export function useScheduleVersion<TData = Awaited<ReturnType<typeof scheduleVer
 
 
 
-export type explainShiftResponse200 = {
+export type deleteScheduleDraftResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteScheduleDraftResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type deleteScheduleDraftResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type deleteScheduleDraftResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type deleteScheduleDraftResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type deleteScheduleDraftResponseSuccess = (deleteScheduleDraftResponse204) & {
+  headers: Headers;
+};
+export type deleteScheduleDraftResponseError = (deleteScheduleDraftResponse402 | deleteScheduleDraftResponse403 | deleteScheduleDraftResponse404 | deleteScheduleDraftResponse409) & {
+  headers: Headers;
+};
+
+export type deleteScheduleDraftResponse = (deleteScheduleDraftResponseSuccess | deleteScheduleDraftResponseError)
+
+export const getDeleteScheduleDraftUrl = (versionId: string,) => {
+
+
+
+
+  return `/api/versions/${versionId}`
+}
+
+/**
+ * "Usuń szkic": remove the newest draft (and unpublished versions since the last publication). A published
+ * schedule stays; with nothing published the period goes back to collecting availability.
+ * @summary Delete Schedule Draft
+ */
+export const deleteScheduleDraft = async (versionId: string, options?: Parameters<typeof apiFetch>[1]): Promise<deleteScheduleDraftResponse> => {
+
+  return apiFetch<deleteScheduleDraftResponse>(getDeleteScheduleDraftUrl(versionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteScheduleDraftMutationKey = () => ['deleteScheduleDraft'] as const;
+
+export const getDeleteScheduleDraftMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteScheduleDraft>>, TError,DeleteScheduleDraftMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteScheduleDraft>>, TError,DeleteScheduleDraftMutationVariables, TContext> => {
+
+const mutationKey = getDeleteScheduleDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteScheduleDraft>>, DeleteScheduleDraftMutationVariables> = (props) => {
+          const {versionId} = props ?? {};
+
+          return  deleteScheduleDraft(versionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteScheduleDraftMutationResult = NonNullable<Awaited<ReturnType<typeof deleteScheduleDraft>>>
+
+    export type DeleteScheduleDraftMutationError = ErrorOut
+    export type DeleteScheduleDraftMutationVariables = {versionId: string}
+
+    /**
+ * "Usuń szkic": remove the newest draft (and unpublished versions since the last publication). A published
+ * schedule stays; with nothing published the period goes back to collecting availability.
+ * @summary Delete Schedule Draft
+ */
+export const useDeleteScheduleDraft = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteScheduleDraft>>, TError,DeleteScheduleDraftMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteScheduleDraft>>,
+        TError,
+        DeleteScheduleDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteScheduleDraftMutationOptions(options), queryClient);
+    }
+    export type explainShiftResponse200 = {
   data: ShiftExplanationOut
   status: 200
 }

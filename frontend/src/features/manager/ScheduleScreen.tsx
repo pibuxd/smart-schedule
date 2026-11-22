@@ -11,7 +11,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarPlus, Clock, Hand, Pin, Plus, Send, ShieldAlert, SquarePen } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Clock, Hand, Pin, Plus, Send, ShieldAlert, SquarePen, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
@@ -25,9 +25,11 @@ import type {
   VersionShiftOut,
 } from '../../api/generated/model'
 import {
+  getLocationPeriodsQueryKey,
   useAddScheduleSeat,
   useChangeAssignments,
   useCheckScheduleChanges,
+  useDeleteScheduleDraft,
   useEmployeeFit,
   useLocationPeriods,
   usePinShift,
@@ -37,6 +39,7 @@ import {
   useStartCorrecting,
 } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
+import { ConfirmSheet } from '../../components/ui/confirm'
 import { Disclosure } from '../../components/ui/disclosure'
 import { Section, SelectField, Tag } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
@@ -268,6 +271,7 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
             ))}
           </SelectField>
         )}
+        {data.editable && !data.period.active_run_id && <DeleteDraft data={data} />}
         {data.editable && (
           <Button size="normal" onClick={() => setPublishing(true)} disabled={data.hard_problems.length > 0}>
             <Send aria-hidden="true" size={20} />
@@ -299,6 +303,47 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
       {correct.isError && <InlineError>{errorMessage(correct.error, NETWORK_PROBLEM)}</InlineError>}
       <PublishSheet data={data} open={publishing} onOpenChange={setPublishing} />
     </section>
+  )
+}
+
+/** "Usuń szkic": the draft goes for good; the published schedule stays, else the period collects availability again. */
+function DeleteDraft({ data }: { data: VersionOut }) {
+  const remove = useDeleteScheduleDraft()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <Button variant="quiet" size="normal" onClick={() => setOpen(true)}>
+        <Trash2 aria-hidden="true" size={18} />
+        Usuń szkic
+      </Button>
+      <ConfirmSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Usunąć szkic grafiku?"
+        confirmLabel="Tak, usuń szkic"
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(
+            { versionId: data.id },
+            {
+              onSuccess: async () => {
+                // The periods first, so this draft's view is gone before its own data is asked for again.
+                await queryClient.invalidateQueries({ queryKey: getLocationPeriodsQueryKey(data.location_id) })
+                void queryClient.invalidateQueries()
+              },
+            },
+          )
+        }
+      >
+        <p className="m-0">
+          {data.period.published_version_id
+            ? 'Szkic zniknie na dobre razem z poprawkami. Zostaje opublikowany grafik, który widzą pracownicy.'
+            : 'Szkic zniknie na dobre razem z poprawkami, a okres wróci do zbierania dyspozycji.'}
+        </p>
+      </ConfirmSheet>
+    </>
   )
 }
 
