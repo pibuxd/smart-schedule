@@ -94,7 +94,7 @@ class Subscription(CompanyOwnedModel):
 
 
 class GenerationUsage(CompanyOwnedModel):
-    """Number of schedule generations per company and calendar month (limit GENERATION_MONTHLY_LIMIT)."""
+    """Number of schedule generations per company and calendar month (limit GENERATION_MONTHLY_LIMIT, 0 = none)."""
 
     month = models.DateField("miesiąc", help_text="Pierwszy dzień miesiąca.")
     count = models.PositiveIntegerField(default=0)

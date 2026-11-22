@@ -161,7 +161,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 | `CodeRedemption` | code, company, user, redeemed_at, days_added | |
 | `CodeAttempt` | user, ip, at, success | do limitu prób |
 | `Subscription` | company, ends_at, source (code/stripe), status liczony z ends_at | jedna na firmę; kod przedłuża od max(ends_at, teraz) |
-| `GenerationUsage` | company, month, count | limit 30 na miesiąc (`GENERATION_MONTHLY_LIMIT`) |
+| `GenerationUsage` | company, month, count | liczba ułożeń w miesiącu; limit `GENERATION_MONTHLY_LIMIT` (od 22.11.2026 domyślnie 0 = bez limitu) |
 
 ### Ustawienia lokalu i pracownicy
 
@@ -395,7 +395,7 @@ Założenia:
 5. Ponowne generowanie, gdy okres ma opublikowaną wersję: dni przed dzisiejszym są zamrożone i biorą zmiany z opublikowanej wersji (także gdy ustawienia obsady się zmieniły); dalsze dni układamy z obecnej obsady z karą za każdą zmianę względem opublikowanej. Przypięcia bierzemy z najnowszej wersji okresu (szkicu albo opublikowanej).
 6. Osoba wyłączona (`is_active = false`) albo pożyczona z innego lokalu zachowuje tylko swoje przypięte i minione zmiany; generator nie daje jej nowych. Opublikowane zmiany tych samych osób w innych okresach i lokalach (7 dni wokół okresu) liczą się do odpoczynku, nakładania i dni z rzędu.
 7. Wynik zapisujemy jako nową wersję szkicu (numer o 1 większy) dla każdego lokalu; okres "zbieranie dyspozycji" przechodzi w "szkic". Historię przypisań (`AssignmentEvent`) zapisujemy dopiero przy publikacji (etap 8), żeby kolejne szkice jej nie zaśmiecały.
-8. Limit generowań liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
+8. Limit generowań (od 22.11.2026 domyślnie wyłączony: `GENERATION_MONTHLY_LIMIT=0`, decyzja Piotra; liczba większa od zera go włącza) liczymy przy zleceniu (blokada na wierszu firmy, więc dwa równoczesne zlecenia go nie przekroczą); nieudane generowanie (brak zmian, sprzeczne zasady, błąd, przekroczony czas bez wyniku) oddaje użycie. Drugie zlecenie dla okresu, który już się układa, dostaje 409.
 9. Zlecenie, które zostało "w trakcie" ponad 10 minut (albo "w kolejce" ponad 30), zadanie okresowe co 10 minut oznacza jako nieudane, żeby ekran nie czekał w nieskończoność.
 10. Warianty: kod przyjmuje inny profil wag i listę wcześniejszych grafików, od których nowy musi się różnić w min. 15 % przypisań; w tej wersji wołamy go raz.
 
@@ -1192,8 +1192,9 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
 - Ekran „Grafik”: `ArrangeButton different` („Ułóż inaczej”, ikona Shuffle) obok „Ułóż od nowa”, gdy okres ma
   wersję. Arkusz „Ułożyć inny grafik?” mówi o co trzeciej zmianie, ostrzega o ręcznych poprawkach jak zwykle, mówi o
   koszu i ma „Napisz asystentowi, co ma być inaczej” (`openChat` z okresem i tekstem „Ułóż inny grafik, żeby ”).
-  Każdy arkusz układania czyta `useSubscription` i pokazuje „Zostało ułożeń w tym miesiącu: N z L.” (ostrzeżenie,
-  gdy zostało mniej niż lokali do ułożenia).
+  Gdy limit jest włączony (`generations_limit` > 0), każdy arkusz układania czyta `useSubscription` i pokazuje
+  „Zostało ułożeń w tym miesiącu: N z L.” (ostrzeżenie, gdy zostało mniej niż lokali do ułożenia). Bez limitu
+  (domyślnie od 22.11.2026) arkusz nic o limicie nie mówi, a „Dostęp” podaje tylko liczbę ułożeń w miesiącu.
 - Asystent: `llm.CommandPlan.arrange` (`no` / `again` / `different`, domyślnie `no`), opis w `COMMAND_SYSTEM`
   (punkt 4) i w przewodniku kierownika. `services._checked_arrange` w `check_plan`: tylko okres ustaleń, który ma
   wersję, lokal nie w archiwum, bez trwającego układania; inaczej uwaga i cały plan zablokowany. Plan dostaje
@@ -1206,7 +1207,9 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
   `RunProgress` (postęp, „Anuluj”, „Zobacz szkic”).
 
 Piotr (22.11.2026): 30 % zostaje; „Ułóż inaczej” ma dawać ciągle nowe grafiki (kierownik klika do skutku), więc
-porównanie obejmuje wszystkie wersje zamiast trzech, a wszystkie szkice zostają i da się do nich wrócić.
+porównanie obejmuje wszystkie wersje zamiast trzech, a wszystkie szkice zostają i da się do nich wrócić. Limitu
+ułożeń domyślnie nie ma (`GENERATION_MONTHLY_LIMIT=0`, sprawdzenie w `request_generation` tylko przy wartości
+większej od zera), żeby klikanie do skutku się nie blokowało.
 Założenia: asystent nie układa
 pierwszego grafiku okresu (to dalej przycisk z ostrzeżeniami o terminie i brakujących dyspozycjach). Okres
 opublikowany zamyka ustalenia, więc z czatu da się układać tylko przed publikacją; przycisk „Ułóż inaczej” działa

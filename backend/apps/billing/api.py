@@ -31,7 +31,7 @@ class SubscriptionOut(Schema):
     # Access comes from the free trial (no code entered yet).
     trial: bool
     generations_used: int
-    generations_limit: int
+    generations_limit: int  # 0 = no limit
 
 
 class RedeemIn(Schema):

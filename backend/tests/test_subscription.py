@@ -221,7 +221,7 @@ def test_company_without_a_code_is_read_only_and_keeps_its_data(api, make_compan
         "expiring_soon": False,
         "trial": False,
         "generations_used": 0,
-        "generations_limit": 30,
+        "generations_limit": 0,  # no limit by default (Piotr, 22.11.2026)
     }
     assert api.get("/api/me").json()["companies"][0]["read_only"] is True
 
@@ -250,7 +250,7 @@ def test_generation_usage_of_the_current_month_is_reported(api, make_company, su
 
     body = api.get(f"/api/companies/{a['company'].id}/subscription").json()
 
-    assert (body["generations_used"], body["generations_limit"]) == (4, 30)
+    assert (body["generations_used"], body["generations_limit"]) == (4, 0)
 
 
 # --- registering a company ----------------------------------------------------------------------------

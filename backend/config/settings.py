@@ -143,7 +143,8 @@ PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "tasks"
 # Scheduling engine: time limit of one generation and CPU threads CP-SAT may use for it.
 SOLVER_TIME_LIMIT_S = int(env("SOLVER_TIME_LIMIT_S", "30"))
 SOLVER_WORKERS = int(env("SOLVER_WORKERS", "8"))
-GENERATION_MONTHLY_LIMIT = int(env("GENERATION_MONTHLY_LIMIT", "30"))
+# Schedule arrangings per company and month; 0 = no limit (the default since 22.11.2026, Piotr).
+GENERATION_MONTHLY_LIMIT = int(env("GENERATION_MONTHLY_LIMIT", "0"))
 
 # The assistant (a language model) reads employees' text requests and the manager's commands. Without a key it is
 # off: requests go to the manager as written and the manager sets rules by hand. OpenRouter is used when its key is

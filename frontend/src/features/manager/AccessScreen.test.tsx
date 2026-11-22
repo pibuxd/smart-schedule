@@ -41,6 +41,16 @@ describe('AccessScreen', () => {
     expect(await screen.findByText('Kod przyjęty. Dostęp aktywny: zostało 44 dni.')).toBeInTheDocument()
   })
 
+  it('says there is no limit when none is set', async () => {
+    mockApi(() => [200, { ...trial, generations_used: 41, generations_limit: 0 }])
+    renderScreen(
+      <AsManager>
+        <AccessScreen />
+      </AsManager>,
+    )
+    expect(await screen.findByText('Ułożenia grafiku w tym miesiącu: 41. Układasz bez limitu.')).toBeInTheDocument()
+  })
+
   it('has an error state', async () => {
     mockApi(() => [500, { detail: 'Błąd serwera.' }])
     renderScreen(

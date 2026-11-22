@@ -347,6 +347,18 @@ def test_generate_differently_from_the_api(api, shop):
 
 
 @pytest.mark.django_db
+def test_without_a_limit_arranging_is_never_refused(api, shop, settings):
+    # The default since 22.11.2026: the manager may click "Ułóż inaczej" until a schedule fits.
+    settings.GENERATION_MONTHLY_LIMIT = 0
+    month = timezone.localdate().replace(day=1)
+    GenerationUsage.objects.create(company=shop["company"], month=month, count=500)
+    api.login(shop["manager"])
+
+    assert generate(api, shop["period"]).status_code == 202
+    assert GenerationUsage.objects.get(company=shop["company"], month=month).count == 501
+
+
+@pytest.mark.django_db
 def test_monthly_generation_limit(api, shop, settings):
     settings.GENERATION_MONTHLY_LIMIT = 1
     api.login(shop["manager"])

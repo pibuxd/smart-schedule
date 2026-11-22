@@ -153,6 +153,20 @@ describe('ArrangeButton', () => {
     expect(await screen.findByText('Zostało ułożeń w tym miesiącu: 3 z 30.')).toBeInTheDocument()
   })
 
+  it('says nothing about a limit when there is none', async () => {
+    mockApi((_method, path) =>
+      path.endsWith('/subscription') ? [200, { generations_used: 41, generations_limit: 0 }] : [200, [run]],
+    )
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    expect(await screen.findByText('Ułożyć inny grafik?')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText(/Zostało ułożeń/)).not.toBeInTheDocument())
+  })
+
   it('warns when nothing is left of the monthly limit', async () => {
     mockApi((_method, path) =>
       path.endsWith('/subscription') ? [200, { generations_used: 30, generations_limit: 30 }] : [200, [run]],

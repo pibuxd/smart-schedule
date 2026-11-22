@@ -119,7 +119,8 @@ def test_when_arranging_cannot_start_on_acceptance_nothing_is_saved(api, drafted
     shop = drafted
     api.login(shop["manager"])
     body = run(api, shop, monkeypatch, plan(new_instructions=[instruction()], arrange="different"))
-    settings.GENERATION_MONTHLY_LIMIT = 0
+    settings.GENERATION_MONTHLY_LIMIT = 1
+    GenerationUsage.objects.create(company=shop["company"], month=timezone.localdate().replace(day=1), count=1)
 
     response = api.post(f"/api/assistant-commands/{body['id']}/apply")
 
@@ -128,7 +129,7 @@ def test_when_arranging_cannot_start_on_acceptance_nothing_is_saved(api, drafted
     assert not ManagerInstruction.objects.exists() and not GenerationRun.objects.exists()
     assert AssistantCommand.objects.get(pk=body["id"]).status == AssistantCommand.Status.READY
 
-    settings.GENERATION_MONTHLY_LIMIT = 10
+    settings.GENERATION_MONTHLY_LIMIT = 0  # no limit
     busy = GenerationRun.objects.create(location=shop["location"])
     busy.periods.set([shop["period"]])
     response = api.post(f"/api/assistant-commands/{body['id']}/apply")
