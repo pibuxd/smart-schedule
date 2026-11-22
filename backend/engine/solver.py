@@ -6,6 +6,10 @@ Two phases, as in docs/plan.md section 3:
 2. with that many holes at most, minimise the penalty: manager rules and employee requests weighed by the
    location's weight profile (80 : 20 by default), plus a cost for every changed published assignment.
 
+With `diversity_from` ("Ułóż inaczej", docs/plan.md section 36) a phase runs between them: with no more holes, keep
+as few of the earlier schedules' person-shifts beyond the allowed share as possible; the penalty phase then keeps
+that difference.
+
 Hard rules (always): one person or a hole per slot, the right position, home location only (borrowing is manual),
 no "cannot" days, no overlapping shifts, pinned slots, frozen past days and "no exceptions" rules. There is no
 contract type and no built-in labour law: the manager switches on rules from the catalog (docs/spec.md).
@@ -15,8 +19,8 @@ requests, hours, closings, days in a row); rules whose score is a share of a var
 between shifts" = broken pairs / all pairs) divide by an estimate of that count instead. The manager always sees
 the numbers from the independent validator, never the solver's own objective.
 
-`solve` is meant to be called once per variant; `diversity_from` and `weights` exist for the later three-variant
-mode (70/30, 80/20, 90/10 with at least 15 % different assignments).
+`solve` is meant to be called once per variant; `diversity_from` and `weights` also exist for the later
+three-variant mode (70/30, 80/20, 90/10 with at least 15 % different assignments).
 """
 
 from __future__ import annotations
@@ -61,6 +65,8 @@ from engine.validator import (
 SCALE = 1_000_000
 # Share of the time limit for phase 1 (holes); phase 2 gets the rest.
 PHASE_1_SHARE = 0.4
+# With `diversity_from`: at most this share of the time limit for the phase that makes the schedule different.
+DIFFERENCE_SHARE = 0.2
 # Time for each quick check that looks for the "no exceptions" rule that makes the problem impossible.
 DIAGNOSIS_TIME_S = 2.0
 DEFAULT_WORKERS = 8
@@ -145,6 +151,8 @@ class _Builder:
         self.x_of_slot: dict[str, list[tuple[str, cp_model.IntVar]]] = defaultdict(list)
         self.x_of_emp: dict[str, list[tuple[Slot, cp_model.IntVar]]] = defaultdict(list)
         self.u: dict[str, cp_model.IntVar] = {}
+        # Person-shifts kept from each earlier schedule beyond the allowed share (`diversity_from`).
+        self.shortfall: list[cp_model.IntVar] = []
         self._own_day: dict[tuple[str, date], cp_model.IntVar] = {}
         self._worked_any: dict[str, cp_model.IntVar] = {}
 
@@ -779,11 +787,17 @@ class _Builder:
                 self.add_penalty(points, 1 - self.x[(before, slot_id)])
 
     def _diversity(self, previous: Schedule, min_difference: float) -> None:
-        kept = [
-            self.x[(e, s)] for s, e in previous.items() if e is not None and (e, s) in self.x and s not in self.fixed
-        ]
-        if kept:
-            self.m.add(sum(kept) <= math.floor((1 - min_difference) * len(kept)))
+        """Soft: every person-shift of `previous` kept beyond (1 - min_difference) of them is one unit of
+        `shortfall`, which `solve` minimises after the holes and before the penalty. Never infeasible."""
+        compared = _compared(self.p, previous, self.fixed)
+        kept = [self.x[(e, s)] for e, seats in compared for s in seats if (e, s) in self.x and s not in self.fixed]
+        allowed = math.floor((1 - min_difference) * len(compared))
+        most = min(len(kept), len(compared)) - allowed
+        if most <= 0:
+            return
+        short = self.m.new_int_var(0, most, f"same_as_before[{len(self.shortfall)}]")
+        self.m.add(short >= sum(kept) - allowed)
+        self.shortfall.append(short)
 
     # ----------------------------------------------------------------- solving
 
@@ -849,6 +863,40 @@ class _Search:
         finally:
             done.set()
             watcher.join()
+
+
+def _shift_of(slot: Slot) -> tuple:
+    """The shift a slot is one seat of: two people swapped between seats of one shift is no difference."""
+    return (slot.location, slot.date, slot.shift_type, slot.position, slot.start_utc, slot.end_utc)
+
+
+def _compared(
+    problem: Problem, previous: Schedule, fixed: Mapping[str, str | None]
+) -> list[tuple[str, tuple[str, ...]]]:
+    """(employee, seats of that shift) for every person-shift of `previous` that arranging can change: its slot is
+    still in the problem, is not fixed (pinned, a day that has passed) and no seat of that shift holds that person
+    fixed."""
+    seats: dict[tuple, list[str]] = defaultdict(list)
+    for slot in problem.slots:
+        seats[_shift_of(slot)].append(slot.id)
+    compared = []
+    for slot_id, employee_id in previous.items():
+        slot = problem.slot_by_id.get(slot_id)
+        if employee_id is None or slot is None or slot_id in fixed:
+            continue
+        group = tuple(seats[_shift_of(slot)])
+        if any(fixed.get(s) == employee_id for s in group):
+            continue
+        compared.append((employee_id, group))
+    return compared
+
+
+def changed_shifts(problem: Problem, previous: Schedule, schedule: Schedule) -> tuple[int, int]:
+    """How many person-shifts of `previous` that arranging could change have someone else in `schedule`, and out of
+    how many (the measure `diversity_from` uses: who works which shift, day and position, whatever the seat)."""
+    compared = _compared(problem, previous, _fixed(problem))
+    changed = sum(1 for employee_id, seats in compared if all(schedule.get(s) != employee_id for s in seats))
+    return changed, len(compared)
 
 
 def _fixed(problem: Problem) -> dict[str, str | None]:
@@ -943,8 +991,9 @@ def solve(
 ) -> SolveResult:
     """Build the best schedule found within `time_limit_s` (fewest holes first, then the lowest penalty).
 
-    `weights` replaces the problem's weight profile (variants with another manager share); every schedule in
-    `diversity_from` must differ from the new one in at least `min_difference` of its assignments.
+    `weights` replaces the problem's weight profile (variants with another manager share). Every schedule in
+    `diversity_from` should differ from the new one in at least `min_difference` of its person-shifts that are not
+    fixed (`changed_shifts`): as close to that as possible without more holes, before the penalty counts.
     `should_stop` is asked about once a second while searching; when it says yes the search ends at once and
     the result is `STOPPED` without a schedule (the manager cancelled the generation).
     """
@@ -998,12 +1047,26 @@ def solve(
             time_ms=elapsed_ms(),
             messages=("Nie udało się ułożyć grafiku w wyznaczonym czasie. Spróbuj ponownie.",),
         )
-    phase_1_optimal = status == cp_model.OPTIMAL
+    optimal = status == cp_model.OPTIMAL
     best_holes = round(first.objective_value)
     schedule = builder.read(first)
+    builder.m.add(builder.holes() <= best_holes)
+
+    if builder.shortfall:
+        # Between the phases: as different from the earlier schedules as asked, with no more holes.
+        builder.m.minimize(sum(builder.shortfall))
+        builder.hint(schedule)
+        budget = min(time_limit_s * DIFFERENCE_SHARE, time_limit_s - (clock.monotonic() - started))
+        middle = _solver(budget, workers, seed)
+        status = search.run(middle, builder.m)
+        if search.stopped:
+            return SolveResult(SolveStatus.STOPPED, None, time_ms=elapsed_ms())
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            schedule = builder.read(middle)
+            builder.m.add(sum(builder.shortfall) <= round(middle.objective_value))
+        optimal = optimal and status == cp_model.OPTIMAL
 
     # Phase 2: the lowest penalty with no more holes.
-    builder.m.add(builder.holes() <= best_holes)
     builder.m.minimize(builder.objective())
     builder.hint(schedule)
     second = _solver(time_limit_s - (clock.monotonic() - started), workers, seed)
@@ -1011,11 +1074,10 @@ def solve(
     if search.stopped:
         return SolveResult(SolveStatus.STOPPED, None, time_ms=elapsed_ms())
     objective = None
-    optimal = False
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         schedule = builder.read(second)
         objective = second.objective_value / SCALE
-        optimal = phase_1_optimal and status == cp_model.OPTIMAL
+    optimal = optimal and status == cp_model.OPTIMAL
     holes = sum(1 for v in schedule.values() if v is None)
     return SolveResult(
         SolveStatus.OPTIMAL if optimal else SolveStatus.FEASIBLE,
@@ -1026,4 +1088,4 @@ def solve(
     )
 
 
-__all__ = ["SolveResult", "SolveStatus", "solve"]
+__all__ = ["SolveResult", "SolveStatus", "changed_shifts", "solve"]

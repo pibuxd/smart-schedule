@@ -9,11 +9,15 @@
 - A run that fails gives its generation back to the monthly limit.
 - `cancel_generation` stops a queued or running run when the manager asks: the run is marked cancelled at once,
   the worker's solver notices within about a second, nothing is saved and the generation is given back.
+- A `different` run ("Ułóż inaczej", docs/plan.md section 36) asks the solver to give at least `DIFFERENT_SHARE`
+  of the person-shifts of each earlier version of the period (up to `COMPARED_VERSIONS`) to someone else, without more
+  holes; the new draft's notes say how different it came out.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from collections.abc import Sequence
 from datetime import date, timedelta
@@ -29,8 +33,8 @@ from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, Sc
 from apps.scheduling.problem_builder import BuildError, BuiltProblem, build_problem
 from apps.tenancy.context import TenantContext
 from apps.tenancy.models import Company
-from engine.scoring import score
-from engine.solver import SolveStatus, solve
+from engine.scoring import Scores, score
+from engine.solver import SolveStatus, changed_shifts, solve
 from engine.validator import validate
 
 logger = logging.getLogger(__name__)
@@ -47,6 +51,10 @@ INVALID_RESULT = (
 )
 NO_SLOTS = "W tym okresie nie ma żadnych zmian do obsadzenia. Ustaw obsadę w ustawieniach lokalu."
 STALE = "Układanie grafiku zostało przerwane. Spróbuj ponownie."
+# "Ułóż inaczej": the share of person-shifts that should get someone else, compared with this many newest versions
+# (more than one, so arranging differently again does not bring back the schedule from a moment ago).
+DIFFERENT_SHARE = 0.3
+COMPARED_VERSIONS = 100  # every version in practice; only a bound on the solver's work
 ALREADY_FINISHED = "Układanie grafiku już się skończyło, więc nie ma czego anulować."
 
 
@@ -54,9 +62,12 @@ def _month(now=None) -> date:
     return timezone.localdate(now or timezone.now()).replace(day=1)
 
 
-def request_generation(ctx: TenantContext, periods: Sequence[SchedulePeriod]) -> list[GenerationRun]:
+def request_generation(
+    ctx: TenantContext, periods: Sequence[SchedulePeriod], *, different: bool = False
+) -> list[GenerationRun]:
     """Queue one generation per period. Locations are independent: each is arranged on its own, with its own
-    rules and weights, and each run counts toward the monthly limit ("arrange all" = one run per location)."""
+    rules and weights, and each run counts toward the monthly limit ("arrange all" = one run per location).
+    `different`: the result has to differ clearly from the period's latest versions ("Ułóż inaczej")."""
     periods = list({p.pk: p for p in periods}.values())
     for period in periods:
         ctx.require_manager_of(period.location)
@@ -72,7 +83,7 @@ def request_generation(ctx: TenantContext, periods: Sequence[SchedulePeriod]) ->
             raise HttpError(409, "Grafik dla tego okresu już się układa. Poczekaj na wynik.")
         usage, _ = ctx.qs(GenerationUsage).get_or_create(company=ctx.company, month=_month())
         limit = settings.GENERATION_MONTHLY_LIMIT
-        if usage.count + len(periods) > limit:
+        if limit and usage.count + len(periods) > limit:
             left = max(0, limit - usage.count)
             raise HttpError(
                 429,
@@ -86,7 +97,9 @@ def request_generation(ctx: TenantContext, periods: Sequence[SchedulePeriod]) ->
 
         runs = []
         for period in periods:
-            run = GenerationRun.objects.create(company=ctx.company, location=period.location, requested_by=ctx.user)
+            run = GenerationRun.objects.create(
+                company=ctx.company, location=period.location, requested_by=ctx.user, different=different
+            )
             run.periods.set([period])
             solve_schedule.defer(run_id=str(run.pk))
             runs.append(run)
@@ -177,11 +190,14 @@ def run_generation(
         built = build_problem(periods, today=today)
         if not built.problem.slots:
             return _fail(run, NO_SLOTS)
+        earlier = _earlier_versions(periods) if run.different else {}
         result = solve(
             built.problem,
             time_limit_s=time_limit_s or settings.SOLVER_TIME_LIMIT_S,
             workers=workers or settings.SOLVER_WORKERS,
             should_stop=should_stop or _stop_check(run.pk),
+            diversity_from=[schedule for versions in earlier.values() for _, schedule in versions],
+            min_difference=DIFFERENT_SHARE,
         )
         run.time_ms = result.time_ms
         if result.status == SolveStatus.STOPPED:
@@ -201,7 +217,14 @@ def run_generation(
             if not _still_active(run):  # cancelled while the result was being checked
                 run.refresh_from_db()
                 return run
-            _save_versions(run, built, result.schedule, report)
+            locations = {period.pk: str(period.location_id) for period in periods}
+            notes = {
+                pk: _difference_notes(
+                    built, versions, result.schedule, score(built.problem, report, location=locations[pk])
+                )
+                for pk, versions in earlier.items()
+            }
+            _save_versions(run, built, result.schedule, report, notes)
             run.status = GenerationRun.Status.SUCCEEDED
             run.solver_status = result.status
             run.finished_at = timezone.now()
@@ -215,7 +238,74 @@ def run_generation(
         return _fail(run, INTERNAL_ERROR)
 
 
-def _save_versions(run: GenerationRun, built: BuiltProblem, schedule, report) -> list[ScheduleVersion]:
+def _earlier_versions(periods: Sequence[SchedulePeriod]) -> dict:
+    """Period id -> its versions (newest first, at most COMPARED_VERSIONS) with their schedules (slot key -> employee
+    id or None). All of them, so that clicking "Ułóż inaczej" again and again keeps giving new schedules."""
+    earlier = {}
+    for period in periods:
+        versions = list(
+            ScheduleVersion.objects.for_company(period.company_id)
+            .filter(period=period)
+            .order_by("-number")[:COMPARED_VERSIONS]
+        )
+        schedules: dict = {version.pk: {} for version in versions}
+        rows = Assignment.objects.for_company(period.company_id).filter(shift__version__in=versions)
+        for version_id, key, employee in rows.values_list("shift__version", "shift__slot_key", "employee"):
+            schedules[version_id][key] = str(employee) if employee else None
+        if versions:
+            earlier[period.pk] = [(version, schedules[version.pk]) for version in versions]
+    return earlier
+
+
+def _difference_notes(built: BuiltProblem, versions, schedule, scores: Scores) -> list[str]:
+    """What "Ułóż inaczej" achieved: compared with the version the manager saw, then with the older ones, and the
+    scores that came out lower than in the version the manager saw (difference goes before rules and requests)."""
+    version, before = versions[0]
+    changed, total = changed_shifts(built.problem, before, schedule)
+    if total == 0:
+        return [
+            f"Ułożony inaczej niż wersja {version.number}, ale nie było czego zmienić: wszystkie obsadzone zmiany "
+            "są przypięte albo minęły."
+        ]
+    note = f"Ułożony inaczej niż wersja {version.number}: inne osoby na {changed} z {total} {_shifts_of(total)}."
+    reached = changed >= math.ceil(DIFFERENT_SHARE * total)
+    older = []
+    for other, shifts in versions[1:]:
+        other_changed, other_total = changed_shifts(built.problem, shifts, schedule)
+        if other_total:
+            older.append((other_changed / other_total, other.number, other_changed, other_total))
+    if older:
+        _share, number, least, out_of = min(older)
+        if least >= math.ceil(DIFFERENT_SHARE * out_of):
+            note += " Od starszych wersji też różni się co najmniej co trzecią zmianą."
+        else:
+            reached = False
+            note += f" Od wersji {number} różni się mniej: inne osoby na {least} z {out_of} {_shifts_of(out_of)}."
+    if not reached:
+        note += " Bardziej się nie dało przy tych dyspozycjach i zasadach bez zostawiania zmian bez obsady."
+    lower = [
+        f"{label} {_percent(getattr(scores, key))} zamiast {_percent(before)}"
+        for key, label in (("manager_rules", "zasady kierownika"), ("employee_requests", "prośby pracowników"))
+        if (before := (version.scores or {}).get(key)) is not None and round(getattr(scores, key), 1) < round(before, 1)
+    ]
+    if lower:
+        note += f" Słabiej niż w wersji {version.number}: {', '.join(lower)}."
+    return [note]
+
+
+def _percent(value: float) -> str:
+    """Like the screen: one decimal at most, a decimal comma ("81,6 %", "90 %")."""
+    return f"{round(value, 1):g}".replace(".", ",") + " %"
+
+
+def _shifts_of(count: int) -> str:
+    """After "z <count>": "z 1 zmiany", "z 2 zmian"."""
+    return "zmiany" if count == 1 else "zmian"
+
+
+def _save_versions(
+    run: GenerationRun, built: BuiltProblem, schedule, report, extra_notes: dict | None = None
+) -> list[ScheduleVersion]:
     problem = built.problem
     people = problem.employee_by_id
     versions = []
@@ -230,7 +320,7 @@ def _save_versions(run: GenerationRun, built: BuiltProblem, schedule, report) ->
             number=(last["n"] or 0) + 1,
             created_by=run.requested_by,
             from_run=run,
-            scores={**scores.as_dict(), "notes": built.notes},
+            scores={**scores.as_dict(), "notes": [*built.notes, *(extra_notes or {}).get(period.pk, [])]},
             is_complete=scores.is_complete,
         )
         slots = [s for s in problem.slots if s.location == location_id]

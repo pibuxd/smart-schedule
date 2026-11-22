@@ -31,6 +31,7 @@ class SubscriptionOut(Schema):
     # Access comes from the free trial (no code entered yet).
     trial: bool
     generations_used: int
+    # Arrangings allowed this month; 0 = no limit.
     generations_limit: int
 
 

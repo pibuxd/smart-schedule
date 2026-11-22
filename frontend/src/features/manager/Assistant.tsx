@@ -27,6 +27,7 @@ import { Button } from "../../components/ui/button";
 import { Disclosure } from "../../components/ui/disclosure";
 import { InlineError, Loading } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
+import { RunProgress } from "./ArrangeSchedule";
 import { useManager } from "./ManagerContext";
 
 const WAIT_MS = 90_000;
@@ -289,6 +290,7 @@ export function AssistantPanel({
               <ChatMessage from="assistant">
                 <CommandReply
                   data={row}
+                  locationId={locationId}
                   late={now - Date.parse(row.created_at) >= WAIT_MS}
                   readOnly={readOnly || (!!row.consumed_at && !row.hours_only)}
                   expired={now >= Date.parse(row.expires_at)}
@@ -391,6 +393,7 @@ export function AssistantPanel({
 
 function CommandReply({
   data,
+  locationId,
   late,
   readOnly,
   expired,
@@ -399,6 +402,7 @@ function CommandReply({
   onRewrite,
 }: {
   data: AssistantCommandOut;
+  locationId: string;
   late: boolean;
   expired: boolean;
   readOnly: boolean;
@@ -544,14 +548,17 @@ function CommandReply({
             )}
         </div>
       )}
-      {applied && (
+      {applied && (data.changes_agreements || data.has_hours) && (
         <p role="status" className="m-0 text-sm text-prefer">
-          {data.hours_only
+          {!data.changes_agreements
             ? "Zapisane. Godziny liczą się od razu, zobaczysz je w „Godzinach”."
             : data.has_hours
               ? "Zapisane. Ustalenia zmienisz w „Ustaleniach”, a godziny w „Godzinach”."
               : "Zapisane w ustaleniach. Tam możesz je zmienić albo usunąć."}
         </p>
+      )}
+      {applied && data.run_id && (
+        <RunProgress runId={data.run_id} locationId={locationId} compact />
       )}
       {dismissed && (
         <p role="status" className="m-0 text-sm text-ink-muted">

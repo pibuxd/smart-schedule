@@ -51,6 +51,11 @@ class AssistantCommandOut(Schema):
     has_hours: bool
     # Only hours: the plan does not depend on the period's agreements, so a published period does not close it.
     hours_only: bool
+    # The plan changes the period's agreements (rules, instructions about people).
+    changes_agreements: bool
+    # Accepting the plan arranges the period's schedule again; `run_id` is that arranging once accepted.
+    arranges: bool
+    run_id: UUID | None
 
 
 class InstructionOut(Schema):
@@ -114,7 +119,7 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
     plan = command.plan or {}
     expires_at = command.created_at + services.COMMAND_MAX_AGE
     consumed_at = command.rule_set.consumed_at if command.rule_set_id else None
-    hours_only = services.has_hours(plan) and not services.needs_rule_set(plan)
+    hours_only = services.has_hours(plan) and not services.needs_rule_set(plan) and not services.arranges(plan)
     return AssistantCommandOut(
         id=command.pk,
         text=command.text,
@@ -138,6 +143,9 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
         consumed_at=consumed_at,
         has_hours=services.has_hours(plan),
         hours_only=hours_only,
+        changes_agreements=services.needs_rule_set(plan),
+        arranges=services.arranges(plan),
+        run_id=command.generation_run_id,
     )
 
 
@@ -284,10 +292,19 @@ def assistant_command(request, command_id: UUID):
 
 @router.post(
     "/assistant-commands/{command_id}/apply",
-    response={200: AssistantCommandOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut, 409: ErrorOut},
+    response={
+        200: AssistantCommandOut,
+        400: ErrorOut,
+        402: ErrorOut,
+        403: ErrorOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+    },
 )
 def apply_assistant_command(request, command_id: UUID):
-    """Accept the plan: the rule list, the instructions and the hours change as the plan's lines say."""
+    """Accept the plan: the rule list, the instructions and the hours change as the plan's lines say, and the
+    arranging it asks for starts (429 when the month's arrangings are used up; then nothing is saved)."""
     ctx, command = _managed_command(request, command_id)
     ctx.require_writable()
     services.apply_command(ctx, command)

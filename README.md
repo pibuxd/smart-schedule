@@ -18,13 +18,14 @@ Stan: prototyp, wszystkie 10 etapów planu zbudowane.
   „Mój grafik”, oddawanie i branie zmian, powiadomienia w aplikacji.
 - Kierownik (komputer): lokale i grupy, stanowiska, zmiany, obsada z kalendarzem na wybrane dni, pracownicy i zaproszenia,
   przegląd dyspozycji i próśb, zasady w kolejności ważności z podglądem skutku, układanie grafiku jednym
-  przyciskiem, ocena w trzech liczbach, wyjaśnienia, ręczne poprawki z walidacją na żywo, publikacja z wersjami,
+  przyciskiem („Ułóż inaczej” daje wyraźnie inny grafik, do starszego szkicu można wrócić), ocena w trzech liczbach, wyjaśnienia, ręczne poprawki z walidacją na żywo, publikacja z wersjami,
   zatwierdzanie oddanych zmian, godziny w miesiącu z eksportem CSV, kody dostępu i okres próbny.
 - Generator: OR-Tools CP-SAT w osobnym workerze (najpierw jak najmniej zmian bez obsady, potem zasady kierownika
   i prośby pracowników w proporcji 80 do 20), niezależny walidator, który ma ostatnie słowo.
 - Asystent (model językowy przez OpenRouter, domyślnie DeepSeek V4.1 Flash; albo Claude): czyta prośby
   pracowników i polecenia kierownika pisane zwykłymi słowami i zamienia je na ustawienia z zamkniętych list.
-  Grafiku nie układa. Kierownik widzi plan zmian i sam go zatwierdza.
+  Sam grafiku nie układa: kierownik widzi plan zmian i go zatwierdza, a gdy wprost poprosi o inny grafik, generator
+  rusza dopiero po zatwierdzeniu planu.
 
 ## Uruchomienie lokalne
 

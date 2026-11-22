@@ -104,6 +104,10 @@ class AssistantCommand(CompanyOwnedModel):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(default=timezone.now)
     decided_at = models.DateTimeField(null=True, blank=True)
+    # The arranging the accepted plan started ("ułóż inny grafik"), so the chat can follow it.
+    generation_run = models.ForeignKey(
+        "scheduling.GenerationRun", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     def validate_same_company(self):
         super().validate_same_company()

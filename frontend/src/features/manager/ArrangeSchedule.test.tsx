@@ -4,11 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExperiencedShortOut } from '../../api/generated/model'
 import { mockApi, renderScreen } from '../../test/render'
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
+import { AssistantDrawerContext } from './assistant-drawer'
 import { AsManager } from './test-utils'
 
 const run = {
   id: 'r1',
   status: 'running',
+  different: false,
   solver_status: '',
   period_ids: ['p1'],
   created_at: '2026-11-13T10:00:00+01:00',
@@ -86,6 +88,116 @@ describe('ArrangeButton', () => {
 
     fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż grafik' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))).toBe(true))
+  })
+
+  it('arranges a clearly different schedule when asked to', async () => {
+    const calls = mockApi(() => [200, [run]])
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true, manualChanges: 2 }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(sheet).toHaveTextContent('Ułożyć inny grafik?')
+    expect(sheet).toHaveTextContent('Co trzecia zmiana dostanie inną osobę niż we wcześniejszych wersjach')
+    expect(sheet).toHaveTextContent('Stracisz ręczne poprawki bez przypięcia: 2.')
+    expect(sheet).toHaveTextContent('Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny razem z poprawkami.')
+
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż inny grafik' }))
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))
+      expect(post?.body).toEqual({ period_ids: ['p1'], different: true })
+    })
+  })
+
+  it('offers the chat for a draft, but not for a published schedule whose agreements are closed', async () => {
+    mockApi(() => [200, [run]])
+    const openChat = vi.fn()
+    const drawer = { openChat, showLocation: vi.fn() }
+    const { unmount } = renderScreen(
+      <AsManager>
+        <AssistantDrawerContext.Provider value={drawer}>
+          <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+        </AssistantDrawerContext.Provider>
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(sheet).toHaveTextContent('Gdy nowy będzie gorszy, usuń go koszem, a wróci obecny.')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Napisz asystentowi, co ma być inaczej' }))
+    expect(openChat).toHaveBeenCalledWith({ locationId: 'l1', periodId: 'p1', text: 'Ułóż inny grafik, żeby ' })
+    unmount()
+
+    renderScreen(
+      <AsManager>
+        <AssistantDrawerContext.Provider value={drawer}>
+          <ArrangeButton targets={[{ ...target, hasVersion: true, published: true }]} different />
+        </AssistantDrawerContext.Provider>
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Napisz asystentowi, co ma być inaczej' })).not.toBeInTheDocument()
+  })
+
+  it('says how many arrangings are left this month', async () => {
+    const subscription = { generations_used: 27, generations_limit: 30 }
+    mockApi((_method, path) => (path.endsWith('/subscription') ? [200, subscription] : [200, [run]]))
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    expect(await screen.findByText('Zostało ułożeń w tym miesiącu: 3 z 30.')).toBeInTheDocument()
+  })
+
+  it('warns when nothing is left of the monthly limit', async () => {
+    mockApi((_method, path) =>
+      path.endsWith('/subscription') ? [200, { generations_used: 30, generations_limit: 30 }] : [200, [run]],
+    )
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    expect(
+      await screen.findByText(/Zostało ułożeń w tym miesiącu: 0 z 30\. Nowe będą możliwe od pierwszego dnia/),
+    ).toBeInTheDocument()
+  })
+
+  it('says nothing about a limit when there is none', async () => {
+    const calls = mockApi((_method, path) =>
+      path.endsWith('/subscription') ? [200, { generations_used: 120, generations_limit: 0 }] : [200, [run]],
+    )
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} different />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż inaczej' }))
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/subscription'))).toBe(true))
+    expect(await screen.findByRole('button', { name: 'Ułóż inny grafik' })).toBeEnabled()
+    expect(screen.queryByText(/Zostało ułożeń/)).not.toBeInTheDocument()
+  })
+
+  it('arranges again without asking for a different schedule', async () => {
+    const calls = mockApi(() => [200, [run]])
+    renderScreen(
+      <AsManager>
+        <ArrangeButton targets={[{ ...target, hasVersion: true }]} />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ułóż od nowa' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(sheet).not.toHaveTextContent('inną osobę')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Ułóż grafik' }))
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/periods/generate'))
+      expect(post?.body).toEqual({ period_ids: ['p1'] })
+    })
   })
 
   it('says nothing about experience when there is enough of it', async () => {

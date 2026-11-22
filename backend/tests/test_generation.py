@@ -1,5 +1,6 @@
 """Generating a schedule: reading the database into a Problem, the API, the worker job, limits and stability."""
 
+import math
 from datetime import date, time, timedelta
 from decimal import Decimal
 
@@ -13,7 +14,13 @@ from apps.accounts.models import User
 from apps.availability.models import AvailabilityDay, TextRequest
 from apps.billing.models import GenerationUsage
 from apps.rules.models import RuleSetting, WeightProfile
-from apps.scheduling.generation import cancel_generation, fail_stale_runs, request_generation, run_generation
+from apps.scheduling.generation import (
+    DIFFERENT_SHARE,
+    cancel_generation,
+    fail_stale_runs,
+    request_generation,
+    run_generation,
+)
 from apps.scheduling.models import Assignment, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuildError, build_problem, slot_key
 from apps.staffing.models import (
@@ -324,6 +331,19 @@ def test_generate_saves_a_run_and_defers_the_job_together(api, shop):
 
     again = generate(api, shop["period"])
     assert again.status_code == 409
+    assert not run.different and body["different"] is False
+
+
+@pytest.mark.django_db
+def test_generate_differently_from_the_api(api, shop):
+    api.login(shop["manager"])
+
+    response = api.post("/api/periods/generate", {"period_ids": [str(shop["period"].id)], "different": True})
+
+    assert response.status_code == 202, response.json()
+    [body] = response.json()
+    assert body["different"] is True
+    assert GenerationRun.objects.get(pk=body["id"]).different
 
 
 @pytest.mark.django_db
@@ -337,6 +357,16 @@ def test_monthly_generation_limit(api, shop, settings):
 
     assert response.status_code == 429
     assert "limit to 1 ułożeń" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_no_monthly_limit_by_default(api, shop, settings):
+    settings.GENERATION_MONTHLY_LIMIT = 0
+    GenerationUsage.objects.create(company=shop["company"], month=timezone.localdate().replace(day=1), count=500)
+    api.login(shop["manager"])
+
+    assert generate(api, shop["period"]).status_code == 202
+    assert GenerationUsage.objects.get(company=shop["company"]).count == 501
 
 
 @pytest.mark.django_db
@@ -477,6 +507,102 @@ def test_stale_runs_are_failed(shop):
     run.refresh_from_db()
     assert run.status == GenerationRun.Status.FAILED
     assert GenerationUsage.objects.get(company=shop["company"]).count == 0
+
+
+def _person_shifts(version) -> set:
+    rows = Assignment.objects.filter(shift__version=version, employee__isnull=False)
+    return set(rows.values_list("shift__date", "shift__shift_type", "shift__position", "employee"))
+
+
+@pytest.mark.django_db
+def test_arranging_differently_gives_other_people_and_says_how_many(shop):
+    period = shop["period"]
+    first = run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get()
+    again = run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get()
+
+    run = request_generation(_ctx(shop), [period], different=True)[0]
+    assert run.different
+    third = run_generation(run.pk, **FAST).versions.get()
+
+    for earlier in (first, again):
+        changed = len(_person_shifts(earlier) - _person_shifts(third))
+        assert changed >= math.ceil(DIFFERENT_SHARE * 12)
+    assert third.scores["holes"] == 0
+    changed = len(_person_shifts(again) - _person_shifts(third))
+    [note] = [note for note in third.scores["notes"] if "inaczej" in note]
+    assert note.startswith(
+        f"Ułożony inaczej niż wersja 2: inne osoby na {changed} z 12 zmian. "
+        "Od starszych wersji też różni się co najmniej co trzecią zmianą."
+    )
+    assert not any("inaczej" in note for note in again.scores["notes"])
+
+
+@pytest.mark.django_db
+def test_the_notes_say_when_rules_or_requests_came_out_lower(shop):
+    from apps.scheduling.generation import _difference_notes
+    from engine.scoring import Scores
+
+    period = shop["period"]
+    first = run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get()
+    first.scores = {**first.scores, "manager_rules": 90.0, "employee_requests": 75.31}
+    rows = Assignment.objects.filter(shift__version=first).values_list("shift__slot_key", "employee")
+    schedule = {key: str(e) if e else None for key, e in rows}
+    built = build_problem([period])
+
+    def notes(manager_rules, employee_requests):
+        scores = Scores(12, 12, manager_rules, employee_requests, 0, 0)
+        return _difference_notes(built, [(first, schedule)], schedule, scores)[0]
+
+    assert notes(85.54, 75.31).endswith("Słabiej niż w wersji 1: zasady kierownika 85,5 % zamiast 90 %.")
+    assert notes(85.54, 70.0).endswith(
+        "Słabiej niż w wersji 1: zasady kierownika 85,5 % zamiast 90 %, prośby pracowników 70 % zamiast 75,3 %."
+    )
+    assert "Słabiej" not in notes(90.0, 80.0)
+
+
+@pytest.mark.django_db
+def test_arranging_differently_again_and_again_compares_with_every_version(shop, monkeypatch):
+    # Clicking "Ułóż inaczej" until it fits: each new schedule is kept away from all earlier ones, not the last three.
+    from apps.scheduling import generation
+
+    period = shop["period"]
+    versions = [run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get() for _ in range(5)]
+    given = {}
+    solve = generation.solve
+
+    def spy(*args, **kwargs):
+        given.update(kwargs)
+        return solve(*args, **kwargs)
+
+    monkeypatch.setattr(generation, "solve", spy)
+    run_generation(request_generation(_ctx(shop), [period], different=True)[0].pk, **FAST)
+
+    def schedule(version):
+        rows = Assignment.objects.filter(shift__version=version).values_list("shift__slot_key", "employee")
+        return {key: str(e) if e else None for key, e in rows}
+
+    assert given["diversity_from"] == [schedule(v) for v in reversed(versions)]
+    assert given["min_difference"] == DIFFERENT_SHARE
+
+
+@pytest.mark.django_db
+def test_arranging_differently_keeps_pins_and_says_when_it_could_not_differ_more(shop):
+    period = shop["period"]
+    first = run_generation(request_generation(_ctx(shop), [period])[0].pk, **FAST).versions.get()
+    # Everything but Monday pinned: only the two Monday places can change, and there are three people.
+    Assignment.objects.filter(shift__version=first).exclude(shift__date=MON).update(pinned=True)
+    pinned = dict(
+        Assignment.objects.filter(shift__version=first, pinned=True).values_list("shift__slot_key", "employee")
+    )
+
+    run = request_generation(_ctx(shop), [period], different=True)[0]
+    second = run_generation(run.pk, **FAST).versions.get()
+
+    after = dict(Assignment.objects.filter(shift__version=second).values_list("shift__slot_key", "employee"))
+    assert all(after[key] == employee for key, employee in pinned.items())
+    monday = {e for (day, _, _, e) in _person_shifts(first) if day == MON}
+    assert len(monday - {e for (day, _, _, e) in _person_shifts(second) if day == MON}) == 1
+    assert "Ułożony inaczej niż wersja 1: inne osoby na 1 z 2 zmian." in second.scores["notes"]
 
 
 @pytest.mark.django_db

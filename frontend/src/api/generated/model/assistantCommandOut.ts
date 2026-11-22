@@ -24,4 +24,7 @@ export interface AssistantCommandOut {
   consumed_at: string | null;
   has_hours: boolean;
   hours_only: boolean;
+  changes_agreements: boolean;
+  arranges: boolean;
+  run_id: string | null;
 }

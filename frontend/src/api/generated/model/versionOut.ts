@@ -35,6 +35,7 @@ export interface VersionOut {
   unmet_request_count: number;
   notes: string[];
   history: VersionSummaryOut[];
+  restorable: boolean;
   today: string;
   changed_people: string[];
 }
