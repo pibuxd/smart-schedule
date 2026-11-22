@@ -59,6 +59,7 @@ describe('MyScheduleScreen', () => {
     expect(next).toHaveTextContent('Z Tobą: Anna Wróbel, Marek Zając')
     expect(screen.getByText('Razem w listopadzie')).toBeInTheDocument()
     expect(screen.getByText('112 godz.')).toBeInTheDocument()
+    expect(screen.queryByText(/Wypłata to godziny razy stawka/)).not.toBeInTheDocument()
   })
 
   it('shows the estimated pay under the hours only when the manager set rates', async () => {
@@ -84,6 +85,7 @@ describe('MyScheduleScreen', () => {
     expect(pay[0].parentElement).toHaveTextContent(/3516,80\szł/)
     expect(pay[1].parentElement).toHaveTextContent(/251,20\szł/)
     expect(screen.getByText('Bez 32 godz., bo kierownik nie ustawił dla nich stawki.')).toBeInTheDocument()
+    expect(screen.getAllByText('Wypłata to godziny razy stawka, przed podatkiem i składkami.')).toHaveLength(1)
   })
 
   it('keeps an ongoing shift visible without offering it and skips an ended shift', async () => {

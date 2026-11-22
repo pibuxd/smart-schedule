@@ -36,7 +36,7 @@ import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { dayTitle, parseDate, shortTime, spanHours, WEEKDAY_HEADERS } from '../../lib/dates'
-import { BAD_RATE, parseRate, rateInput, rateText } from '../../lib/money'
+import { BAD_RATE, parseRate, RATE_CHANGES_PAST, rateInput, rateText } from '../../lib/money'
 import { useManager } from './ManagerContext'
 import { StaffingCalendar } from './StaffingCalendar'
 
@@ -299,6 +299,11 @@ function PositionsSection({ locationId, setup }: { locationId: string; setup: Lo
                 <Button variant="quiet" size="normal" onClick={() => { setEditing(null); setBadRate(false) }}>
                   Anuluj
                 </Button>
+                {rateInput(p.hourly_rate) !== editing.rate.trim() && (
+                  <p role="status" className="m-0 basis-full text-sm text-prefer-not">
+                    {RATE_CHANGES_PAST}
+                  </p>
+                )}
               </form>
             ) : (
               <>

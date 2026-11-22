@@ -111,6 +111,9 @@ export function MyScheduleScreen({
         {data.months.map((month) => (
           <MonthTotal key={month.month} month={month} />
         ))}
+        {data.months.some((month) => month.pay != null) && (
+          <p className="m-0 text-sm text-ink-muted">Wypłata to godziny razy stawka, przed podatkiem i składkami.</p>
+        )}
       </div>
       {recent.length > 0 && <PastShifts shifts={recent} onReport={report} />}
       <GiveAwaySheet shift={data.shifts.find((s) => s.id === giving) ?? null} onClose={() => setGiving(null)} />

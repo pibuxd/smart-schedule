@@ -25,3 +25,6 @@ export function rateInput(value: number | null | undefined): string {
 }
 
 export const BAD_RATE = 'Wpisz stawkę w złotych, np. 31,40.'
+
+// Rates have no history: a new one counts for every month (docs/plan.md, section 35), so say so before saving.
+export const RATE_CHANGES_PAST = 'Nowa stawka zmieni wypłatę także za minione miesiące.'

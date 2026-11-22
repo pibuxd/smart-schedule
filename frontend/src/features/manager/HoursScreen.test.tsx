@@ -146,7 +146,7 @@ describe('HoursScreen: other hours', () => {
       pending: [],
       rows: [
         row({ longer: 0, pay: 2559.1, unpriced_hours: 0 }),
-        row({ employee_id: 'e2', name: 'Ewa Nowak', longer: 0, pay: null, unpriced_hours: 16, total: 16 }),
+        row({ employee_id: 'e2', name: 'Ewa Nowak', longer: 0, pay: null, unpriced_hours: 16, total: 16, elsewhere: true }),
       ],
       pay: 2559.1,
     })
@@ -156,6 +156,7 @@ describe('HoursScreen: other hours', () => {
     expect(anna).toHaveTextContent(/2559,10\szł/)
     const ewa = screen.getByText('Ewa Nowak').closest('tr')!
     expect(ewa).toHaveTextContent('–16 h bez stawki')
+    expect(ewa).toHaveTextContent('więc godziny i wypłata są niepełne')
     expect(screen.getByText('Razem').closest('tr')).toHaveTextContent(/2559,10\szł/)
     expect(screen.getByText(/Wypłata to szacunek brutto/)).toBeInTheDocument()
     expect(screen.queryByText(/Wpisz stawki przy stanowiskach/)).not.toBeInTheDocument()

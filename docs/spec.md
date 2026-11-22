@@ -19,12 +19,16 @@ i wszystkim razem. Piotr zawsze na to patrzył w Kadromierzu.
   podatku, składek, dodatków (np. za noc albo święto) ani premii.
 - Pracownik: w „Mój grafik” pod „Razem w listopadzie” jest „Szacunkowa wypłata brutto” za wszystkie opublikowane zmiany
   tego miesiąca (także te, które są jeszcze przed nim) we wszystkich jego lokalach. Gdy żadna z nich nie ma stawki,
-  tej linii nie ma. Gdy części zmian brakuje stawki, linia mówi, ilu godzin nie liczy.
+  tej linii nie ma. Gdy części zmian brakuje stawki, linia mówi, ilu godzin nie liczy. Pod sumami jest raz zdanie
+  „Wypłata to godziny razy stawka, przed podatkiem i składkami.”
 - Kierownik: ekran „Godziny” ma kolumnę „Wypłata” na osobę i sumę dla wszystkich (z lokali, które prowadzi), a plik
   CSV kolumny „Wypłata brutto, zł (szacunek)” i „Godziny bez stawki”. Gdy w miesiącu żadna zmiana nie ma stawki, ekran
-  mówi jednym zdaniem, gdzie ją ustawić.
+  mówi jednym zdaniem, gdzie ją ustawić. Przy osobie, która pracuje też w lokalach innego kierownika, uwaga mówi, że
+  godziny i wypłata są niepełne.
 - Liczy się stawka zapisana teraz, więc zmiana stawki przelicza też minione miesiące (założenie prototypu; stawka „od
   dnia” to pomysł na później). Przed podwyżką warto pobrać plik CSV za miesiąc, który nie jest jeszcze wypłacony.
+  Pole stawki mówi to przy zmianie: „Nowa stawka zmieni wypłatę także za minione miesiące.” (uwaga Prelint z
+  22.11.2026).
   Własna stawka zostaje, gdy osoba traci stanowisko albo odchodzi z lokalu, żeby jej dawne zmiany liczyły się tak jak
   wcześniej.
 - Asystent nie zna kwot: wypłaty i stawki nie trafiają do zewnętrznej usługi AI (uwaga z przeglądu Prelint z

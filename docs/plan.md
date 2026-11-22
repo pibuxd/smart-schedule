@@ -1177,7 +1177,9 @@ wypłaty.
   „Szacunkowa wypłata brutto” w ramce miesiąca, tylko gdy `pay` nie jest null, i zdanie o godzinach bez stawki.
   „Godziny”: kolumna „Wypłata” i suma w stopce, podpis tabeli „Wypłata to szacunek brutto…”, a gdy w miesiącu nic
   nie ma stawki, jedno zdanie, że stawki ustawia się przy stanowiskach w ustawieniach lokalu. Kwoty
-  `lib/money.ts` (`Intl.NumberFormat` pl-PL, PLN).
+  `lib/money.ts` (`Intl.NumberFormat` pl-PL, PLN). Po przeglądzie Prelint (22.11.2026): pole stawki (stanowisko i
+  „Własna stawka”) różne od zapisanego pokazuje `RATE_CHANGES_PAST`; „Mój grafik” ma raz zdanie, co kwota pomija;
+  uwaga `elsewhere` w „Godzinach” mówi o godzinach i wypłacie.
 - Asystent: `tools.DROPPED_KEYS` usuwa z wyników narzędzi `pay`, `unpriced_hours`, `hourly_rate` i
   `position_rates`, więc kwoty nie trafiają do zewnętrznej usługi AI (uwaga Prelint z 22.11.2026). Przewodniki po
   ekranach mówią, gdzie jest szacunek wypłaty i stawki, a asystent odsyła tam przy pytaniu o pieniądze.

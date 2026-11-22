@@ -84,11 +84,13 @@ it('shows a position’s hourly rate, changes it and refuses a typo before sendi
   fireEvent.click(screen.getByRole('button', { name: 'Zmień stanowisko Kasa' }))
   const [rate] = screen.getAllByLabelText('Stawka, zł/h')
   expect(rate).toHaveValue('31,40')
+  expect(screen.queryByText('Nowa stawka zmieni wypłatę także za minione miesiące.')).not.toBeInTheDocument()
   fireEvent.change(rate, { target: { value: 'dużo' } })
   fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
   expect(await screen.findByText('Wpisz stawkę w złotych, np. 31,40.')).toBeInTheDocument()
   expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
   fireEvent.change(rate, { target: { value: '33,00' } })
+  expect(screen.getByRole('status')).toHaveTextContent('Nowa stawka zmieni wypłatę także za minione miesiące.')
   fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
   await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ name: 'Kasa', hourly_rate: 33 }))
 

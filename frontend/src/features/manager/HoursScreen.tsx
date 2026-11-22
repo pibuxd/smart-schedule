@@ -118,7 +118,9 @@ function HoursTable({ data, onShowMonth }: { data: HoursReportOut; onShowMonth: 
                     <span className="block text-sm text-ink-muted">{row.home_location_name}</span>
                     {row.elsewhere && (
                       <span className="block text-sm font-semibold text-prefer-not">
-                        Pracuje też w lokalach, których nie prowadzisz, więc suma jest niepełna.
+                        {pay
+                          ? 'Pracuje też w lokalach, których nie prowadzisz, więc godziny i wypłata są niepełne.'
+                          : 'Pracuje też w lokalach, których nie prowadzisz, więc suma jest niepełna.'}
                       </span>
                     )}
                   </td>

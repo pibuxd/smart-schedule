@@ -18,7 +18,7 @@ import { CheckField, Section, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
-import { BAD_RATE, parseRate, rateInput, rateText } from '../../lib/money'
+import { BAD_RATE, parseRate, RATE_CHANGES_PAST, rateInput, rateText } from '../../lib/money'
 import { prettyPhone } from '../auth/phone'
 import { useManager } from './ManagerContext'
 import { EXPERIENCE, shifts } from './words'
@@ -351,6 +351,7 @@ function EmployeeForm({
         <OwnRates
           positions={positions.filter((p) => chosen.includes(p.id))}
           rates={rates}
+          saved={ownRates}
           onChange={(id, value) => setRates((now) => ({ ...now, [id]: value }))}
         />
       )}
@@ -409,13 +410,16 @@ function EmployeeForm({
 function OwnRates({
   positions,
   rates,
+  saved,
   onChange,
 }: {
   positions: PositionOut[]
   rates: Record<string, string>
+  saved: Map<string, number | null>
   onChange: (positionId: string, value: string) => void
 }) {
   const set = positions.filter((p) => (rates[p.id] ?? '').trim() !== '')
+  const changed = positions.some((p) => (rates[p.id] ?? '').trim() !== rateInput(saved.get(p.id)))
   return (
     <Disclosure
       summary={
@@ -440,6 +444,11 @@ function OwnRates({
             hint={p.hourly_rate != null ? `Stanowisko: ${rateText(p.hourly_rate)}` : 'Stanowisko nie ma stawki.'}
           />
         ))}
+        {changed && (
+          <p role="status" className="m-0 text-sm text-prefer-not">
+            {RATE_CHANGES_PAST}
+          </p>
+        )}
       </div>
     </Disclosure>
   )
