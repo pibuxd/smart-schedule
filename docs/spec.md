@@ -4,6 +4,55 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Oczekiwana wypłata (prośby Piotra z 22.11.2026)
+
+Pracownik widzi przy sumie godzin w miesiącu, ile zarobi, a kierownik widzi, ile wypłacić każdej osobie i wszystkim
+razem. Piotr zawsze na to patrzył w Kadromierzu. Wypłata to dokładne wyliczenie z grafiku i stawek, więc ekrany nie
+nazywają jej szacunkiem (prośba Piotra).
+
+- Stawka za godzinę należy do stanowiska: kierownik wpisuje ją w ustawieniach lokalu, przy stanowiskach (np. Sprzedawca
+  31,40 zł, Piekarz 36 zł). Stanowisko bez stawki działa jak dotąd. Stawki widzi tylko kierownik.
+- Osoba może mieć własną stawkę na stanowisku: kierownik wpisuje ją w formularzu pracownika, w zwijanej części
+  „Stawki”. Bez własnej stawki liczy się stawka stanowiska. Stanowiska należą do lokalu, więc w każdym lokalu osoby jej
+  stawki ustawia kierownik tego lokalu.
+- Stawka „od dnia” (prośba Piotra): zmiana stawki stanowiska albo osoby działa dopiero od wybranego dnia. Zmiany
+  wcześniejsze liczą się po starej stawce, więc minione miesiące się nie zmieniają. Pierwsza stawka stanowiska liczy się
+  dla wszystkich zmian, bo wcześniej żadnej nie było. Własna stawka osoby zawsze ma dzień, także pierwsza, bo
+  wcześniej liczyła się stawka stanowiska. Zmianę można wpisać z góry (np. podwyżka od 1 stycznia), a pomyłkę
+  usunąć: wtedy znów liczy się poprzednia stawka. O stawce zmiany decyduje dzień, w którym zmiana się zaczyna.
+  Stawka albo dodatek od dnia w minionym miesiącu i usunięcie stawki, która już działała przed tym miesiącem, zmieniają
+  wypłatę, która mogła być już wypłacona: ekran mówi wtedy „To zmieni wypłatę za minione miesiące.”, a usunięcie
+  takiej stawki pyta najpierw (uwaga Prelint z 22.11.2026). Czy zamykać minione miesiące, sprawdzimy w pilotażu.
+  Własne stawki osoby zapisują się od razu, osobno od przycisku „Zapisz” formularza, i ekran to mówi.
+- Doświadczenie na stanowisku (prośba Piotra, tak jak w Kadromierzu): kto ma dłuższy staż, dostaje własną stawkę na
+  tym stanowisku od dnia, np. piekarz po roku 38 zł od 1 marca. Ta sama osoba może więc zarabiać różnie na różnych
+  stanowiskach i w różnych miesiącach. Stopień doświadczenia z formularza („początkujący”, „samodzielny”,
+  „doświadczony”) służy do układania grafiku i nie ma daty, więc stawki nie zmienia: inaczej awans przeliczyłby
+  minione miesiące.
+- Dodatki za porę dnia (prośba Piotra): kierownik dodaje je w ustawieniach lokalu, np. „Noc 22:00–06:00, +6 zł za
+  godzinę” albo „Niedziela, cały dzień, +50% stawki”. Dodatek ma godziny (mogą przechodzić przez północ), dni tygodnia,
+  kwotę w złotych za godzinę albo procent stawki zmiany, i wszystkie stanowiska albo wybrane. Liczy się tylko część
+  zmiany w tych godzinach: zmiana 20:00–04:00 dostaje 6 godzin dodatku nocnego. Dzień tygodnia to dzień, w którym
+  zaczynają się godziny dodatku (noc z soboty na niedzielę to sobota). Kilka dodatków w tej samej godzinie się sumuje.
+  Dodatek dotyczy tylko godzin ze stawką. Zmiana albo usunięcie dodatku też działa od wybranego dnia. Świąt aplikacja
+  nie zna, więc dodatku za święto na razie nie ma.
+- Wypłata to godziny, które się liczą (z opublikowanych grafików, z zatwierdzonymi nadgodzinami i krótszymi zmianami,
+  tak jak na ekranie „Godziny”), razy stawka danej zmiany, plus dodatki. To kwota brutto: aplikacja nie zna umowy, więc
+  nie liczy podatku, składek ani premii.
+- Pracownik: w „Mój grafik” pod „Razem w listopadzie” jest „Wypłata brutto” za wszystkie opublikowane zmiany tego
+  miesiąca (także te, które są jeszcze przed nim) we wszystkich jego lokalach, a pod nią „w tym dodatki”, gdy są. Gdy
+  żadna zmiana nie ma stawki, tej linii nie ma. Gdy części zmian brakuje stawki, linia mówi, ilu godzin nie liczy.
+- Kierownik: ekran „Godziny” ma kolumnę „Wypłata brutto” na osobę i sumę dla wszystkich (z lokali, które prowadzi), a
+  plik CSV kolumny „Wypłata brutto, zł”, „W tym dodatki, zł” i „Godziny bez stawki”. Gdy w miesiącu żadna zmiana nie ma
+  stawki, ekran mówi jednym zdaniem, gdzie ją ustawić. W trwającym miesiącu podpis mówi, że kwota obejmuje też zmiany,
+  które dopiero będą. Przy osobie, która pracuje też w lokalach innego kierownika, uwaga przy kwocie mówi, że brak w
+  niej innych lokali (uwagi Prelint z 22.11.2026).
+- Własna stawka zostaje, gdy osoba traci stanowisko albo odchodzi z lokalu, żeby jej dawne zmiany liczyły się tak jak
+  wcześniej.
+- Asystent nie zna kwot: wypłaty, stawki i dodatki nie trafiają do zewnętrznej usługi AI (uwaga z przeglądu Prelint z
+  22.11.2026: to dane wrażliwsze niż godziny, a ekrany o tym nie mówią). Na „ile zarobię w listopadzie?” odpowiada,
+  gdzie to sprawdzić.
+
 ## Asystent przez OpenRouter (decyzja Piotra z 21.11.2026)
 
 Piotrowi skończył się limit Claude API, więc asystent łączy się przez OpenRouter (jeden klucz, wiele modeli) z modelem
@@ -171,7 +220,7 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 1. Mój grafik: data, lokal, godziny, stanowisko; kto jest ze mną na zmianie.
 2. Dyspozycyjność wyłącznie ręcznie w kalendarzu, bez LLM. W kalendarzu są trzy stany: nie mogę / mogę / chętnie. Każdy dzień jest od początku "mogę" (jasna zieleń), "chętnie" to pełniejsza zieleń, więc nie ma pustych, białych dni (decyzja Piotra z 13.11.2026 po testach: biały dzień po "wyczyść" był mylący). "Wolę nie" i "obojętnie" są usunięte (decyzja Piotra z 13.11.2026: takie życzenia pracownik pisze jako prośbę tekstem, np. "wolałbym mieć wolne 5 grudnia", a LLM zamienia ją na typ wolne_dni). Zaznaczanie "pędzlem" (decyzja Piotra z 12.11.2026): pracownik wybiera na dole ekranu stan (nie mogę, mogę albo chętnie), który zaznacza, a potem stuka w dzień albo przeciąga po kilku dniach naraz; nie trzeba pamiętać kolejności stanów. Zapis automatyczny. Przycisków "Cofnij" i "Więcej opcji" nie ma (decyzja Piotra z 13.11.2026 po testach: każdy kolejny przycisk zmniejsza czytelność, a dzień poprawia się jednym stuknięciem). Stuknięcie w dzień, który ma już wybrany stan, albo narzędzie "Godziny dnia" otwiera ten dzień; pod kalendarzem jest lista dni z godzinami z przyciskiem "Zmień". Można tam wybrać godziny (prośba Piotra z 12.11.2026: pracownicy są elastyczni i zaznaczają godziny, w których mogą): przy "chętnie" i "mogę" znaczą "mogę tylko w tych godzinach" (zmiana spoza nich tego dnia liczy się jak "nie mogę"), przy "nie mogę" znaczą "nie w tych godzinach"; koniec przed początkiem to godziny do rana następnego dnia (nocka). Dzień może mieć dwa przedziały godzin (prośba Piotra z 15.11.2026), np. "mogę 6–10 i 16–22": przy "lub" pracownik może dostać zmianę w każdym z nich, przy "albo" najwyżej jedną zmianę tego dnia, w jednym z przedziałów (twarde, jak "nie mogę"); przy "nie mogę" oba przedziały znaczą "nie w tych godzinach". Kalendarz jest zawsze otwarty (decyzja Piotra z 13.11.2026 po testach): pracownik zaznacza dostępność miesiącami na przyszłość, także zanim kierownik o nią poprosi; zamknięte są tylko dni, które minęły, i dni z ułożonym już grafikiem. Gdy kierownik poprosi o dyspozycje na okres, pracownik widzi termin zgłoszenia i przycisk "Wyślij kierownikowi". Po terminie pracownik nadal może poprawiać dyspozycje, aż kierownik ułoży grafik; dni zmienione po terminie kierownik widzi w siatce ze znakiem "po terminie" (decyzja Piotra z 12.11.2026, zamiast twardego zamknięcia).
 3. Prośby tekstem tylko dla spraw spoza kalendarza, np. "nie chcę zmiany z osobą X". Pracownik widzi, jak system zrozumiał prośbę, i może poprawić. Spośród ludzi prośby widzi tylko menedżer. Gdy asystent jest włączony, treść prośby czyta też zewnętrzna usługa AI (model językowy, od 21.11.2026 przez OpenRouter), a ekran prośby mówi o tym pracownikowi wprost. Prośbę można napisać zawsze, na każdy miesiąc w kalendarzu, także zanim kierownik poprosi o dyspozycje (decyzja Piotra z 15.11.2026: "żeby zawsze dało się pisać o rzeczach na przyszłość"). Taka prośba należy do miesiąca i lokalu pracownika; kierownik widzi ją w każdym okresie grafiku, który obejmuje ten miesiąc, a generator bierze z niej tylko dni z danego okresu.
-4. Po publikacji pracownik widzi tylko swój grafik na najbliższy okres i sumę godzin. Nie widzi, czy jego prośby zostały spełnione, ani powodów.
+4. Po publikacji pracownik widzi tylko swój grafik na najbliższy okres i sumę godzin (od 22.11.2026 z wypłatą brutto, sekcja „Oczekiwana wypłata”). Nie widzi, czy jego prośby zostały spełnione, ani powodów.
 5. Oddanie zmiany: "oddaj zmianę" -> powiadomienie w aplikacji dla osób ze wszystkich lokali firmy, które zaznaczyły wtedy dyspozycyjność, mają właściwe stanowisko i nie złamią twardych reguł -> "biorę" -> menedżer zatwierdza. Zapisuj historię przypisań zmiany, żeby później łatwo dodać zamiany zmian między dwiema osobami. Do zatwierdzenia zmiana należy do osoby, która ją oddaje. Po zatwierdzeniu zmiana od razu przechodzi w opublikowanym grafiku (bez nowej wersji: ślad zostaje w historii przypisań, z osobą, która zatwierdziła), jest przypięta, żeby ponowne układanie nie cofnęło uzgodnienia, a wszyscy zainteresowani dostają powiadomienie. Kierownik może w "Zasadach" lokalu włączyć "Przejęcie oddanej zmiany bez zatwierdzania" (domyślnie wyłączone): wtedy pierwsza osoba, która weźmie zmianę i dla której walidator nie znajduje nowego twardego problemu, dostaje ją od razu, a oddający, biorący i kierownicy lokalu dostają powiadomienie (decyzja Piotra 15.11.2026). Kierownik może też zarządzać tym sam w "Oddane zmiany" (decyzja Piotra 18.11.2026): wybrać dowolną osobę na oddawaną zmianę, zakończyć oddawanie (zmiana zostaje u oddającego), poszukać chętnych na zmianę pracownika w jego imieniu, a w opublikowanym grafiku wpisać inną osobę na dowolną zmianę albo zamienić dwie osoby zmianami (ten sam lokal i okres). Walidator sprawdza każdą taką zmianę i pokazuje zastrzeżenia, ale kierownik może je pominąć ("Wpisz mimo to", "Zamień mimo to"). Działa to też dla zmian, które już się zaczęły albo minęły, żeby godziny zgadzały się z tym, kto naprawdę pracował. Zainteresowani dostają powiadomienie, a ślad zostaje w historii przypisań.
 6. Powiadomienia tylko w aplikacji (zakładka "Powiadomienia" z licznikiem nowych): prośba o dyspozycje, nowy lub poprawiony grafik, zmiana do wzięcia, decyzja kierownika o oddanej zmianie. Kierownik widzi chętnych do wzięcia zmian w "Oddane zmiany" z licznikiem w nagłówku.
 
@@ -187,7 +236,7 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 5. Ponowne generowanie układa od nowa wszystko poza zmianami przypiętymi i dniami, które minęły: nieprzypięte ręczne poprawki znikają. Kierownik, który chce coś zmienić w wyniku, pisze polecenie dla asystenta (LLM), a ten zamienia je na zasady i ich ważność. Układanie w trakcie (w kolejce albo już liczone) kierownik może anulować przyciskiem "Anuluj": nic się nie zapisuje, wcześniejszy szkic zostaje, a anulowane układanie nie wlicza się do miesięcznego limitu (prośba Piotra z 13.11.2026 po testach).
 6. Okres grafiku: kierownik wpisuje daty okresu i dzień, w którym będzie układał grafik. Może jednym przyciskiem poprosić wszystkich pracowników lokalu o dyspozycje (powiadomienie w aplikacji z okresem i terminem). Widzi, kto już wpisał dyspozycje, a kto nie, i może przypomnieć tylko tym, którzy jeszcze nie wpisali.
    Grafik powstaje wyłącznie na świadome polecenie kierownika, gdy minie termin albo gdy wszyscy wpiszą dyspozycje (Piotr, 12.11.2026: ludzie zwlekają do ostatniej chwili, więc grafik ma sens dopiero przy komplecie danych). Aplikacja nie układa grafiku sama, okresowo ani automatycznie; może jedynie podpowiedzieć, że przyszła pora.
-7. Podsumowanie godzin w miesiącu z podziałem na lokale, eksport CSV.
+7. Podsumowanie godzin w miesiącu z podziałem na lokale i wypłatą brutto (od 22.11.2026, sekcja „Oczekiwana wypłata”), eksport CSV.
 8. Usuwanie (prośba Piotra z 18.11.2026): kierownik może usunąć każdą rzecz, którą dodał, a historia grafików i godzin zostaje.
    - Osoba: "Usuń z lokalu" w formularzu pracownika (obok wyłączenia z grafiku), po potwierdzeniu. Osoba bez żadnej zmiany w grafikach znika całkiem. Osoba ze zmianami w zapisanych grafikach znika z list i traci dostęp do firmy, ale jej dawne zmiany i godziny zostają; wraca tylko przez nowe zaproszenie. Kierownik usunięty z listy pracowników dalej jest kierownikiem.
    - Stanowisko: zawsze da się usunąć. Gdy jest w zapisanym grafiku, znika z ustawień, obsady i od ludzi, a dawne grafiki dalej pokazują jego nazwę.
@@ -273,7 +322,7 @@ Firma z 4 piekarniami w jednej grupie i jednym menedżerem, 15-25 pracowników n
 
 ## Poza pierwszą wersją
 
-Trzy warianty grafiku, zamiany zmian proponowane przez pracowników, wnioski urlopowe, zadania na zmianie, koszt pracy, rejestracja czasu pracy (poza zgłaszaniem innych godzin zmiany, od 20.11.2026), miesięczne zestawienie przepracowanych godzin zleceniobiorców, płatności, aplikacje iOS i Android, wysyłka SMS przez bramkę.
+Trzy warianty grafiku, zamiany zmian proponowane przez pracowników, wnioski urlopowe, zadania na zmianie, koszt pracy w układaniu grafiku (wypłata z godzin jest od 22.11.2026), dodatek za święto, rejestracja czasu pracy (poza zgłaszaniem innych godzin zmiany, od 20.11.2026), miesięczne zestawienie przepracowanych godzin zleceniobiorców, płatności, aplikacje iOS i Android, wysyłka SMS przez bramkę.
 
 ## Sposób pracy
 

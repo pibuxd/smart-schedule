@@ -20,6 +20,7 @@ it('keeps each weekday’s hours and experience quota when saving the staffing f
   const calls = mockApi((_method, path) => {
     if (path.endsWith('/setup') || path.endsWith('/staffing')) return [200, setup]
     if (path.endsWith('/overview')) return [200, { groups: [] }]
+    if (path.endsWith('/pay-settings')) return [200, { positions: [], supplements: [] }]
     return [200, { id: 'l', name: 'Lokal', address: '', schedule_period: 'month', availability_deadline_days: 7 }]
   })
   renderScreen(<AsManager><LocationSettingsScreen locationId="l" /></AsManager>)
