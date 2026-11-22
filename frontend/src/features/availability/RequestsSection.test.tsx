@@ -122,7 +122,7 @@ describe("RequestsSection", () => {
     );
     await openChat();
     const reading = (
-      await screen.findByText("Czytamy Twoją wiadomość…")
+      await screen.findByText("Myślę…")
     ).closest("[role=status]") as HTMLElement;
     expect(within(reading).getByTestId("reading-robot")).toBeInTheDocument();
   });

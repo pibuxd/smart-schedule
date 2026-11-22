@@ -309,7 +309,7 @@ export function AssistantPanel({
                 </p>
               </ChatMessage>
               <ChatMessage from="assistant">
-                <ChatTyping>Wysyłam wiadomość…</ChatTyping>
+                <ChatTyping />
               </ChatMessage>
             </li>
           )}

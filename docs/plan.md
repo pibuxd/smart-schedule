@@ -954,6 +954,8 @@ w tygodniu” asystent nie umiał zapisać.
 - Gdy asystent czyta wiadomość (prośba `new`, polecenie w kolejce), czat pokazuje małego robota z książką
   (`ReadingRobot` w `components/assistant/Chat.tsx`, własny rysunek SVG): oczy przesuwają się wzdłuż wiersza, głowa
   lekko kiwa (animacja CSS w `tokens.css`, bez emoji; przy `prefers-reduced-motion` stoi w miejscu).
+  Obok robota zawsze jest „Myślę…” (Piotr, 22.11.2026; wcześniej „Przygotowuję odpowiedź…”, „Czytamy Twoją
+  wiadomość…” i „Wysyłam wiadomość…”), w okienku „Twoje prośby” „Asystent myśli…”.
 
 ## 30. Asystent przez OpenRouter (21.11.2026)
 

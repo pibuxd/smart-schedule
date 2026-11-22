@@ -341,7 +341,7 @@ function RequestStatus({
     );
   }
   if (request.status === "new")
-    return <ChatTyping>Czytamy Twoją wiadomość…</ChatTyping>;
+    return <ChatTyping />;
   return (
     <div className="grid gap-2">
       <Reply request={request} />
@@ -891,7 +891,7 @@ function RequestsWindow({
           ))}
         </ul>
       )}
-      {reading && <ChatTyping>Asystent czyta Twoją prośbę…</ChatTyping>}
+      {reading && <ChatTyping>Asystent myśli…</ChatTyping>}
       {notSaved && !chatOpen && (
         <p className="m-0 text-sm text-ink-muted">
           {notSaved.status === "rejected"

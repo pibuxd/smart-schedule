@@ -235,6 +235,16 @@ describe("Assistant chat", () => {
     expect(screen.getByText(command.text)).toBeInTheDocument();
   });
 
+  it("says it is thinking while a fresh command waits for an answer", async () => {
+    chatApi([{ ...command, status: "queued" }]);
+    panel();
+    const thinking = (await screen.findByText("Myślę…")).closest(
+      "[role=status]",
+    ) as HTMLElement;
+    expect(thinking.querySelector("[data-testid=reading-robot]")).not.toBeNull();
+    expect(screen.queryByText(/Przygotowuję odpowiedź/)).not.toBeInTheDocument();
+  });
+
   it("offers a read retry for a delayed answer without resending the prompt", async () => {
     const calls = chatApi([
       {
