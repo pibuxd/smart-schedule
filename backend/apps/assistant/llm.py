@@ -10,6 +10,9 @@ chat completions, by default DeepSeek V4.1 Flash; since 21.11.2026) and Anthropi
 OpenRouter wins when both are set. Without a key the assistant is off (`is_enabled()` is False) and callers fall back:
 a request goes to the manager as written, the manager sets rules by hand. Both backends take the same prompts, tools
 and Pydantic answer models, so a new answer field needs no change here.
+
+What an answer cost (`Usage`: calls, tokens, dollars from OpenRouter's `usage.cost`) goes to the caller's
+`with tracking(usage)`, also when the answer fails; `apps/assistant/costs.py` saves it (docs/plan.md section 38).
 """
 
 from __future__ import annotations
@@ -17,6 +20,11 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
 import anthropic
@@ -66,6 +74,62 @@ ANSWER_RULE = (
 
 class AssistantError(Exception):
     """The assistant could not answer (network, limit, refusal). The caller falls back to the manager."""
+
+
+@dataclass
+class Usage:
+    """What answers cost: every response the API returned counts, also in an answer that failed afterwards."""
+
+    backend: str = ""
+    model: str = ""
+    providers: list[str] = field(default_factory=list)
+    calls: int = 0  # responses that came back (rounds)
+    input_tokens: int = 0
+    output_tokens: int = 0
+    # Dollars. OpenRouter says it in every response (`usage.cost`); Claude's API does not, so None ("no price").
+    cost: Decimal | None = None
+    seconds: float = 0.0
+    failed: bool = False
+
+    def count(self, provider: str, input_tokens: int, output_tokens: int, cost: Decimal | None) -> None:
+        """One response from the API."""
+        self.calls += 1
+        if provider and provider not in self.providers:
+            self.providers.append(provider)
+        self.input_tokens += input_tokens
+        self.output_tokens += output_tokens
+        if cost is not None:
+            self.cost = (self.cost or Decimal(0)) + cost
+
+    def add(self, other: Usage) -> None:
+        """Add one answer's usage to this (the tracked) one."""
+        self.backend, self.model = other.backend or self.backend, other.model or self.model
+        for provider in other.providers:
+            if provider not in self.providers:
+                self.providers.append(provider)
+        self.calls += other.calls
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        if other.cost is not None:
+            self.cost = (self.cost or Decimal(0)) + other.cost
+        self.seconds += other.seconds
+        self.failed = self.failed or other.failed
+
+
+_tracked: ContextVar[Usage | None] = ContextVar("assistant_usage", default=None)
+
+
+@contextmanager
+def tracking(usage: Usage) -> Iterator[Usage]:
+    """Collect into `usage` what every answer inside the block cost; an exception marks it failed."""
+    token = _tracked.set(usage)
+    try:
+        yield usage
+    except BaseException:
+        usage.failed = True
+        raise
+    finally:
+        _tracked.reset(token)
 
 
 class Preference(BaseModel):
@@ -463,9 +527,19 @@ def is_enabled() -> bool:
 
 def _converse[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None = None) -> T:
     """One message, with up to `MAX_TOOL_ROUNDS` rounds of read-only tool calls, ending in a structured answer."""
-    if backend() == "openrouter":
-        return _converse_openrouter(system, content, output, toolbox)
-    return _converse_anthropic(system, content, output, toolbox)
+    usage, started = Usage(), time.monotonic()
+    try:
+        if backend() == "openrouter":
+            return _converse_openrouter(system, content, output, toolbox, usage)
+        return _converse_anthropic(system, content, output, toolbox, usage)
+    except BaseException:
+        usage.failed = True
+        raise
+    finally:
+        usage.seconds = time.monotonic() - started
+        tracked = _tracked.get()
+        if tracked is not None:
+            tracked.add(usage)
 
 
 # ----------------------------------------------------------------- Anthropic (Claude)
@@ -487,12 +561,15 @@ def output_config(output: type[BaseModel]) -> dict:
     return config
 
 
-def _converse_anthropic[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None) -> T:
+def _converse_anthropic[T: BaseModel](
+    system: str, content: str, output: type[T], toolbox: Toolbox | None, usage: Usage
+) -> T:
     client = anthropic_client()
     config = output_config(output)
     tools = toolbox.definitions() if toolbox else []
     messages: list = [{"role": "user", "content": content}]
-    started, used, output_tokens = time.monotonic(), [], 0
+    usage.backend, usage.model = "anthropic", settings.ANTHROPIC_MODEL
+    started, used = time.monotonic(), []
     for round_ in range(MAX_TOOL_ROUNDS + 1):
         request: dict = {
             "model": settings.ANTHROPIC_MODEL,
@@ -515,7 +592,16 @@ def _converse_anthropic[T: BaseModel](system: str, content: str, output: type[T]
         except anthropic.APIStatusError as exc:
             logger.error("assistant call failed: %s %s", exc.status_code, exc.message)
             raise AssistantError(f"status {exc.status_code}") from exc
-        output_tokens += response.usage.output_tokens
+        tokens = response.usage
+        usage.count(
+            "anthropic",
+            # Cached parts of the prompt are input too (cheaper, but the API gives no price either way).
+            tokens.input_tokens
+            + (getattr(tokens, "cache_creation_input_tokens", 0) or 0)
+            + (getattr(tokens, "cache_read_input_tokens", 0) or 0),
+            tokens.output_tokens,
+            None,
+        )
         if response.stop_reason == "tool_use" and toolbox is not None:
             messages.append({"role": "assistant", "content": response.content})
             results = []
@@ -534,7 +620,7 @@ def _converse_anthropic[T: BaseModel](system: str, content: str, output: type[T]
             time.monotonic() - started,
             round_ + 1,
             ",".join(used) or "-",
-            output_tokens,
+            usage.output_tokens,
             config.get("effort", "default"),
         )
         if response.stop_reason != "end_turn":
@@ -660,14 +746,17 @@ def _text_answer[T: BaseModel](text: str | None, output: type[T], schema: dict) 
         return None
 
 
-def _converse_openrouter[T: BaseModel](system: str, content: str, output: type[T], toolbox: Toolbox | None) -> T:
+def _converse_openrouter[T: BaseModel](
+    system: str, content: str, output: type[T], toolbox: Toolbox | None, usage: Usage
+) -> T:
     client = openrouter_client()
     model = settings.OPENROUTER_MODEL
     schema = answer_schema(output)
     tools = openrouter_tools(toolbox, schema)
     options = openrouter_options()
     messages: list[dict] = [{"role": "system", "content": system + ANSWER_RULE}, {"role": "user", "content": content}]
-    started, used, providers, output_tokens, cost = time.monotonic(), [], [], 0, 0.0
+    usage.backend, usage.model, usage.cost = "openrouter", model, Decimal(0)
+    started, used, providers = time.monotonic(), [], []
 
     def done(result: T, calls: int) -> T:
         # One line per answer, so slow or costly answers can be traced on the server.
@@ -677,11 +766,11 @@ def _converse_openrouter[T: BaseModel](system: str, content: str, output: type[T
             time.monotonic() - started,
             calls,
             ",".join(used) or "-",
-            output_tokens,
+            usage.output_tokens,
             options.get("reasoning", {}).get("effort", "default"),
             model,
             ",".join(dict.fromkeys(providers)) or "-",
-            cost,
+            usage.cost,
         )
         return result
 
@@ -705,11 +794,15 @@ def _converse_openrouter[T: BaseModel](system: str, content: str, output: type[T
             logger.error("assistant call failed: %s %s", exc.status_code, exc.message)
             raise AssistantError(f"status {exc.status_code}") from exc
         extra = response.model_extra or {}
-        providers.append(str(extra.get("provider") or "?"))
-        usage = getattr(response, "usage", None)
-        if usage is not None:
-            output_tokens += usage.completion_tokens or 0
-            cost += float((usage.model_extra or {}).get("cost") or 0)
+        provider = str(extra.get("provider") or "?")
+        providers.append(provider)
+        tokens = getattr(response, "usage", None)
+        usage.count(
+            provider,
+            (tokens.prompt_tokens or 0) if tokens is not None else 0,
+            (tokens.completion_tokens or 0) if tokens is not None else 0,
+            _dollars((tokens.model_extra or {}).get("cost")) if tokens is not None else Decimal(0),
+        )
         if not getattr(response, "choices", None):
             # OpenRouter reports some provider failures inside a 200 response.
             logger.error("assistant call failed: %s", extra.get("error"))
@@ -769,6 +862,14 @@ def _converse_openrouter[T: BaseModel](system: str, content: str, output: type[T
                     text = "Błąd: argumenty muszą być obiektem JSON."
             messages.append({"role": "tool", "tool_call_id": call.id, "content": text})
     raise AssistantError("too many tool rounds")
+
+
+def _dollars(value) -> Decimal:
+    """OpenRouter's `usage.cost` (a JSON number of dollars) without float noise; missing or odd = 0."""
+    try:
+        return Decimal(str(value)) if value is not None else Decimal(0)
+    except ArithmeticError:
+        return Decimal(0)
 
 
 def read_request(text: str, context: str, toolbox: Toolbox | None = None) -> EmployeeReply:

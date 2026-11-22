@@ -1,0 +1,78 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  table.costs { width: 100%; }
+  .costs td.num, .costs th.num { text-align: right; white-space: nowrap; }
+  .costs tr.total td { font-weight: bold; }
+  .costs-month { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+  &rsaquo; <a href="{% url 'admin:assistant_assistantusage_changelist' %}">Koszty asystenta</a>
+  &rsaquo; Zestawienie miesiąca
+</div>
+{% endblock %}
+
+{% block content %}
+<form method="get" class="costs-month">
+  <label for="month">Miesiąc</label>
+  <input type="month" id="month" name="month" value="{{ month_value }}" required>
+  <input type="submit" value="Pokaż">
+</form>
+<p>
+  Razem: <strong>{{ total.cost|floatformat:4 }} USD</strong> za {{ total.messages }} wiadomości
+  (pracownicy {{ total.employee_messages }}, kierownicy {{ total.manager_messages }}).
+  Układanie grafiku: {{ total.arrangings }} razy, {{ total.solver_minutes }} min pracy solvera.
+</p>
+<p class="help">
+  Koszt podaje OpenRouter przy każdej odpowiedzi. Układanie grafiku działa na naszym serwerze, więc nie ma ceny za
+  użycie, tylko czas pracy. Wspólne układanie grupy lokali liczy się w każdym jej lokalu, a czas dzieli się po równo.
+  {% if total.unpriced %}{{ total.unpriced }} wiadomości przeczytał Claude, który nie podaje ceny.{% endif %}
+</p>
+{% for table in tables %}
+  <h2>{{ table.title }} <a href="?month={{ month_value }}&amp;csv={{ table.by }}" style="font-size: .8rem; font-weight: normal">Pobierz CSV</a></h2>
+  {% if table.rows %}
+  <table class="costs">
+    <thead>
+      <tr>
+        <th>Firma</th>
+        {% if table.by == "location" %}<th>Lokal</th>{% endif %}
+        {% if table.by == "person" %}<th>Osoba</th><th>Rola</th>{% endif %}
+        <th class="num">Wiadomości<br>pracownika</th>
+        <th class="num">Koszt<br>(USD)</th>
+        <th class="num">Wiadomości<br>kierownika</th>
+        <th class="num">Koszt<br>(USD)</th>
+        <th class="num">Razem<br>(USD)</th>
+        <th class="num">Nieudane</th>
+        <th class="num">Układanie<br>grafiku</th>
+        <th class="num">Minuty<br>solvera</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>
+        <td>{{ row.company }}</td>
+        {% if table.by == "location" %}<td>{{ row.location }}</td>{% endif %}
+        {% if table.by == "person" %}<td>{{ row.person }}</td><td>{{ row.role }}</td>{% endif %}
+        <td class="num">{{ row.employee_messages }}</td>
+        <td class="num">{{ row.employee_cost|floatformat:4 }}</td>
+        <td class="num">{{ row.manager_messages }}</td>
+        <td class="num">{{ row.manager_cost|floatformat:4 }}</td>
+        <td class="num"><strong>{{ row.cost|floatformat:4 }}</strong></td>
+        <td class="num">{{ row.failed }}</td>
+        <td class="num">{{ row.arrangings }}</td>
+        <td class="num">{{ row.solver_minutes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>W tym miesiącu nic.</p>
+  {% endif %}
+{% endfor %}
+{% endblock %}

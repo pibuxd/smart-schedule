@@ -4,6 +4,30 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Koszty asystenta (prośba Piotra z 22.11.2026)
+
+Piotr chce wiedzieć, ile płaci za OpenRouter: za każde konto i każdy lokal, a u kierownika osobno za rozmowy
+z asystentem i za układanie grafiku.
+
+- Model językowy (OpenRouter, zapasowo Claude) czyta tylko wiadomości do asystenta: pracownika (prośby i pytania)
+  i kierownika (polecenia i pytania w czacie). Grafik układa solver OR-Tools na naszym serwerze, więc układanie nie
+  kosztuje nic za użycie, tylko zajmuje serwer (w cenie VPS). „Ułóż inny grafik” z czatu to wiadomość (koszt modelu)
+  plus układanie (czas solvera).
+- Każda wiadomość, którą przeczytał model, zostawia jeden zapis: firma, lokal, osoba, która napisała, rodzaj
+  (pracownik albo kierownik), model, dostawcy, liczba zapytań do API, tokeny, koszt w USD (z `usage.cost`, który
+  OpenRouter podaje przy każdej odpowiedzi) i czy odpowiedź się udała. Nieudana odpowiedź też kosztuje, więc też
+  zostaje zapisana. Claude nie podaje kosztu: jego zapis ma tylko tokeny i liczy się jako „bez ceny”.
+- Lokal wiadomości pracownika to lokal okresu, a dla prośby na miesiąc (bez okresu) główny lokal osoby. Lokal
+  wiadomości kierownika to lokal czatu.
+- Układanie grafiku to każde uruchomienie solvera: kto poprosił, dla którego lokalu i ile trwało. Wspólne układanie
+  grupy lokali liczy się w każdym jej lokalu, a jego czas dzieli się między nie po równo.
+- Zestawienie miesiąca (firmy, lokale, osoby) widzi tylko superadmin: w panelu admina Django („Koszty asystenta”,
+  przycisk „Zestawienie miesiąca”) i w pliku CSV (`manage.py assistant_costs --month 2026-11`). Kierownicy
+  i pracownicy nie widzą kosztów, a model językowy nigdy ich nie czyta.
+- Liczenie zaczyna się od wdrożenia: wcześniejszych wiadomości nie da się przypisać do osób, bo koszt był tylko
+  w logu workera. Zestawienie pokazuje to, co schodzi z kredytów OpenRouter; opłaty OpenRoutera za doładowanie konta
+  w nim nie ma.
+
 ## Inny grafik na prośbę kierownika (prośba Piotra z 22.11.2026)
 
 Prośba Piotra: gdy ułożony grafik z jakiegoś powodu nie pasuje kierownikowi, ma się dać ułożyć nowy, wyraźnie inny,

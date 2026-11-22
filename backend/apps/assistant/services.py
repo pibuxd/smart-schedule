@@ -19,9 +19,9 @@ from django.db import transaction
 from django.utils import timezone
 from ninja.errors import HttpError
 
-from apps.assistant import agreements, llm, readings, tools
+from apps.assistant import agreements, costs, llm, readings, tools
 from apps.assistant import context as facts
-from apps.assistant.models import AssistantCommand, ManagerInstruction
+from apps.assistant.models import AssistantCommand, AssistantUsage, ManagerInstruction
 from apps.availability.models import AvailabilityDay, AvailabilityState, TextRequest
 from apps.rules.services import NUMBER_PARAMS
 from apps.scheduling.models import SchedulePeriod
@@ -203,11 +203,13 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
     if llm.is_enabled():
         outcome.reason = TextRequest.UnreadReason.FAILED
         toolbox = tools.employee_toolbox(row.employee.membership.user, row.company_id)
+        usage = llm.Usage()
         try:
             previous = facts.prior_requests(row)
             asked = waiting_questions(row)
             context, people, shift_types = request_context(row, today, previous, asked)
-            reply = llm.read_request(row.text, context, toolbox)
+            with llm.tracking(usage):
+                reply = llm.read_request(row.text, context, toolbox)
             outcome = _checked_reply(reply, row, people, shift_types, previous, today, asked)
         except llm.AssistantError as exc:
             logger.warning("request %s left to the manager: %s", row.pk, exc)
@@ -218,6 +220,16 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
             outcome.answer = {"error": type(exc).__name__}
         if outcome.answer is not None and toolbox.calls:
             outcome.answer["tools"] = toolbox.calls
+        # Paid for even when the answer is not used (failed, or the message was changed meanwhile).
+        location = row.location
+        costs.record(
+            usage,
+            kind=AssistantUsage.Kind.EMPLOYEE,
+            company_id=row.company_id,
+            location_id=location.pk if location is not None else None,
+            user_id=row.employee.membership.user_id,
+            message_id=row.pk,
+        )
     with transaction.atomic():
         rows = TextRequest.objects.for_company(row.company_id)
         locked = rows.select_for_update().filter(pk=row.pk, status=TextRequest.Status.NEW, text=row.text).first()
@@ -923,6 +935,7 @@ def run_command(command_id: str, today: date | None = None) -> str:
         if command.created_by is not None
         else None
     )
+    usage = llm.Usage()
     try:
         sc = rules_scope(_SystemContext(command.company), command.location, command.rule_set)
         instructions = _instructions(command.location, command.rule_set)
@@ -935,7 +948,8 @@ def run_command(command_id: str, today: date | None = None) -> str:
                 facts.command_history(command),
             ]
         )
-        answer = llm.plan_command(command.text, context, toolbox)
+        with llm.tracking(usage):
+            answer = llm.plan_command(command.text, context, toolbox)
         raw = answer.model_dump(mode="json")
         period = command.rule_set.period if command.rule_set_id and command.rule_set.period_id else None
         status, plan = (
@@ -953,6 +967,14 @@ def run_command(command_id: str, today: date | None = None) -> str:
         raw = {**(raw or {}), "error": type(exc).__name__}
     if toolbox is not None and toolbox.calls:
         raw = {**(raw or {}), "tools": toolbox.calls}
+    costs.record(
+        usage,
+        kind=AssistantUsage.Kind.MANAGER,
+        company_id=command.company_id,
+        location_id=command.location_id,
+        user_id=command.created_by_id,
+        message_id=command.pk,
+    )
     AssistantCommand.objects.for_company(command.company_id).filter(
         pk=command.pk, status=AssistantCommand.Status.QUEUED
     ).update(status=status, plan=plan, assistant_answer=raw)
