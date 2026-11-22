@@ -181,6 +181,8 @@ class MyRequestOut(Schema):
     created_at: datetime
     # Reports of other hours the assistant prepared from this message, to send with "Wyślij kierownikowi".
     hours_reports: list[HoursProposalOut] = Field(default_factory=list)
+    # The assistant was not sure what the person meant and asks them this (nothing is saved until they answer).
+    question: str | None = None
 
 
 def _period_out(period: SchedulePeriod) -> AvailabilityPeriodOut:
@@ -510,6 +512,7 @@ def _request_out(text_request: TextRequest, calendar: _Calendar | None = None) -
         notes=[*((text_request.interpretation or {}).get("notes") or [] if interpreted else []), *notes],
         created_at=text_request.created_at,
         hours_reports=_hours_proposals(text_request),
+        question=(text_request.question or None) if text_request.status == TextRequest.Status.ANSWERED else None,
     )
 
 
@@ -731,9 +734,18 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
             text_request.text_edited_at = timezone.now()
             text_request.status = TextRequest.Status.NEW
             text_request.interpretation = None
+            text_request.question = ""
             text_request.employee_corrected = True
             text_request.save(
-                update_fields=["text", "text_edited_at", "status", "interpretation", "employee_corrected", "updated_at"]
+                update_fields=[
+                    "text",
+                    "text_edited_at",
+                    "status",
+                    "interpretation",
+                    "question",
+                    "employee_corrected",
+                    "updated_at",
+                ]
             )
             queue_request(text_request)
         elif payload.understood is False and text_request.status in (
@@ -811,6 +823,13 @@ class AvailabilityGridOut(Schema):
     employees: list[GridEmployeeOut]
 
 
+class AskedOut(Schema):
+    """The person's earlier message and the assistant's question on it, which this request answers."""
+
+    text: str
+    question: str
+
+
 class ManagerRequestOut(Schema):
     id: UUID
     employee_id: UUID
@@ -830,6 +849,8 @@ class ManagerRequestOut(Schema):
     manager_priority: PriorityName
     manager_rejected: bool
     created_at: datetime
+    # This message answers the assistant's question on an earlier one: the earlier text and the question.
+    asked: AskedOut | None = None
 
 
 class RequestDecisionIn(Schema):
@@ -910,6 +931,7 @@ def _manager_request_out(row: TextRequest) -> ManagerRequestOut:
         manager_priority=row.manager_priority,
         manager_rejected=row.manager_rejected,
         created_at=row.created_at,
+        asked=AskedOut(text=row.answer_to.text, question=row.answer_to.question) if row.answer_to else None,
     )
 
 
@@ -931,7 +953,7 @@ def period_requests(request, period_id: UUID):
         .filter(TextRequest.for_periods([period]))
         .exclude(status__in=[TextRequest.Status.SUPERSEDED, TextRequest.Status.ANSWERED])
         .exclude(interpretation__type="out_of_scope", interpretation__type__isnull=False)
-        .select_related("employee__membership__user")
+        .select_related("employee__membership__user", "answer_to")
     )
     return [_manager_request_out(r) for r in rows.order_by("created_at")]
 

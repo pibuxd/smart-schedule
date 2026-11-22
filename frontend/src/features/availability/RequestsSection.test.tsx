@@ -247,6 +247,42 @@ describe("RequestsSection", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows the assistant's question and asks for an answer in the field", async () => {
+    mockApi(() => [
+      200,
+      [
+        request({
+          text: "Chcę mniej pracować.",
+          status: "answered",
+          summary: null,
+          question: "Ile najwyżej godzin w tygodniu chcesz pracować?",
+        }),
+      ],
+    ]);
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    expect(
+      await screen.findByText(
+        "Asystent ma pytanie do Twojej ostatniej wiadomości.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Odpowiedz" }));
+    expect(
+      await screen.findByText("Ile najwyżej godzin w tygodniu chcesz pracować?"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Asystent dopytuje")).toBeInTheDocument();
+    expect(
+      screen.getByText("Odpowiedz niżej. Do tego czasu niczego nie zapisuję."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Twoja wiadomość")).toHaveAttribute(
+      "placeholder",
+      "Odpowiedz asystentowi…",
+    );
+    // Not saved until the answer: nothing in "Twoje prośby".
+    expect(screen.queryByRole("list", { name: "Zapisane prośby" })).toBeNull();
+  });
+
   it("lets the employee forward a misclassified question to the manager", async () => {
     let row = request({ status: "answered", summary: "Odpowiedź asystenta." });
     const calls = mockApi((method) => {

@@ -108,7 +108,10 @@ def request_span(text_request: TextRequest) -> tuple[date, date]:
 
 
 def request_context(
-    text_request: TextRequest, today: date, previous: list[TextRequest] | None = None
+    text_request: TextRequest,
+    today: date,
+    previous: list[TextRequest] | None = None,
+    asked: TextRequest | None = None,
 ) -> tuple[str, dict[str, str], dict[str, str]]:
     location = text_request.location
     start, end = request_span(text_request)
@@ -136,6 +139,7 @@ def request_context(
             f"Zmiany w lokalu: {_shift_lines(shift_types)}.",
             facts.request_history(previous if previous is not None else facts.prior_requests(text_request)),
             facts.conversation(text_request),
+            facts.open_question(asked) if asked is not None else "",
         ]
     )
     return context, people, {s.name: str(s.pk) for s in shift_types}
@@ -185,9 +189,10 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         toolbox = tools.employee_toolbox(row.employee.membership.user, row.company_id)
         try:
             previous = facts.prior_requests(row)
-            context, people, shift_types = request_context(row, today, previous)
+            asked = waiting_question(row)
+            context, people, shift_types = request_context(row, today, previous, asked)
             reply = llm.read_request(row.text, context, toolbox)
-            outcome = _checked_reply(reply, row, people, shift_types, previous, today)
+            outcome = _checked_reply(reply, row, people, shift_types, previous, today, asked)
         except llm.AssistantError as exc:
             logger.warning("request %s left to the manager: %s", row.pk, exc)
             outcome.answer = {"error": str(exc)}
@@ -250,9 +255,15 @@ def interpret_request(request_id: str, text: str | None = None, today: date | No
         locked.assistant_answer = outcome.answer
         locked.reply = outcome.reply[:2000]
         locked.hours_reports = outcome.hours_reports or None
+        locked.question = outcome.question[:500]
+        # The question may have been taken back (deleted) while the answer was being read.
+        answer_to = outcome.answer_to
+        locked.answer_to = answer_to if answer_to is not None and rows.filter(pk=answer_to.pk).exists() else None
         locked.save(
             update_fields=[
                 "hours_reports",
+                "question",
+                "answer_to",
                 "status",
                 "interpretation",
                 "unread_reason",
@@ -281,6 +292,37 @@ class _Outcome:
         self.replacement: TextRequest | None = None
         # Reports of other hours to show with "Wyślij kierownikowi" (checked; nothing is sent by itself).
         self.hours_reports: list[dict[str, Any]] = []
+        # The assistant's question back to the person (nothing of the message is saved until they answer).
+        self.question = ""
+        # The earlier message whose question this one answers.
+        self.answer_to: TextRequest | None = None
+
+
+def waiting_question(row: TextRequest) -> TextRequest | None:
+    """The assistant's question waiting for an answer: on the person's newest earlier message of the same chat
+    (period or month), when no other message answered it. The next message is read as the answer."""
+    last = (
+        TextRequest.objects.for_company(row.company_id)
+        .filter(employee_id=row.employee_id, period_id=row.period_id, month=row.month, created_at__lt=row.created_at)
+        .order_by("-created_at", "-pk")
+        .first()
+    )
+    if last is None or last.status != TextRequest.Status.ANSWERED or not last.question:
+        return None
+    return None if last.answers.exclude(pk=row.pk).exists() else last
+
+
+def _namesake_question(reply: llm.EmployeeReply, people: dict[str, str]) -> str:
+    """A question the app asks by itself when a preference names a first name that several co-workers share
+    ("Ania" with Ania K. and Ania M. on the list): never guess which one."""
+    for preference in reply.preferences:
+        wanted = (preference.person or "").strip().casefold()
+        if not wanted or any(label.casefold() == wanted for label in people):
+            continue
+        namesakes = [label for label in people if label.split(" ", 1)[0].casefold() == wanted]
+        if len(namesakes) > 1:
+            return f"O którą osobę chodzi: {', '.join(namesakes[:-1])} czy {namesakes[-1]}?"
+    return ""
 
 
 def _checked_reply(
@@ -290,6 +332,7 @@ def _checked_reply(
     shift_types: dict[str, str],
     previous: list[TextRequest],
     today: date | None = None,
+    asked: TextRequest | None = None,
 ) -> _Outcome:
     raw = reply.model_dump(mode="json")
     answer = reply.answer.strip()[:2000]
@@ -299,7 +342,22 @@ def _checked_reply(
         outcome.answer, outcome.raw = {"why": "poza tematem", **raw}, raw
         return outcome
     hours, hours_notes = checked_hours(reply.hours_changes, row, today or timezone.localdate())
-    outcome = _checked_preferences(reply, row, people, shift_types, previous, raw, answer, bool(hours))
+    # One question per request: the answer to it is read with the first message, and what is still unclear after
+    # that goes to the manager.
+    answering = asked is not None and reply.answers_question
+    question = (reply.question or "").strip() or ("" if answering else _namesake_question(reply, people))
+    if question and not answering:
+        # Nothing of this message is saved until the person answers (not even the parts the model was sure of).
+        outcome = _Outcome(TextRequest.Status.ANSWERED)
+        outcome.question, outcome.reply, outcome.raw = question, answer, raw
+    elif question:
+        outcome = _Outcome(TextRequest.Status.NEEDS_MANAGER, reason=TextRequest.UnreadReason.UNSURE)
+        outcome.reply = answer
+        outcome.answer, outcome.raw = {"why": "drugie pytanie", **raw}, raw
+    else:
+        outcome = _checked_preferences(reply, row, people, shift_types, previous, raw, answer, bool(hours))
+    if answering:
+        outcome.answer_to = asked
     outcome.hours_reports = hours
     if hours_notes:
         outcome.reply = " ".join(filter(None, [outcome.reply, *hours_notes]))

@@ -41,6 +41,23 @@ function Reply({ request }: { request: MyRequestOut }) {
   ) : null;
 }
 
+/**
+ * The assistant's question back: it was not sure what the person meant and saves nothing until they answer.
+ * `waiting`: it is about the newest message, so the next one answers it.
+ */
+function Question({ question, waiting }: { question: string; waiting: boolean }) {
+  return (
+    <div className="grid gap-1">
+      <p className="m-0 font-semibold whitespace-pre-wrap">{question}</p>
+      {waiting && (
+        <p className="m-0 text-sm text-ink-muted">
+          Odpowiedz niżej. Do tego czasu niczego nie zapisuję.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Notes from the app: the calendar says the opposite, or the shift is not on the person's position. */
 function Notes({ notes }: { notes: string[] }) {
   return notes.length > 0 ? (
@@ -135,6 +152,7 @@ function WrongChoice({
 function RequestStatus({
   request,
   editable,
+  waiting = false,
   busy,
   marking,
   onRewrite,
@@ -143,6 +161,8 @@ function RequestStatus({
 }: {
   request: MyRequestOut;
   editable: boolean;
+  /** The newest message of the chat: an open question waits for the next one. */
+  waiting?: boolean;
   busy: boolean;
   marking: boolean;
   onRewrite: (text: string) => void;
@@ -177,13 +197,19 @@ function RequestStatus({
       </p>
     );
   }
-  if (request.status === "answered" && (request.reply || request.summary)) {
+  if (
+    request.status === "answered" &&
+    (request.reply || request.summary || request.question)
+  ) {
     return (
       <div className="grid gap-2">
         {request.reply ? (
           <Reply request={request} />
         ) : (
-          <p className="m-0">{request.summary}</p>
+          request.summary && <p className="m-0">{request.summary}</p>
+        )}
+        {request.question && (
+          <Question question={request.question} waiting={waiting} />
         )}
         {editable && (
           <div>
@@ -538,13 +564,15 @@ function RequestsWindow({
         <p className="m-0 text-sm text-ink-muted">
           {notSaved.status === "rejected"
             ? "Twoja ostatnia wiadomość została odrzucona i nie jest prośbą."
-            : "Asystent odpowiedział na Twoją ostatnią wiadomość."}{" "}
+            : notSaved.question
+              ? "Asystent ma pytanie do Twojej ostatniej wiadomości."
+              : "Asystent odpowiedział na Twoją ostatnią wiadomość."}{" "}
           <button
             type="button"
             className="min-h-(--touch) cursor-pointer font-semibold text-accent underline"
             onClick={openChat}
           >
-            Pokaż odpowiedź
+            {notSaved.question ? "Odpowiedz" : "Pokaż odpowiedź"}
           </button>
         </p>
       )}
@@ -600,6 +628,11 @@ export function RequestsChat({
   });
   const failure =
     update.error ?? remove.error ?? create.error ?? markCannot.error;
+  // The assistant asked about the newest message: the next one answers it.
+  const lastId = list.at(-1)?.id;
+  const asking = Boolean(
+    list.at(-1)?.status === "answered" && list.at(-1)?.question,
+  );
 
   const feedRef = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -657,8 +690,10 @@ export function RequestsChat({
               </ChatMessage>
               <div className="flex flex-wrap items-center justify-end gap-x-2 text-xs text-ink-muted">
                 <span>
-                  {request.status === "answered"
-                    ? "Odpowiedź asystenta"
+                  {request.status === "answered" && request.question
+                    ? "Asystent dopytuje"
+                    : request.status === "answered"
+                      ? "Odpowiedź asystenta"
                     : request.status === "superseded"
                       ? "Historia prośby"
                       : request.status === "rejected"
@@ -686,6 +721,7 @@ export function RequestsChat({
                 <RequestStatus
                   request={request}
                   editable={editable && request.status !== "superseded"}
+                  waiting={editable && request.id === lastId}
                   busy={update.isPending}
                   marking={markCannot.isPending}
                   onRewrite={(newText) => {
@@ -731,9 +767,11 @@ export function RequestsChat({
             sendLabel={assistantReads ? "Wyślij" : "Wyślij prośbę"}
             enterSends={false}
             placeholder={
-              assistantReads
-                ? "Zapytaj albo opisz prośbę…"
-                : "Opisz swoją prośbę…"
+              asking
+                ? "Odpowiedz asystentowi…"
+                : assistantReads
+                  ? "Zapytaj albo opisz prośbę…"
+                  : "Opisz swoją prośbę…"
             }
             disabled={requests.isPending || requests.isError}
             sending={create.isPending}

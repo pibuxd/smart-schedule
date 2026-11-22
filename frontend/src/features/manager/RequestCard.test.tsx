@@ -52,6 +52,23 @@ describe('RequestCard', () => {
     expect(calls.find((c) => c.method === 'POST')!.url).toContain('/api/requests/r1/reread')
   })
 
+  it('shows the earlier message and the question an answer belongs to', async () => {
+    mockApi(() => [200, {}])
+    card(
+      request({
+        text: 'Od poniedziałku, przy piecu.',
+        unread_reason: 'unsure',
+        asked: { text: 'Po zabiegu nie mogę dźwigać blach.', question: 'Od kiedy i na których zmianach?' },
+      }),
+    )
+    expect(
+      await screen.findByText(
+        'Wcześniej: „Po zabiegu nie mogę dźwigać blach.” Asystent zapytał: „Od kiedy i na których zmianach?”',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('„Od poniedziałku, przy piecu.”')).toBeInTheDocument()
+  })
+
   it('tells apart a request the assistant read but could not turn into a setting', async () => {
     mockApi(() => [200, {}])
     card(request({ unread_reason: 'unsure' }))

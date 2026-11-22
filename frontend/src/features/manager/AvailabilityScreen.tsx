@@ -456,6 +456,11 @@ export function RequestCard({ request }: { request: ManagerRequestOut }) {
         <b>{request.employee_name}</b>
         {rejected && <Tag tone="bad">Odrzucona</Tag>}
       </div>
+      {request.asked && (
+        <p className="m-0 text-sm text-ink-muted">
+          Wcześniej: „{request.asked.text}” Asystent zapytał: „{request.asked.question}”
+        </p>
+      )}
       <p className={rejected ? 'm-0 text-ink-muted line-through' : 'm-0'}>„{request.text}”</p>
       <p className="m-0 text-sm text-ink-muted">{requestNote(request)}</p>
       {request.employee_corrected && request.summary && (

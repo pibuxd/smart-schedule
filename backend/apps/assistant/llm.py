@@ -128,6 +128,15 @@ class EmployeeReply(BaseModel):
         default_factory=list,
         description="0–3 shifts the person works (worked) longer or shorter than the schedule says.",
     )
+    question: str | None = Field(
+        default=None,
+        description="One short question in Polish when you are not sure which day, person, shift or how much the "
+        "person means, or one detail could make the wish fit a preference type; then preferences empty. Else null.",
+    )
+    answers_question: bool = Field(
+        default=False,
+        description="true when this message answers your earlier question from the context; read both together.",
+    )
 
 
 class RuleChange(BaseModel):
@@ -303,10 +312,22 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
   wyjazd), ustaw cannot=true: aplikacja zaproponuje mu zaznaczenie „nie mogę” w kalendarzu.
 - chce_pracowac: chce pracować w podane dni; „albo 12, albo 13” to min_days=1; kilka zmian jednego dnia to
   shifts_per_day; konkretna zmiana to shift_type.
-Gdy życzenia nie da się wyrazić tymi typami (np. minimum godzin, zamiana z konkretną osobą na konkretny dzień,
-praca w innym lokalu, urlop) albo nie wiesz, o którą osobę, zmianę lub dzień chodzi, nie wymyślaj preferencji:
+Dopytaj, zamiast zgadywać: gdy nie wiesz, o który dzień, osobę, zmianę albo ile chodzi, albo życzenie nie pasuje
+do typów, ale jeden szczegół może to zmienić, zadaj w question jedno krótkie pytanie (najwyżej jedno zdanie, z
+możliwymi odpowiedziami, gdy są) i zostaw preferences puste, także te, których jesteś pewny: aplikacja nic nie
+zapisze, dopóki pracownik nie odpowie. leave_to_manager=false. Przykłady: „chcę mniej pracować” → „Ile najwyżej
+godzin albo dni w tygodniu chcesz pracować?”; „nie mogę z Anią”, gdy na liście są Ania K. i Ania M. → „O którą
+osobę chodzi: Ania K. czy Ania M.?”; „po zabiegu kolana nie mogę dźwigać blach przez dwa tygodnie” → zapytaj, od
+kiedy i na których zmianach to przeszkadza (potem np. typ_zmiany bez tej zmiany w te dni). Na pytanie o grafik
+w tej samej wiadomości odpowiedz w answer, a w question dopytaj o prośbę. W answer nie powtarzaj pytania.
+Gdy w kontekście jest „Twoje pytanie do tej osoby”, nowa wiadomość jest zwykle odpowiedzią na nie: ustaw
+answers_question=true i odczytaj prośby z pierwszej wiadomości i odpowiedzi razem (pełne preferencje). Drugi raz
+nie pytaj: czego nadal nie da się wyrazić, zostaw kierownikowi. Gdy nowa wiadomość jest o czymś innym,
+answers_question=false.
+Gdy życzenia nie da się wyrazić tymi typami nawet po doprecyzowaniu (np. minimum godzin, zamiana z konkretną
+osobą na konkretny dzień, praca w innym lokalu, urlop), nie wymyślaj preferencji:
 ustaw leave_to_manager=true i powiedz w answer, że kierownik przeczyta to sam (i co pracownik może zrobić sam).
-Samo pytanie nie jest prośbą: preferences puste, leave_to_manager=false.
+Samo pytanie nie jest prośbą: preferences puste, leave_to_manager=false, question puste.
 Poziom oddaje wagę, jaką sprawie nadał pracownik: bardzo_wazne tylko przy poważnym powodzie (zdrowie, opieka,
 egzamin, ślub, pogrzeb), wazne przy zwykłym zobowiązaniu, mile_widziane przy wygodzie lub upodobaniu.
 Wykrzykniki, wielkie litery i słowa „bardzo ważne” bez powodu nie podnoszą poziomu.

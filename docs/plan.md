@@ -1111,3 +1111,32 @@ miejsce" / "Usuń miejsce" (to ustawienie lokalu) i zdjęcie osoby z opublikowan
 potwierdzonym konflikcie (razem z jej innymi godzinami tamtej zmiany) zostają. Licznik ułożeń w miesiącu się nie
 zmienia. Ustalenia asystenta i inne godziny opublikowanych zmian zmieniają się dopiero przy publikacji, więc szkic
 niczego w nich nie zużył.
+
+## 34. Asystent pracownika dopytuje (22.11.2026)
+
+Prośba Piotra (spec.md, „Asystent pracownika dopytuje”): zamiast od razu oddawać kierownikowi niepewną prośbę,
+asystent raz dopytuje pracownika.
+
+- `llm.EmployeeReply.question` (jedno pytanie albo null) i `answers_question` (ta wiadomość odpowiada na pytanie
+  z kontekstu). Oba mają wartości domyślne, więc działają tak samo na OpenRouter (argumenty `final_answer`) i na
+  Claude (`output_config.format`).
+- `TextRequest.question`: pytanie przy wiadomości, która ma status `answered` (nic z niej nie trafia do generatora,
+  kierownika ani limitu próśb). `TextRequest.answer_to`: wiadomość, na której pytanie odpowiada ta.
+- `services.waiting_question(row)`: otwarte pytanie to pytanie przy najnowszej wcześniejszej wiadomości tej osoby
+  w tej samej rozmowie (okres albo miesiąc), na które nic jeszcze nie odpowiedziało. Kontekst dostaje wtedy
+  pierwszą wiadomość i pytanie (`context.open_question`); `conversation` pokazuje też pytania z historii.
+- `_checked_reply`: pytanie modelu (albo pytanie aplikacji o imię kilku osób, `_namesake_question`) daje `answered`
+  z pytaniem i bez interpretacji, nawet gdy model podał też preferencje. Odpowiedź (`answers_question` przy otwartym
+  pytaniu) dostaje `answer_to` i przechodzi zwykłe sprawdzenie; drugie pytanie zamiast odczytu daje
+  `needs_manager` / `unsure` z powodem „drugie pytanie”.
+- API: `MyRequestOut.question` (tylko przy `answered`), `ManagerRequestOut.asked` (`text`, `question` wiadomości,
+  na którą odpowiada prośba). Nowa treść prośby („Popraw”) czyści pytanie. `assistant_misses` pokazuje odpowiedź
+  razem z pierwszą wiadomością i pytaniem.
+- Czat pracownika: pytanie pogrubione pod odpowiedzią, etykieta „Asystent dopytuje”, pod najnowszym „Odpowiedz niżej.
+  Do tego czasu niczego nie zapisuję.”, pole pisania „Odpowiedz asystentowi…”; okienko „Twoje prośby” mówi „Asystent
+  ma pytanie do Twojej ostatniej wiadomości.” z „Odpowiedz”. Karta prośby u kierownika: „Wcześniej: „…” Asystent
+  zapytał: „…””.
+
+Założenia: pytanie czeka tylko na następną wiadomość; gdy pracownik napisze o czymś innym, pierwsza wiadomość
+zostaje niezapisana (widać ją w historii czatu i można ją przekazać kierownikowi). Zgłoszenia innych godzin z
+wiadomości z pytaniem pokazują się jak dotąd, bo i tak wysyła je dopiero pracownik.

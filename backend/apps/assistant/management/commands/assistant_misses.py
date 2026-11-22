@@ -6,8 +6,9 @@ are missing from the closed lists (and to improve the prompts).
 Rows: employee requests left to the manager (assistant off, unsure, failed, "not what I meant", or an answer
 the person forwarded: `forwarded_answer`, to see how often plain questions reach the manager), messages it
 refused as unrelated to work, and manager commands that failed, asked a question, dropped something (notes) or
-proposed nothing. Answers to questions are not misses. `assistant_answer` also lists the tools it read. The text
-is what people wrote, so the file is for the superadmin only.
+proposed nothing. Answers to questions and the assistant's questions back are not misses; an answer to such a
+question is listed with the first message and the question. `assistant_answer` also lists the tools it read. The
+text is what people wrote, so the file is for the superadmin only.
 """
 
 import csv
@@ -43,10 +44,14 @@ def misses(since):
         TextRequest.objects.filter(  # superadmin
             created_at__gte=since, status__in=[TextRequest.Status.NEEDS_MANAGER, TextRequest.Status.REJECTED]
         )
-        .select_related("company", "period__location", "employee__home_location")
+        .select_related("company", "period__location", "employee__home_location", "answer_to")
         .order_by("created_at")
     )
     for r in requests:
+        text = r.text
+        if r.answer_to:
+            # An answer to the assistant's question makes sense only with the first message and the question.
+            text = f"{r.answer_to.text} | pytanie: {r.answer_to.question} | odpowiedź: {r.text}"
         if r.status == TextRequest.Status.REJECTED:
             reason = "unrelated"
         elif r.employee_corrected and not r.unread_reason and r.interpretation is None:
@@ -61,7 +66,7 @@ def misses(since):
                 "request",
                 r.company.name,
                 r.location.name,
-                r.text,
+                text,
                 reason,
                 _json(r.assistant_answer),
             )

@@ -12065,6 +12065,17 @@
             },
             "title": "Hours Reports",
             "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
           }
         },
         "required": [
@@ -12376,6 +12387,25 @@
         "title": "GridPeriodOut",
         "type": "object"
       },
+      "AskedOut": {
+        "description": "The person's earlier message and the assistant's question on it, which this request answers.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "question"
+        ],
+        "title": "AskedOut",
+        "type": "object"
+      },
       "ManagerRequestOut": {
         "properties": {
           "id": {
@@ -12455,6 +12485,16 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "asked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskedOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
