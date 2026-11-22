@@ -1116,7 +1116,7 @@ niczego w nich nie zużył.
 ## 34. Asystent pracownika dopytuje (22.11.2026)
 
 Prośba Piotra (spec.md, „Asystent pracownika dopytuje”): zamiast od razu oddawać kierownikowi niepewną prośbę,
-asystent raz dopytuje pracownika.
+asystent dopytuje pracownika (od 22.11.2026 najwyżej trzy razy z rzędu, wcześniej raz).
 
 - `llm.EmployeeReply.question` (jedno pytanie albo null) i `answers_question` (numer czekającego pytania z
   kontekstu, na które odpowiada ta wiadomość, albo null). Oba mają wartości domyślne, więc działają tak samo na OpenRouter (argumenty `final_answer`) i na
@@ -1129,14 +1129,20 @@ asystent raz dopytuje pracownika.
   Numer spoza listy znaczy „nowa wiadomość”.
 - `_checked_reply`: pytanie modelu (albo pytanie aplikacji o imię kilku osób, `_namesake_question`) daje `answered`
   z pytaniem i bez interpretacji, nawet gdy model podał też preferencje. Odpowiedź (`answers_question` przy otwartym
-  pytaniu) dostaje `answer_to` i przechodzi zwykłe sprawdzenie; drugie pytanie zamiast odczytu daje
-  `needs_manager` / `unsure` z powodem „drugie pytanie”.
+  pytaniu) dostaje `answer_to` i przechodzi zwykłe sprawdzenie. Odpowiedź może dostać kolejne pytanie (znów
+  `answered` z pytaniem i `answer_to`): `services.exchange(row)` idzie po `answer_to` i daje wiadomości z pytaniami
+  tej prośby, a `MAX_QUESTIONS = 3` ogranicza je do trzech z rzędu. Czwarte pytanie zamiast odczytu daje
+  `needs_manager` / `unsure` z powodem „za dużo pytań” (wcześniej „drugie pytanie” już przy drugim).
+  `context.open_questions` podaje przy czekającym pytaniu wcześniejsze wiadomości i pytania (`earlier`) oraz
+  `questions_in_a_row`. API: `MyRequestOut.exchange` i `ManagerRequestOut.exchange` (wszystkie wcześniejsze
+  wiadomości z pytaniami, od najstarszej; `asked` zostaje = ostatnia z nich). Karta kierownika: „Wcześniej: …”, potem
+  „Potem: …” przy kolejnych. `assistant_misses` łączy całą wymianę.
 - Pytania aplikacji (dopisane 22.11.2026, gdy wiadomość nie odpowiada na pytanie): `_unknown_name_question` przy
   `unikaj_osoby` / `preferuj_osobe` bez osoby albo z osobą spoza listy (podobne imiona = te same dwie pierwsze
   litery, najwyżej 4) i przy zmianie spoza listy (lista zmian lokalu); `CONFIRM_QUESTION` („Czy dobrze rozumiem:
   <opis>? …”), gdy któraś preferencja ma pewność poniżej `ASSISTANT_MIN_CONFIDENCE` (`_checked_preference` zwraca
   wtedy dane i powód). `assistant_answer.why` mówi, czemu aplikacja zapytała („osoba lub zmiana”, „pewność 0.40”).
-  W odpowiedzi na pytanie oba przypadki dają `needs_manager` / `unsure` jak dotąd.
+  W odpowiedzi na pytanie pyta tak samo, dopóki pytań z rzędu jest mniej niż `MAX_QUESTIONS`.
 - API: `MyRequestOut.question` (tylko przy `answered`), `ManagerRequestOut.asked` (`text`, `question` wiadomości,
   na którą odpowiada prośba). Nowa treść prośby („Popraw”) czyści pytanie. `assistant_misses` pokazuje odpowiedź
   razem z pierwszą wiadomością i pytaniem.

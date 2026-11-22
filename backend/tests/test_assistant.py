@@ -855,10 +855,11 @@ class TestMisses:
         monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading(confidence=0.2))
         services.interpret_request(first)
         assert TextRequest.objects.get(pk=first).question.startswith("Czy dobrze rozumiem")
-        unsure = send_request(api, shop, "chyba tak").json()["id"]
         doubtful = reading(confidence=0.2).model_copy(update={"answers_question": 1})
         monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: doubtful)
-        services.interpret_request(unsure)
+        for text in ("chyba tak", "może", "tak"):  # asked up to three times in a row
+            unsure = send_request(api, shop, text).json()["id"]
+            services.interpret_request(unsure)
         row = TextRequest.objects.get(pk=unsure)
         assert row.unread_reason == "unsure" and row.assistant_answer["why"] == "pewność 0.20"
         assert row.assistant_answer["preferences"][0]["type"] == "wolne_dni"
@@ -888,11 +889,19 @@ class TestMisses:
         assert {(r["kind"], r["text"], r["reason"]) for r in rows} == {
             (
                 "request",
-                "coś niejasnego | pytanie: Czy dobrze rozumiem: wolne w piątki? Odpisz „tak” albo napisz, co "
-                "poprawić. | odpowiedź: chyba tak",
+                " | ".join(
+                    [
+                        *(
+                            f"{text} | pytanie: Czy dobrze rozumiem: wolne w piątki? Odpisz „tak” albo napisz, co "
+                            "poprawić."
+                            for text in ("coś niejasnego", "chyba tak", "może")
+                        ),
+                        "odpowiedź: tak",
+                    ]
+                ),
                 "unsure",
             ),
             ("request", "prośba przy błędzie", "failed"),
             ("command", "zrób coś", "question"),
         }
-        assert "pewność 0.20" in next(r for r in rows if r["text"].endswith("chyba tak"))["assistant_answer"]
+        assert "pewność 0.20" in next(r for r in rows if r["text"].endswith("odpowiedź: tak"))["assistant_answer"]

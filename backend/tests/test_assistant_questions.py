@@ -132,31 +132,55 @@ def test_what_is_still_unclear_after_the_answer_goes_to_the_manager_with_both_me
     assert miss[4] == f"{first.text} | pytanie: {question} | odpowiedź: {second.text}" and miss[5] == "unsure"
 
 
-def test_the_assistant_asks_only_once(api, two_anias, with_key, monkeypatch):
-    shop = two_anias
-    Model(
+def test_the_assistant_asks_up_to_three_times_then_the_manager_reads_the_whole_exchange(
+    api, shop, with_key, monkeypatch
+):
+    model = Model(
         monkeypatch,
         asking("Ile godzin?"),
-        answering(asking("A w które dni?")),
+        answering(asking("Ile najwyżej w tygodniu?")),
+        answering(asking("Podaj liczbę godzin w tygodniu.")),
+        answering(asking("A konkretnie?")),
     )
     api.login(shop["worker"])
     first = write(api, shop, "Chcę mniej pracować.")
     second = write(api, shop, "Trochę mniej.")
-    assert second.status == "needs_manager" and second.unread_reason == "unsure" and second.question == ""
-    assert second.assistant_answer["why"] == "drugie pytanie" and second.answer_to_id == first.pk
+    assert second.status == "answered" and second.question == "Ile najwyżej w tygodniu?"
+    assert second.answer_to_id == first.pk
+    # The second question waits instead of the first one, and the assistant sees the whole request with it.
+    assert [r["waiting"] for r in my_requests(api, shop)] == [False, True]
+    assert my_requests(api, shop)[1]["exchange"] == [{"text": "Chcę mniej pracować.", "question": "Ile godzin?"}]
+    third = write(api, shop, "No mniej.")
+    sent = model.seen[2][1]
+    assert '"questions_in_a_row": 2' in sent and "Chcę mniej pracować." in sent and "Trochę mniej." in sent
+    assert third.status == "answered" and third.question == "Podaj liczbę godzin w tygodniu."
+    fourth = write(api, shop, "Nie wiem.")
+    assert fourth.status == "needs_manager" and fourth.unread_reason == "unsure" and fourth.question == ""
+    assert fourth.assistant_answer["why"] == "za dużo pytań" and fourth.answer_to_id == third.pk
+    [listed] = manager_requests(api, shop)
+    assert [e["text"] for e in listed["exchange"]] == ["Chcę mniej pracować.", "Trochę mniej.", "No mniej."]
+    assert listed["asked"] == {"text": "No mniej.", "question": "Podaj liczbę godzin w tygodniu."}
+    [miss] = [m for m in misses(timezone.now() - timedelta(days=1)) if m[1] == "request"]
+    assert miss[4] == (
+        "Chcę mniej pracować. | pytanie: Ile godzin? | Trochę mniej. | pytanie: Ile najwyżej w tygodniu? | "
+        "No mniej. | pytanie: Podaj liczbę godzin w tygodniu. | odpowiedź: Nie wiem."
+    )
 
 
-def test_an_answer_naming_a_namesake_again_is_not_asked_twice(api, two_anias, with_key, monkeypatch):
+def test_an_answer_naming_a_namesake_again_is_asked_about_again(api, two_anias, with_key, monkeypatch):
     shop = two_anias
     Model(
         monkeypatch,
         asking("O którą osobę chodzi: Ania K. czy Ania M.?"),
         answering(reading(type="unikaj_osoby", person="Ania", weekdays=[])),
+        answering(reading(type="unikaj_osoby", person="Ania M.", weekdays=[])),
     )
     api.login(shop["worker"])
     write(api, shop, "Nie mogę z Anią.")
     second = write(api, shop, "Z Anią.")
-    assert second.status == "needs_manager" and second.question == ""
+    assert second.status == "answered" and second.question == "O którą osobę chodzi: Ania K. czy Ania M.?"
+    third = write(api, shop, "Z Mazur.")
+    assert third.status == "interpreted" and third.interpretation["subject_employee"] == str(shop["ania_m"].pk)
 
 
 def test_a_question_saves_nothing_even_of_what_the_model_was_sure_of(api, shop, with_key, monkeypatch):
@@ -283,16 +307,18 @@ def test_a_doubtful_reading_is_confirmed_before_it_is_saved(api, shop, with_key,
     assert second.status == "interpreted" and second.answer_to_id == first.pk
 
 
-def test_a_reading_still_doubtful_after_the_answer_goes_to_the_manager(api, shop, with_key, monkeypatch):
-    Model(monkeypatch, reading(confidence=0.4), answering(reading(confidence=0.3)))
+def test_a_reading_still_doubtful_after_three_questions_goes_to_the_manager(api, shop, with_key, monkeypatch):
+    Model(monkeypatch, *[reading(confidence=0.4)], *[answering(reading(confidence=0.3))] * 3)
     api.login(shop["worker"])
     write(api, shop, "piątki raczej nie")
-    second = write(api, shop, "no nie wiem")
-    assert second.status == "needs_manager" and second.assistant_answer["why"] == "pewność 0.30"
-    assert second.question == ""
+    assert write(api, shop, "no nie wiem").question.startswith("Czy dobrze rozumiem")
+    assert write(api, shop, "może").question.startswith("Czy dobrze rozumiem")
+    fourth = write(api, shop, "sam nie wiem")
+    assert fourth.status == "needs_manager" and fourth.assistant_answer["why"] == "pewność 0.30"
+    assert fourth.question == ""
 
 
-def test_an_unknown_name_in_an_answer_is_not_asked_about_again(api, shop, with_key, monkeypatch):
+def test_an_unknown_name_in_an_answer_is_asked_about_again(api, shop, with_key, monkeypatch):
     Model(
         monkeypatch,
         asking("Z kim nie chcesz pracować?"),
@@ -301,4 +327,4 @@ def test_an_unknown_name_in_an_answer_is_not_asked_about_again(api, shop, with_k
     api.login(shop["worker"])
     write(api, shop, "Nie chcę pracować z kimś.")
     second = write(api, shop, "Z Zenonem.")
-    assert second.status == "needs_manager" and second.question == ""
+    assert second.status == "answered" and second.question.startswith("Nie ma w lokalu osoby „Zenon”")

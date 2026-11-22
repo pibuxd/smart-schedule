@@ -52,6 +52,9 @@ LIMIT_REPLY = (
 NOT_UNDERSTOOD_REPLY = "Nie wiem, jak na to odpowiedzieć. Napisz to inaczej albo zapytaj kierownika."
 MAX_PREFERENCES = 3
 PARTIAL_NOTE = "Części tej wiadomości nie da się zamienić na ustawienie. Kierownik przeczyta ją sam."
+# Questions in a row about one request (the assistant's or the app's) before the manager reads it (Piotr, 22.11.2026:
+# the assistant asks until it is sure; three keeps a person from being asked forever).
+MAX_QUESTIONS = 3
 # The app's own question when the assistant doubts its reading (confidence below ASSISTANT_MIN_CONFIDENCE).
 CONFIRM_QUESTION = "Czy dobrze rozumiem: {what}? Odpisz „tak” albo napisz, co poprawić."
 
@@ -141,7 +144,7 @@ def request_context(
             f"Zmiany w lokalu: {_shift_lines(shift_types)}.",
             facts.request_history(previous if previous is not None else facts.prior_requests(text_request)),
             facts.conversation(text_request),
-            facts.open_questions(asked) if asked else "",
+            facts.open_questions(asked, MAX_QUESTIONS) if asked else "",
         ]
     )
     return context, people, {s.name: str(s.pk) for s in shift_types}
@@ -317,6 +320,16 @@ def waiting_questions(row: TextRequest) -> list[TextRequest]:
     ]
 
 
+def exchange(asked: TextRequest | None) -> list[TextRequest]:
+    """The messages the assistant asked about that led to `asked` (its `answer_to`, then theirs), with `asked` last:
+    one per question in a row about the same request (at most `MAX_QUESTIONS`)."""
+    rows: list[TextRequest] = []
+    while asked is not None and asked.question and len(rows) < MAX_QUESTIONS and asked not in rows:
+        rows.append(asked)
+        asked = asked.answer_to
+    return rows[::-1]
+
+
 def _namesake_question(reply: llm.EmployeeReply, people: dict[str, str]) -> str:
     """A question the app asks by itself when a preference names a first name that several co-workers share
     ("Ania" with Ania K. and Ania M. on the list): never guess which one."""
@@ -376,27 +389,28 @@ def _checked_reply(
         outcome.answer, outcome.raw = {"why": "poza tematem", **raw}, raw
         return outcome
     hours, hours_notes = checked_hours(reply.hours_changes, row, today or timezone.localdate())
-    # One question per request: the answer to it is read with the first message, and what is still unclear after
-    # that goes to the manager.
+    # Up to MAX_QUESTIONS questions in a row about one request: each answer is read with the earlier messages, and
+    # what is still unclear after the last one goes to the manager.
     number = reply.answers_question
     answered = asked[number - 1] if asked and isinstance(number, int) and 1 <= number <= len(asked) else None
     answering = answered is not None
+    can_ask = len(exchange(answered)) < MAX_QUESTIONS
     question = (reply.question or "").strip()
     why = ""
-    if not question and not answering:
+    if not question and can_ask:
         # The app asks by itself when the reading names a person or a shift it cannot tell or find.
         question = _namesake_question(reply, people) or _unknown_name_question(reply, people, shift_types)
         why = "osoba lub zmiana" if question else ""
-    if question and not answering:
+    if question and can_ask:
         # Nothing of this message is saved until the person answers (not even the parts the model was sure of).
         outcome = _asking(question, answer, raw, why)
     elif question:
         outcome = _Outcome(TextRequest.Status.NEEDS_MANAGER, reason=TextRequest.UnreadReason.UNSURE)
         outcome.reply = answer
-        outcome.answer, outcome.raw = {"why": "drugie pytanie", **raw}, raw
+        outcome.answer, outcome.raw = {"why": "za dużo pytań", **raw}, raw
     else:
         outcome = _checked_preferences(
-            reply, row, people, shift_types, previous, raw, answer, bool(hours), can_ask=not answering
+            reply, row, people, shift_types, previous, raw, answer, bool(hours), can_ask=can_ask
         )
     if answering:
         outcome.answer_to = answered
@@ -439,7 +453,8 @@ def _checked_preferences(
     has_hours: bool,
     can_ask: bool = False,
 ) -> _Outcome:
-    """`can_ask`: the app may ask the person to confirm a reading the assistant doubts (not after its question)."""
+    """`can_ask`: the app may ask the person to confirm a reading the assistant doubts (fewer than `MAX_QUESTIONS`
+    questions in a row so far)."""
     span = request_span(row)
     parts, why, doubt = [], "", ""
     if len(reply.preferences) > MAX_PREFERENCES:
@@ -454,7 +469,7 @@ def _checked_preferences(
             parts.append(data)
             doubt = doubt or problem
     if doubt and not can_ask:
-        why = why or doubt  # already asked once: the manager reads it, as before
+        why = why or doubt  # asked enough times: the manager reads it
     replacement = None
     if parts and not why and reply.replaces_request is not None:
         number = reply.replaces_request
