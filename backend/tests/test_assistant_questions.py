@@ -224,3 +224,81 @@ def test_the_question_can_go_to_the_manager_instead_and_is_reset_when_rewritten(
     second = write(api, shop, "Chcę mniej pracować.")
     body = api.patch(f"/api/me/requests/{second.pk}", {"understood": False}).json()
     assert body["status"] == "needs_manager" and body["question"] is None
+
+
+# ----------------------------------------------------------------- the app's own questions (22.11.2026, follow-up)
+
+
+@pytest.mark.parametrize(
+    "preference, question",
+    [
+        (
+            {"type": "unikaj_osoby", "person": "Zenon", "weekdays": []},
+            "Nie ma w lokalu osoby „Zenon”. O kogo chodzi? Napisz imię tak, jak jest w grafiku.",
+        ),
+        (
+            {"type": "unikaj_osoby", "person": "Kaśka", "weekdays": []},
+            "Czy chodzi o tę osobę: Kasia? Odpisz „tak” albo napisz, o kogo.",
+        ),
+        (
+            {"type": "preferuj_osobe", "person": None, "weekdays": []},
+            "O którą osobę chodzi? Napisz jej imię tak, jak jest w grafiku.",
+        ),
+        (
+            {"type": "typ_zmiany", "shift_type": "Nocna", "weekdays": []},
+            "Nie ma w lokalu zmiany „Nocna”. O którą zmianę chodzi: Ranna?",
+        ),
+    ],
+)
+def test_an_unknown_person_or_shift_is_asked_about_instead_of_going_to_the_manager(
+    api, shop, with_key, monkeypatch, preference, question
+):
+    Model(monkeypatch, reading(**preference))
+    api.login(shop["worker"])
+    row = write(api, shop, "Prośba")
+    assert row.status == "answered" and row.question == question and row.interpretation is None
+    assert row.assistant_answer["why"] == "osoba lub zmiana"  # why the app asked by itself
+    assert manager_requests(api, shop) == []
+
+
+def test_similar_names_are_offered_when_the_model_wrote_a_nickname(api, two_anias, with_key, monkeypatch):
+    shop = two_anias
+    shop["anna"] = add_worker(shop, "Anna", "Nowak")
+    Model(monkeypatch, reading(type="unikaj_osoby", person="Anka", weekdays=[]))
+    api.login(shop["worker"])
+    row = write(api, shop, "Nie mogę z Anką.")
+    assert row.question == "O którą osobę chodzi: Ania K., Ania M. czy Anna?"
+
+
+def test_a_doubtful_reading_is_confirmed_before_it_is_saved(api, shop, with_key, monkeypatch):
+    model = Model(monkeypatch, reading(confidence=0.4), answering(reading(confidence=0.95)))
+    api.login(shop["worker"])
+    first = write(api, shop, "piątki raczej nie")
+    assert first.status == "answered" and first.interpretation is None
+    assert first.question == "Czy dobrze rozumiem: wolne w piątki? Odpisz „tak” albo napisz, co poprawić."
+    assert first.assistant_answer["why"] == "pewność 0.40"
+    assert build_problem([shop["period"]]).problem.requests == ()
+    second = write(api, shop, "tak")
+    assert "Czy dobrze rozumiem: wolne w piątki?" in model.seen[1][1]
+    assert second.status == "interpreted" and second.answer_to_id == first.pk
+
+
+def test_a_reading_still_doubtful_after_the_answer_goes_to_the_manager(api, shop, with_key, monkeypatch):
+    Model(monkeypatch, reading(confidence=0.4), answering(reading(confidence=0.3)))
+    api.login(shop["worker"])
+    write(api, shop, "piątki raczej nie")
+    second = write(api, shop, "no nie wiem")
+    assert second.status == "needs_manager" and second.assistant_answer["why"] == "pewność 0.30"
+    assert second.question == ""
+
+
+def test_an_unknown_name_in_an_answer_is_not_asked_about_again(api, shop, with_key, monkeypatch):
+    Model(
+        monkeypatch,
+        asking("Z kim nie chcesz pracować?"),
+        answering(reading(type="unikaj_osoby", person="Zenon", weekdays=[])),
+    )
+    api.login(shop["worker"])
+    write(api, shop, "Nie chcę pracować z kimś.")
+    second = write(api, shop, "Z Zenonem.")
+    assert second.status == "needs_manager" and second.question == ""

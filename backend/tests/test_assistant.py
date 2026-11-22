@@ -213,13 +213,11 @@ class TestRequests:
         assert f"od {first.isoformat()} do {last.isoformat()}" in seen["context"]
         assert "Kasia" in seen["context"]  # the person's own location
 
+    # A doubtful reading and an unknown person or shift are asked about first (tests/test_assistant_questions.py).
     @pytest.mark.parametrize(
         "answer",
         [
-            reading(confidence=0.3),
             reading(type="inne", weekdays=[]),
-            reading(type="unikaj_osoby", person="Zenon", weekdays=[]),  # nobody of that name here
-            reading(type="typ_zmiany", shift_type="Nocna", weekdays=[]),  # no such shift here
             reading(weekdays=[], dates=["2020-01-01"]),  # outside the period
         ],
     )
@@ -309,7 +307,7 @@ class TestRequests:
         told = Notification.objects.get(user=shop["worker"], kind="request_to_assistant")
         assert "asystentowi AI" in notification_text(told.kind, told.payload)
         assert ProcrastinateJob.objects.filter(task_name="assistant.interpret_text_request").count() == 1
-        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading(confidence=0.2))
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading(type="inne", weekdays=[]))
         assert services.interpret_request(request_id) == "needs_manager"
         [listed] = api.get(url).json()
         assert (listed["unread_reason"], listed["can_reread"]) == ("unsure", False)  # it did read it
@@ -852,8 +850,14 @@ class TestMisses:
         from django.core.management import call_command
 
         api.login(shop["worker"])
-        unsure = send_request(api, shop, "coś niejasnego").json()["id"]
+        # A doubtful reading is first confirmed with the person; still doubtful after that, the manager reads it.
+        first = send_request(api, shop, "coś niejasnego").json()["id"]
         monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: reading(confidence=0.2))
+        services.interpret_request(first)
+        assert TextRequest.objects.get(pk=first).question.startswith("Czy dobrze rozumiem")
+        unsure = send_request(api, shop, "chyba tak").json()["id"]
+        doubtful = reading(confidence=0.2).model_copy(update={"answers_question": 1})
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: doubtful)
         services.interpret_request(unsure)
         row = TextRequest.objects.get(pk=unsure)
         assert row.unread_reason == "unsure" and row.assistant_answer["why"] == "pewność 0.20"
@@ -882,8 +886,13 @@ class TestMisses:
         call_command("assistant_misses", stdout=out)
         rows = list(csv.DictReader(io.StringIO(out.getvalue())))
         assert {(r["kind"], r["text"], r["reason"]) for r in rows} == {
-            ("request", "coś niejasnego", "unsure"),
+            (
+                "request",
+                "coś niejasnego | pytanie: Czy dobrze rozumiem: wolne w piątki? Odpisz „tak” albo napisz, co "
+                "poprawić. | odpowiedź: chyba tak",
+                "unsure",
+            ),
             ("request", "prośba przy błędzie", "failed"),
             ("command", "zrób coś", "question"),
         }
-        assert "pewność 0.20" in next(r for r in rows if r["text"] == "coś niejasnego")["assistant_answer"]
+        assert "pewność 0.20" in next(r for r in rows if r["text"].endswith("chyba tak"))["assistant_answer"]

@@ -52,6 +52,8 @@ LIMIT_REPLY = (
 NOT_UNDERSTOOD_REPLY = "Nie wiem, jak na to odpowiedzieć. Napisz to inaczej albo zapytaj kierownika."
 MAX_PREFERENCES = 3
 PARTIAL_NOTE = "Części tej wiadomości nie da się zamienić na ustawienie. Kierownik przeczyta ją sam."
+# The app's own question when the assistant doubts its reading (confidence below ASSISTANT_MIN_CONFIDENCE).
+CONFIRM_QUESTION = "Czy dobrze rozumiem: {what}? Odpisz „tak” albo napisz, co poprawić."
 
 WEEKDAY_NAMES = ("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")
 WEEKDAY_SHORT = ("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
@@ -324,7 +326,36 @@ def _namesake_question(reply: llm.EmployeeReply, people: dict[str, str]) -> str:
             continue
         namesakes = [label for label in people if label.split(" ", 1)[0].casefold() == wanted]
         if len(namesakes) > 1:
-            return f"O którą osobę chodzi: {', '.join(namesakes[:-1])} czy {namesakes[-1]}?"
+            return f"O którą osobę chodzi: {_or_words(namesakes)}?"
+    return ""
+
+
+def _or_words(names: list[str]) -> str:
+    """ "Ranna, Popołudniowa czy Nocna" (at most six names)."""
+    names = names[:6]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} czy {names[-1]}"
+
+
+def _unknown_name_question(reply: llm.EmployeeReply, people: dict[str, str], shift_types: dict[str, str]) -> str:
+    """A question the app asks by itself when a preference is about a person or a shift the location does not have
+    (the model wrote a name that is not on the lists): never hand such a request to the manager unasked."""
+    for preference in reply.preferences[:MAX_PREFERENCES]:
+        if preference.type in ("unikaj_osoby", "preferuj_osobe"):
+            name = (preference.person or "").strip()[:40]
+            if not name:
+                return "O którą osobę chodzi? Napisz jej imię tak, jak jest w grafiku."
+            if readings._lookup(name, people) is None:
+                first = name.split()[0].casefold()
+                similar = [label for label in people if len(first) >= 2 and label.casefold()[:2] == first[:2]]
+                if 1 < len(similar) <= 4:
+                    return f"O którą osobę chodzi: {_or_words(similar)}?"
+                if len(similar) == 1:
+                    return f"Czy chodzi o tę osobę: {similar[0]}? Odpisz „tak” albo napisz, o kogo."
+                return f"Nie ma w lokalu osoby „{name}”. O kogo chodzi? Napisz imię tak, jak jest w grafiku."
+        shift = (preference.shift_type or "").strip()[:40]
+        known = readings._lookup(shift, shift_types) is not None
+        if shift and shift_types and preference.type in readings.SHIFT_TYPED and not known:
+            return f"Nie ma w lokalu zmiany „{shift}”. O którą zmianę chodzi: {_or_words(list(shift_types))}?"
     return ""
 
 
@@ -350,17 +381,23 @@ def _checked_reply(
     number = reply.answers_question
     answered = asked[number - 1] if asked and isinstance(number, int) and 1 <= number <= len(asked) else None
     answering = answered is not None
-    question = (reply.question or "").strip() or ("" if answering else _namesake_question(reply, people))
+    question = (reply.question or "").strip()
+    why = ""
+    if not question and not answering:
+        # The app asks by itself when the reading names a person or a shift it cannot tell or find.
+        question = _namesake_question(reply, people) or _unknown_name_question(reply, people, shift_types)
+        why = "osoba lub zmiana" if question else ""
     if question and not answering:
         # Nothing of this message is saved until the person answers (not even the parts the model was sure of).
-        outcome = _Outcome(TextRequest.Status.ANSWERED)
-        outcome.question, outcome.reply, outcome.raw = question, answer, raw
+        outcome = _asking(question, answer, raw, why)
     elif question:
         outcome = _Outcome(TextRequest.Status.NEEDS_MANAGER, reason=TextRequest.UnreadReason.UNSURE)
         outcome.reply = answer
         outcome.answer, outcome.raw = {"why": "drugie pytanie", **raw}, raw
     else:
-        outcome = _checked_preferences(reply, row, people, shift_types, previous, raw, answer, bool(hours))
+        outcome = _checked_preferences(
+            reply, row, people, shift_types, previous, raw, answer, bool(hours), can_ask=not answering
+        )
     if answering:
         outcome.answer_to = answered
     outcome.hours_reports = hours
@@ -375,6 +412,22 @@ def _checked_reply(
     return outcome
 
 
+def _asking(question: str, answer: str, raw: dict[str, Any], why: str = "") -> _Outcome:
+    """A question back to the person instead of a reading: nothing of the message is saved until they answer.
+    `why`: set when the app asks by itself (kept in `assistant_answer` to see why it asked)."""
+    outcome = _Outcome(TextRequest.Status.ANSWERED)
+    outcome.question, outcome.reply, outcome.raw = question, answer, raw
+    if why:
+        outcome.answer = {"why": why, "question": question, **raw}
+    return outcome
+
+
+def _clause(summary: str) -> str:
+    """A summary inside a sentence: no full stop, lower case unless it starts with "Ty"."""
+    summary = summary.strip().rstrip(".")
+    return summary if summary.startswith("Ty ") else summary[:1].lower() + summary[1:]
+
+
 def _checked_preferences(
     reply: llm.EmployeeReply,
     row: TextRequest,
@@ -384,17 +437,24 @@ def _checked_preferences(
     raw: dict[str, Any],
     answer: str,
     has_hours: bool,
+    can_ask: bool = False,
 ) -> _Outcome:
+    """`can_ask`: the app may ask the person to confirm a reading the assistant doubts (not after its question)."""
     span = request_span(row)
-    parts, why = [], ""
+    parts, why, doubt = [], "", ""
     if len(reply.preferences) > MAX_PREFERENCES:
         why = "za dużo próśb w jednej wiadomości"
     for preference in reply.preferences[:MAX_PREFERENCES]:
         if why:
             break
-        data, why = _checked_preference(preference, span, people, shift_types, row.text)
-        if data is not None:
+        data, problem = _checked_preference(preference, span, people, shift_types, row.text)
+        if data is None:
+            why = problem
+        else:
             parts.append(data)
+            doubt = doubt or problem
+    if doubt and not can_ask:
+        why = why or doubt  # already asked once: the manager reads it, as before
     replacement = None
     if parts and not why and reply.replaces_request is not None:
         number = reply.replaces_request
@@ -407,6 +467,9 @@ def _checked_preferences(
         outcome = _Outcome(TextRequest.Status.NEEDS_MANAGER, reason=TextRequest.UnreadReason.UNSURE)
         outcome.answer, outcome.raw = {"why": why, **raw}, raw
         return outcome
+    if doubt:
+        # The reading may be right, but the assistant itself doubts it: the person confirms or corrects it first.
+        return _asking(CONFIRM_QUESTION.format(what=_clause(_combined(parts, row)["summary"])), answer, raw, doubt)
     if parts:
         outcome = _Outcome(TextRequest.Status.INTERPRETED)
         outcome.interpretation = _combined(parts, row)
@@ -539,7 +602,9 @@ def checked_hours(
 def _checked_preference(
     preference: llm.Preference, span: tuple[date, date], people: dict[str, str], shift_types: dict[str, str], text: str
 ) -> tuple[dict[str, Any] | None, str]:
-    """(checked part of an interpretation, "") or (None, why it cannot be used). `span`: the days it can be about."""
+    """(checked part of an interpretation, "") or (None, why it cannot be used). A reading the assistant itself
+    doubts (confidence below `ASSISTANT_MIN_CONFIDENCE`) comes with why as well, (data, "pewność 0.40"): the person is
+    asked to confirm it. `span`: the days it can be about."""
     start, end = span[0].isoformat(), span[1].isoformat()
     confidence = min(1.0, max(0.0, float(preference.confidence)))
     if any(not start <= d <= end for d in preference.dates):
@@ -561,8 +626,7 @@ def _checked_preference(
     )
     if data is None:
         return None, "osoba, zmiana, godziny lub dni nie pasują do lokalu"
-    if confidence < settings.ASSISTANT_MIN_CONFIDENCE:
-        return None, f"pewność {confidence:.2f}"
+    doubt = f"pewność {confidence:.2f}" if confidence < settings.ASSISTANT_MIN_CONFIDENCE else ""
     if preference.cannot and data["type"] == "wolne_dni" and data["dates"]:
         data["cannot"] = True
     summary = readings.describe(
@@ -572,7 +636,7 @@ def _checked_preference(
         {sid: name for name, sid in shift_types.items()},
     ).lstrip(": ")
     data.update(level=preference.level, confidence=round(confidence, 2), summary=_sentence(summary))
-    return data, ""
+    return data, doubt
 
 
 def _sentence(text: str) -> str:

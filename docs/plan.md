@@ -1131,6 +1131,12 @@ asystent raz dopytuje pracownika.
   z pytaniem i bez interpretacji, nawet gdy model podał też preferencje. Odpowiedź (`answers_question` przy otwartym
   pytaniu) dostaje `answer_to` i przechodzi zwykłe sprawdzenie; drugie pytanie zamiast odczytu daje
   `needs_manager` / `unsure` z powodem „drugie pytanie”.
+- Pytania aplikacji (dopisane 22.11.2026, gdy wiadomość nie odpowiada na pytanie): `_unknown_name_question` przy
+  `unikaj_osoby` / `preferuj_osobe` bez osoby albo z osobą spoza listy (podobne imiona = te same dwie pierwsze
+  litery, najwyżej 4) i przy zmianie spoza listy (lista zmian lokalu); `CONFIRM_QUESTION` („Czy dobrze rozumiem:
+  <opis>? …”), gdy któraś preferencja ma pewność poniżej `ASSISTANT_MIN_CONFIDENCE` (`_checked_preference` zwraca
+  wtedy dane i powód). `assistant_answer.why` mówi, czemu aplikacja zapytała („osoba lub zmiana”, „pewność 0.40”).
+  W odpowiedzi na pytanie oba przypadki dają `needs_manager` / `unsure` jak dotąd.
 - API: `MyRequestOut.question` (tylko przy `answered`), `ManagerRequestOut.asked` (`text`, `question` wiadomości,
   na którą odpowiada prośba). Nowa treść prośby („Popraw”) czyści pytanie. `assistant_misses` pokazuje odpowiedź
   razem z pierwszą wiadomością i pytaniem.

@@ -167,7 +167,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   existing `GET /api/...` endpoints run as the person who wrote (same permissions as the app, phones stripped). Never
   give it write tools; it says where in the app to do things. Off-topic messages get application-owned copy; mixed
   messages are answered and their preferences saved. When unsure (day, person, shift, how much) the employee's
-  assistant asks one question (`EmployeeReply.question`, saved as `TextRequest.question` on an `answered` row, nothing
+  assistant asks one question (`EmployeeReply.question`, or the app's own about a namesake, an unknown person or
+  shift, or a reading below `ASSISTANT_MIN_CONFIDENCE`; saved as `TextRequest.question` on an `answered` row, nothing
   saved); it waits while it is among the last `MAX_CONVERSATION` messages, a later message names it by number
   (`answers_question`, `TextRequest.answer_to`), and a second question goes to the manager. Without a key (`llm.is_enabled()`) requests go uninterpreted. Tests
   replace `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
