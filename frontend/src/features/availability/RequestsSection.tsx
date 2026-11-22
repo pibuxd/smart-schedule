@@ -185,10 +185,6 @@ function RequestStatus({
         ) : (
           <p className="m-0">{request.summary}</p>
         )}
-        <p className="m-0 text-sm text-ink-muted">
-          Asystent może się pomylić. Ważne daty i godziny sprawdź w „Mój
-          grafik”.
-        </p>
         {editable && (
           <div>
             <Button
