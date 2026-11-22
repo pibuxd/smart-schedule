@@ -498,7 +498,7 @@ describe('ScheduleScreen', () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
     const sheet = await screen.findByRole('dialog')
-    expect(within(sheet).getByText(/Wróci poprzedni szkic, wersja 2\./)).toBeInTheDocument()
+    expect(within(sheet).getByText(/Wróci poprzedni szkic, wersja 2 z .*, z jego poprawkami i przypięciami\./)).toBeInTheDocument()
     expect(within(sheet).queryByText(/okres wróci do zbierania dyspozycji/)).not.toBeInTheDocument()
     expect(within(sheet).getByText(/Obsada dni i zmiany w grafikach innych lokali zostają/)).toBeInTheDocument()
   })

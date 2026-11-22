@@ -308,6 +308,9 @@ function VersionHeader({ data, onShowVersion }: { data: VersionOut; onShowVersio
   )
 }
 
+const madeAt = (iso: string) =>
+  new Date(iso).toLocaleString('pl-PL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
+
 /** What is current after "Usuń szkic": the version just before this draft, if any. */
 function versionBefore(data: VersionOut) {
   return data.history.filter((v) => v.number < data.number).sort((x, y) => y.number - x.number)[0]
@@ -359,7 +362,7 @@ function DeleteDraft({ data, current, onDeleted }: { data: VersionOut; current: 
                 ? 'Szkic zniknie na dobre razem z poprawkami, a okres wróci do zbierania dyspozycji.'
                 : before.published_at
                   ? 'Szkic zniknie na dobre razem z poprawkami. Zostaje opublikowany grafik, który widzą pracownicy.'
-                  : `Szkic zniknie na dobre razem z poprawkami. Wróci poprzedni szkic, wersja ${before.number}.`}
+                  : `Szkic zniknie na dobre razem z poprawkami. Wróci poprzedni szkic, wersja ${before.number} z ${madeAt(before.created_at)}, z jego poprawkami i przypięciami.`}
             </p>
             <p className="m-0">Obsada dni i zmiany w grafikach innych lokali zostają.</p>
           </>
