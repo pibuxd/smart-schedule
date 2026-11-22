@@ -171,7 +171,7 @@ Piotr: przycisk asystenta ma być zawsze dostępny, a nie pojawiać się tylko w
 ## Poprawki asystenta po niezależnym QA (18.11.2026)
 
 - Polecenie pracy w danym dniu może wskazywać konkretną zmianę. Zapis, opis i ocena generatora zachowują ten sam zakres. Nieobsługiwanej części odpowiedzi modelu nie wolno po cichu pominąć ani zatwierdzić niepełnego planu.
-- Polecenia o osobach i prośby pozostają preferencjami. Potwierdzenie nie obiecuje przydziału ani zmiany dyspozycji w kalendarzu. Zatwierdzenie ustawień nie uruchamia układania grafiku.
+- Polecenia o osobach i prośby pozostają preferencjami. Potwierdzenie nie obiecuje przydziału ani zmiany dyspozycji w kalendarzu. Zatwierdzenie ustawień nie uruchamia układania grafiku; wyjątek to plan z punktem o ułożeniu, który asystent dodaje tylko na wyraźną prośbę kierownika (sekcja „Inny grafik na prośbę kierownika”, 22.11.2026).
 - Funkcja odpowiedzi o danych wróciła 19.11.2026 (sekcja „Asystent odpowiada na wszystko o Grafikomacie i lokalu”), tym razem przez API z prawami osoby, która pisze.
 - Kolejne wiadomości kierownika zawierają 10 ostatnich wiadomości tego samego autora w tym lokalu i okresie ustaleń (od 20.11.2026 bez limitu 24 godzin), z informacją, czy plan został przyjęty. Korekta pracownika może zastąpić jedną wcześniejszą prośbę tego pracownika w tym samym okresie lub miesiącu. Stara treść pozostaje w historii jako zastąpiona; nie bierze udziału w układaniu grafiku. Niejasna lub nieaktualna korekta trafia do kierownika bez nowej interpretacji. Decyzja i ważność nadane przez kierownika przechodzą na poprawioną prośbę.
 - Interfejs informuje o zakresie danych czytanych przez zewnętrzny asystent. LLM nie publikuje, nie generuje, nie wysyła wiadomości i nie edytuje kalendarza.

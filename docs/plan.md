@@ -1055,7 +1055,7 @@ Zakres produktu: spec.md, „Nadgodziny i krótsza zmiana”.
   zgłoszenie: Anna Nowak, pt. 20.11, 06:00–15:00 zamiast 06:00–14:00 (nadgodziny: +1 h)”, „Zmienię godziny: Ewa Nowak, …”, „Przywrócę godziny z grafiku: …”; zawsze pełne imię i nazwisko);
   te same godziny co teraz trafiają do „To już jest ustawione”, błędna część blokuje cały plan. `apply_command`
   wykonuje je przez `worktime.services` (najpierw decyzje, potem zmiany) w tej samej transakcji: gdy coś się
-  zmieniło od przygotowania planu, nic się nie zapisuje (409 „… Nic z tego planu nie zapisałem.”). Plan, który
+  zmieniło od przygotowania planu, nic się nie zapisuje (409 „… Nic z tego planu się nie zapisało.”). Plan, który
   zmienia tylko godziny, nie wymaga otwartego zestawu ustaleń, więc działa też po publikacji okresu
   (`AssistantCommandOut.has_hours`, `hours_only`). Nowe narzędzie `manager_hours_changes`. Na OpenRouter schematy
   odpowiedzi powstają z modeli (`answer_schema`), na Claude zostają w limicie API (test).
@@ -1184,7 +1184,7 @@ dawało prawie ten sam grafik (kara stabilności liczy się tylko względem opub
   niż obecny.” / „… ułożę grafik na okres … od nowa.” i uwagę o przypięciach, ręcznych poprawkach i koszu.
   `has_changes` liczy `arranges(plan)`. `apply_command` po ustaleniach i godzinach woła `_apply_arrange` →
   `request_generation` w tej samej transakcji; błąd (limit 429, trwające układanie 409, okres opublikowany) cofa
-  cały plan z dopiskiem „Nic z tego planu nie zapisałem.”. `AssistantCommand.generation_run` (migracja assistant
+  cały plan z dopiskiem „Nic z tego planu się nie zapisało.”. `AssistantCommand.generation_run` (migracja assistant
   0004); `AssistantCommandOut.arranges`, `changes_agreements`, `run_id`. Czat po zatwierdzeniu pokazuje
   `RunProgress` (postęp, „Anuluj”, „Zobacz szkic”).
 
