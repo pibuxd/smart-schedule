@@ -461,12 +461,6 @@ function CommandReply({
   return (
     <>
       {data.reply && <p className="m-0 whitespace-pre-wrap">{data.reply}</p>}
-      {data.informational && (
-        <p className="m-0 text-sm text-ink-muted">
-          Asystent może się pomylić. Ważne dane sprawdź w aplikacji, na przykład
-          w zakładkach „Grafik” i „Dyspozycje” albo w „Godzinach”.
-        </p>
-      )}
       {data.question && <p className="m-0 font-semibold">{data.question}</p>}
       {data.lines.length > 0 && (
         <div className="overflow-hidden rounded-md border border-grid">

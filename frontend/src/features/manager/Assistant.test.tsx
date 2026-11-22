@@ -125,7 +125,7 @@ describe("Assistant chat", () => {
         "Odpoczynek między zmianami określa minimalną przerwę.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Asystent może się pomylić/)).toBeInTheDocument();
+    expect(screen.queryByText(/Asystent może się pomylić/)).toBeNull();
     fireEvent.change(screen.getByLabelText("Twoja wiadomość"), {
       target: { value: "A Kasia?" },
     });
