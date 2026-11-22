@@ -16,8 +16,9 @@ nazywają jej szacunkiem (prośba Piotra).
   „Stawki”. Bez własnej stawki liczy się stawka stanowiska. Stanowiska należą do lokalu, więc w każdym lokalu osoby jej
   stawki ustawia kierownik tego lokalu.
 - Stawka „od dnia” (prośba Piotra): zmiana stawki stanowiska albo osoby działa dopiero od wybranego dnia. Zmiany
-  wcześniejsze liczą się po starej stawce, więc minione miesiące się nie zmieniają. Pierwsza stawka liczy się dla
-  wszystkich zmian, bo wcześniej żadnej nie było. Zmianę można wpisać z góry (np. podwyżka od 1 stycznia), a pomyłkę
+  wcześniejsze liczą się po starej stawce, więc minione miesiące się nie zmieniają. Pierwsza stawka stanowiska liczy się
+  dla wszystkich zmian, bo wcześniej żadnej nie było. Własna stawka osoby zawsze ma dzień, także pierwsza, bo
+  wcześniej liczyła się stawka stanowiska. Zmianę można wpisać z góry (np. podwyżka od 1 stycznia), a pomyłkę
   usunąć: wtedy znów liczy się poprzednia stawka. O stawce zmiany decyduje dzień, w którym zmiana się zaczyna.
 - Doświadczenie na stanowisku (prośba Piotra, tak jak w Kadromierzu): kto ma dłuższy staż, dostaje własną stawkę na
   tym stanowisku od dnia, np. piekarz po roku 38 zł od 1 marca. Ta sama osoba może więc zarabiać różnie na różnych

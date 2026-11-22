@@ -54,6 +54,8 @@ export function RateSteps({
   name,
   steps,
   fallback,
+  emptyHint,
+  firstForAll = true,
   today,
   disabled,
   pending,
@@ -66,6 +68,10 @@ export function RateSteps({
   steps: RateStep[]
   /** What counts without an amount: "bez stawki", or the position's rate for a person. */
   fallback: string
+  /** What an empty amount means, under the field: "Puste pole: znowu stawka stanowiska." */
+  emptyHint?: string
+  /** The first step counts for every shift (a position). A person's first own rate is a change from a day. */
+  firstForAll?: boolean
   today: string
   disabled: boolean
   pending: boolean
@@ -79,7 +85,7 @@ export function RateSteps({
   const [bad, setBad] = useState(false)
   const now = stepOn(steps, today)
   const amount = (step: RateStep | undefined) => (step?.hourly_rate != null ? rateText(step.hourly_rate) : fallback)
-  const first = steps.length === 0
+  const first = steps.length === 0 && firstForAll
 
   return (
     <div className="grid gap-1">
@@ -122,7 +128,7 @@ export function RateSteps({
             label="Stawka, zł/h"
             className="w-32"
             inputMode="decimal"
-            placeholder={fallback}
+            placeholder="np. 34,00"
             value={rate}
             onChange={(e) => setRate(e.target.value)}
           />
@@ -136,6 +142,7 @@ export function RateSteps({
             Anuluj
           </Button>
           {first && <p className="m-0 basis-full text-sm text-ink-muted">Pierwsza stawka liczy się dla wszystkich zmian.</p>}
+          {emptyHint && steps.length > 0 && <p className="m-0 basis-full text-sm text-ink-muted">{emptyHint}</p>}
           {bad && <InlineError>{BAD_RATE}</InlineError>}
           {Boolean(error) && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
         </form>
@@ -313,6 +320,8 @@ export function OwnRates({
                   name={p.name}
                   steps={steps.filter((s) => s.position_id === p.position_id)}
                   fallback={position != null ? `stawka stanowiska, ${rateText(position)}` : 'stawka stanowiska (bez stawki)'}
+                  emptyHint="Puste pole: znowu stawka stanowiska."
+                  firstForAll={false}
                   today={day}
                   disabled={readOnly}
                   pending={save.isPending}

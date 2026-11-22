@@ -1195,12 +1195,12 @@ Model: aplikacja `apps/pay` (migracja `pay.0001`; staffing bez pól stawek).
 - Własne stawki nie znikają, gdy osoba traci stanowisko albo odchodzi: dawne zmiany liczą się dalej. Stanowisko
   usunięte całkiem (bez zmian w grafikach) zabiera kroki kaskadą.
 - UI: ustawienia lokalu, sekcja „Stawki i dodatki”: przy każdym stanowisku stawka dziś i zaplanowana zmiana, „Zmień
-  stawkę” z polem „Od dnia” (domyślnie dziś; pierwsza stawka bez daty), lista kroków w zwijanej części z „Usuń”;
-  dodatki z formularzem (nazwa, od–do albo cała doba, dni, zł/h albo %, stanowiska) i „Zakończ od dnia”. Formularz
-  pracownika: zwijane „Stawki” z tym samym edytorem kroków dla każdego zaznaczonego stanowiska. „Mój grafik”: „Wypłata
-  brutto” i „w tym dodatki” w ramce miesiąca. „Godziny”: kolumna „Wypłata brutto”, suma w stopce, w trwającym miesiącu
-  zdanie, że kwota obejmuje zmiany, które dopiero będą, a przy osobie z innymi lokalami „bez innych lokali” pod kwotą.
-  Kwoty `lib/money.ts` (`Intl.NumberFormat` pl-PL, PLN).
+  stawkę” z polem „Od dnia” (domyślnie dziś; pierwsza stawka stanowiska bez daty, własna stawka osoby zawsze z datą),
+  lista kroków w zwijanej części z „Usuń”; dodatki z formularzem (nazwa, od–do albo cała doba, dni, zł/h albo %,
+  stanowiska) i „Zakończ od dnia”. Formularz pracownika: zwijane „Stawki” z tym samym edytorem kroków dla każdego
+  zaznaczonego stanowiska. „Mój grafik”: „Wypłata brutto” i „w tym dodatki” w ramce miesiąca. „Godziny”: kolumna
+  „Wypłata brutto”, suma w stopce, w trwającym miesiącu zdanie, że kwota obejmuje zmiany, które dopiero będą, a przy
+  osobie z innymi lokalami „bez innych lokali” pod kwotą. Kwoty `lib/money.ts` (`Intl.NumberFormat` pl-PL, PLN).
 - Asystent: `tools.DROPPED_KEYS` usuwa z wyników narzędzi `pay`, `supplements_pay`, `unpriced_hours`, `hourly_rate`,
   `rates` i `supplements`, więc kwoty nie trafiają do zewnętrznej usługi AI (uwaga Prelint z 22.11.2026). Przewodniki
   po ekranach mówią, gdzie jest wypłata i stawki, a asystent odsyła tam przy pytaniu o pieniądze.

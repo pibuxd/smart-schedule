@@ -170,8 +170,13 @@ describe('OwnRates', () => {
     expect(seller).toHaveTextContent(/35,00\szł\/h/)
     const baker = screen.getByText('Piekarz').closest('li')!
     expect(baker).toHaveTextContent('stawka stanowiska (bez stawki)')
+    fireEvent.click(within(baker).getByRole('button', { name: 'Zmień stawkę: Piekarz' }))
+    expect(within(baker).getByLabelText('Od dnia')).toHaveValue('2026-11-22')
+    expect(within(baker).queryByText('Pierwsza stawka liczy się dla wszystkich zmian.')).not.toBeInTheDocument()
+    fireEvent.click(within(baker).getByRole('button', { name: 'Anuluj' }))
 
     fireEvent.click(within(seller).getByRole('button', { name: 'Zmień stawkę: Sprzedawca' }))
+    expect(within(seller).getByText('Puste pole: znowu stawka stanowiska.')).toBeInTheDocument()
     fireEvent.change(within(seller).getByLabelText('Stawka, zł/h'), { target: { value: '38' } })
     fireEvent.change(within(seller).getByLabelText('Od dnia'), { target: { value: '2027-03-01' } })
     fireEvent.click(within(seller).getByRole('button', { name: 'Zapisz stawkę' }))
