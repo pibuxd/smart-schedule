@@ -20,6 +20,10 @@ nazywają jej szacunkiem (prośba Piotra).
   dla wszystkich zmian, bo wcześniej żadnej nie było. Własna stawka osoby zawsze ma dzień, także pierwsza, bo
   wcześniej liczyła się stawka stanowiska. Zmianę można wpisać z góry (np. podwyżka od 1 stycznia), a pomyłkę
   usunąć: wtedy znów liczy się poprzednia stawka. O stawce zmiany decyduje dzień, w którym zmiana się zaczyna.
+  Stawka albo dodatek od dnia w minionym miesiącu i usunięcie stawki, która już działała przed tym miesiącem, zmieniają
+  wypłatę, która mogła być już wypłacona: ekran mówi wtedy „To zmieni wypłatę za minione miesiące.”, a usunięcie
+  takiej stawki pyta najpierw (uwaga Prelint z 22.11.2026). Czy zamykać minione miesiące, sprawdzimy w pilotażu.
+  Własne stawki osoby zapisują się od razu, osobno od przycisku „Zapisz” formularza, i ekran to mówi.
 - Doświadczenie na stanowisku (prośba Piotra, tak jak w Kadromierzu): kto ma dłuższy staż, dostaje własną stawkę na
   tym stanowisku od dnia, np. piekarz po roku 38 zł od 1 marca. Ta sama osoba może więc zarabiać różnie na różnych
   stanowiskach i w różnych miesiącach. Stopień doświadczenia z formularza („początkujący”, „samodzielny”,

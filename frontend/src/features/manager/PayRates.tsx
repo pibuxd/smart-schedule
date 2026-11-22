@@ -2,7 +2,7 @@
 // pay of earlier months. Used by "Stawki i dodatki" in the location settings and "Stawki" in the employee form.
 
 import { useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { AlertTriangle, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import type {
@@ -36,6 +36,8 @@ import {
   BAD_RATE,
   byDay,
   fullDay,
+  inPastMonth,
+  PAST_MONTHS,
   parseRate,
   rateInput,
   rateText,
@@ -46,6 +48,16 @@ import {
 import { useManager } from './ManagerContext'
 
 const hhmm = (value: string) => value.slice(0, 5)
+
+/** Said next to a day before this month: the change reaches pay that may already be paid. */
+function PastMonthsNote() {
+  return (
+    <p className="m-0 flex basis-full items-center gap-2 text-sm font-semibold">
+      <AlertTriangle aria-hidden="true" size={16} className="shrink-0 text-cannot" />
+      {PAST_MONTHS}
+    </p>
+  )
+}
 
 // --------------------------------------------------------------------------------------------- rate steps
 
@@ -83,6 +95,7 @@ export function RateSteps({
   const [rate, setRate] = useState('')
   const [from, setFrom] = useState(today)
   const [bad, setBad] = useState(false)
+  const [removing, setRemoving] = useState<RateStep | null>(null)
   const now = stepOn(steps, today)
   const amount = (step: RateStep | undefined) => (step?.hourly_rate != null ? rateText(step.hourly_rate) : fallback)
   const first = steps.length === 0 && firstForAll
@@ -141,6 +154,7 @@ export function RateSteps({
           <Button variant="quiet" size="normal" onClick={() => setEditing(false)}>
             Anuluj
           </Button>
+          {!first && from && inPastMonth(from, today) && <PastMonthsNote />}
           {first && <p className="m-0 basis-full text-sm text-ink-muted">Pierwsza stawka liczy się dla wszystkich zmian.</p>}
           {emptyHint && steps.length > 0 && <p className="m-0 basis-full text-sm text-ink-muted">{emptyHint}</p>}
           {bad && <InlineError>{BAD_RATE}</InlineError>}
@@ -158,7 +172,7 @@ export function RateSteps({
                   size="normal"
                   disabled={disabled}
                   aria-label={`Usuń stawkę ${name} ${s.valid_from ? `od ${fullDay(s.valid_from)}` : 'od początku'}`}
-                  onClick={() => onDelete(s.id)}
+                  onClick={() => (inPastMonth(s.valid_from, today) ? setRemoving(s) : onDelete(s.id))}
                 >
                   Usuń
                 </Button>
@@ -167,6 +181,18 @@ export function RateSteps({
           </ul>
         </Disclosure>
       )}
+      <ConfirmSheet
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Usunąć stawkę ${removing?.valid_from ? `od ${fullDay(removing.valid_from)}` : 'od początku'}?`}
+        confirmLabel="Tak, usuń stawkę"
+        onConfirm={() => {
+          if (removing) onDelete(removing.id)
+          setRemoving(null)
+        }}
+      >
+        <p className="m-0">{PAST_MONTHS}</p>
+      </ConfirmSheet>
     </div>
   )
 }
@@ -297,7 +323,9 @@ export function OwnRates({
         </span>
       }
     >
-      <p className="m-0 text-sm text-ink-muted">Np. za dłuższy staż. Bez własnej stawki liczy się stawka stanowiska.</p>
+      <p className="m-0 text-sm text-ink-muted">
+        Np. za dłuższy staż, bo stopień doświadczenia nie zmienia stawki. Zapisuje się od razu.
+      </p>
       {!open ? null : settings.isPending || personal.isPending ? (
         <Loading>Wczytuję stawki…</Loading>
       ) : settings.isError || personal.isError ? (
@@ -515,6 +543,7 @@ function Supplements({ locationId, data, today }: { locationId: string; data: Pa
       >
         <p className="m-0">Zmiany przed tym dniem zachowają dodatek.</p>
         <TextField label="Bez dodatku od dnia" type="date" value={endFrom} onChange={(e) => setEndFrom(e.target.value)} required />
+        {endFrom && inPastMonth(endFrom, today) && <PastMonthsNote />}
       </ConfirmSheet>
     </div>
   )
@@ -629,8 +658,9 @@ function SupplementForm({
         value={from}
         onChange={(e) => setFrom(e.target.value)}
         required={Boolean(initial)}
-        hint={initial ? 'Wcześniejsze zmiany zachowają stary dodatek.' : 'Puste pole: dla wszystkich zmian.'}
+        hint={initial ? 'Wcześniejsze zmiany zachowają stary dodatek.' : 'Puste pole: dla wszystkich zmian, także minionych.'}
       />
+      {from && inPastMonth(from, today) && <PastMonthsNote />}
       {problem && <InlineError>{problem}</InlineError>}
       {Boolean(error) && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
       <div className="flex flex-wrap gap-2">

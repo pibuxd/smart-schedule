@@ -77,6 +77,27 @@ describe('PaySection', () => {
     )
   })
 
+  it('warns when a rate change or a removed step reaches months that have passed', async () => {
+    const calls = show()
+    const seller = (await screen.findByText('Sprzedawca')).closest('li')!
+    fireEvent.click(within(seller).getByRole('button', { name: 'Zmień stawkę: Sprzedawca' }))
+    expect(within(seller).queryByText('To zmieni wypłatę za minione miesiące.')).not.toBeInTheDocument()
+    fireEvent.change(within(seller).getByLabelText('Od dnia'), { target: { value: '2026-10-15' } })
+    expect(within(seller).getByText('To zmieni wypłatę za minione miesiące.')).toBeInTheDocument()
+    fireEvent.click(within(seller).getByRole('button', { name: 'Anuluj' }))
+
+    fireEvent.click(within(seller).getByText('Zmiany stawki (2)'))
+    fireEvent.click(within(seller).getByRole('button', { name: 'Usuń stawkę Sprzedawca od 1 stycznia 2027' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/position-rates/r2'))
+    fireEvent.click(within(seller).getByRole('button', { name: 'Usuń stawkę Sprzedawca od początku' }))
+    expect(await screen.findByRole('dialog', { name: 'Usunąć stawkę od początku?' })).toHaveTextContent(
+      'To zmieni wypłatę za minione miesiące.',
+    )
+    expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Tak, usuń stawkę' }))
+    await waitFor(() => expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toContain('/api/position-rates/r1'))
+  })
+
   it('saves the first rate of a position for every shift and catches a typo', async () => {
     const calls = show()
     const baker = (await screen.findByText('Piekarz')).closest('li')!

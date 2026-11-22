@@ -1196,11 +1196,13 @@ Model: aplikacja `apps/pay` (migracja `pay.0001`; staffing bez pól stawek).
   usunięte całkiem (bez zmian w grafikach) zabiera kroki kaskadą.
 - UI: ustawienia lokalu, sekcja „Stawki i dodatki”: przy każdym stanowisku stawka dziś i zaplanowana zmiana, „Zmień
   stawkę” z polem „Od dnia” (domyślnie dziś; pierwsza stawka stanowiska bez daty, własna stawka osoby zawsze z datą),
-  lista kroków w zwijanej części z „Usuń”; dodatki z formularzem (nazwa, od–do albo cała doba, dni, zł/h albo %,
-  stanowiska) i „Zakończ od dnia”. Formularz pracownika: zwijane „Stawki” z tym samym edytorem kroków dla każdego
-  zaznaczonego stanowiska. „Mój grafik”: „Wypłata brutto” i „w tym dodatki” w ramce miesiąca. „Godziny”: kolumna
-  „Wypłata brutto”, suma w stopce, w trwającym miesiącu zdanie, że kwota obejmuje zmiany, które dopiero będą, a przy
-  osobie z innymi lokalami „bez innych lokali” pod kwotą. Kwoty `lib/money.ts` (`Intl.NumberFormat` pl-PL, PLN).
+  lista kroków w zwijanej części z „Usuń” (krok sprzed bieżącego miesiąca pyta najpierw, a dzień w minionym miesiącu
+  pokazuje „To zmieni wypłatę za minione miesiące.”, też przy dodatkach); dodatki z formularzem (nazwa, od–do albo cała
+  doba, dni, zł/h albo %, stanowiska) i „Zakończ od dnia”. Formularz pracownika: zwijane „Stawki” z tym samym edytorem
+  kroków dla każdego zaznaczonego stanowiska. „Mój grafik”: „Wypłata brutto” i „w tym dodatki” w ramce miesiąca.
+  „Godziny”: kolumna „Wypłata brutto”, suma w stopce, w trwającym miesiącu zdanie, że kwota obejmuje zmiany, które
+  dopiero będą, a przy osobie z innymi lokalami „bez innych lokali” pod kwotą. Kwoty `lib/money.ts` (`Intl.NumberFormat`
+  pl-PL, PLN).
 - Asystent: `tools.DROPPED_KEYS` usuwa z wyników narzędzi `pay`, `supplements_pay`, `unpriced_hours`, `hourly_rate`,
   `rates` i `supplements`, więc kwoty nie trafiają do zewnętrznej usługi AI (uwaga Prelint z 22.11.2026). Przewodniki
   po ekranach mówią, gdzie jest wypłata i stawki, a asystent odsyła tam przy pytaniu o pieniądze.
@@ -1213,4 +1215,6 @@ chodzi w „oczekiwanej” wypłacie. Dodatku za święto nie ma, bo aplikacja n
 lokalu widzi i ustawia stawki tego lokalu.
 Do sprawdzenia w pilotażu (uwagi Prelinta do #66): czy pracownicy czytają kwotę za cały miesiąc jako pewną wypłatę,
 choć część zmian jest jeszcze przed nimi; czy właściciele chcą, żeby stawki widział tylko właściciel, a nie każdy
-kierownik lokalu.
+kierownik lokalu (jeśli odpowiedzi będą różne, najpierw przełącznik w lokalu); czy kierownicy chcą zamknąć minione
+miesiące zamiast samego ostrzeżenia; czy zmiana stopnia doświadczenia ma proponować nową stawkę; czy dodatek za święto
+jest potrzebny od razu.

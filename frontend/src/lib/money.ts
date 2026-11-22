@@ -56,3 +56,10 @@ export function byDay(a: RateStep, b: RateStep): number {
   if (b.valid_from === null) return 1
   return a.valid_from < b.valid_from ? -1 : 1
 }
+
+/** A day before the month of `today` (null = from the start): a pay change from it reaches months already paid. */
+export function inPastMonth(day: string | null, today: string): boolean {
+  return day === null || day < `${today.slice(0, 7)}-01`
+}
+
+export const PAST_MONTHS = 'To zmieni wypłatę za minione miesiące.'
