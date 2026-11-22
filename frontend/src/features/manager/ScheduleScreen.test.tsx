@@ -482,6 +482,26 @@ describe('ScheduleScreen', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/versions/v1')).toBe(true))
   })
 
+  it('warns that older unpublished attempts go too', async () => {
+    const h = version.history[0]
+    api({
+      version: {
+        ...version,
+        number: 3,
+        history: [
+          { ...h, id: 'v3', number: 3 },
+          { ...h, id: 'v2', number: 2, status: 'superseded' },
+          { ...h, id: 'v1old', number: 1, status: 'superseded' },
+        ],
+      },
+    })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Usuń szkic' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText(/Znikną też starsze wersje z historii, których nie opublikowano \(2\)/)).toBeInTheDocument()
+    expect(within(sheet).getByText(/Obsada dni i zmiany w grafikach innych lokali zostają/)).toBeInTheDocument()
+  })
+
   it('says the published schedule stays when deleting corrections', async () => {
     api({ version: { ...version, number: 2, period: { ...period, status: 'published', published_version_id: 'v0' } } })
     show()

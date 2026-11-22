@@ -1104,7 +1104,7 @@ Prośba Piotra: przycisk, którym kierownik usuwa szkic grafiku. Wcześniej szki
 - Gdy nic nie było opublikowane, okres wraca do `collecting` (pracownicy znów zmieniają dyspozycje, "Poproś o
   dyspozycje" działa). Przy opublikowanym zostaje `published`, a bieżącą wersją jest znów opublikowana.
 - Ekran: "Usuń szkic" (przycisk cichy z koszem) obok "Opublikuj" przy edytowalnym szkicu, ukryty w trakcie układania;
-  `ConfirmSheet` "Usunąć szkic grafiku?" z jednym zdaniem o skutku i "Tak, usuń szkic" / "Zostaw".
+  `ConfirmSheet` "Usunąć szkic grafiku?" z jednym zdaniem o skutku, liczbą starszych nieopublikowanych wersji, które znikną (gdy są), i zdaniem "Obsada dni i zmiany w grafikach innych lokali zostają." i "Tak, usuń szkic" / "Zostaw".
 
 Założenia: usunięcie szkicu nie cofa tego, co poprawki w nim zrobiły poza nim samym: obsada dnia z "Dodaj
 miejsce" / "Usuń miejsce" (to ustawienie lokalu) i zdjęcie osoby z opublikowanego grafiku innego lokalu po
