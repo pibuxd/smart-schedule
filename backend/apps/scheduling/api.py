@@ -396,6 +396,10 @@ class MyShiftOut(Schema):
     report: WaitingHoursOut | None = None
     # I may report other hours of this shift ("Zgłoś inne godziny"): published, at most 14 days back.
     can_report: bool = False
+    # My rate on this shift's day (złoty an hour before tax) and the pay for its hours that count with supplements;
+    # None without a rate. Not on the screen (it shows the month): for the assistant, to work out earnings.
+    hourly_rate: float | None = None
+    pay: float | None = None
 
 
 class MonthHoursOut(Schema):
@@ -410,6 +414,14 @@ class MonthHoursOut(Schema):
     unpriced_hours: float = 0
 
 
+class PreparingOut(Schema):
+    """A schedule of one of my locations that the manager has arranged but not published yet."""
+
+    location_name: str
+    start: date
+    end: date
+
+
 class MyScheduleOut(Schema):
     home_location_name: str
     # From now on: shifts that have not ended (with the hours that count).
@@ -420,6 +432,8 @@ class MyScheduleOut(Schema):
     published_until: date | None = None
     # Hours of published shifts in each month that the list touches (and the current month).
     months: list[MonthHoursOut]
+    # Schedules still being arranged (a draft, not published): their shifts appear here only after publishing.
+    preparing: list[PreparingOut] = Field(default_factory=list)
 
 
 def _hours(shift: Shift) -> float:
@@ -445,6 +459,7 @@ def my_schedule(request, company_id: UUID):
         ).order_by("shift__start_at")
     )
     worked = worked_hours(near)
+    near_rules = PayRules(near)
     upcoming = [a for a in near if worked[a.pk].end_at > now]
     recent = [
         a for a in reversed(near) if worked[a.pk].end_at <= now and a.shift.date >= today - timedelta(days=PAST_DAYS)
@@ -480,6 +495,8 @@ def my_schedule(request, company_id: UUID):
     def shift_out(assignment: Assignment) -> MyShiftOut:
         shift = assignment.shift
         tz = ZoneInfo(shift.location.timezone)
+        rate, shift_pay = near_rules.rate(assignment), Pay()
+        near_rules.add(shift_pay, assignment, worked[assignment.pk])
         start, end = shift.start_at.astimezone(tz), shift.end_at.astimezone(tz)
         overlapping = [
             o
@@ -506,6 +523,8 @@ def my_schedule(request, company_id: UUID):
             worked=worked_out(worked[assignment.pk], shift),
             report=report_out(waiting.get(assignment.pk), shift),
             can_report=shift.date >= today - timedelta(days=PAST_DAYS),
+            hourly_rate=float(rate) if rate is not None else None,
+            pay=shift_pay.amount,
         )
 
     shifts = [shift_out(a) for a in upcoming]
@@ -534,6 +553,17 @@ def my_schedule(request, company_id: UUID):
     )
     if published_until:
         published_until = min(published_until, today + timedelta(days=MY_SCHEDULE_DAYS))
+    preparing = (
+        ctx.qs(SchedulePeriod)
+        .filter(
+            location_id__in=profile.location_ids(),
+            status=SchedulePeriod.Status.DRAFT,
+            end__gte=today,
+            start__lte=today + timedelta(days=MY_SCHEDULE_DAYS),
+        )
+        .select_related("location")
+        .order_by("start", "location__name")
+    )
     return MyScheduleOut(
         home_location_name=profile.home_location.name,
         shifts=shifts,
@@ -549,6 +579,7 @@ def my_schedule(request, company_id: UUID):
             )
             for m, h in totals.items()
         ],
+        preparing=[PreparingOut(location_name=p.location.name, start=p.start, end=p.end) for p in preparing],
     )
 
 

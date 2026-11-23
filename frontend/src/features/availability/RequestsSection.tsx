@@ -1116,11 +1116,7 @@ export function RequestsChat({
                 { onSuccess: () => onTextChange("") },
               );
             }}
-            footer={
-              assistantReads
-                ? "Czyta to asystent AI (zewnętrzna usługa), kierownik i jego asystent."
-                : "Wiadomość dla kierownika."
-            }
+            footer={assistantReads ? undefined : "Wiadomość dla kierownika."}
           />
         ) : (
           <p className="m-0 text-sm text-ink-muted">
@@ -1140,7 +1136,7 @@ export function RequestsChat({
             {!periodId &&
               "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
             {assistantReads
-              ? "Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Prośby czyta też kierownik, a gdy kierownik pyta swojego asystenta, ten też może przeczytać Twoje prośby i dyspozycje. Nie wpisuj tu nic, czego nie chcesz przekazać kierownikowi."
+              ? "Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, wypłatę, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Kierownik widzi zapisane prośby i to, co mu przekażesz, a nie całą rozmowę."
               : "Przeczyta to tylko kierownik."}
           </p>
         </Disclosure>

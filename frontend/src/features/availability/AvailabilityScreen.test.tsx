@@ -22,18 +22,29 @@ type Server = {
   period?: typeof period | null
   submitted_at?: string | null
   locked?: string[]
+  unpublished?: string[]
   days?: MyCalendarOut['days']
   location_names?: string[]
 }
 
 /** The two reads of the screen (the open request, then one month of the calendar) and every write. */
-function api({ period: asked = period, submitted_at = null, locked = [], days, location_names = ['Rynek'] }: Server = {}) {
+function api({
+  period: asked = period,
+  submitted_at = null,
+  locked = [],
+  unpublished = [],
+  days,
+  location_names = ['Rynek'],
+}: Server = {}) {
   const marked = days ?? [{ date: '2026-12-04', state: 'prefer' as const, from_time: '22:00:00', to_time: '06:00:00' }]
   return mockApi((method, path) => {
     if (path === '/api/me/requests') return [200, []]
     if (path === '/api/me/calendar' && method === 'GET') {
       // The test server answers for December whatever month is asked; enough for one screen.
-      return [200, { start: '2026-12-01', end: '2026-12-31', days: marked, locked, period: asked, submitted_at, location_names }]
+      return [
+        200,
+        { start: '2026-12-01', end: '2026-12-31', days: marked, locked, unpublished, period: asked, submitted_at, location_names },
+      ]
     }
     if (path === '/api/me/calendar') return [204, null]
     return [200, { period: asked, days: [], submitted_at }]
@@ -95,6 +106,16 @@ describe('AvailabilityScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę, nie da się zmienić' }), { detail: 0 })
     expect(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę, nie da się zmienić' })).toBeInTheDocument()
     expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0)
+    expect(screen.getByText(/Na szare dni grafik jest już opublikowany/)).toBeInTheDocument()
+  })
+
+  it('says when the locked days are still being arranged, not published', async () => {
+    // Piotr, 23.11.2026: "Kiedy mogę" said December was arranged while "Mój grafik" showed nothing of it.
+    api({ locked: ['2026-12-01', '2026-12-02'], unpublished: ['2026-12-01', '2026-12-02'] })
+    show()
+    expect(await screen.findByText(/Kierownik układa już grafik na szare dni/)).toBeInTheDocument()
+    expect(screen.getByText(/gdy go opublikuje/)).toBeInTheDocument()
+    expect(screen.queryByText(/grafik jest już opublikowany/)).not.toBeInTheDocument()
   })
 
   it('says that availability is shared when the person works in several locations', async () => {

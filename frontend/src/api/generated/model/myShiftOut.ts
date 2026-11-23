@@ -27,4 +27,6 @@ export interface MyShiftOut {
   worked?: WorkedOut | null;
   report?: WaitingHoursOut | null;
   can_report?: boolean;
+  hourly_rate?: number | null;
+  pay?: number | null;
 }

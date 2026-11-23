@@ -1,6 +1,7 @@
 """The employee's screens: "Kiedy mogę" (availability, repeats, copying, requests) and "Mój grafik"."""
 
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -8,6 +9,7 @@ from django.utils import timezone
 
 from apps.availability.api import previous_month_day
 from apps.availability.models import AvailabilityDay, AvailabilityPattern, AvailabilitySubmission, TextRequest
+from apps.pay.models import PositionRate
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing.models import EmployeeProfile
 from apps.tenancy.models import Membership
@@ -431,10 +433,13 @@ class TestMySchedule:
         _shift(version, location, position, None, today + timedelta(days=2), time(22), time(6), me, "night")
         _shift(draft, location, position, shift_type, today + timedelta(days=3), time(6), time(14), me, "draft")
 
+        PositionRate.objects.create(position=position, hourly_rate=Decimal("30.50"))
         api.login(shop["worker"])
         body = api.get(path("/api/me/schedule", shop["company"])).json()
         shifts = body["shifts"]
         assert [s["date"] for s in shifts] == [str(tomorrow), str(today + timedelta(days=2))]
+        # For the assistant (Piotr, 23.11.2026: it works out earnings): my rate and the pay of each shift.
+        assert shifts[0]["hourly_rate"] == 30.5 and shifts[0]["pay"] == 244.0
         assert shifts[0]["start_time"] == "06:00" and shifts[0]["end_time"] == "14:00"
         assert shifts[0]["coworkers"] == ["Anna Wróbel"]
         assert shifts[0]["position_name"] == "Sprzedawca" and shifts[0]["shift_type_name"] == "Ranna"
@@ -446,6 +451,29 @@ class TestMySchedule:
         assert body["months"][0]["month"] == today.strftime("%Y-%m")
         # The list goes on to the end of the published period, so free days at the end are shown too.
         assert body["published_until"] == str(today + timedelta(days=20))
+
+    def test_a_schedule_arranged_but_not_published_is_named(self, api, shop):
+        """ "Kiedy mogę" locks the days of an arranged schedule while "Mój grafik" shows only published ones: both
+        say which days are still being arranged (Piotr saw no December shifts on 23.11.2026)."""
+        period = shop["period"]
+        period.status = SchedulePeriod.Status.DRAFT
+        period.save()
+        ScheduleVersion.objects.create(period=period, number=1)
+        api.login(shop["worker"])
+        body = api.get(path("/api/me/schedule", shop["company"])).json()
+        assert body["preparing"] == [
+            {"location_name": shop["location"].name, "start": str(period.start), "end": str(period.end)}
+        ]
+        url = f"/api/me/calendar?company_id={shop['company'].pk}&start={period.start}&end={period.end}"
+        calendar = api.get(url).json()
+        assert calendar["unpublished"] == calendar["locked"]
+        assert calendar["unpublished"][0] == str(period.start) and calendar["unpublished"][-1] == str(period.end)
+
+        period.status = SchedulePeriod.Status.PUBLISHED
+        period.save()
+        assert api.get(path("/api/me/schedule", shop["company"])).json()["preparing"] == []
+        calendar = api.get(url).json()
+        assert calendar["unpublished"] == [] and len(calendar["locked"]) == (period.end - period.start).days + 1
 
     def test_empty_when_nothing_is_published(self, api, shop):
         api.login(shop["worker"])

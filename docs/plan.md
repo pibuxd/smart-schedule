@@ -1221,9 +1221,8 @@ Model: aplikacja `apps/pay` (migracja `pay.0001`; staffing bez pól stawek).
   „Godziny”: kolumna „Wypłata brutto”, suma w stopce, w trwającym miesiącu zdanie, że kwota obejmuje zmiany, które
   dopiero będą, a przy osobie z innymi lokalami „bez innych lokali” pod kwotą. Kwoty `lib/money.ts` (`Intl.NumberFormat`
   pl-PL, PLN).
-- Asystent: `tools.DROPPED_KEYS` usuwa z wyników narzędzi `pay`, `supplements_pay`, `unpriced_hours`, `hourly_rate`,
-  `rates` i `supplements`, więc kwoty nie trafiają do zewnętrznej usługi AI (uwaga Prelint z 22.11.2026). Przewodniki
-  po ekranach mówią, gdzie jest wypłata i stawki, a asystent odsyła tam przy pytaniu o pieniądze.
+- Asystent: ~~`tools.DROPPED_KEYS` usuwa z wyników narzędzi kwoty (uwaga Prelint z 22.11.2026)~~. Od 23.11.2026
+  (Piotr: asystent ma liczyć zarobki, RODO później) kwoty trafiają do modelu, sekcja 40.
 - Dane przykładowe (`seed_demo`) mają stawki stanowisk i dodatek nocny w piekarniach; firmy testowe
   (`seed_test_data`) nie, żeby było widać stan bez stawek.
 
@@ -1391,3 +1390,36 @@ limitu.” na ekranie „Dostęp”).
 Założenia: tabela `GenerationUsage` miała tylko liczniki ułożeń; ta sama informacja (z czasem solvera) jest w
 `GenerationRun`, więc usuwamy ją razem z danymi. Linia `GENERATION_MONTHLY_LIMIT=0` w `.env` serwera po wdrożeniu nic
 nie robi i można ją skasować.
+
+## 40. Uwagi z testu pracownika na telefonie (23.11.2026)
+
+Spec: „Uwagi z testu pracownika na telefonie”.
+
+- Grafik w przygotowaniu: `MyScheduleOut.preparing` (lokal, od, do) to okresy moich lokali w statusie `draft`
+  (ułożone, nigdy nieopublikowane) w zasięgu „Mojego grafiku”; `MyCalendarOut.unpublished` to dni z `locked` w takich
+  okresach (bez dni z moją opublikowaną zmianą). „Mój grafik” pokazuje zdanie pod „Grafik jest opublikowany do…”,
+  „Kiedy mogę” rozróżnia dni układane od opublikowanych. Blokada dni się nie zmienia.
+- Czat pracownika: bez stopki „Czyta to…” przy włączonym asystencie; „O prośbach i Twoich danych” mówi, że kierownik
+  widzi zapisane prośby i to, co pracownik mu przekaże, a nie całą rozmowę.
+- Kwoty dla asystenta: `tools.DROPPED_KEYS` ma już tylko telefony i pola ekranów. `MyShiftOut.hourly_rate`
+  (stawka osoby w dniu zmiany) i `MyShiftOut.pay` (brutto za zmianę z dodatkami) liczy `PayRules` jak miesiąc; ekran
+  ich nie pokazuje. Nowe narzędzia kierownika: `pay_settings` i `personal_rates` (istniejące GET, uprawnienia
+  kierownika lokalu); `hours_report` oddaje już `pay`.
+- Prośba o stanowisko: typ `stanowisko` w `readings` (`positions` = id stanowiska o tej nazwie wśród stanowisk osoby,
+  po jednym na lokal, `position_name`, `avoid`), w odpowiedzi modelu `position` i `avoid_position` (zwykłe pola
+  z wartością domyślną, bo schemat odpowiedzi ma limit 16 pól z unią). W silniku `RequestType.POSITION` z
+  `Request.positions`: walidator liczy odsetek zmian osoby w dniach prośby na złym stanowisku (jak `shift_type`),
+  solver daje karę za każdą taką zmianę. Kontekst pracownika ma „Twoje stanowiska” (nazwy bez powtórzeń). Aplikacja
+  sama pyta: o które stanowisko (nieznane przy kilku) albo, przy jednym stanowisku i „nie na nim”, czy chodzi
+  o wolne; „tylko na nim” przy jednym stanowisku nic nie zapisuje i mówi to; stanowisko spoza stanowisk osoby idzie
+  do kierownika z jasnym zdaniem. Polecenie kierownika sprawdza, czy osoba ma to stanowisko w lokalu (także przy
+  zatwierdzeniu i kopiowaniu ustaleń, `agreements.positions_held`).
+- Święta: `apps/core/holidays.py` liczy dni ustawowo wolne w Polsce na dowolny rok (Wielkanoc algorytmem, Wigilia od
+  2025). Linia z nimi jest w kontekście pracownika (lata dzisiaj i okresu wiadomości) i kierownika (lata dzisiaj,
+  za trzy miesiące i okresów lokalu). Zasada tematów w `COMMON_RULES`: `app` dla wszystkiego, co dotyczy pracy i jej
+  organizacji, także świąt i podstaw prawa pracy (krótko, jako informacja ogólna), `unrelated` tylko dla spraw wyraźnie
+  niezwiązanych; w razie wątpliwości `app`. Stała odmowa wymienia też wypłaty, święta i zasady pracy.
+
+Założenia: pracownik widzi przez asystenta swoją stawkę za godzinę (to jego własna stawka, wynika też z wypłaty za
+miesiąc). Ekran „Mój grafik” jej nie pokazuje, żeby nie dokładać napisów. Stanu danych na serwerze nie sprawdzono
+(bez logowania na konto); przyczynę z grudniem odtworzono z kodu: tylko szkic okresu daje taki obraz.

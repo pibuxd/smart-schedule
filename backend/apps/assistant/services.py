@@ -23,6 +23,7 @@ from apps.assistant import agreements, costs, llm, readings, tools
 from apps.assistant import context as facts
 from apps.assistant.models import AssistantCommand, AssistantUsage, ManagerInstruction
 from apps.availability.models import AvailabilityDay, AvailabilityState, TextRequest
+from apps.core.holidays import holidays_line
 from apps.rules.services import NUMBER_PARAMS
 from apps.scheduling.models import SchedulePeriod
 from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule, works_in_q
@@ -36,11 +37,11 @@ COMMAND_MAX_AGE = timedelta(hours=24)
 # A message still "being read" after this long lost its job (worker down, deploy): it is failed, never left waiting.
 STALE_AFTER = timedelta(minutes=15)
 UNRELATED_REPLY = (
-    "Pomagam w sprawach Grafikomatu i tego lokalu: odpowiadam na pytania o grafik, dyspozycje, godziny i oddane "
-    "zmiany oraz ustawiam zasady układania grafiku. Na to pytanie nie odpowiem. Nic się nie zmieniło."
+    "Pomagam w sprawach pracy i Grafikomatu: odpowiadam na pytania o grafik, dyspozycje, godziny, wypłaty, święta "
+    "i zasady pracy oraz ustawiam zasady układania grafiku. Na to pytanie nie odpowiem. Nic się nie zmieniło."
 )
 UNRELATED_REQUEST_REPLY = (
-    "Odpowiadam tylko w sprawach pracy w tym lokalu: Twojego grafiku, dyspozycji, godzin, oddawania zmian i próśb "
+    "Odpowiadam w sprawach pracy: Twojego grafiku, dyspozycji, godzin, wypłaty, świąt, zasad pracy i próśb "
     "o układanie grafiku. Na to pytanie nie odpowiem."
 )
 # Kept for messages saved before 19.11.2026 (same marker in `interpretation["type"]`).
@@ -102,6 +103,17 @@ def _shift_lines(shift_types: list[ShiftType]) -> str:
     return ", ".join(label(s) for s in shift_types) or "(brak)"
 
 
+def own_positions(employee: EmployeeProfile) -> dict[str, list[str]]:
+    """The person's live positions: name -> ids (the same name in several locations of the person is one choice)."""
+    result: dict[str, list[str]] = {}
+    for position in employee.positions.all():
+        if position.removed_at is not None:
+            continue
+        name = next((n for n in result if n.casefold() == position.name.casefold()), position.name)
+        result.setdefault(name, []).append(str(position.pk))
+    return result
+
+
 def _today_line(today: date) -> str:
     return f"Dzisiaj: {today.isoformat()} ({WEEKDAY_NAMES[today.weekday()]})."
 
@@ -129,7 +141,7 @@ def request_context(
     start, end = request_span(text_request)
     people = _people(location, exclude_id=text_request.employee_id)
     shift_types = _shift_types(location)
-    positions = sorted(p.name for p in text_request.employee.positions.all() if p.removed_at is None)
+    positions = sorted(own_positions(text_request.employee))
     if text_request.period_id:
         span = (
             f"Okres tej wiadomości (kierownik prosi o dyspozycje): od {start.isoformat()} do {end.isoformat()}, "
@@ -150,6 +162,7 @@ def request_context(
             f"Twoje stanowiska: {', '.join(positions) or '(brak)'}.",
             f"Współpracownicy: {', '.join(people) or '(brak)'}.",
             f"Zmiany w lokalu: {_shift_lines(shift_types)}.",
+            holidays_line([today, start, end]),
             facts.request_history(
                 previous if previous is not None else facts.prior_requests(text_request),
                 (text_request.period_id, text_request.month),
@@ -425,6 +438,33 @@ def _unknown_name_question(reply: llm.EmployeeReply, people: dict[str, str], shi
     return ""
 
 
+def _position_question(reply: llm.EmployeeReply, positions: dict[str, list[str]]) -> str:
+    """A question the app asks by itself about a position wish: which of several positions, or, for someone with one
+    position, whether "not on it" means days off (without it there would be no shifts at all)."""
+    for preference in reply.preferences[:MAX_PREFERENCES]:
+        if preference.type != "stanowisko":
+            continue
+        known = readings._lookup(preference.position.strip()[:40], positions)
+        if not known and len(positions) > 1:
+            return f"O które stanowisko chodzi: {_or_words(list(positions))}?"
+        if known and len(positions) == 1 and preference.avoid_position:
+            return (
+                f"Masz tylko jedno stanowisko: „{next(iter(positions))}”, więc bez niego nie byłoby dla Ciebie "
+                "zmian. Chodzi o wolne w te dni? Inne stanowisko może Ci dodać tylko kierownik."
+            )
+    return ""
+
+
+def _one_position_note(positions: dict[str, list[str]]) -> str:
+    return f"Masz tylko jedno stanowisko: „{next(iter(positions))}”, więc i tak pracujesz tylko na nim."
+
+
+def _other_position_note(positions: dict[str, list[str]]) -> str:
+    mine = ", ".join(f"„{name}”" for name in positions)
+    have = f"Twoje stanowiska: {mine}." if len(positions) > 1 else f"Twoje stanowisko: {mine}." if mine else ""
+    return " ".join(filter(None, [have, "Inne stanowisko może Ci dodać tylko kierownik, więc przekazuję mu to."]))
+
+
 def _checked_reply(
     reply: llm.EmployeeReply,
     row: TextRequest,
@@ -436,6 +476,7 @@ def _checked_reply(
 ) -> _Outcome:
     raw = reply.model_dump(mode="json")
     answer = reply.answer.strip()[:2000]
+    positions = own_positions(row.employee)
     if reply.topic == "unrelated":
         outcome = _Outcome(TextRequest.Status.REJECTED)
         outcome.interpretation = {"type": "out_of_scope", "summary": UNRELATED_REQUEST_REPLY}
@@ -454,6 +495,9 @@ def _checked_reply(
         # The app asks by itself when the reading names a person or a shift it cannot tell or find.
         question = _namesake_question(reply, people) or _unknown_name_question(reply, people, shift_types)
         why = "osoba lub zmiana" if question else ""
+        if not question:
+            question = _position_question(reply, positions)
+            why = "stanowisko" if question else ""
     if question and can_ask:
         # Nothing of this message is saved until the person answers (not even the parts the model was sure of).
         outcome = _asking(question, answer, raw, why)
@@ -464,7 +508,17 @@ def _checked_reply(
     else:
         sure = confirmed(answered, row.text)
         outcome = _checked_preferences(
-            reply, row, people, shift_types, previous, raw, answer, bool(hours), can_ask=can_ask, sure=sure
+            reply,
+            row,
+            people,
+            shift_types,
+            previous,
+            raw,
+            answer,
+            bool(hours),
+            can_ask=can_ask,
+            sure=sure,
+            positions=positions,
         )
     if answering:
         outcome.answer_to = answered
@@ -510,17 +564,28 @@ def _checked_preferences(
     has_hours: bool,
     can_ask: bool = False,
     sure: bool = False,
+    positions: dict[str, list[str]] | None = None,
 ) -> _Outcome:
     """`can_ask`: the app may ask the person to confirm a reading the assistant doubts (fewer than `MAX_QUESTIONS`
-    questions in a row so far). `sure`: the person has just said "yes" to such a question, so a doubt is settled."""
+    questions in a row so far). `sure`: the person has just said "yes" to such a question, so a doubt is settled.
+    `positions`: the person's own positions (name -> ids), the only ones a position wish may name."""
     span = request_span(row)
-    parts, why, doubt = [], "", ""
+    positions = positions or {}
+    parts, why, doubt, notes = [], "", "", []
     if len(reply.preferences) > MAX_PREFERENCES:
         why = "za dużo próśb w jednej wiadomości"
     for preference in reply.preferences[:MAX_PREFERENCES]:
         if why:
             break
-        data, problem = _checked_preference(preference, span, people, shift_types, row.text)
+        if (
+            preference.type == "stanowisko"
+            and len(positions) == 1
+            and not preference.avoid_position
+            and readings._lookup(preference.position, positions)
+        ):
+            notes.append(_one_position_note(positions))  # "only as a seller" for a seller only: nothing to keep
+            continue
+        data, problem = _checked_preference(preference, span, people, shift_types, row.text, positions)
         if data is None:
             why = problem
         else:
@@ -539,6 +604,8 @@ def _checked_preferences(
         # The model believed it understood, the app could not check it: the manager reads the text as written.
         outcome = _Outcome(TextRequest.Status.NEEDS_MANAGER, reason=TextRequest.UnreadReason.UNSURE)
         outcome.answer, outcome.raw = {"why": why, **raw}, raw
+        if why == OTHER_POSITION:
+            outcome.reply = _other_position_note(positions)
         return outcome
     if doubt:
         # The reading may be right, but the assistant itself doubts it: the person confirms or corrects it first.
@@ -561,8 +628,10 @@ def _checked_preferences(
         outcome.answer, outcome.raw = {"why": "nie pasuje do żadnego typu", **raw}, raw
         return outcome
     outcome = _Outcome(TextRequest.Status.ANSWERED)
-    outcome.reply = answer or (HOURS_READY_REPLY if has_hours else NOT_UNDERSTOOD_REPLY)
+    outcome.reply = answer or (HOURS_READY_REPLY if has_hours else "" if notes else NOT_UNDERSTOOD_REPLY)
     outcome.raw = raw
+    if notes:
+        outcome.reply = " ".join(filter(None, [outcome.reply, *notes, "Tej prośby nie zapisuję."]))
     return outcome
 
 
@@ -673,8 +742,16 @@ def checked_hours(
     return list(proposals.values()), notes
 
 
+OTHER_POSITION = "stanowisko spoza stanowisk tej osoby"
+
+
 def _checked_preference(
-    preference: llm.Preference, span: tuple[date, date], people: dict[str, str], shift_types: dict[str, str], text: str
+    preference: llm.Preference,
+    span: tuple[date, date],
+    people: dict[str, str],
+    shift_types: dict[str, str],
+    text: str,
+    positions: dict[str, list[str]] | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     """(checked part of an interpretation, "") or (None, why it cannot be used). A reading the assistant itself
     doubts (confidence below `ASSISTANT_MIN_CONFIDENCE`) comes with why as well, (data, "pewność 0.40"): the person is
@@ -695,10 +772,15 @@ def _checked_preference(
         weekdays=preference.weekdays,
         min_days=preference.min_days,
         shifts_per_day=preference.shifts_per_day,
+        position=preference.position,
+        avoid_position=preference.avoid_position,
         people=people,
         shift_types=shift_types,
+        positions=positions,
     )
     if data is None:
+        if preference.type == "stanowisko":
+            return None, OTHER_POSITION
         return None, "osoba, zmiana, godziny lub dni nie pasują do lokalu"
     doubt = f"pewność {confidence:.2f}" if confidence < settings.ASSISTANT_MIN_CONFIDENCE else ""
     if preference.cannot and data["type"] == "wolne_dni" and data["dates"]:
@@ -874,6 +956,7 @@ def command_context(
         f"Osoby: {', '.join(people) or '(brak)'}.",
         f"Stanowiska: {', '.join(position_names.values()) or '(brak)'}.",
         f"Zmiany: {_shift_lines(shift_types)}.",
+        holidays_line([today, today + timedelta(days=92), *(p.end for p in periods)]),
         "",
         "Zasady z katalogu (kolejność = ważność, 1 = najważniejsza):",
     ]
@@ -1405,11 +1488,19 @@ def check_plan(
             rejected = True
             continue
         others = {label: pid for label, pid in people.items() if pid != employee}
+        held = list(
+            Position.objects.for_company(location.company_id)
+            .filter(location=location, removed_at__isnull=True, employees__pk=employee)
+            .values_list("name", "pk")
+        )
         data = readings.clean(
             type=new.type,
             person=new.other_person,
             shift_type=new.shift_type,
             avoid=new.avoid_shift_type,
+            position=new.position,
+            avoid_position=new.avoid_position,
+            positions={name: [str(pk)] for name, pk in held},
             max_hours=new.max_hours,
             max_shifts=new.max_shifts,
             hours_period=readings.hour_scope(
@@ -1423,9 +1514,16 @@ def check_plan(
             shift_types=shift_types,
         )
         if data is None:
-            notes.append(
-                f"Nie umiem zapisać całego polecenia o osobie „{new.person}”: sprawdź osobę, zmianę, godziny i dni."
-            )
+            if new.type == "stanowisko":
+                mine = ", ".join(f"„{name}”" for name, _ in held) or "żadnego"
+                notes.append(
+                    f"Osoba „{new.person}” nie pracuje na stanowisku „{new.position}” (ma: {mine}). Stanowiska "
+                    "dodasz w zakładce „Pracownicy”."
+                )
+            else:
+                notes.append(
+                    f"Nie umiem zapisać całego polecenia o osobie „{new.person}”: sprawdź osobę, zmianę, godziny i dni."
+                )
             rejected = True
             continue
         days = sorted(d for d in (readings._parse_date(v) for v in data["dates"]) if d is not None)
@@ -1610,7 +1708,7 @@ def _personal_effects(sc, location, additions, removed, names, shift_names, peri
     for req in [*old_requests, *new_requests]:
         label = "Usuwane polecenie" if req.id in removed_ids else "Nowe polecenie"
         worked = any(schedule.get(s.id) == req.employee and req.covers(s.date) for s in problem.slots)
-        if not worked and req.type in ("prefer_person", "avoid_person", "shift_type"):
+        if not worked and req.type in ("prefer_person", "avoid_person", "shift_type", "position"):
             outcome = "brak przydziałów tej osoby w podanych dniach"
         elif req.id in degrees:
             outcome = f"wykonanie {100 * (1 - degrees[req.id]):.0f}%"
@@ -1738,6 +1836,7 @@ def _apply_agreements(
             new["employee"] not in people
             or (data.get("subject_employee") and data["subject_employee"] not in people)
             or (data.get("shift_type") and data["shift_type"] not in shifts)
+            or not agreements.positions_held(location, new["employee"], data)
         ):
             raise HttpError(409, "Osoby lub zmiany z tego planu już się zmieniły. Napisz polecenie jeszcze raz.")
     if plan.get("rule_changes"):

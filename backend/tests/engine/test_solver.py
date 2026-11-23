@@ -442,6 +442,21 @@ def test_hours_limit_and_shift_type_requests_are_kept():
     assert report.hours["ewa"] <= 16
 
 
+@pytest.mark.parametrize("avoid", [True, False])
+def test_position_request_keeps_a_person_with_two_positions_off_one(avoid):
+    # Anna sells and bakes; she asks not to sell (or to bake only) on the first two days, so there she bakes.
+    people = [employee("anna", positions=(SALES, BAKER)), employee("ewa"), employee("ola", positions=(BAKER,))]
+    slots = []
+    for d in range(4):
+        slots += [slot(f"s{d}", day(d)), slot(f"b{d}", day(d), position=BAKER)]
+    first_days = frozenset({day(0), day(1)})
+    wanted = frozenset({SALES}) if avoid else frozenset({BAKER})
+    request = Request("r1", "anna", "position", positions=wanted, avoid=avoid, dates=first_days, level="bardzo_wazne")
+    result, report = solved(problem(people, slots, requests=[request]))
+    assert all(result.schedule[f"s{d}"] != "anna" for d in range(2))
+    assert next(m for m in report.requests if m.request_id == "r1").degree == 0.0
+
+
 @pytest.mark.parametrize("code", ["fair_weekends", "fair_closings"])
 def test_fair_split_rules_as_hard_constraints(code):
     people = [employee(f"e{i}") for i in range(3)]
@@ -618,6 +633,7 @@ def random_problem(seed: int):
         Request("r3", people[2].id, "hours_limit", max_hours=24),
         Request("r4", people[3].id, "shift_type", shift_type="m", avoid=True),
         Request("r5", people[0].id, "other"),
+        Request("r6", people[-1].id, "position", positions=frozenset({BAKER}), avoid=True),
     ]
     published = {s.id: rng.choice([None, *[p.id for p in people]]) for s in slots if rng.random() < 0.3}
     return problem(

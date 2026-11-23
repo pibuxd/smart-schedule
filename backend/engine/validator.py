@@ -781,6 +781,13 @@ class _Checker:
                     return 0.0
                 wrong = sum(1 for s in own if (s.shift_type == request.shift_type) == request.avoid)
                 return wrong / len(own)
+            case RequestType.POSITION:
+                if not request.positions:
+                    return None
+                if not own:
+                    return 0.0
+                wrong = sum(1 for s in own if (s.position in request.positions) == request.avoid)
+                return wrong / len(own)
             case RequestType.HOURS_LIMIT:
                 if request.max_hours is None:
                     return None

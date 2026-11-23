@@ -191,6 +191,9 @@ describe("RequestsSection", () => {
     expect(
       screen.queryByText(/Przeczyta to tylko kierownik/),
     ).not.toBeInTheDocument();
+    // Piotr, 23.11.2026: no line under the field about who reads the chat; the manager sees requests, not the chat.
+    expect(screen.queryByText(/Czyta to/)).not.toBeInTheDocument();
+    expect(screen.getByText(/a nie całą rozmowę/)).toBeInTheDocument();
     unmount();
 
     renderSection(<RequestsSection companyId="c1" periodId="p1" editable />);

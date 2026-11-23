@@ -709,6 +709,12 @@ class _Builder:
                 for slot, var in own:
                     if (slot.shift_type == request.shift_type) == request.avoid:
                         self.add_penalty(weight / estimate, var)
+            case RequestType.POSITION:
+                if not request.positions:
+                    return
+                for slot, var in own:
+                    if (slot.position in request.positions) == request.avoid:
+                        self.add_penalty(weight / estimate, var)
             case RequestType.HOURS_LIMIT:
                 windows = request.hour_windows(self.p)
                 limit = round(float(request.max_hours) * 60)

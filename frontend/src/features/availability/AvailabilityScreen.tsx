@@ -230,6 +230,8 @@ function AvailabilityEditor({
   const dates: string[] = []
   for (let d = parseDate(initial.start); d <= parseDate(initial.end); d = addDays(d, 1)) dates.push(toIsoDate(d))
   const locked = useMemo(() => new Set(initial.locked), [initial.locked])
+  // Days of a schedule the manager has arranged but not published yet: "Mój grafik" does not show them.
+  const unpublished = useMemo(() => new Set(initial.unpublished ?? []), [initial.unpublished])
   const editable = !readOnly && locked.size < dates.length
   const [marks, setMarks] = useState<Marks>(() => marksFromServer(initial.days))
   const marksRef = useRef(marks)
@@ -310,7 +312,8 @@ function AvailabilityEditor({
   const open = dates.filter((date) => !locked.has(date))
   const counts = countStates(marks, open)
   const today = toIsoDate(new Date())
-  const arranged = dates.some((date) => locked.has(date) && date >= today)
+  const arranged = dates.some((date) => locked.has(date) && date >= today && !unpublished.has(date))
+  const preparing = dates.some((date) => unpublished.has(date))
 
   return (
     <div className="grid gap-4">
@@ -329,9 +332,17 @@ function AvailabilityEditor({
         </p>
       )}
 
+      {preparing && (
+        <p className="m-0 text-sm text-ink-muted">
+          Kierownik układa już grafik na {arranged ? 'część szarych dni' : 'szare dni'}. Zobaczysz go w{' '}
+          <Link to="/grafik" className="font-semibold text-accent underline">Moim grafiku</Link>, gdy go opublikuje.
+          {!arranged && ' Jeśli coś Ci wypadło, skontaktuj się z kierownikiem.'}
+        </p>
+      )}
+
       {arranged && (
         <p className="m-0 text-sm text-ink-muted">
-          Na szare dni grafik jest już ułożony.{' '}
+          {preparing ? 'Na pozostałe szare dni grafik jest już opublikowany.' : 'Na szare dni grafik jest już opublikowany.'}{' '}
           {readOnly ? 'Jeśli coś Ci wypadło, skontaktuj się z kierownikiem.' : <>
             Jeśli masz opublikowaną zmianę, która jeszcze się nie zaczęła, możesz ją oddać w{' '}
             <Link to="/grafik" className="font-semibold text-accent underline">Moim grafiku</Link>.

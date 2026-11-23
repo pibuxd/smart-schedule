@@ -289,6 +289,17 @@ class TestTextRequests:
         assert self.degree(only_mornings, {"a1": "anna"}) == 0.0
         assert self.degree(no_mornings, {"a1": "anna"}) == 1.0
 
+    def test_position(self):
+        # The slots are all on SALES: "not as a seller" is broken by each of them, "only as a seller" by none.
+        no_selling = Request("r", "anna", "position", positions=frozenset({SALES}), avoid=True)
+        only_baking = Request("r", "anna", "position", positions=frozenset({BAKER}))
+        assert self.degree(no_selling, {"a1": "anna", "a2": "anna"}) == 1.0
+        assert self.degree(only_baking, {"a1": "anna"}) == 1.0
+        assert self.degree(Request("r", "anna", "position", positions=frozenset({SALES})), {"a1": "anna"}) == 0.0
+        on_monday = Request("r", "anna", "position", positions=frozenset({SALES}), avoid=True, dates=frozenset({MON}))
+        assert self.degree(on_monday, {"a2": "anna"}) == 0.0  # Tuesday is not in the request
+        assert self.degree(Request("r", "anna", "position", avoid=True), {"a1": "anna"}) is None  # no position
+
     def test_days_off(self):
         request = Request("r", "anna", "days_off", dates=frozenset({MON, day(1)}))
         assert self.degree(request, {"o1": "ola", "e2": "ewa"}) == 0.0
