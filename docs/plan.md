@@ -1400,7 +1400,9 @@ Spec: „Uwagi z testu pracownika na telefonie”.
   okresach (bez dni z moją opublikowaną zmianą). „Mój grafik” pokazuje zdanie pod „Grafik jest opublikowany do…”,
   „Kiedy mogę” rozróżnia dni układane od opublikowanych. Blokada dni się nie zmienia.
 - Czat pracownika: bez stopki „Czyta to…” przy włączonym asystencie; „O prośbach i Twoich danych” mówi, że kierownik
-  widzi zapisane prośby i to, co pracownik mu przekaże, a nie całą rozmowę.
+  widzi zapisane prośby (z pytaniami asystenta, które do nich prowadziły) i to, co pracownik mu przekaże; resztę
+  rozmowy nie (`period_requests` pomija `answered`, `superseded` i `out_of_scope`). Szkic to „w przygotowaniu”, bez
+  „kierownik układa”, bo szkic może czekać na publikację kilka dni.
 - Kwoty dla asystenta: `tools.DROPPED_KEYS` ma już tylko telefony i pola ekranów. `MyShiftOut.hourly_rate`
   (stawka osoby w dniu zmiany) i `MyShiftOut.pay` (brutto za zmianę z dodatkami) liczy `PayRules` jak miesiąc; ekran
   ich nie pokazuje. Nowe narzędzia kierownika: `pay_settings` i `personal_rates` (istniejące GET, uprawnienia
@@ -1423,3 +1425,10 @@ Spec: „Uwagi z testu pracownika na telefonie”.
 Założenia: pracownik widzi przez asystenta swoją stawkę za godzinę (to jego własna stawka, wynika też z wypłaty za
 miesiąc). Ekran „Mój grafik” jej nie pokazuje, żeby nie dokładać napisów. Stanu danych na serwerze nie sprawdzono
 (bez logowania na konto); przyczynę z grudniem odtworzono z kodu: tylko szkic okresu daje taki obraz.
+
+Do zrobienia przed szerszym pilotażem (uwagi przeglądu PR #76; Piotr odłożył RODO na koniec):
+
+- Informacja o danych: przy pierwszej wiadomości do asystenta raz, poza zwijaną sekcją, że czyta ją zewnętrzna usługa
+  AI; pracownicy muszą wiedzieć, że ich stawki i wypłaty trafiają do niej także przez czat kierownika.
+- Prośba o stanowisko przestaje działać, gdy kierownik odbierze osobie to stanowisko; lista próśb kierownika
+  i pracownika powinna to pokazać.
