@@ -11,17 +11,22 @@ Piotr testował konto pracowniczki na serwerze i zgłosił pięć rzeczy.
 - „Mój grafik” pokazywał zmiany tylko do 30.11, a „Kiedy mogę” mówiło, że grafik na grudzień jest już ułożony.
   Przyczyna: grudzień był ułożony (szkic), ale nie opublikowany. „Kiedy mogę” blokuje dni od chwili ułożenia, bo
   zmiana dyspozycji po cichu różniłaby się od tego, z czego ułożono grafik, a pracownik widzi tylko opublikowane
-  zmiany. Teraz oba ekrany mówią to wprost: „Kiedy mogę” pisze „Kierownik układa już grafik na szare dni. Zobaczysz
-  go w Moim grafiku, gdy go opublikuje.” (a o opublikowanych dniach „Na szare dni grafik jest już opublikowany.”),
-  a „Mój grafik” pod listą: „Grafik od 1 grudnia kierownik jeszcze układa. Zobaczysz tu swoje zmiany, gdy go
-  opublikuje.” Zachowanie (blokada po ułożeniu, pokazywanie tylko opublikowanych zmian) się nie zmienia.
+  zmiany. Teraz oba ekrany mówią to wprost: „Kiedy mogę” pisze „Grafik na szare dni jest w przygotowaniu. Zobaczysz
+  go w Moim grafiku, gdy kierownik go opublikuje.” (a o opublikowanych dniach „Na szare dni grafik jest już
+  opublikowany.”), a „Mój grafik” pod listą: „Grafik od 1 grudnia jest w przygotowaniu. Zobaczysz tu swoje zmiany,
+  gdy kierownik go opublikuje.” Słowa neutralne, bo szkic może czekać na publikację kilka dni po ułożeniu.
+  Zachowanie (blokada po ułożeniu, pokazywanie tylko opublikowanych zmian) się nie zmienia.
 - Pod polem czatu pracownika nie ma już zdania „Czyta to asystent AI (zewnętrzna usługa), kierownik i jego
-  asystent.”, a aplikacja nigdzie nie pisze, że kierownik czyta rozmowę: kierownik widzi tylko zapisane prośby
-  i wiadomości, które pracownik sam mu przekaże. Informacja o zewnętrznej usłudze AI zostaje w zwijanym „O prośbach
+  asystent.”, a aplikacja nigdzie nie pisze, że kierownik czyta rozmowę: kierownik (i jego asystent) widzi tylko zapisane
+  prośby z pytaniami asystenta, które do nich prowadziły, i wiadomości, które pracownik sam mu przekaże; odpowiedzi
+  na pytania i odrzucone wiadomości zostają w rozmowie. Informacja o zewnętrznej usłudze AI zostaje w zwijanym „O prośbach
   i Twoich danych”. Bez asystenta pole dalej mówi „Wiadomość dla kierownika.”. Zasady RODO przyjdą na końcu.
 - Asystent zna stawki i wypłaty, żeby liczyć zarobki (RODO później): pracownik przez „Mój grafik” swoją stawkę na
   każdej zmianie, wypłatę brutto za zmianę i za miesiąc; kierownik stawki stanowisk, własne stawki osób, dodatki
   i wypłaty z „Godzin”. Pracownik widzi przez asystenta tylko swoje kwoty, kierownik kwoty swoich lokali.
+  Za opublikowane zmiany asystent podaje wypłatę wyliczoną przez aplikację (z dodatkami); sam liczy tylko zmianę,
+  której jeszcze nie ma w grafiku (godziny razy stawka, bez dodatków, i mówi to). Kwoty zawsze nazywa brutto.
+  Zwijane „Jak działa asystent” u kierownika mówi, że asystent sprawdza też stawki i wypłaty.
 - Pracownik może mieć kilka stanowisk (to już było: stanowiska osoby i stopień doświadczenia na każdym z nich).
   Nowy typ prośby „stanowisko”: „w trzecim tygodniu stycznia nie chcę być sprzedawcą” albo „chcę być tylko
   kelnerem” trafia do generatora jako miękka preferencja (jak „typ_zmiany”), a nie tylko do kierownika. Dotyczy tylko
@@ -30,7 +35,8 @@ Piotr testował konto pracowniczki na serwerze i zgłosił pięć rzeczy.
   dodaje kierownik, więc taka wiadomość idzie do niego. Kierownik może wydać takie polecenie o osobie przez asystenta.
 - Asystent odpowiada też na pytania organizacyjne związane z pracą: święta i dni wolne w Polsce (aplikacja sama
   liczy listę świąt na dany rok i daje ją asystentowi, z Wielkanocą i Bożym Ciałem) i podstawowe zasady prawa pracy
-  (krótko, jako informacja ogólna; aplikacja tych przepisów nie sprawdza, decyzja z 13.11.2026 zostaje). Odmawia
+  (krótko, jako informacja ogólna; aplikacja tych przepisów nie sprawdza, decyzja z 13.11.2026 zostaje, więc asystent
+  nigdy nie ocenia, czy konkretny grafik albo zmiana jest zgodna z prawem). Odmawia
   tylko spraw wyraźnie niezwiązanych z pracą, np. „udowodnij twierdzenie Pitagorasa”.
 
 ## Koszty asystenta (prośba Piotra z 22.11.2026)

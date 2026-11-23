@@ -127,7 +127,7 @@ export function MyScheduleScreen({
 }
 
 /**
- * "Grafik od 1 grudnia kierownik jeszcze układa": a schedule arranged but not published yet, so its days are locked
+ * "Grafik od 1 grudnia jest w przygotowaniu": a schedule arranged but not published yet, so its days are locked
  * in "Kiedy mogę" while this screen shows nothing of it. Another location is named.
  */
 function preparingText(preparing: PreparingOut[], home: string): string {
@@ -136,7 +136,7 @@ function preparingText(preparing: PreparingOut[], home: string): string {
     return `od ${dayAndMonth(parseDate(p.start))}${where}`
   })
   const when = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} i ${parts[parts.length - 1]}` : parts[0]
-  return `Grafik ${when} kierownik jeszcze układa. Zobaczysz tu swoje zmiany, gdy go opublikuje.`
+  return `Grafik ${when} jest w przygotowaniu. Zobaczysz tu swoje zmiany, gdy kierownik go opublikuje.`
 }
 
 /** "Razem w listopadzie" and, once the manager has set rates, the pay for the month's published shifts. */

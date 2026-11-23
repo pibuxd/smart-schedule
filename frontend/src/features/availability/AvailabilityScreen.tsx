@@ -334,8 +334,9 @@ function AvailabilityEditor({
 
       {preparing && (
         <p className="m-0 text-sm text-ink-muted">
-          Kierownik układa już grafik na {arranged ? 'część szarych dni' : 'szare dni'}. Zobaczysz go w{' '}
-          <Link to="/grafik" className="font-semibold text-accent underline">Moim grafiku</Link>, gdy go opublikuje.
+          Grafik na {arranged ? 'część szarych dni' : 'szare dni'} jest w przygotowaniu. Zobaczysz go w{' '}
+          <Link to="/grafik" className="font-semibold text-accent underline">Moim grafiku</Link>, gdy kierownik go
+          opublikuje.
           {!arranged && ' Jeśli coś Ci wypadło, skontaktuj się z kierownikiem.'}
         </p>
       )}

@@ -113,8 +113,8 @@ describe('AvailabilityScreen', () => {
     // Piotr, 23.11.2026: "Kiedy mogę" said December was arranged while "Mój grafik" showed nothing of it.
     api({ locked: ['2026-12-01', '2026-12-02'], unpublished: ['2026-12-01', '2026-12-02'] })
     show()
-    expect(await screen.findByText(/Kierownik układa już grafik na szare dni/)).toBeInTheDocument()
-    expect(screen.getByText(/gdy go opublikuje/)).toBeInTheDocument()
+    expect(await screen.findByText(/Grafik na szare dni jest w przygotowaniu/)).toBeInTheDocument()
+    expect(screen.getByText(/gdy kierownik go opublikuje/)).toBeInTheDocument()
     expect(screen.queryByText(/grafik jest już opublikowany/)).not.toBeInTheDocument()
   })
 

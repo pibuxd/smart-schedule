@@ -216,7 +216,7 @@ describe('MyScheduleScreen', () => {
     renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
     expect(
       await screen.findByText(
-        'Grafik od 1 grudnia i od 7 grudnia w lokalu Bochnia kierownik jeszcze układa. Zobaczysz tu swoje zmiany, gdy go opublikuje.',
+        'Grafik od 1 grudnia i od 7 grudnia w lokalu Bochnia jest w przygotowaniu. Zobaczysz tu swoje zmiany, gdy kierownik go opublikuje.',
       ),
     ).toBeInTheDocument()
   })
