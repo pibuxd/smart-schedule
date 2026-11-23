@@ -299,3 +299,6 @@ def test_phone_mask_hides_numbers_but_not_dates():
     assert mask.number("[TEL2]") == "+48 600-100-200"
     assert mask.number("tel 1") == "512 345 678"
     assert mask.number("[TEL9]") is None
+    # The same number written another way keeps its mark; a number only in the file is marked as such.
+    assert mask.hide("Jan 600100200, Ewa 601 200 300", file=True) == "Jan [TEL2], Ewa [TEL3]"
+    assert not mask.only_in_file("[TEL2]") and mask.only_in_file("[TEL3]")

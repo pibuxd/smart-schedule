@@ -983,7 +983,7 @@ def run_command(command_id: str, today: date | None = None) -> str:
                     text,
                     context,
                     toolbox,
-                    file_text=mask.hide(attachment["text"]),
+                    file_text=mask.hide(attachment["text"], file=True),
                     file_name=attachment.get("name", ""),
                 )
             else:
@@ -1679,7 +1679,7 @@ def _checked_invites(
     if inviter is None:
         return [], [], ["Zapraszać ludzi może tylko kierownik lokalu."]
     managed = {loc.name: loc for loc in inviter.managed_locations().filter(archived_at__isnull=True)}
-    people, unknown = [], []
+    people, unknown, as_employees = [], [], []
     for row in rows[:MAX_INVITES]:
         target = location
         if row.location:
@@ -1700,19 +1700,25 @@ def _checked_invites(
             elif found not in position_ids:
                 position_ids.append(found)
         raw = phones.number(row.phone) if phones and row.phone else None
+        # A manager only from the owner's own words: a file's "kierownik" (often a shift leader) or a planted line
+        # must not hide a manager in a long list (Prelint on #77).
+        demoted = bool(row.manager and raw and phones.only_in_file(row.phone))
+        role = Role.MANAGER if row.manager and not demoted else Role.EMPLOYEE
         person = invitations.Person(
             phone=raw or "",
             first_name=row.first_name.strip()[:80],
             last_name=row.last_name.strip()[:120],
             position_ids=position_ids,
             location_id=target.pk if target else location.pk,
-            role=Role.MANAGER if row.manager else Role.EMPLOYEE,
+            role=role,
         )
         if target is None:
             person.problem = f"nie ma lokalu „{row.location.strip()[:60]}”"
         elif row.phone and raw is None:
             person.problem = "numeru nie ma w Twojej wiadomości ani w pliku"
         people.append((person, missing))
+        if demoted:
+            as_employees.append(person)
     to_check = [person for person, _ in people if person.problem is None]
     invitations.check_people(inviter, location, to_check)
     invites, lines, skipped = [], [], []
@@ -1746,6 +1752,19 @@ def _checked_invites(
         if missing:
             unknown.append(f"{name}: {', '.join(missing)}")
     notes = []
+    demoted = [_person_words(p.first_name, p.last_name) for p in as_employees if p.problem is None]
+    if demoted:
+        hint = (
+            " Kierownika zaprosisz w „Pracownicy” albo podając mi jego numer w wiadomości."
+            if inviter.role == Role.OWNER
+            else ""
+        )
+        notes.append(
+            "Z pliku zapraszam tylko pracowników, więc jako pracownika zaproszę: "
+            + ", ".join(demoted[:MAX_LISTED_SKIPS])
+            + "."
+            + hint
+        )
     if skipped:
         listed = "; ".join(skipped[:MAX_LISTED_SKIPS])
         more = f" i {len(skipped) - MAX_LISTED_SKIPS} innych" if len(skipped) > MAX_LISTED_SKIPS else ""

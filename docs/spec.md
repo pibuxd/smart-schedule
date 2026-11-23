@@ -30,9 +30,10 @@ pliku np pdf albo csv i sparsowania tego i wrzucenia do apki”.
   tylko nazwa: jego tekst znika, gdy asystent go przeczyta.
 - Osoba, której nie da się zaprosić, nie blokuje całej listy (inaczej niż przy zasadach): plan zaprasza resztę i
   mówi, kogo pominął i dlaczego. Kto zostanie zaproszony w międzyczasie, jest pomijany przy zatwierdzeniu.
-- Kierownik zaprasza tylko do lokali, którymi zarządza; kierownika (osoba opisana w pliku jako kierownik) zaprasza
-  tylko właściciel firmy, tylko przez asystenta. Jak dotąd SMS-a z zaproszeniem nie ma: zaproszeni logują się swoim
-  numerem.
+- Kierownik zaprasza tylko do lokali, którymi zarządza. Kierownika zaprasza tylko właściciel firmy, a przez asystenta
+  tylko wtedy, gdy numer tej osoby jest w jego wiadomości. Osoba, którą jako kierownika opisuje sam plik (często to
+  kierownik zmiany albo dopisek), dostaje zaproszenie pracownika, a plan to mówi. Jak dotąd SMS-a z zaproszeniem nie
+  ma: zaproszeni logują się swoim numerem.
 - Naraz najwyżej 300 osób z ekranu i 100 z asystenta (dłuższą listę trzeba podzielić).
 
 ## Koszty asystenta (prośba Piotra z 22.11.2026)

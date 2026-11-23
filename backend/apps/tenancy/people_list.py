@@ -212,30 +212,47 @@ def without_numbers(text: str) -> str:
     return PHONE_LIKE.sub(lambda m: m.group() if DATE_LIKE.fullmatch(m.group().strip()) else "[numer]", text)
 
 
+def _same_number(one: str, other: str) -> bool:
+    """ "600-100-200", "600 100 200" and "+48 600100200" are one number (one mark for the model)."""
+    a, b = re.sub(r"\D", "", one), re.sub(r"\D", "", other)
+    return a == b or (len(a) >= 9 and len(b) >= 9 and a[-9:] == b[-9:])
+
+
 class PhoneMask:
     """Replaces every phone-like number with a mark ([TEL1], [TEL2]…) before text goes to the assistant: the model
     never sees a number, and the numbers in its answer can only be ones from the manager's own text."""
 
     def __init__(self) -> None:
         self.numbers: dict[str, str] = {}
+        # Marks first seen in a file, not in the manager's own words (hide the message first).
+        self.from_file: set[str] = set()
 
-    def hide(self, text: str) -> str:
+    def hide(self, text: str, *, file: bool = False) -> str:
         def mark(match: re.Match) -> str:
             raw = match.group()
             if DATE_LIKE.fullmatch(raw.strip()):
                 return raw
-            token = next((t for t, number in self.numbers.items() if number == raw), None)
+            token = next((t for t, number in self.numbers.items() if _same_number(number, raw)), None)
             if token is None:
                 token = f"TEL{len(self.numbers) + 1}"
                 self.numbers[token] = raw
+                if file:
+                    self.from_file.add(token)
             return f"[{token}]"
 
         return PHONE_LIKE.sub(mark, text)
 
+    @staticmethod
+    def _token(mark: str) -> str:
+        return re.sub(r"[\s\[\]]", "", mark or "").upper()
+
     def number(self, mark: str) -> str | None:
         """The number behind "[TEL3]" (also "TEL3", "tel 3"); None for anything else."""
-        token = re.sub(r"[\s\[\]]", "", mark or "").upper()
-        return self.numbers.get(token)
+        return self.numbers.get(self._token(mark))
+
+    def only_in_file(self, mark: str) -> bool:
+        """The number comes from the file alone: the manager did not write it."""
+        return self._token(mark) in self.from_file
 
 
 # ------------------------------------------------------------------------------- finding people without a model

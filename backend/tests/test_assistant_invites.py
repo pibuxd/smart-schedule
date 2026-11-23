@@ -131,25 +131,43 @@ def test_invitations_to_another_managed_location_and_managers_only_by_the_owner(
     other = Location.objects.create(company=a["company"], name="Piekarnia Wieliczka")
     Position.objects.create(location=other, name="Piec")
     api.login(a["manager"])  # the owner
+    # The owner's own words name the manager's number; the file only says "kierownik" next to Ewa.
     answer = plan(
         invitations=[
-            person("Anna", "Kowalska", "[TEL1]", ["piec"], location="Wieliczka"),
-            person("Jan", "Nowak", "[TEL2]", manager=True),
+            person("Anna", "Kowalska", "[TEL2]", ["piec"], location="Wieliczka"),
+            person("Jan", "Nowak", "[TEL1]", manager=True),
+            person("Ewa", "Lis", "[TEL3]", manager=True),
         ]
     )
 
-    body, _ = send_file(api, a["location"], monkeypatch, answer, content="Anna 512345678\nJan 600100200")
+    body, seen = send_file(
+        api,
+        a["location"],
+        monkeypatch,
+        answer,
+        content="Anna 512345678\nJan 600100200\nEwa 601200300 kierownik",
+        text="Jan Nowak 600 100 200 będzie kierownikiem",
+    )
 
+    assert seen["text"] == "Jan Nowak [TEL1] będzie kierownikiem"
+    assert seen["file_text"] == "Anna [TEL2]\nJan [TEL1]\nEwa [TEL3] kierownik"
     assert body["lines"] == shown(
         [
             "Zaproszę: Anna Kowalska, 512 345 678, Piec (lokal Piekarnia Wieliczka).",
             f"Zaproszę: Jan Nowak, 600 100 200, kierownik (lokal {a['location'].name}).",
+            f"Zaproszę: Ewa Lis, 601 200 300 (lokal {a['location'].name}).",
         ]
+    )
+    # A manager only from the owner's words, never from a file alone.
+    assert any(
+        note.startswith("Z pliku zapraszam tylko pracowników, więc jako pracownika zaproszę: Ewa Lis.")
+        for note in body["notes"]
     )
     assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200
     anna = Invitation.objects.get(phone_e164="+48512345678")
     assert anna.location == other and [p.name for p in anna.positions.all()] == ["Piec"]
     assert Invitation.objects.get(phone_e164="+48600100200").role == Role.MANAGER
+    assert Invitation.objects.get(phone_e164="+48601200300").role == Role.EMPLOYEE
 
     # A manager (not the owner) cannot invite managers, nor to a location they do not manage.
     boss = a["manager"].__class__.objects.create_user("+48602300499")
@@ -162,7 +180,9 @@ def test_invitations_to_another_managed_location_and_managers_only_by_the_owner(
             person("Iza", "", "[TEL2]", location="Piekarnia Wieliczka"),
         ]
     )
-    body, seen = send_file(api, a["location"], monkeypatch, answer, content="Ola 601000001\nIza 601000002")
+    body, seen = send_file(
+        api, a["location"], monkeypatch, answer, content="Iza 601000002", text="Ola 601000001 ma być kierownikiem"
+    )
     assert "Piekarnia Wieliczka" not in seen["context"]
     assert body["lines"] == []
     assert "Ola (kierownika zaprasza tylko właściciel firmy)" in body["notes"][0]

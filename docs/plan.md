@@ -1429,7 +1429,10 @@ Prośba Piotra (spec.md, „Zapraszanie wielu osób naraz”): zaprosić wielu p
   stanowiska, lokal, `manager`); prompt punkt 5. `check_plan` → `_checked_invites` (`inviter` =
   `manager_context(command)`, `phones` = maska): znacznik spoza tekstu, lokal spoza listy kierownika, brak numeru i
   powody z `check_people` dają notatkę „Nie zaproszę: …” zamiast blokady całego planu; nieznane stanowiska notatkę;
-  najwyżej `MAX_INVITES` = 100 osób. Plan `invites` (lokal, numer E.164, imię, nazwisko, stanowiska, rola), linie
+  najwyżej `MAX_INVITES` = 100 osób. Rola kierownika tylko ze znacznikiem z wiadomości: znacznik, który jest tylko
+  w pliku (`PhoneMask.only_in_file`; ten sam numer zapisany inaczej ma jeden znacznik), daje zaproszenie pracownika
+  i notatkę „Z pliku zapraszam tylko pracowników…” (Prelint na #77: „kierownik” w pliku nie może ukryć kierownika
+  w długiej liście). Plan `invites` (lokal, numer E.164, imię, nazwisko, stanowiska, rola), linie
   „Zaproszę: Anna Kowalska, 512 345 678, Kasa.” (z „(lokal …)”, gdy któraś osoba idzie do innego lokalu) i
   `INVITES_NOTE` (znika po decyzji). `apply_command` → `_apply_invites` (`invite_people` z uprawnieniami
   zatwierdzającego; kto w międzyczasie dostał zaproszenie albo zaczął pracować, jest pominięty z notatką).
