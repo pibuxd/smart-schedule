@@ -15,6 +15,7 @@ export interface InvitationOut {
   last_name: string;
   role: InvitationOutRole;
   status: InvitationOutStatus;
+  position_ids: string[];
   created_at: string;
   decided_at: string | null;
 }

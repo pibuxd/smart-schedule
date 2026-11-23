@@ -56,7 +56,13 @@ export function mockApi(answer: (method: string, path: string, body: unknown) =>
     'fetch',
     vi.fn(async (url: string, init: RequestInit = {}) => {
       const method = (init.method ?? 'GET').toUpperCase()
-      const body = init.body ? JSON.parse(String(init.body)) : undefined
+      // A file upload (multipart) is recorded as its fields; a File stays a File.
+      const body =
+        init.body instanceof FormData
+          ? Object.fromEntries(init.body.entries())
+          : init.body
+            ? JSON.parse(String(init.body))
+            : undefined
       calls.push({ url, method, body })
       const [status, data] = answer(method, url.split('?')[0], body)
       return new Response(status === 204 ? null : JSON.stringify(data), { status })

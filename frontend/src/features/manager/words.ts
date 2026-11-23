@@ -84,3 +84,8 @@ export function statusWords(data: Pick<SubscriptionOut, 'read_only' | 'trial' | 
 function daysWords(days: number): string {
   return days === 1 ? 'został 1 dzień' : `zostało ${days} dni`
 }
+
+/** "Zaproś 1 osobę / 3 osoby / 5 osób" (the object of a sentence; `people` is the subject). */
+export function persons(n: number): string {
+  return countWords(n, ['osobę', 'osoby', 'osób'])
+}

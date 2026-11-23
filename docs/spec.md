@@ -4,6 +4,37 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Zapraszanie wielu osób naraz (prośba Piotra z 23.11.2026)
+
+Prośba Piotra: „dodaj też możliwość zaproszenia wielu pracowników na raz. niech asystent ai ma możliwość przyjęcia
+pliku np pdf albo csv i sparsowania tego i wrzucenia do apki”.
+
+- „Pracownicy” lokalu → „Zaproś kilka osób”: kierownik wkleja listę (jedna osoba w wierszu: imię, nazwisko, numer,
+  może być stanowisko i lokal) albo wybiera plik CSV, Excel (.xlsx) lub PDF z tekstem (do 2 MB). Aplikacja sama, bez
+  asystenta, znajduje w nim osoby: wiersz z numerem telefonu to osoba, a gdy plik ma wiersz nagłówków („Imię”,
+  „Nazwisko”, „Telefon”, „Stanowisko”, „Lokal”), kolumny mówią, co jest czym. Stanowiska i lokale rozpoznaje po
+  nazwie (także po samym „Wieliczka”, gdy tylko jeden lokal ma to słowo).
+- Przed wysłaniem kierownik widzi listę: imię, numer, stanowiska, lokal (gdy inny niż ten) i przy każdej osobie, co
+  przeszkadza (brak numeru, zły numer, już pracuje w tym lokalu, ma już zaproszenie, numer powtarza się na liście).
+  Każdą osobę może poprawić („Popraw”: imię, nazwisko, numer, stanowiska) albo usunąć z listy. „Zaproś N osób”
+  zaprasza gotowe osoby; te, których nie dało się zaprosić, zostają na liście z powodem.
+- Zaproszenie może mieć stanowiska: po przyjęciu zaproszenia osoba dostaje je w tym lokalu (tylko stanowiska, które
+  lokal nadal ma). Lista „Czekają na odpowiedź” pokazuje je przy numerze.
+- Asystent kierownika: spinacz przy polu wiadomości (i podpowiedź „Zaproś ludzi z pliku” w pustej rozmowie) dołącza
+  plik. Asystent czyta listę także w innym układzie (np. nazwisko przed imieniem, imię i numer w osobnych wierszach,
+  „kasjerka” zamiast „Kasa”) i proponuje zaproszenia jak każdy plan: lista „Zaproszę: Anna Kowalska, 512 345 678,
+  Kasa.”, uwagi o osobach pominiętych i „Zatwierdź zmiany”. Nic się nie zapisuje przed zatwierdzeniem. Tak samo działa
+  zwykła wiadomość („zaproś Annę Kowalską 512 345 678 na kasę”).
+- Asystent nie widzi numerów telefonów: aplikacja zastępuje je znacznikami ([TEL1]…), a w planie wstawia z powrotem
+  numery z wiadomości albo pliku. Asystent nie może więc wymyślić ani przekręcić numeru. Z pliku zostaje w aplikacji
+  tylko nazwa: jego tekst znika, gdy asystent go przeczyta.
+- Osoba, której nie da się zaprosić, nie blokuje całej listy (inaczej niż przy zasadach): plan zaprasza resztę i
+  mówi, kogo pominął i dlaczego. Kto zostanie zaproszony w międzyczasie, jest pomijany przy zatwierdzeniu.
+- Kierownik zaprasza tylko do lokali, którymi zarządza; kierownika (osoba opisana w pliku jako kierownik) zaprasza
+  tylko właściciel firmy, tylko przez asystenta. Jak dotąd SMS-a z zaproszeniem nie ma: zaproszeni logują się swoim
+  numerem.
+- Naraz najwyżej 300 osób z ekranu i 100 z asystenta (dłuższą listę trzeba podzielić).
+
 ## Koszty asystenta (prośba Piotra z 22.11.2026)
 
 Piotr chce wiedzieć, ile płaci za OpenRouter: za każde konto i każdy lokal, a u kierownika osobno za rozmowy
@@ -386,7 +417,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Menedżer zaprasza pracownika po numerze telefonu: wiersz w tabeli invitations ze statusem (oczekuje / przyjęte / odrzucone / anulowane), unikalne oczekujące zaproszenie na parę (placówka, numer). SMS z zaproszeniem NIE jest wysyłany. Pracownik po zalogowaniu widzi zaproszenie: Akceptuj / Odrzuć; akceptacja w jednej transakcji. Kto ma już konto, widzi nowe zaproszenie od razu.
 - Limity dokładnie: kolejny kod najwcześniej po 60 s, najwyżej 5 kodów na numer na godzinę i 20 próśb o kod z jednego adresu IP na godzinę (liczą się też prośby dla nieznanych numerów). Nowy kod unieważnia poprzedni. W bazie jest tylko skrót kodu.
 - Nieznany numer przy logowaniu dostaje jasną odpowiedź ("Nie znamy tego numeru. Poproś kierownika o zaproszenie…"), a nie udawane wysłanie kodu: dla osób niechętnych technologii czekanie na SMS, który nie przyjdzie, jest gorsze niż ryzyko, że ktoś sprawdzi, czy numer ma konto (to ryzyko ogranicza limit na adres IP).
-- Zapraszając, menedżer może od razu wpisać imię i nazwisko; trafiają na konto przy akceptacji, jeśli konto nie ma jeszcze imienia. Pracownika zaprasza menedżer lokalu, menedżera zaprasza tylko właściciel firmy. Akceptacja zaproszenia pracownika tworzy członkostwo w firmie i profil pracownika z tym lokalem jako głównym. Osoba, która już pracuje w firmie, po akceptacji zaproszenia do kolejnego lokalu dostaje go jako lokal dodatkowy (lokal główny się nie zmienia). Kierownik lokalu dodatkowego ustawia jej stanowiska w swoim lokalu; stopień, godziny i wyłączenie z grafiku są wspólne i ustawia je kierownik lokalu głównego.
+- Zapraszając, menedżer może od razu wpisać imię i nazwisko; trafiają na konto przy akceptacji, jeśli konto nie ma jeszcze imienia. Wiele osób naraz zaprasza z wklejonej listy albo pliku (sekcja „Zapraszanie wielu osób naraz” na początku); takie zaproszenie może mieć stanowiska, które osoba dostaje po akceptacji. Pracownika zaprasza menedżer lokalu, menedżera zaprasza tylko właściciel firmy. Akceptacja zaproszenia pracownika tworzy członkostwo w firmie i profil pracownika z tym lokalem jako głównym. Osoba, która już pracuje w firmie, po akceptacji zaproszenia do kolejnego lokalu dostaje go jako lokal dodatkowy (lokal główny się nie zmienia). Kierownik lokalu dodatkowego ustawia jej stanowiska w swoim lokalu; stopień, godziny i wyłączenie z grafiku są wspólne i ustawia je kierownik lokalu głównego.
 - Kierownik, który sam pracuje na zmianach, dodaje siebie do grafiku lokalu jednym przyciskiem w zakładce "Pracownicy" (bez zaproszenia); dostaje wszystkie stanowiska lokalu i może je potem zawęzić (prośba Piotra z 13.11.2026).
 - Zmiana numeru telefonu: robi ją superadmin w panelu. Konto, członkostwa i historia zostają; wszystkie sesje tego konta wygasają i trzeba zalogować się nowym numerem. Zaproszenia oczekujące na stary numer menedżer wysyła ponownie. Numery spoza Polski: poza prototypem.
 - Poza kodami logowania nic nie wysyłamy SMS-em ani e-mailem. Powiadomienia tylko w aplikacji.

@@ -14,4 +14,6 @@ export interface InvitationIn {
   first_name?: string;
   /** @maxLength 120 */
   last_name?: string;
+  /** @maxItems 50 */
+  position_ids?: string[];
 }

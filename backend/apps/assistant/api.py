@@ -7,7 +7,7 @@ from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
-from ninja import Field, Router, Schema
+from ninja import Field, File, Form, Router, Schema, UploadedFile
 from ninja.errors import HttpError
 from ninja.responses import Status
 
@@ -15,6 +15,7 @@ from apps.assistant import agreements, llm, services
 from apps.assistant.models import AssistantCommand, ManagerInstruction
 from apps.core.schemas import ErrorOut
 from apps.staffing.models import EmployeeProfile, ShiftType, works_in_q
+from apps.tenancy import people_list
 from apps.tenancy.context import TenantContext, context_for
 from apps.tenancy.models import Location
 
@@ -31,6 +32,8 @@ class CommandIn(Schema):
 class AssistantCommandOut(Schema):
     id: UUID
     text: str
+    # The name of the file sent with the message (a list of people to invite), else None.
+    file_name: str | None
     status: CommandStatusName
     # The assistant's short answer and, when it could not act, its question.
     reply: str | None
@@ -51,6 +54,10 @@ class AssistantCommandOut(Schema):
     has_hours: bool
     # Only hours: the plan does not depend on the period's agreements, so a published period does not close it.
     hours_only: bool
+    # The plan invites people (saved at once on acceptance).
+    has_invites: bool
+    # Only hours and invitations: a published period does not close the plan.
+    outside_agreements: bool
     # The plan changes the period's agreements (rules, instructions about people).
     changes_agreements: bool
     # Accepting the plan arranges the period's schedule again; `run_id` is that arranging once accepted.
@@ -112,7 +119,7 @@ def _notes(command: AssistantCommand, plan: dict) -> list[str]:
     notes = plan.get("notes") or []
     if command.status == AssistantCommand.Status.READY:
         return notes
-    return [note for note in notes if note != services.HOURS_NOTE]
+    return [note for note in notes if note not in (services.HOURS_NOTE, services.INVITES_NOTE)]
 
 
 def _command_out(command: AssistantCommand) -> AssistantCommandOut:
@@ -120,9 +127,11 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
     expires_at = command.created_at + services.COMMAND_MAX_AGE
     consumed_at = command.rule_set.consumed_at if command.rule_set_id else None
     hours_only = services.has_hours(plan) and not services.needs_rule_set(plan) and not services.arranges(plan)
+    outside = services.outside_agreements(plan)
     return AssistantCommandOut(
         id=command.pk,
         text=command.text,
+        file_name=(command.attachment or {}).get("name") or None,
         status=command.status,
         reply=plan.get("reply"),
         question=plan.get("question"),
@@ -133,7 +142,7 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
             command.status == AssistantCommand.Status.READY
             and services.has_changes(plan)
             and timezone.now() < expires_at
-            and (hours_only or (command.rule_set_id is not None and consumed_at is None))
+            and (outside or (command.rule_set_id is not None and consumed_at is None))
         ),
         informational=command.status == AssistantCommand.Status.READY and plan.get("informational") is True,
         created_at=command.created_at,
@@ -143,6 +152,8 @@ def _command_out(command: AssistantCommand) -> AssistantCommandOut:
         consumed_at=consumed_at,
         has_hours=services.has_hours(plan),
         hours_only=hours_only,
+        has_invites=services.has_invites(plan),
+        outside_agreements=outside,
         changes_agreements=services.needs_rule_set(plan),
         arranges=services.arranges(plan),
         run_id=command.generation_run_id,
@@ -281,6 +292,47 @@ def send_assistant_command(request, location_id: UUID, payload: CommandIn):
     ctx, location = _managed_location(request, location_id)
     ctx.require_writable()
     return Status(201, _command_out(services.submit_command(ctx, location, payload.text, payload.period_id)))
+
+
+FILE_MESSAGE = "Zaproś osoby z tego pliku."
+
+
+@router.post(
+    "/locations/{location_id}/assistant-commands/file",
+    response={
+        201: AssistantCommandOut,
+        400: ErrorOut,
+        402: ErrorOut,
+        403: ErrorOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+    },
+)
+def send_assistant_file(
+    request,
+    location_id: UUID,
+    file: File[UploadedFile],
+    text: Form[str] = "",
+    period_id: Form[UUID | None] = None,
+):
+    """A message with a file (CSV, XLSX, PDF, text): usually a list of people to invite. The file is read here,
+    in the request; the assistant gets its text with phone numbers hidden, and only the file's name is kept."""
+    ctx, location = _managed_location(request, location_id)
+    ctx.require_writable()
+    if len(text) > 1000:
+        raise HttpError(400, "Wiadomość jest za długa. Najwyżej 1000 znaków.")
+    if file.size and file.size > people_list.MAX_FILE_BYTES:
+        raise HttpError(400, people_list.TOO_BIG)
+    name = (file.name or "plik").rsplit("/", 1)[-1][:120]
+    rows = people_list.file_lines(name, file.read(people_list.MAX_FILE_BYTES + 1))
+    content = people_list.as_text(rows)
+    if not content.strip():
+        raise HttpError(400, "Ten plik jest pusty.")
+    command = services.submit_command(
+        ctx, location, text.strip() or FILE_MESSAGE, period_id, attachment={"name": name, "text": content}
+    )
+    return Status(201, _command_out(command))
 
 
 @router.get("/assistant-commands/{command_id}", response={200: AssistantCommandOut, 403: ErrorOut, 404: ErrorOut})

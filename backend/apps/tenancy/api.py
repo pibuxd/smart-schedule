@@ -6,7 +6,7 @@ from uuid import UUID
 
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
-from ninja import Field, Router, Schema
+from ninja import Field, File, Form, Router, Schema, UploadedFile
 from ninja.errors import HttpError
 from ninja.responses import Status
 
@@ -20,8 +20,9 @@ from apps.billing.services import (
 )
 from apps.core.http import client_ip
 from apps.core.schemas import ErrorOut
+from apps.staffing.models import Position
 from apps.staffing.shortage import ExperiencedShortOut, experienced_shortage
-from apps.tenancy import invitations
+from apps.tenancy import invitations, people_list
 from apps.tenancy.context import context_for, tenant_context
 from apps.tenancy.models import Company, Invitation, InvitationStatus, Location, LocationGroup, Membership, Role
 
@@ -65,6 +66,8 @@ class InvitationIn(Schema):
     role: InvitationRole = "employee"
     first_name: str = Field("", max_length=80)
     last_name: str = Field("", max_length=120)
+    # Positions of this location the person gets on acceptance (employees only).
+    position_ids: list[UUID] = Field(default_factory=list, max_length=50)
 
 
 class InvitationOut(Schema):
@@ -75,8 +78,48 @@ class InvitationOut(Schema):
     last_name: str
     role: InvitationRole
     status: InvitationStatusName
+    position_ids: list[UUID]
     created_at: datetime
     decided_at: datetime | None
+
+
+class ListedPersonIn(Schema):
+    """One person of a list to invite (employees). Without `location_id`: the location in the address."""
+
+    phone: str = Field("", max_length=40)
+    first_name: str = Field("", max_length=80)
+    last_name: str = Field("", max_length=120)
+    position_ids: list[UUID] = Field(default_factory=list, max_length=50)
+    location_id: UUID | None = None
+
+
+class PeopleIn(Schema):
+    people: list[ListedPersonIn] = Field(min_length=1, max_length=invitations.MAX_PEOPLE)
+
+
+class ListedPersonOut(Schema):
+    # +48… when the number is right, otherwise as written, so the manager can correct it.
+    phone: str
+    first_name: str
+    last_name: str
+    position_ids: list[UUID]
+    location_id: UUID
+    # Positions named in the list that this location does not have (not set; the manager may add them by hand).
+    unknown_positions: list[str]
+    # Why this person cannot be invited (no number, already works here…); None = ready to invite.
+    problem: str | None
+
+
+class PeopleListOut(Schema):
+    people: list[ListedPersonOut]
+    # Non-empty lines that were not a person (titles, notes, rows without a number).
+    skipped_lines: int
+
+
+class InvitedPeopleOut(Schema):
+    invited: list[InvitationOut]
+    # People who were not invited, each with the reason.
+    skipped: list[ListedPersonOut]
 
 
 def _my_invitation_out(invitation: Invitation) -> MyInvitationOut:
@@ -100,8 +143,21 @@ def _invitation_out(invitation: Invitation) -> InvitationOut:
         last_name=invitation.last_name,
         role=invitation.role,
         status=invitation.status,
+        position_ids=[p.pk for p in invitation.positions.all()],
         created_at=invitation.created_at,
         decided_at=invitation.decided_at,
+    )
+
+
+def _listed_out(person: invitations.Person, unknown_positions: list[str] | None = None) -> ListedPersonOut:
+    return ListedPersonOut(
+        phone=person.phone_e164 or person.phone.strip(),
+        first_name=person.first_name,
+        last_name=person.last_name,
+        position_ids=person.position_ids,
+        location_id=person.location.pk if person.location else person.location_id,
+        unknown_positions=unknown_positions or [],
+        problem=person.problem,
     )
 
 
@@ -171,7 +227,7 @@ def location_invitations(request, location_id: UUID):
     """All invitations of a location, newest first (the manager sees who has not answered yet)."""
     ctx, location = context_for(request, Location, location_id)
     ctx.require_manager_of(location)
-    rows = ctx.qs(Invitation).filter(location=location).order_by("-created_at")
+    rows = ctx.qs(Invitation).filter(location=location).prefetch_related("positions").order_by("-created_at")
     return [_invitation_out(invitation) for invitation in rows]
 
 
@@ -187,9 +243,88 @@ def invite_to_location(request, location_id: UUID, payload: InvitationIn):
     if payload.role == Role.MANAGER and ctx.role != Role.OWNER:
         raise HttpError(403, "Menedżera może zaprosić tylko właściciel firmy.")
     invitation = invitations.create_invitation(
-        location, parse_phone(payload.phone), payload.role, ctx.user, payload.first_name, payload.last_name
+        location,
+        parse_phone(payload.phone),
+        payload.role,
+        ctx.user,
+        payload.first_name,
+        payload.last_name,
+        payload.position_ids,
     )
     return Status(201, _invitation_out(invitation))
+
+
+@router.post(
+    "/locations/{location_id}/invitations/read",
+    response={200: PeopleListOut, 400: ErrorOut, 403: ErrorOut, 404: ErrorOut},
+)
+def read_people_list(request, location_id: UUID, text: Form[str] = "", file: File[UploadedFile] = None):
+    """Find people in a pasted list or a file (CSV, XLSX, PDF) for a preview. Nothing is saved, the file neither.
+
+    Read without the assistant: a row with a phone number is a person (or a header row says which column is
+    what). Positions and locations are matched by name; each person says what stands in the way of inviting them.
+    """
+    ctx, location = context_for(request, Location, location_id)
+    ctx.require_manager_of(location)
+    if file is not None:
+        if file.size and file.size > people_list.MAX_FILE_BYTES:
+            raise HttpError(400, people_list.TOO_BIG)
+        rows = people_list.file_lines(file.name or "", file.read(people_list.MAX_FILE_BYTES + 1))
+    else:
+        if len(text) > people_list.MAX_TEXT:
+            raise HttpError(400, "Lista jest za długa. Podziel ją na mniejsze części.")
+        rows = people_list.text_lines(text)
+    positions = {p.name: p.pk for p in ctx.qs(Position).filter(location=location, removed_at__isnull=True)}
+    managed = {loc.name: loc.pk for loc in ctx.managed_locations().filter(archived_at__isnull=True)}
+    found, skipped = people_list.find_people(rows, positions, managed)
+    if not found:
+        raise HttpError(
+            400,
+            "Nie znalazłem tu nikogo z numerem telefonu. Wpisz jedną osobę w wierszu: imię, nazwisko i numer.",
+        )
+    found = found[: invitations.MAX_PEOPLE]
+    people = [
+        invitations.Person(
+            phone=row.phone,
+            first_name=row.first_name,
+            last_name=row.last_name,
+            # A location found in the row has its own positions: those of this location do not apply there.
+            position_ids=row.position_ids if row.location_id in (None, location.pk) else [],
+            location_id=row.location_id,
+        )
+        for row in found
+    ]
+    invitations.check_people(ctx, location, people)
+    return PeopleListOut(
+        people=[_listed_out(person, row.unknown_positions) for person, row in zip(people, found, strict=True)],
+        skipped_lines=skipped,
+    )
+
+
+@router.post(
+    "/locations/{location_id}/invitations/many",
+    response={200: InvitedPeopleOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
+)
+def invite_many(request, location_id: UUID, payload: PeopleIn):
+    """Invite everyone on the list who can be invited (as employees); the others come back with the reason."""
+    ctx, location = context_for(request, Location, location_id)
+    ctx.require_manager_of(location)
+    ctx.require_writable()
+    people = [
+        invitations.Person(
+            phone=row.phone,
+            first_name=row.first_name,
+            last_name=row.last_name,
+            position_ids=row.position_ids,
+            location_id=row.location_id,
+        )
+        for row in payload.people
+    ]
+    invited, skipped = invitations.invite_people(ctx, location, people)
+    return InvitedPeopleOut(
+        invited=[_invitation_out(invitation) for invitation in invited],
+        skipped=[_listed_out(person) for person in skipped],
+    )
 
 
 @router.post(
