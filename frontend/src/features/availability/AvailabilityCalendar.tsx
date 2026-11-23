@@ -7,8 +7,9 @@ import { cellHours, describeMark, type Mark, markOf, type Marks } from './marks'
 import { StateIcon } from './StateIcon'
 
 /**
- * The period as a squared-paper grid. Press on a day and drag across others to mark them all
- * (`onStroke` gets every day touched in one movement, once, when the finger lifts).
+ * The period as a squared-paper grid. A tap marks one day. With a mouse, press on a day and drag across
+ * others to mark them all (`onStroke` gets every day touched in one movement, once, when the button is
+ * released). A finger or a pen only taps: moving it scrolls the page, so marking never fights scrolling.
  * Keyboard: Tab to a day and press Enter or Space.
  */
 export function AvailabilityCalendar({
@@ -34,6 +35,8 @@ export function AvailabilityCalendar({
   onOpenDay?: (date: string) => void
 }) {
   const painting = useRef(false)
+  /** What pressed a day last: only a mouse paints on press and drag, anything else paints on the tap's click. */
+  const lastPointer = useRef<string | null>(null)
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -61,7 +64,7 @@ export function AvailabilityCalendar({
     <div
       role="grid"
       aria-label="Kalendarz dni"
-      className="-mx-3 grid touch-none grid-cols-7 gap-x-0 gap-y-1 select-none min-[400px]:mx-0 min-[400px]:gap-1"
+      className="-mx-3 grid touch-manipulation grid-cols-7 gap-x-0 gap-y-1 select-none min-[400px]:mx-0 min-[400px]:gap-1"
     >
       <div role="row" className="contents">
         {WEEKDAY_HEADERS.map((name, i) => (
@@ -85,7 +88,9 @@ export function AvailabilityCalendar({
                 mark={markOf(marks, date)}
                 disabled={off}
                 onPointerDown={(event) => {
-                  if (off || onOpenDay) return
+                  lastPointer.current = event.pointerType
+                  // A finger waits for the click: the browser sends one only for a tap, not when the page scrolls.
+                  if (off || onOpenDay || event.pointerType !== 'mouse') return
                   event.preventDefault()
                   painting.current = true
                   onPaint(date)
@@ -93,8 +98,8 @@ export function AvailabilityCalendar({
                 onClick={(event) => {
                   if (off) return
                   if (onOpenDay) onOpenDay(date)
-                  else if (event.detail === 0) {
-                    // Keyboard (Enter/Space) or a screen reader: paint this one day.
+                  else if (event.detail === 0 || lastPointer.current !== 'mouse') {
+                    // A tap, the keyboard (Enter/Space) or a screen reader: paint this one day.
                     onPaint(date)
                     onStroke()
                   }
