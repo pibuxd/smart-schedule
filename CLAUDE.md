@@ -106,6 +106,11 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - A person can work in several locations of a company: `EmployeeProfile.home_location` (main) plus
   `extra_locations`. "People of a location" is `works_in_q(location)` / `profile.works_in(location)`, never
   `home_location=` alone; in the engine `Employee.works_in`. Availability and monthly hours are per person.
+- People may hold several positions (`EmployeeProfile.positions`). An employee's wish about one of them ("nie chcę
+  być sprzedawcą w tym tygodniu", reading type `stanowisko`) is `engine.problem.Request(type=POSITION, positions=…)`,
+  soft like `shift_type`; with one position the assistant explains instead of saving it (`services._position_question`).
+- Schedules arranged but not published (period status `draft`) lock their days in "Kiedy mogę" (`unpublished`) and
+  are named in "Mój grafik" (`preparing`); employees only ever see published shifts.
 - Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.
   Each catalog rule needs a `rule_<code>` method in `engine/validator.py` and a `_rule_<code>` method in
   `engine/solver.py` (hard: a constraint; soft: a penalty matching the validator's degree), checked by a test.
@@ -171,8 +176,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   so a change never moves earlier months; a person's step without an amount means the position's rate again.
   Supplement changes split the row at `change_from`. Hours without a rate are `unpriced_hours`, never 0 zł, get no
   supplement, and `pay` is null when nothing had a rate (screens then show no pay). Only the location's managers see
-  rates; the generator, validator and scores never read them, and `assistant/tools.DROPPED_KEYS` keeps pay, rates
-  and supplements away from the language model.
+  rate settings; a person's own rate and pay per shift are in `MyShiftOut` (`hourly_rate`, `pay`; not on the screen).
+  The generator, validator and scores never read them. Since 23.11.2026 the assistant reads pay, rates and
+  supplements to work out earnings (`assistant/tools.DROPPED_KEYS` drops only phones and screen fields).
 - Assistant (a language model): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   On OpenRouter the structured answer is a call of the `final_answer` tool (never `response_format` next to tools:
   providers then force JSON on every round and no tool gets called); on Anthropic it is `output_config.format`.
@@ -190,7 +196,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   replace `llm.read_request` / `llm.plan_command` (no real key). Importance is always a place on a list, never a level
   the manager picks; manager instructions about people are `engine.problem.Request(by_manager=True)`.
   `apps/assistant/context.py` supplies bounded history for corrections. Both structured outputs require a
-  topic classification (`app|unrelated`). A correction may supersede one earlier request in the same employee/scope,
+  topic classification (`app|unrelated`; `unrelated` only for things clearly not about work: holidays in Poland
+  (`apps/core/holidays.py`, a context line) and labour-law basics are `app`). A correction may supersede one earlier request in the same employee/scope,
   atomically and only against an unchanged snapshot. `answered` and `superseded` requests never reach the solver; extra
   preferences of one message live in `interpretation["more"]`. An invalid part blocks the entire manager plan;
   informational replies are not misses. Limits on writing to the assistant are off by default (0 = no limit):

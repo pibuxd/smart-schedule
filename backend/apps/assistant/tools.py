@@ -26,23 +26,10 @@ logger = logging.getLogger(__name__)
 
 # One tool result goes back to the model in full up to this size; larger ones are cut with a note.
 MAX_RESULT_CHARS = 40_000
-# Never sent to the model: phone numbers (personal data), fields that only drive the screens, and money: pay,
-# hourly rates and supplements stay in the app, out of the external AI service (docs/plan.md, section 35).
-DROPPED_KEYS = frozenset(
-    {
-        "phone",
-        "phone_e164",
-        "revision",
-        "headers",
-        "link",
-        "pay",
-        "supplements_pay",
-        "unpriced_hours",
-        "hourly_rate",
-        "rates",
-        "supplements",
-    }
-)
+# Never sent to the model: phone numbers (personal data) and fields that only drive the screens. Pay, rates and
+# supplements are sent since 23.11.2026 (Piotr: the assistant works out earnings; personal-data rules come later,
+# docs/plan.md section 35).
+DROPPED_KEYS = frozenset({"phone", "phone_e164", "revision", "headers", "link"})
 
 NULLABLE_DATE = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "YYYY-MM-DD albo null"}
 NULLABLE_ID = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Identyfikator (UUID) albo null"}
@@ -103,8 +90,10 @@ EMPLOYEE_TOOLS = (
         "/api/me/schedule",
         "Ekran „Mój grafik”: moje opublikowane zmiany, które się nie skończyły (shifts: data, godziny z grafiku, "
         "lokal, stanowisko, kto jest ze mną, czy oddaję zmianę), moje zmiany z ostatnich 14 dni (recent), przy "
-        "zmianie godziny naprawdę zatwierdzone przez kierownika (worked) i moje zgłoszenie czekające na kierownika "
-        "(report), oraz suma moich godzin w każdym miesiącu (liczy zatwierdzone godziny).",
+        "zmianie godziny naprawdę zatwierdzone przez kierownika (worked), moje zgłoszenie czekające na kierownika "
+        "(report), moja stawka za godzinę (hourly_rate) i wypłata brutto za zmianę z dodatkami (pay), suma moich "
+        "godzin i wypłata brutto w każdym miesiącu (months: hours, pay, z tego dodatki supplements_pay, godziny bez "
+        "stawki unpriced_hours) oraz grafiki ułożone, ale jeszcze nieopublikowane (preparing).",
         fixed=_company(),
         narrow=(Narrow("shifts", date="date"), Narrow("recent", date="date")),
     ),
@@ -225,10 +214,26 @@ MANAGER_TOOLS = (
         fixed={"location_id": "location_id"},
     ),
     ApiTool(
+        "pay_settings",
+        "/api/locations/{location_id}/pay-settings",
+        "„Stawki i dodatki” w ustawieniach lokalu: stawki stanowisk za godzinę w złotych brutto „od dnia” "
+        "(valid_from null = od początku) i dodatki za porę dnia (kind amount = zł za godzinę, percent = % stawki; "
+        "weekdays 0 = poniedziałek; valid_until = do kiedy).",
+        fixed={"location_id": "location_id"},
+    ),
+    ApiTool(
+        "personal_rates",
+        "/api/locations/{location_id}/personal-rates",
+        "Własne stawki osób na stanowiskach lokalu (np. za staż), „od dnia”; hourly_rate null = znów stawka "
+        "stanowiska. employee_id to id z location_employees, position_id z pay_settings.",
+        fixed={"location_id": "location_id"},
+    ),
+    ApiTool(
         "hours_report",
         "/api/reports/hours",
         "Ekran „Godziny”: godziny z opublikowanych grafików w miesiącu na osobę i lokal (zatwierdzone inne godziny "
-        "liczą się zamiast grafiku; longer = nadgodziny, shorter = krótsze zmiany, w godzinach).",
+        "liczą się zamiast grafiku; longer = nadgodziny, shorter = krótsze zmiany, w godzinach) i wypłata brutto "
+        "(pay, z tego dodatki supplements_pay; unpriced_hours = godziny bez stawki).",
         params={"month": {"type": "string", "description": "RRRR-MM"}},
         fixed=_company(),
         narrow=(Narrow("rows", person=("name",)),),

@@ -195,6 +195,32 @@ describe('MyScheduleScreen', () => {
     expect(screen.getByRole('link', { name: 'kiedy możesz pracować' })).toBeInTheDocument()
   })
 
+  it('says which schedule the manager is still arranging', async () => {
+    // December is arranged but not published: "Kiedy mogę" locks it, so this screen says why it shows nothing yet.
+    mockApi((_method, path) => {
+      if (path === '/api/me/offers') return [200, []]
+      return [
+        200,
+        {
+          home_location_name: 'Wieliczka – Rynek',
+          shifts: [shift],
+          published_until: '2026-11-30',
+          months: [{ month: '2026-11', hours: 112 }],
+          preparing: [
+            { location_name: 'Wieliczka – Rynek', start: '2026-12-01', end: '2026-12-31' },
+            { location_name: 'Bochnia', start: '2026-12-07', end: '2026-12-13' },
+          ],
+        },
+      ]
+    })
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
+    expect(
+      await screen.findByText(
+        'Grafik od 1 grudnia i od 7 grudnia w lokalu Bochnia jest w przygotowaniu. Zobaczysz tu swoje zmiany, gdy kierownik go opublikuje.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('shows a plain error with a retry button', async () => {
     mockApi(() => [500, {}])
     renderScreen(<MyScheduleScreen companyId="c1" />)

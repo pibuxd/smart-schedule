@@ -1,9 +1,11 @@
 """The structure a sentence becomes: one wish about one person, of a type from a closed list.
 
 Used for an employee's text request (`TextRequest.interpretation`) and for a manager's instruction
-(`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, limit_godzin, limit_zmian,
-wolne_dni, chce_pracowac, inne), subject_employee (id), shift_type (id; for unikaj_osoby / preferuj_osobe it narrows
-the pair to that shift: "nie razem na zamknięciu"), avoid, max_hours, max_shifts, hours_period (day, week, period:
+(`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, stanowisko, limit_godzin,
+limit_zmian, wolne_dni, chce_pracowac, inne), subject_employee (id), shift_type (id; for unikaj_osoby / preferuj_osobe
+it narrows the pair to that shift: "nie razem na zamknięciu"), positions (stanowisko: the ids of one position name
+among the person's positions, one per location) with position_name, avoid (typ_zmiany, stanowisko: not this one),
+max_hours, max_shifts, hours_period (day, week, period:
 the window of limit_godzin and limit_zmian), min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot
 (wolne_dni the person cannot work at all).
 An employee's message with several wishes keeps the others in `more` (a list of readings like this one).
@@ -23,6 +25,7 @@ TYPES = (
     "unikaj_osoby",
     "preferuj_osobe",
     "typ_zmiany",
+    "stanowisko",
     "limit_godzin",
     "limit_zmian",
     "wolne_dni",
@@ -108,13 +111,17 @@ def clean(
     weekdays: Iterable[int] = (),
     min_days: int | None = None,
     shifts_per_day: int | None = None,
+    position: str | None = None,
+    avoid_position: bool = False,
     people: Mapping[str, str],
     shift_types: Mapping[str, str],
+    positions: Mapping[str, list[str]] | None = None,
 ) -> dict[str, Any] | None:
     """The checked reading, or None when it is not something the generator can use.
 
-    `people` and `shift_types` map the labels sent to the assistant back to ids. `weekdays` come as 1 = Monday
-    … 7 = Sunday (as people count them) and are stored as 0–6.
+    `people` and `shift_types` map the labels sent to the assistant back to ids, `positions` the names of the
+    person's positions to their ids. `weekdays` come as 1 = Monday … 7 = Sunday (as people count them) and are stored
+    as 0–6.
     """
     if type not in TYPES or type == "inne":
         return None
@@ -122,7 +129,8 @@ def clean(
     if (
         (person and type not in ("unikaj_osoby", "preferuj_osobe"))
         or (shift_type and type not in SHIFT_TYPED)
-        or (avoid and type != "typ_zmiany")
+        or (avoid and type not in ("typ_zmiany", "stanowisko"))  # stanowisko reads `avoid_position` only
+        or ((position or avoid_position) and type != "stanowisko")
         or (max_hours is not None and type != "limit_godzin")
         or (max_shifts is not None and type != "limit_zmian")
         or ((min_days is not None or shifts_per_day is not None) and type != "chce_pracowac")
@@ -154,6 +162,13 @@ def clean(
             return None
         data["shift_type"] = found
         data["avoid"] = bool(avoid)
+    elif type == "stanowisko":
+        ids = _lookup(position, positions or {})
+        if not ids:
+            return None
+        data["positions"] = sorted(str(i) for i in ids)
+        data["position_name"] = next(label for label in positions or {} if positions[label] == ids)
+        data["avoid"] = bool(avoid_position)
     elif type == "limit_godzin":
         if max_hours is None or not 0 <= max_hours <= 744:
             return None
@@ -298,6 +313,11 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
         case "typ_zmiany":
             name = shift_types.get(str(data.get("shift_type")), "?")
             return f"{who}: bez zmiany „{name}”{when}" if data.get("avoid") else f"{who}: tylko zmiana „{name}”{when}"
+        case "stanowisko":
+            name = data.get("position_name") or "?"
+            if data.get("avoid"):
+                return f"{who}: bez stanowiska „{name}”{when}"
+            return f"{who}: tylko stanowisko „{name}”{when}"
         case "limit_godzin":
             hours = data.get("max_hours") or 0
             shown = int(hours) if float(hours).is_integer() else hours

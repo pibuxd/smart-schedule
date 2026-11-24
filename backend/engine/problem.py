@@ -49,6 +49,9 @@ class RequestType(StrEnum):
     WANT_WORK = "want_work"
     # "najwyżej trzy nocki w tygodniu": at most `max_shifts` shifts (of `shift_type`, if set) in each window.
     SHIFTS_LIMIT = "shifts_limit"
+    # "w trzecim tygodniu stycznia nie chcę być sprzedawcą": for someone with several positions, not on (`avoid`) or
+    # only on one of `positions` (ids; a person with the same position in several locations has one id per location).
+    POSITION = "position"
     OTHER = "other"  # read by the manager, not scored
 
 
@@ -257,7 +260,8 @@ class Request:
     # shift_type; optional restriction for want_work, shifts_limit and avoid_person / prefer_person ("nie razem
     # na zamknięciu": only shifts of this type count)
     shift_type: str | None = None
-    avoid: bool = False  # shift_type: True = "not this shift type", False = "only this shift type"
+    avoid: bool = False  # shift_type / position: True = "not this one", False = "only this one"
+    positions: frozenset[str] = frozenset()  # position: the position (its ids in every location of the person)
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
     max_shifts: int | None = None  # shifts_limit, in each window (same windows as hours_limit)
     min_days: int | None = None  # want_work: how many of `dates` (None = all of them)
@@ -329,6 +333,7 @@ class Request:
         object.__setattr__(self, "level", RequestLevel(self.level))
         object.__setattr__(self, "manager_priority", ManagerPriority(self.manager_priority))
         object.__setattr__(self, "dates", frozenset(self.dates))
+        object.__setattr__(self, "positions", frozenset(self.positions))
 
     def covers(self, day: date) -> bool:
         return not self.dates or day in self.dates

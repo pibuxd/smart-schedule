@@ -6,6 +6,7 @@ from ninja.errors import HttpError
 from apps.assistant.models import AssistantCommand, AssistantRuleSet, ManagerInstruction
 from apps.rules.services import Row, merge
 from apps.scheduling.models import SchedulePeriod
+from apps.staffing.models import Position
 from apps.tenancy.models import Company, Location
 from engine.rules_catalog import RULES_BY_CODE
 
@@ -195,9 +196,23 @@ def copyable(location, source, target):
         and not readings.is_over(row.data or {}, today)
         and (not (row.data or {}).get("subject_employee") or str(row.data["subject_employee"]) in people)
         and (not (row.data or {}).get("shift_type") or str(row.data["shift_type"]) in shifts)
+        and positions_held(location, row.employee_id, row.data or {})
         and (row.employee_id, repr(row.data)) not in have
     ]
     return rules, instructions
+
+
+def positions_held(location, employee_id, data: dict) -> bool:
+    """A position instruction still makes sense: the person still holds that live position in the location."""
+    wanted = {str(pk) for pk in data.get("positions") or []}
+    if data.get("type") != "stanowisko":
+        return True
+    held = (
+        Position.objects.for_company(location.company_id)
+        .filter(location=location, removed_at__isnull=True, employees__pk=employee_id, pk__in=wanted)
+        .exists()
+    )
+    return bool(wanted) and held
 
 
 def copy_from_previous(location, period_id, rule_codes, instruction_ids, user):

@@ -91,6 +91,8 @@ class MyCalendarOut(Schema):
     days: list[AvailabilityDayOut]
     # Days of this range that cannot be changed: past days and days whose schedule is already arranged.
     locked: list[date]
+    # Of `locked`: days the manager has arranged but not published yet (a draft): "Mój grafik" does not show them.
+    unpublished: list[date] = Field(default_factory=list)
     # The nearest period the manager is collecting availability for (None: no request is open now).
     period: AvailabilityPeriodOut | None
     submitted_at: datetime | None
@@ -371,6 +373,20 @@ def _published_dates(ctx: TenantContext, profile: EmployeeProfile, start: date, 
     )
 
 
+def _unpublished_days(ctx: TenantContext, profile: EmployeeProfile, start: date, end: date) -> set[date]:
+    """Days between `start` and `end` in a schedule of my locations that is arranged but not published yet."""
+    days = set()
+    drafts = ctx.qs(SchedulePeriod).filter(
+        location__in=profile.location_ids(), status=SchedulePeriod.Status.DRAFT, start__lte=end, end__gte=start
+    )
+    for period_start, period_end in drafts.values_list("start", "end"):
+        day = max(period_start, start)
+        while day <= min(period_end, end):
+            days.add(day)
+            day += timedelta(days=1)
+    return days - _published_dates(ctx, profile, start, end)
+
+
 def _locked_days(ctx: TenantContext, profile: EmployeeProfile, start: date, end: date) -> set[date]:
     """Days between `start` and `end` that the employee cannot change any more."""
     today = timezone.localdate()
@@ -413,6 +429,7 @@ def my_calendar(request, company_id: UUID, start: date, end: date):
         end=end,
         days=[_day_out(d) for d in days],
         locked=sorted(_locked_days(ctx, profile, start, end)),
+        unpublished=sorted(_unpublished_days(ctx, profile, max(start, timezone.localdate()), end)),
         period=_period_out(period) if period else None,
         submitted_at=submission.submitted_at if submission else None,
         location_names=[

@@ -75,10 +75,17 @@ def _max_shifts(data: dict) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
+def _positions(data: dict) -> frozenset[str]:
+    """stanowisko: the position's ids (one per location of the person); other types have none."""
+    values = data.get("positions") if data.get("type") == "stanowisko" else None
+    return frozenset(str(v) for v in values) if isinstance(values, list) else frozenset()
+
+
 REQUEST_TYPES = {
     "unikaj_osoby": RequestType.AVOID_PERSON,
     "preferuj_osobe": RequestType.PREFER_PERSON,
     "typ_zmiany": RequestType.SHIFT_TYPE,
+    "stanowisko": RequestType.POSITION,
     "limit_godzin": RequestType.HOURS_LIMIT,
     "limit_zmian": RequestType.SHIFTS_LIMIT,
     "wolne_dni": RequestType.DAYS_OFF,
@@ -117,6 +124,7 @@ def instruction_request(data, employee_id, instruction_id, rank, start, end, nam
         subject_employee=subject,
         shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
         avoid=bool(data.get("avoid", False)),
+        positions=_positions(data),
         max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
         max_shifts=_max_shifts(data),
         weekly_hours=data.get("hours_period") == "week",
@@ -557,6 +565,7 @@ class _Reader:
             subject_employee=subject,
             shift_type=str(data["shift_type"]) if data.get("shift_type") else None,
             avoid=bool(data.get("avoid", False)),
+            positions=_positions(data),
             max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
             max_shifts=_max_shifts(data),
             weekly_hours=data.get("hours_period") == "week",

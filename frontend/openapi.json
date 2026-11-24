@@ -11617,6 +11617,13 @@
             },
             "title": "Months",
             "type": "array"
+          },
+          "preparing": {
+            "items": {
+              "$ref": "#/components/schemas/PreparingOut"
+            },
+            "title": "Preparing",
+            "type": "array"
           }
         },
         "required": [
@@ -11740,6 +11747,28 @@
             "default": false,
             "title": "Can Report",
             "type": "boolean"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
           }
         },
         "required": [
@@ -11757,6 +11786,32 @@
           "coworkers"
         ],
         "title": "MyShiftOut",
+        "type": "object"
+      },
+      "PreparingOut": {
+        "description": "A schedule of one of my locations that the manager has arranged but not published yet.",
+        "properties": {
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_name",
+          "start",
+          "end"
+        ],
+        "title": "PreparingOut",
         "type": "object"
       },
       "WaitingHoursOut": {
@@ -13255,6 +13310,14 @@
               "type": "string"
             },
             "title": "Locked",
+            "type": "array"
+          },
+          "unpublished": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Unpublished",
             "type": "array"
           },
           "period": {

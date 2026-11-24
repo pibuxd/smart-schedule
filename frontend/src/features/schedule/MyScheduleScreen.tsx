@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
-import type { MonthHoursOut, MyScheduleOut, MyShiftOut } from '../../api/generated/model'
+import type { MonthHoursOut, MyScheduleOut, MyShiftOut, PreparingOut } from '../../api/generated/model'
 import { useMySchedule } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Section } from '../../components/ui/field'
@@ -107,6 +107,9 @@ export function MyScheduleScreen({
           Grafik jest opublikowany do {weekdayGenitive(parseDate(data.published_until))} {dayAndMonth(parseDate(data.published_until))}.
         </p>
       )}
+      {(data.preparing ?? []).length > 0 && (
+        <p className="m-0 text-ink-muted">{preparingText(data.preparing ?? [], data.home_location_name)}</p>
+      )}
       <div className="grid gap-2">
         {data.months.map((month) => (
           <MonthTotal key={month.month} month={month} />
@@ -121,6 +124,19 @@ export function MyScheduleScreen({
       />
     </div>
   )
+}
+
+/**
+ * "Grafik od 1 grudnia jest w przygotowaniu": a schedule arranged but not published yet, so its days are locked
+ * in "Kiedy mogę" while this screen shows nothing of it. Another location is named.
+ */
+function preparingText(preparing: PreparingOut[], home: string): string {
+  const parts = preparing.map((p) => {
+    const where = p.location_name === home ? '' : ` w lokalu ${p.location_name}`
+    return `od ${dayAndMonth(parseDate(p.start))}${where}`
+  })
+  const when = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} i ${parts[parts.length - 1]}` : parts[0]
+  return `Grafik ${when} jest w przygotowaniu. Zobaczysz tu swoje zmiany, gdy kierownik go opublikuje.`
 }
 
 /** "Razem w listopadzie" and, once the manager has set rates, the pay for the month's published shifts. */

@@ -494,7 +494,8 @@ export function AssistantPanel({
             dołączone pliki, listy zasad, osób i zmian tego lokalu, a żeby
             odpowiedzieć na
             pytanie, sprawdza w aplikacji to, co Ty widzisz: grafik, godziny,
-            oddane zmiany oraz dyspozycje i prośby pracowników. Nie dostaje
+            stawki i wypłaty, oddane zmiany oraz dyspozycje i prośby
+            pracowników. Nie dostaje
             numerów telefonów i niczego nie zmienia sam. Może się pomylić, więc
             ważne dane sprawdź na ekranie. Pamięta {MEMORY_COUNT} ostatnich
             wiadomości z tego okresu, więc starszą sprawę opisz ponownie. W
