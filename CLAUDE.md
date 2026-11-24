@@ -16,6 +16,7 @@ Scope and requirements: `docs/spec.md`. Technical plan, data model, endpoints, s
 ## Stack
 
 - Backend (`backend/`): Python 3.13, Django + Django Ninja (OpenAPI), PostgreSQL 16, Django sessions, dependencies managed with `uv`.
+  `pypdf` reads text from PDF lists of people (`apps/tenancy/people_list.py`); XLSX and CSV use the standard library.
 - Background jobs: Procrastinate on Postgres (no Redis). Worker = `manage.py procrastinate worker`, same code as the API.
   Save data and defer the job in one `transaction.atomic()` block.
 - Scheduling engine (`backend/engine/`): pure Python, must not import Django. OR-Tools CP-SAT runs only in the worker.
@@ -95,6 +96,11 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   When a failure must leave a trace (attempt counters), raise after the `transaction.atomic()` block, not inside.
 - Login codes: `apps/accounts/login.py`; SMS goes through `settings.SMS_BACKEND` (console by default; tests use
   the `sms_outbox` fixture). Rate limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`.
+- Inviting many people (`apps/tenancy/people_list.py` reads a pasted list or a CSV/XLSX/PDF file without a model;
+  `invitations.check_people` / `invite_people` decide; `Invitation.positions` are given on acceptance). The manager's
+  assistant reads a file too (`assistant-commands/file`, `AssistantCommand.attachment`, text dropped once read) and
+  proposes `invites`; phone numbers reach the model only as `[TEL1]` marks (`people_list.PhoneMask`), and a person who
+  cannot be invited is left out with a note instead of blocking the plan.
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
 - A person can work in several locations of a company: `EmployeeProfile.home_location` (main) plus

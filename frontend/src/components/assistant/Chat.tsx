@@ -108,6 +108,9 @@ export function ChatComposer({
   sendLabel = 'Wyślij wiadomość',
   enterSends = true,
   footer,
+  attachButton,
+  attachment,
+  hasAttachment = false,
 }: {
   text: string
   onChange: (text: string) => void
@@ -121,10 +124,15 @@ export function ChatComposer({
   sendLabel?: string
   enterSends?: boolean
   footer?: ReactNode
+  /** A button before the field (the manager's paperclip), and the chosen file shown above it. */
+  attachButton?: ReactNode
+  attachment?: ReactNode
+  /** A file is chosen: the message may be sent without text. */
+  hasAttachment?: boolean
 }) {
   const ownRef = useRef<HTMLTextAreaElement>(null)
   const ref = inputRef ?? ownRef
-  const canSend = !!text.trim() && !disabled && !sending && !waiting
+  const canSend = (!!text.trim() || hasAttachment) && !disabled && !sending && !waiting
   // No hints under the field (Piotr, 20.11.2026): only an optional footer and the length near the limit.
   const nearLimit = text.length > 800
   useEffect(() => {
@@ -142,12 +150,14 @@ export function ChatComposer({
       }}
       className="grid gap-2"
     >
+      {attachment}
       <div
         className={cn(
           'flex items-end gap-2 rounded-lg border border-line bg-surface p-2 transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft',
           !enterSends && 'flex-col',
         )}
       >
+        {attachButton}
         <textarea
           ref={ref}
           rows={1}

@@ -4,6 +4,9 @@ import {
   Check,
   Users,
   CalendarSearch,
+  FileText,
+  Paperclip,
+  UserPlus,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +18,7 @@ import {
   useDismissAssistantCommand,
   useLocationInstructions,
   useSendAssistantCommand,
+  useSendAssistantFile,
   type assistantHistoryResponse,
 } from "../../api/generated/assistant/assistant";
 import type { AssistantCommandOut } from "../../api/generated/model";
@@ -30,7 +34,15 @@ import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
 import { RunProgress } from "./ArrangeSchedule";
 import { useManager } from "./ManagerContext";
 
+// A list of people takes the model longer to write out than a rule.
 const WAIT_MS = 90_000;
+const FILE_WAIT_MS = 180_000;
+// Same limit as the server (`people_list.MAX_FILE_BYTES`).
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const FILE_TYPES =
+  ".csv,.txt,.tsv,.xlsx,.pdf,text/csv,text/plain,application/pdf";
+const waitFor = (row: AssistantCommandOut) =>
+  row.file_name ? FILE_WAIT_MS : WAIT_MS;
 // The assistant reads this many earlier messages of the chat (backend `context.MAX_CONVERSATION`).
 const MEMORY_COUNT = 10;
 const STARTERS = [
@@ -48,6 +60,11 @@ const STARTERS = [
     icon: CalendarSearch,
     title: "Sprawdź dyspozycje",
     text: "Kto jeszcze nie wysłał dyspozycji?",
+  },
+  {
+    icon: UserPlus,
+    title: "Zaproś ludzi z pliku",
+    text: "",
   },
 ];
 
@@ -79,7 +96,7 @@ export function AssistantPanel({
           result.data.some(
             (row) =>
               row.status === "queued" &&
-              Date.now() - Date.parse(row.created_at) < WAIT_MS,
+              Date.now() - Date.parse(row.created_at) < waitFor(row),
           )
           ? 1500
           : false;
@@ -87,7 +104,13 @@ export function AssistantPanel({
     },
   });
   const send = useSendAssistantCommand();
+  const sendFile = useSendAssistantFile();
+  const sending = send.isPending || sendFile.isPending;
   const [text, setText] = useState(initialText);
+  // A file to send with the next message (a list of people to invite).
+  const [file, setFile] = useState<File | null>(null);
+  const [fileProblem, setFileProblem] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(Date.now);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -101,7 +124,7 @@ export function AssistantPanel({
     0,
     ...rows
       .filter((r) => r.status === "queued")
-      .map((r) => Date.parse(r.created_at) + WAIT_MS),
+      .map((r) => Date.parse(r.created_at) + waitFor(r)),
   );
   const waiting = pendingUntil > now;
   const remembered = new Set(
@@ -145,7 +168,7 @@ export function AssistantPanel({
       cancelAnimationFrame(frame);
       clearTimeout(timer);
     };
-  }, [changeKey, send.isPending]);
+  }, [changeKey, sending]);
 
   const remember = async (row: AssistantCommandOut) => {
     const queryKey = getAssistantHistoryQueryKey(locationId);
@@ -166,21 +189,45 @@ export function AssistantPanel({
     setText(value);
     requestAnimationFrame(() => inputRef.current?.focus());
   };
+  const chooseFile = (chosen: File | undefined) => {
+    setFileProblem(null);
+    if (!chosen) return;
+    if (chosen.size > MAX_FILE_BYTES) {
+      setFileProblem(
+        "Plik jest za duży. Najwyżej 2 MB: podziel listę na mniejsze części.",
+      );
+      return;
+    }
+    setFile(chosen);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
   const submit = () => {
-    if (readOnly || !enabled || send.isPending || waiting || !text.trim())
+    if (readOnly || !enabled || sending || waiting || !(text.trim() || file))
       return;
     follow.current = true;
-    send.mutate(
-      { locationId, data: { text: text.trim(), period_id: periodId } },
-      {
-        onSuccess: async (response) => {
-          if (response.status !== 201) return;
-          await remember(response.data);
-          setText("");
-          requestAnimationFrame(() => inputRef.current?.focus());
-        },
+    const sent = {
+      onSuccess: async (response: { status: number; data: unknown }) => {
+        if (response.status !== 201) return;
+        await remember(response.data as AssistantCommandOut);
+        setText("");
+        setFile(null);
+        requestAnimationFrame(() => inputRef.current?.focus());
       },
-    );
+    };
+    if (file) {
+      sendFile.mutate(
+        {
+          locationId,
+          data: { file, text: text.trim(), period_id: periodId },
+        },
+        sent,
+      );
+    } else {
+      send.mutate(
+        { locationId, data: { text: text.trim(), period_id: periodId } },
+        sent,
+      );
+    }
   };
 
   return (
@@ -220,7 +267,7 @@ export function AssistantPanel({
         {!history.isPending &&
           !history.isError &&
           rows.length === 0 &&
-          !send.isPending && (
+          !sending && (
             <div className="flex min-h-full flex-col justify-center gap-4">
               <div>
                 <h3 className="m-0 text-xl font-semibold tracking-tight">
@@ -237,7 +284,9 @@ export function AssistantPanel({
                     key={title}
                     type="button"
                     disabled={!enabled || readOnly}
-                    onClick={() => draft(text)}
+                    onClick={() =>
+                      text ? draft(text) : fileRef.current?.click()
+                    }
                     className="group flex min-h-(--touch-main) cursor-pointer items-center gap-3 rounded-md border border-grid bg-surface p-3 text-left transition-colors hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Icon
@@ -285,14 +334,17 @@ export function AssistantPanel({
                   </p>
                 )}
               <ChatMessage from="user" date={row.created_at}>
+                {row.file_name && <FileChip name={row.file_name} />}
                 <p className="m-0 whitespace-pre-wrap">{row.text}</p>
               </ChatMessage>
               <ChatMessage from="assistant">
                 <CommandReply
                   data={row}
                   locationId={locationId}
-                  late={now - Date.parse(row.created_at) >= WAIT_MS}
-                  readOnly={readOnly || (!!row.consumed_at && !row.hours_only)}
+                  late={now - Date.parse(row.created_at) >= waitFor(row)}
+                  readOnly={
+                    readOnly || (!!row.consumed_at && !row.outside_agreements)
+                  }
                   expired={now >= Date.parse(row.expires_at)}
                   onChanged={remember}
                   onRetry={() => void history.refetch()}
@@ -301,11 +353,22 @@ export function AssistantPanel({
               </ChatMessage>
             </li>
           ))}
-          {send.isPending && (
+          {sending && (
             <li className="grid gap-5">
               <ChatMessage from="user">
+                {sendFile.isPending && sendFile.variables && (
+                  <FileChip
+                    name={
+                      sendFile.variables.data.file instanceof File
+                        ? sendFile.variables.data.file.name
+                        : "plik"
+                    }
+                  />
+                )}
                 <p className="m-0 whitespace-pre-wrap">
-                  {send.variables?.data.text}
+                  {sendFile.isPending
+                    ? sendFile.variables?.data.text
+                    : send.variables?.data.text}
                 </p>
               </ChatMessage>
               <ChatMessage from="assistant">
@@ -316,12 +379,17 @@ export function AssistantPanel({
         </ol>
       </div>
       <div className="shrink-0 border-t border-grid bg-surface px-4 pt-3 pb-2">
-        {send.isError && (
+        {(send.isError || sendFile.isError) && (
           <div className="mb-3">
             <InlineError>
-              {errorMessage(send.error, NETWORK_PROBLEM)} Tekst pozostał w polu
-              wiadomości.
+              {errorMessage(send.error ?? sendFile.error, NETWORK_PROBLEM)}{" "}
+              Tekst pozostał w polu wiadomości.
             </InlineError>
+          </div>
+        )}
+        {fileProblem && (
+          <div className="mb-3">
+            <InlineError>{fileProblem}</InlineError>
           </div>
         )}
         {instructions.isError && (
@@ -354,17 +422,63 @@ export function AssistantPanel({
             ? `Zasady na ${data.period_label}`
             : "Jeszcze bez okresu. Ustalenia zadziałają, gdy klikniesz „Poproś o dyspozycje”."}
         </p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={FILE_TYPES}
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Plik z listą osób do zaproszenia"
+          onChange={(event) => {
+            chooseFile(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
         <ChatComposer
           text={text}
           onChange={setText}
           onSend={submit}
-          sending={send.isPending}
+          sending={sending}
           waiting={waiting}
           inputRef={inputRef}
           disabled={
             readOnly || !enabled || history.isPending || history.isError
           }
-          placeholder="Zapytaj albo opisz zasadę…"
+          placeholder={
+            file ? "Co zrobić z tym plikiem? (nieobowiązkowo)" : "Zapytaj albo opisz zasadę…"
+          }
+          hasAttachment={!!file}
+          attachment={
+            file && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-grid bg-paper py-1 pr-1 pl-3 text-sm">
+                <span className="flex min-w-0 items-center gap-2">
+                  <FileText size={18} aria-hidden="true" className="shrink-0 text-accent" />
+                  <span className="truncate">{file.name}</span>
+                </span>
+                <Button
+                  variant="quiet"
+                  size="normal"
+                  aria-label={`Usuń plik ${file.name}`}
+                  disabled={sending}
+                  onClick={() => setFile(null)}
+                >
+                  <X size={18} aria-hidden="true" />
+                </Button>
+              </div>
+            )
+          }
+          attachButton={
+            <button
+              type="button"
+              aria-label="Dołącz plik z listą osób"
+              title="Dołącz plik z listą osób (CSV, Excel, PDF)"
+              disabled={readOnly || !enabled || sending}
+              onClick={() => fileRef.current?.click()}
+              className="flex h-(--touch) w-(--touch) shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-accent-soft hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Paperclip size={22} aria-hidden="true" />
+            </button>
+          }
         />
         <Disclosure
           className="text-xs text-ink-muted"
@@ -376,8 +490,9 @@ export function AssistantPanel({
             przydziału.
           </p>
           <p className="mt-0 mb-2">
-            Asystent to zewnętrzna usługa AI. Czyta Twoje wiadomości,
-            listy zasad, osób i zmian tego lokalu, a żeby odpowiedzieć na
+            Asystent to zewnętrzna usługa AI. Czyta Twoje wiadomości i
+            dołączone pliki, listy zasad, osób i zmian tego lokalu, a żeby
+            odpowiedzieć na
             pytanie, sprawdza w aplikacji to, co Ty widzisz: grafik, godziny,
             stawki i wypłaty, oddane zmiany oraz dyspozycje i prośby
             pracowników. Nie dostaje
@@ -448,9 +563,9 @@ function CommandReply({
     );
   const applied = data.status === "applied";
   const dismissed = data.status === "dismissed";
-  // Hours of published shifts do not depend on the period's agreements: publishing does not close such a plan.
+  // Hours and invitations do not depend on the period's agreements: publishing does not close such a plan.
   const closedProposal =
-    data.status === "ready" && !!data.consumed_at && !data.hours_only;
+    data.status === "ready" && !!data.consumed_at && !data.outside_agreements;
   const needsRefresh =
     data.status === "ready" &&
     data.lines.length > 0 &&
@@ -558,6 +673,12 @@ function CommandReply({
               : "Zapisane w ustaleniach. Tam możesz je zmienić albo usunąć."}
         </p>
       )}
+      {applied && data.has_invites && (
+        <p role="status" className="m-0 text-sm text-prefer">
+          Zaproszenia czekają w „Pracownicy”. SMS-a nie wysyłamy: powiedz tym
+          osobom, żeby zalogowały się w Grafikomacie swoim numerem.
+        </p>
+      )}
       {applied && data.run_id && (
         <RunProgress runId={data.run_id} locationId={locationId} compact />
       )}
@@ -602,5 +723,14 @@ function CommandReply({
         </InlineError>
       )}
     </>
+  );
+}
+
+function FileChip({ name }: { name: string }) {
+  return (
+    <span className="mb-1 flex items-center gap-2 text-sm font-semibold">
+      <FileText size={18} aria-hidden="true" className="shrink-0 text-accent" />
+      <span className="truncate">{name}</span>
+    </span>
   );
 }

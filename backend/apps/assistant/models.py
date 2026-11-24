@@ -97,7 +97,10 @@ class AssistantCommand(CompanyOwnedModel):
     )
     text = models.TextField("polecenie", max_length=1000)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
-    # The checked plan: reply, question, rule_changes, new_instructions, remove_instructions, notes.
+    # A file the manager sent with the message: {"name", "text"}. The text (read from the file in the request) is
+    # dropped once the assistant has read it; the name stays for the chat.
+    attachment = models.JSONField("plik", null=True, blank=True)
+    # The checked plan: reply, question, rule_changes, new_instructions, remove_instructions, invites, notes.
     plan = models.JSONField("plan", null=True, blank=True)
     # The assistant's own answer before checking, or {"error": ...}: kept for the superadmin's list of misses.
     assistant_answer = models.JSONField("odpowiedź asystenta", null=True, blank=True)

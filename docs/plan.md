@@ -281,7 +281,7 @@ Pracownik (telefon)
 1. Logowanie: numer telefonu → kod (duże pola, automatyczne przejście, "wyślij ponownie" z odliczaniem).
 2. Zaproszenie: nazwa firmy i lokalu, Akceptuj / Odrzuć.
 3. Mój grafik: lista najbliższych zmian (data, lokal, godziny, stanowisko, kto ze mną), suma godzin i wypłata brutto, "Oddaj zmianę", sekcja "Zmiany do wzięcia" z przyciskiem "Biorę".
-4. Kiedy mogę: kalendarz okresu z czterema stanami (kolor + ikona + wzór, podpis na przyciskach pędzla), wybór stanu "pędzlem" na dole, potem stuknięcie lub przeciągnięcie po dniach, "Powtarzaj co tydzień do…", "Skopiuj z poprzedniego miesiąca", termin zgłoszenia; na dole "Coś jeszcze?" na prośbę tekstem i pokazanie, jak system ją zrozumiał.
+4. Kiedy mogę: kalendarz okresu z czterema stanami (kolor + ikona + wzór, podpis na przyciskach pędzla), wybór stanu "pędzlem" na dole, potem stuknięcie w dzień (myszką także przeciągnięcie po dniach; palcem przesunięcie przewija ekran, decyzja Piotra z 23.11.2026), "Powtarzaj co tydzień do…", "Skopiuj z poprzedniego miesiąca", termin zgłoszenia; na dole "Coś jeszcze?" na prośbę tekstem i pokazanie, jak system ją zrozumiał.
 
 Menedżer (komputer)
 1. Rejestracja firmy i kod dostępu (także później w Ustawieniach → Subskrypcja).
@@ -404,7 +404,7 @@ Założenia:
 
 - Kierunek wizualny "kartka z zaplecza" zaakceptowany przez Piotra 12.11.2026 (podgląd: https://claude.ai/artifact/1oXFa1qyj6754qT9KLoKrx). Tokeny: `frontend/src/styles/tokens.css` (blok `@theme` Tailwinda z wyłączonymi domyślnymi kolorami, rozmiarami pisma, promieniami i cieniami, więc klasy spoza tokenów nie istnieją). Krój Atkinson Hyperlegible Next z paczki `@fontsource-variable` (bez zapytań do Google Fonts). Komponenty w stylu shadcn/ui: `src/components/ui/` (przycisk na `class-variance-authority`, panel na Radix Dialog).
 - Ekrany: `/logowanie` (numer, potem kod: sześć pól, wpisanie szóstej cyfry loguje, odliczanie do ponownego wysłania), `/zaproszenia`, `/grafik` ("Mój grafik"), `/kiedy-moge`. Ekrany pracownika mają zakładki na dole na telefonie i u góry na komputerze, kolumna do 560 px. `/` kieruje do logowania, zaproszeń albo grafiku.
-- "Kiedy mogę": pasek stanów ("pędzel") przyklejony do dołu ekranu, przeciąganie po dniach, zapis od razu po każdym ruchu, "Cofnij", "Godziny dnia" (panel z godzinami jednego dnia; otwiera go też stuknięcie w dzień, który już ma wybrany stan, i lista "Dni z godzinami" pod kalendarzem), "Więcej opcji" (powtarzanie co tydzień, kopiowanie z poprzedniego miesiąca), "Gotowe, wysyłam kierownikowi", "Coś jeszcze?" (prośby tekstem, interpretacja w etapie 10).
+- "Kiedy mogę": pasek stanów ("pędzel") przyklejony do dołu ekranu, przeciąganie po dniach (od 23.11.2026 tylko myszką; palcem stuknięcie, a przesunięcie przewija), zapis od razu po każdym ruchu, "Cofnij", "Godziny dnia" (panel z godzinami jednego dnia; otwiera go też stuknięcie w dzień, który już ma wybrany stan, i lista "Dni z godzinami" pod kalendarzem), "Więcej opcji" (powtarzanie co tydzień, kopiowanie z poprzedniego miesiąca), "Gotowe, wysyłam kierownikowi", "Coś jeszcze?" (prośby tekstem, interpretacja w etapie 10).
 - Nowe endpointy pracownika (zawsze z `company_id`, na własnym profilu pracownika w tej firmie; bez profilu 404 z wyjaśnieniem): `GET /me/schedule`, `GET/PUT /me/availability`, `POST /me/availability/pattern`, `POST /me/availability/copy-previous`, `POST /me/availability/submit`, `GET/POST /me/requests`, `DELETE /me/requests/{id}`. `MyInvitationOut` podaje też, kto zaprasza.
 - `manage.py generate_schedule ... --publish` od razu publikuje wynik, żeby na danych demo "Mój grafik" miał co pokazać (publikacja z ekranu menedżera w etapie 8).
 
@@ -1222,7 +1222,7 @@ Model: aplikacja `apps/pay` (migracja `pay.0001`; staffing bez pól stawek).
   dopiero będą, a przy osobie z innymi lokalami „bez innych lokali” pod kwotą. Kwoty `lib/money.ts` (`Intl.NumberFormat`
   pl-PL, PLN).
 - Asystent: ~~`tools.DROPPED_KEYS` usuwa z wyników narzędzi kwoty (uwaga Prelint z 22.11.2026)~~. Od 23.11.2026
-  (Piotr: asystent ma liczyć zarobki, RODO później) kwoty trafiają do modelu, sekcja 40.
+  (Piotr: asystent ma liczyć zarobki, RODO później) kwoty trafiają do modelu, sekcja 41.
 - Dane przykładowe (`seed_demo`) mają stawki stanowisk i dodatek nocny w piekarniach; firmy testowe
   (`seed_test_data`) nie, żeby było widać stan bez stawek.
 
@@ -1391,7 +1391,65 @@ Założenia: tabela `GenerationUsage` miała tylko liczniki ułożeń; ta sama i
 `GenerationRun`, więc usuwamy ją razem z danymi. Linia `GENERATION_MONTHLY_LIMIT=0` w `.env` serwera po wdrożeniu nic
 nie robi i można ją skasować.
 
-## 40. Uwagi z testu pracownika na telefonie (23.11.2026)
+## 40. Zapraszanie wielu osób naraz i plik dla asystenta (23.11.2026)
+
+Prośba Piotra (spec.md, „Zapraszanie wielu osób naraz”): zaprosić wielu pracowników naraz, a asystent ma przyjąć plik
+(PDF, CSV) i wrzucić osoby do aplikacji.
+
+- `apps/tenancy/people_list.py` (bez modelu językowego, nic nie zapisuje): `file_lines(name, data)` czyta plik w
+  pamięci: CSV/TXT/TSV (UTF-8, inaczej Windows-1250 jak z polskiego Excela; separator: tabulator, średnik, pionowa
+  kreska albo przecinek, ten, który ma większość wierszy), XLSX (pierwszy arkusz, biblioteka standardowa: `zipfile`
+  i ElementTree, bez formuł; część XML ponad 20 MB po rozpakowaniu albo z DTD jest odrzucana) i PDF z tekstem
+  (`pypdf`, do 30 stron; skan bez tekstu i PDF z hasłem dostają zdanie dla kierownika). Stary `.xls`, `.docx` i inne
+  dostają 400 z prośbą o CSV, XLSX albo PDF. Limit 2 MB, 40 000 znaków, 400 wierszy.
+  `find_people(rows, positions, locations)`: wiersz nagłówków (pierwszy bez numeru, z co najmniej dwiema znanymi
+  nazwami kolumn albo z „Telefon”) mówi, gdzie są imię, nazwisko, „imię i nazwisko” (albo „nazwisko i imię”), telefon,
+  stanowiska i lokal; wtedy osoba bez numeru zostaje (do uzupełnienia). Bez nagłówka osobą jest tylko wiersz z numerem
+  (pierwszy, który jest polskim numerem, inaczej pierwszy ciąg 7–15 cyfr); z reszty wiersza wypadają nazwy lokali
+  (pełne albo słowo, które ma tylko jeden lokal), stanowisk, e-maile i numer porządkowy, a pierwsze słowo to imię.
+  `PhoneMask` zamienia numery na `[TEL1]`… (daty zostają) i oddaje numer po znaczniku; `without_numbers` daje
+  „[numer]” w historii rozmowy.
+- `Invitation.positions` (M2M do `staffing.Position`, migracja tenancy 0005). `accept_invitation` dodaje osobie
+  stanowiska zaproszenia z tego lokalu, które nie są usunięte. `InvitationIn.position_ids`, `InvitationOut.position_ids`.
+- `apps/tenancy/invitations.py`: `invitation_problem` (już pracuje, już zarządza, oczekujące zaproszenie; wcześniej
+  w `create_invitation`), `check_people(ctx, default, people)` (lokale, którymi kierownik zarządza, numer, kierownika
+  tylko właściciel, powtórka na liście; stanowiska spoza lokalu wypadają) i `invite_people` (jedna transakcja; kto nie
+  przejdzie, wraca z powodem). `short_problem` skraca powody do listy w zdaniu.
+- API: `POST /api/locations/{id}/invitations/read` (multipart: `file` albo `text`; 200 `PeopleListOut` z osobami
+  i ich `problem`, nic nie zapisuje, 400 gdy nikogo nie ma) i `POST /api/locations/{id}/invitations/many`
+  (`{"people": [...]}`, do 300 osób, pracownicy; 200 `InvitedPeopleOut`: `invited` i `skipped` z powodem). Oba tylko
+  dla kierownika lokalu z adresu; `many` z `require_writable`.
+- Asystent: `POST /api/locations/{id}/assistant-commands/file` (multipart `file`, `text`, `period_id`; pusty tekst =
+  „Zaproś osoby z tego pliku.”) czyta plik w żądaniu i zapisuje `AssistantCommand.attachment` = `{"name", "text"}`
+  (migracja assistant 0006). `run_command` ukrywa numery w tekście wiadomości i pliku (`PhoneMask`), woła
+  `llm.plan_command(..., file_text, file_name)` (plik w `<plik>`, `MAX_TOKENS_WITH_FILE` = 20 000) i od razu zostawia
+  w `attachment` tylko nazwę (także przy błędzie, „asystent wyłączony” i przeterminowaniu). Kontekst ma linię „Lokale
+  tego kierownika (do zaproszeń)”. `CommandPlan.invitations` (`PersonToInvite`: imię, nazwisko, znacznik numeru,
+  stanowiska, lokal, `manager`); prompt punkt 5. `check_plan` → `_checked_invites` (`inviter` =
+  `manager_context(command)`, `phones` = maska): znacznik spoza tekstu, lokal spoza listy kierownika, brak numeru i
+  powody z `check_people` dają notatkę „Nie zaproszę: …” zamiast blokady całego planu; nieznane stanowiska notatkę;
+  najwyżej `MAX_INVITES` = 100 osób. Rola kierownika tylko ze znacznikiem z wiadomości: znacznik, który jest tylko
+  w pliku (`PhoneMask.only_in_file`; ten sam numer zapisany inaczej ma jeden znacznik), daje zaproszenie pracownika
+  i notatkę „Z pliku zapraszam tylko pracowników…” (Prelint na #77: „kierownik” w pliku nie może ukryć kierownika
+  w długiej liście). Plan `invites` (lokal, numer E.164, imię, nazwisko, stanowiska, rola), linie
+  „Zaproszę: Anna Kowalska, 512 345 678, Kasa.” (z „(lokal …)”, gdy któraś osoba idzie do innego lokalu) i
+  `INVITES_NOTE` (znika po decyzji). `apply_command` → `_apply_invites` (`invite_people` z uprawnieniami
+  zatwierdzającego; kto w międzyczasie dostał zaproszenie albo zaczął pracować, jest pominięty z notatką).
+- `AssistantCommandOut`: `file_name`, `has_invites`, `outside_agreements` (tylko godziny i zaproszenia: publikacja
+  okresu nie zamyka planu; `can_apply` używa tego zamiast `hours_only`). Historia dla modelu (`command_history`) ma
+  tekst i linie bez numerów i nazwę pliku.
+- Frontend: `features/manager/InviteMany.tsx` (przycisk „Zaproś kilka osób” w nagłówku „Zaproś do lokalu”, arkusz:
+  wklej albo wybierz plik → lista z „Popraw” i „Usuń z listy” → „Zaproś N osób”; podpowiedź „Otwórz asystenta”).
+  Czat kierownika: spinacz w `ChatComposer` (`attachButton`, `attachment`, `hasAttachment`), plik nad polem z „Usuń
+  plik”, nazwa pliku w dymku, czekanie do 3 minut przy pliku, po zatwierdzeniu „Zaproszenia czekają w „Pracownicy””.
+  `mockApi` w testach zapisuje treść `FormData` jako pola.
+
+Założenia: biblioteka `pypdf` (czysty Python) to jedyna nowa zależność, bo PDF-a nie da się przeczytać biblioteką
+standardową; XLSX czytamy bez `openpyxl`. Plik nie jest zapisywany (przy limicie 2 MB Django trzyma go w pamięci). Zapraszanie kierowników
+z ekranu „Zaproś kilka osób” pominięte (zostaje pojedyncze zaproszenie i asystent). Pliki ze skanem (bez tekstu) nie
+są czytane (OCR poza prototypem).
+
+## 41. Uwagi z testu pracownika na telefonie (23.11.2026)
 
 Spec: „Uwagi z testu pracownika na telefonie”.
 

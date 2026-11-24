@@ -33,7 +33,8 @@ import type {
   LocationInstructionsParams,
   PreviousAgreementsOut,
   PreviousAgreementsParams,
-  RevertAgreedRuleParams
+  RevertAgreedRuleParams,
+  SendAssistantFileBody
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -328,6 +329,136 @@ export const useSendAssistantCommand = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getSendAssistantCommandMutationOptions(options), queryClient);
+    }
+    export type sendAssistantFileResponse201 = {
+  data: AssistantCommandOut
+  status: 201
+}
+
+export type sendAssistantFileResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type sendAssistantFileResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type sendAssistantFileResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type sendAssistantFileResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type sendAssistantFileResponse409 = {
+  data: ErrorOut
+  status: 409
+}
+
+export type sendAssistantFileResponse429 = {
+  data: ErrorOut
+  status: 429
+}
+
+export type sendAssistantFileResponseSuccess = (sendAssistantFileResponse201) & {
+  headers: Headers;
+};
+export type sendAssistantFileResponseError = (sendAssistantFileResponse400 | sendAssistantFileResponse402 | sendAssistantFileResponse403 | sendAssistantFileResponse404 | sendAssistantFileResponse409 | sendAssistantFileResponse429) & {
+  headers: Headers;
+};
+
+export type sendAssistantFileResponse = (sendAssistantFileResponseSuccess | sendAssistantFileResponseError)
+
+export const getSendAssistantFileUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/assistant-commands/file`
+}
+
+/**
+ * A message with a file (CSV, XLSX, PDF, text): usually a list of people to invite. The file is read here,
+ * in the request; the assistant gets its text with phone numbers hidden, and only the file's name is kept.
+ * @summary Send Assistant File
+ */
+export const sendAssistantFile = async (locationId: string,
+    sendAssistantFileBody: SendAssistantFileBody, options?: Parameters<typeof apiFetch>[1]): Promise<sendAssistantFileResponse> => {
+    const formData = new FormData();
+formData.append(`file`, sendAssistantFileBody.file);
+if(sendAssistantFileBody.text !== undefined) {
+ formData.append(`text`, sendAssistantFileBody.text);
+ }
+if(sendAssistantFileBody.period_id !== undefined && sendAssistantFileBody.period_id !== null) {
+ formData.append(`period_id`, sendAssistantFileBody.period_id);
+ }
+
+  return apiFetch<sendAssistantFileResponse>(getSendAssistantFileUrl(locationId),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getSendAssistantFileMutationKey = () => ['sendAssistantFile'] as const;
+
+export const getSendAssistantFileMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAssistantFile>>, TError,SendAssistantFileMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendAssistantFile>>, TError,SendAssistantFileMutationVariables, TContext> => {
+
+const mutationKey = getSendAssistantFileMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendAssistantFile>>, SendAssistantFileMutationVariables> = (props) => {
+          const {locationId,data} = props ?? {};
+
+          return  sendAssistantFile(locationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendAssistantFileMutationResult = NonNullable<Awaited<ReturnType<typeof sendAssistantFile>>>
+    export type SendAssistantFileMutationBody = SendAssistantFileBody
+    export type SendAssistantFileMutationError = ErrorOut
+    export type SendAssistantFileMutationVariables = {locationId: string;data: SendAssistantFileBody}
+
+    /**
+ * A message with a file (CSV, XLSX, PDF, text): usually a list of people to invite. The file is read here,
+ * in the request; the assistant gets its text with phone numbers hidden, and only the file's name is kept.
+ * @summary Send Assistant File
+ */
+export const useSendAssistantFile = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAssistantFile>>, TError,SendAssistantFileMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof sendAssistantFile>>,
+        TError,
+        SendAssistantFileMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendAssistantFileMutationOptions(options), queryClient);
     }
     export type assistantCommandResponse200 = {
   data: AssistantCommandOut

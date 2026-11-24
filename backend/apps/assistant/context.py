@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from apps.assistant.models import AssistantCommand
 from apps.availability.models import TextRequest
+from apps.tenancy.people_list import without_numbers
 
 # How many earlier messages of the same chat (and their replies) the assistant reads, however old (Piotr, 20.11.2026).
 MAX_CONVERSATION = 10
@@ -92,11 +93,13 @@ def command_history(command: AssistantCommand) -> str:
         [
             {
                 "sent_at": sent_at(row),
-                "text": row.text,
+                # Phone numbers never reach the model (invitations show them in the plan's lines).
+                "text": without_numbers(row.text),
                 "status": row.status,
                 "reply": (row.plan or {}).get("reply"),
                 "question": (row.plan or {}).get("question"),
-                "lines": (row.plan or {}).get("lines", []),
+                "lines": [without_numbers(line) for line in (row.plan or {}).get("lines", [])],
+                **({"file": row.attachment["name"]} if row.attachment else {}),
             }
             for row in reversed(rows)
         ]

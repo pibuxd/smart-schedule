@@ -18,6 +18,7 @@ import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
 import { prettyPhone } from '../auth/phone'
+import { InviteManyButton } from './InviteMany'
 import { useManager } from './ManagerContext'
 import { OwnRates } from './PayRates'
 import { EXPERIENCE, shifts } from './words'
@@ -62,7 +63,7 @@ export function EmployeesScreen({ locationId }: { locationId: string }) {
         <AddMyself locationId={locationId} employees={list} />
       </Section>
 
-      <InvitationsSection locationId={locationId} />
+      <InvitationsSection locationId={locationId} positions={positions} />
 
       {off.length > 0 && (
         <Section
@@ -460,7 +461,7 @@ function RemoveEmployee({
   )
 }
 
-function InvitationsSection({ locationId }: { locationId: string }) {
+function InvitationsSection({ locationId, positions }: { locationId: string; positions: PositionOut[] }) {
   const { role, readOnly } = useManager()
   const invitations = useLocationInvitations(locationId)
   const invite = useInviteToLocation()
@@ -494,11 +495,13 @@ function InvitationsSection({ locationId }: { locationId: string }) {
     )
   }
   const pending = ((invitations.data?.data as InvitationOut[] | undefined) ?? []).filter((i) => i.status === 'pending')
+  const names = new Map(positions.map((p) => [p.id, p.name]))
 
   return (
     <Section
       title="Zaproś do lokalu"
-      description="Ta osoba zaloguje się kodem z SMS-a i przyjmie zaproszenie."
+      description="Ta osoba zaloguje się kodem z SMS-a i przyjmie zaproszenie. Listę osób wkleisz albo wgrasz w „Zaproś kilka osób”."
+      action={<InviteManyButton locationId={locationId} positions={positions} />}
     >
       <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
         <TextField label="Numer telefonu" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="512 345 678" />
@@ -535,10 +538,15 @@ function InvitationsSection({ locationId }: { locationId: string }) {
           <ul className="m-0 grid list-none gap-2 p-0">
             {pending.map((i) => (
               <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-line bg-surface px-4 py-2">
-                <span>
-                  <b className="tabular-nums">{prettyPhone(i.phone)}</b>
-                  {(i.first_name || i.last_name) && ` ${i.first_name} ${i.last_name}`}
-                  {i.role === 'manager' && ' (kierownik)'}
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>
+                    <b className="tabular-nums">{prettyPhone(i.phone)}</b>
+                    {(i.first_name || i.last_name) && ` ${i.first_name} ${i.last_name}`}
+                    {i.role === 'manager' && ' (kierownik)'}
+                  </span>
+                  {(i.position_ids ?? []).map((id) => (
+                    <Tag key={id}>{names.get(id) ?? 'Stanowisko'}</Tag>
+                  ))}
                 </span>
                 <Button
                   variant="quiet"
