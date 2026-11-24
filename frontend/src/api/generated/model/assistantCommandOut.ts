@@ -9,6 +9,7 @@ import type { AssistantCommandOutStatus } from './assistantCommandOutStatus';
 export interface AssistantCommandOut {
   id: string;
   text: string;
+  file_name: string | null;
   status: AssistantCommandOutStatus;
   reply: string | null;
   question: string | null;
@@ -24,6 +25,8 @@ export interface AssistantCommandOut {
   consumed_at: string | null;
   has_hours: boolean;
   hours_only: boolean;
+  has_invites: boolean;
+  outside_agreements: boolean;
   changes_agreements: boolean;
   arranges: boolean;
   run_id: string | null;

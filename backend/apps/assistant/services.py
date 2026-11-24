@@ -26,8 +26,9 @@ from apps.availability.models import AvailabilityDay, AvailabilityState, TextReq
 from apps.rules.services import NUMBER_PARAMS
 from apps.scheduling.models import SchedulePeriod
 from apps.staffing.models import EmployeeProfile, Position, ShiftType, StaffingRule, works_in_q
+from apps.tenancy import invitations, people_list
 from apps.tenancy.context import TenantContext
-from apps.tenancy.models import Location
+from apps.tenancy.models import Location, Membership, Role
 from engine.rules_catalog import RULES_BY_CODE
 
 logger = logging.getLogger(__name__)
@@ -777,9 +778,12 @@ def fail_stale_messages(now=None) -> int:
         assistant_answer={"error": "stale"},
         updated_at=now,
     )
-    commands = AssistantCommand.objects.filter(  # periodic job over all companies
+    stale = AssistantCommand.objects.filter(  # periodic job over all companies
         status=AssistantCommand.Status.QUEUED, created_at__lt=cutoff
-    ).update(status=AssistantCommand.Status.FAILED, assistant_answer={"error": "stale"})
+    )
+    for row in stale.filter(attachment__has_key="text").only("pk", "attachment"):
+        AssistantCommand.objects.filter(pk=row.pk).update(attachment=drop_file_text(row.attachment))
+    commands = stale.update(status=AssistantCommand.Status.FAILED, assistant_answer={"error": "stale"})
     return requests + commands
 
 
@@ -790,8 +794,11 @@ def _month_start():
     return timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
-def submit_command(ctx: TenantContext, location: Location, text: str, period_id=None) -> AssistantCommand:
-    """Save the command and defer the assistant's job in one transaction (or mark it "assistant is off")."""
+def submit_command(
+    ctx: TenantContext, location: Location, text: str, period_id=None, attachment: dict | None = None
+) -> AssistantCommand:
+    """Save the command and defer the assistant's job in one transaction (or mark it "assistant is off").
+    `attachment`: a file the manager sent, as {"name", "text"} (its text, read in the request)."""
     text = text.strip()
     if not text:
         raise HttpError(400, "Napisz, co ma się zmienić.")
@@ -802,7 +809,12 @@ def submit_command(ctx: TenantContext, location: Location, text: str, period_id=
         agreements.lock_location(location)
         rule_set = agreements.for_command(location, period_id)
         command = AssistantCommand.objects.for_company(ctx.company).create(
-            company=ctx.company, location=location, text=text, created_by=ctx.user, rule_set=rule_set
+            company=ctx.company,
+            location=location,
+            text=text,
+            created_by=ctx.user,
+            rule_set=rule_set,
+            attachment=attachment,
         )
         if llm.is_enabled():
             from apps.assistant.tasks import plan_assistant_command  # tasks import this module
@@ -810,7 +822,8 @@ def submit_command(ctx: TenantContext, location: Location, text: str, period_id=
             plan_assistant_command.defer(command_id=str(command.pk))
         else:
             command.status = AssistantCommand.Status.UNAVAILABLE
-            command.save(update_fields=["status"])
+            command.attachment = drop_file_text(command.attachment)
+            command.save(update_fields=["status", "attachment"])
     return command
 
 
@@ -842,7 +855,12 @@ def instruction_text(row: ManagerInstruction, names: dict[str, str], shift_names
 
 
 def command_context(
-    location: Location, sc, today: date, instructions: list[ManagerInstruction], reports: list | None = None
+    location: Location,
+    sc,
+    today: date,
+    instructions: list[ManagerInstruction],
+    reports: list | None = None,
+    managed: list[str] | None = None,
 ) -> str:
     people = _people(location)
     names = {pid: label for label, pid in people.items()}
@@ -873,6 +891,7 @@ def command_context(
         f"Okresy grafiku lokalu (ostatnie i przyszłe): {period_words}.",
         f"Osoby: {', '.join(people) or '(brak)'}.",
         f"Stanowiska: {', '.join(position_names.values()) or '(brak)'}.",
+        *([f"Lokale tego kierownika (do zaproszeń): {', '.join(managed)}."] if managed else []),
         f"Zmiany: {_shift_lines(shift_types)}.",
         "",
         "Zasady z katalogu (kolejność = ważność, 1 = najważniejsza):",
@@ -941,21 +960,49 @@ def run_command(command_id: str, today: date | None = None) -> str:
         instructions = _instructions(command.location, command.rule_set)
         # Numbered once: the plan's "report 2" is the report the assistant saw as 2.
         reports = pending_hours(command.location)
+        inviter = manager_context(command)
+        managed = (
+            list(inviter.managed_locations().filter(archived_at__isnull=True).values_list("name", flat=True))
+            if inviter
+            else []
+        )
         context = "\n".join(
             [
                 agreements_line(command.rule_set),
-                command_context(command.location, sc, today, instructions, reports),
+                command_context(command.location, sc, today, instructions, reports, managed),
                 facts.command_history(command),
             ]
         )
+        # The model never sees a phone number: they become marks ([TEL1]…) that the plan turns back into numbers.
+        mask = people_list.PhoneMask()
+        text = mask.hide(command.text)
+        attachment = command.attachment or {}
         with llm.tracking(usage):
-            answer = llm.plan_command(command.text, context, toolbox)
+            if attachment.get("text"):
+                answer = llm.plan_command(
+                    text,
+                    context,
+                    toolbox,
+                    file_text=mask.hide(attachment["text"], file=True),
+                    file_name=attachment.get("name", ""),
+                )
+            else:
+                answer = llm.plan_command(text, context, toolbox)
         raw = answer.model_dump(mode="json")
         period = command.rule_set.period if command.rule_set_id and command.rule_set.period_id else None
         status, plan = (
             AssistantCommand.Status.READY,
             check_plan(
-                command.location, sc, answer, command.text, instructions, period=period, today=today, reports=reports
+                command.location,
+                sc,
+                answer,
+                command.text,
+                instructions,
+                period=period,
+                today=today,
+                reports=reports,
+                inviter=inviter,
+                phones=mask,
             ),
         )
     except llm.AssistantError as exc:
@@ -977,7 +1024,7 @@ def run_command(command_id: str, today: date | None = None) -> str:
     )
     AssistantCommand.objects.for_company(command.company_id).filter(
         pk=command.pk, status=AssistantCommand.Status.QUEUED
-    ).update(status=status, plan=plan, assistant_answer=raw)
+    ).update(status=status, plan=plan, assistant_answer=raw, attachment=drop_file_text(command.attachment))
     return status
 
 
@@ -989,6 +1036,20 @@ class _SystemContext:
 
     def qs(self, model):
         return model.objects.for_company(self.company)
+
+
+def manager_context(command: AssistantCommand) -> TenantContext | None:
+    """The manager who wrote, as they are now (invitations follow their rights at the time of the plan and of the
+    acceptance); None when they are no longer a manager of the company."""
+    if command.created_by_id is None:
+        return None
+    membership = (
+        Membership.objects.for_company(command.company_id)
+        .filter(user_id=command.created_by_id, role__in=[Role.OWNER, Role.MANAGER])
+        .select_related("user", "company")
+        .first()
+    )
+    return TenantContext(company=membership.company, membership=membership) if membership else None
 
 
 def _number_param(code: str) -> str | None:
@@ -1279,13 +1340,16 @@ def check_plan(
     period: SchedulePeriod | None = None,
     today: date | None = None,
     reports: list | None = None,
+    inviter: TenantContext | None = None,
+    phones: people_list.PhoneMask | None = None,
 ) -> dict[str, Any]:
     """Turn the assistant's answer into a plan made only of things that exist in this location.
 
     `lines` say in plain Polish what accepting the plan will do; `notes` say what was left out and warn about
     side effects. An unusable part blocks the whole proposal, including paired removals in corrections.
     `period` is the period of the agreements (None: they wait for the next request for availability).
-    `reports` are the waiting reports of other hours as numbered in the assistant's context.
+    `reports` are the waiting reports of other hours as numbered in the assistant's context. `inviter` is the
+    manager who wrote (who may be invited where) and `phones` the numbers hidden from the assistant.
     """
     from apps.rules.api import RulesIn, _clean_items, _location_preview
 
@@ -1483,6 +1547,9 @@ def check_plan(
     already += hours.already
     rejected = rejected or hours.rejected
     hours_changes, hours_decisions = hours.changes, hours.decisions
+    # A list of people is not one instruction: whoever cannot be invited is left out with a note, the rest stays.
+    invites, invite_lines, invite_notes = _checked_invites(location, answer, inviter, phones)
+    lines += invite_lines
 
     effects: list[str] = []
     if rule_changes:
@@ -1504,13 +1571,16 @@ def check_plan(
             rejected = True
         else:
             lines.append(line)
-    if answer.question and (rule_changes or new_instructions or removed or hours_changes or hours_decisions or arrange):
+    if answer.question and (
+        rule_changes or new_instructions or removed or hours_changes or hours_decisions or arrange or invites
+    ):
         rejected = True  # a clarification must not leave a partial plan available for acceptance
         notes.append("Najpierw odpowiedz na pytanie asystenta. Nie można jeszcze zatwierdzić tego planu.")
     if rejected:
         rule_changes, new_instructions, removed, lines, effects = [], [], [], [], []
         hours_changes, hours_decisions = [], []
         arrange, arrange_note = None, ""
+        invites, invite_notes = [], []
     if new_instructions or removed:
         effects.extend(_personal_effects(sc, location, new_instructions, removed, names, shift_names, period))
     hard = sum(1 for item in _changed_items(items, rule_changes) if item.enabled and item.is_hard)
@@ -1539,9 +1609,14 @@ def check_plan(
         )
     if hours_changes or hours_decisions:
         notes.insert(0, HOURS_NOTE)
+    notes += invite_notes
+    if invites:
+        notes.insert(0, INVITES_NOTE)
     if already and not rejected:
         notes.insert(0, f"To już jest ustawione: {'; '.join(already)}.")
-    changes = bool(rule_changes or new_instructions or removed or hours_changes or hours_decisions or arrange)
+    changes = bool(
+        rule_changes or new_instructions or removed or hours_changes or hours_decisions or arrange or invites
+    )
     reply = answer.reply.strip()[:1500]
     if rejected:
         reply = BLOCKED_REPLY
@@ -1563,9 +1638,155 @@ def check_plan(
         "hours_changes": hours_changes,
         "hours_decisions": hours_decisions,
         "arrange": arrange,
+        "invites": invites,
         "lines": lines,
         "effects": effects,
         "notes": notes,
+    }
+
+
+# ------------------------------------------------------------------------- inviting people (the manager's chat)
+
+# People one plan may invite (a file's list); the rest is left out with a note.
+MAX_INVITES = 100
+INVITES_NOTE = (
+    "Zaproszenia zapiszę po zatwierdzeniu. SMS-a nie wysyłamy: powiedz tym osobom, żeby zalogowały się w Grafikomacie "
+    "swoim numerem, a zobaczą zaproszenie."
+)
+MAX_LISTED_SKIPS = 15
+
+
+def pretty_phone(e164: str) -> str:
+    """+48512345678 → 512 345 678 (as the app shows numbers; non-breaking spaces keep it on one line)."""
+    digits = e164.removeprefix("+48")
+    return "\u00a0".join(digits[i : i + 3] for i in range(0, len(digits), 3)) if len(digits) == 9 else e164
+
+
+def _person_words(first: str, last: str) -> str:
+    return f"{first} {last}".strip() or "Osoba bez imienia"
+
+
+def _checked_invites(
+    location: Location,
+    answer: llm.CommandPlan,
+    inviter: TenantContext | None,
+    phones: people_list.PhoneMask | None,
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    """(invitations of the plan, their lines, notes about the people left out)."""
+    rows = answer.invitations
+    if not rows:
+        return [], [], []
+    if inviter is None:
+        return [], [], ["Zapraszać ludzi może tylko kierownik lokalu."]
+    managed = {loc.name: loc for loc in inviter.managed_locations().filter(archived_at__isnull=True)}
+    people, unknown, as_employees = [], [], []
+    for row in rows[:MAX_INVITES]:
+        target = location
+        if row.location:
+            target = managed.get(people_list._match(row.location, {name: name for name in managed}) or "")
+        positions = {}
+        if target is not None:
+            positions = {
+                p.name: p.pk
+                for p in Position.objects.for_company(location.company_id).filter(
+                    location=target, removed_at__isnull=True
+                )
+            }
+        position_ids, missing = [], []
+        for name in row.positions[:10]:
+            found = people_list._match(name, positions)
+            if found is None:
+                missing.append(name.strip()[:60])
+            elif found not in position_ids:
+                position_ids.append(found)
+        raw = phones.number(row.phone) if phones and row.phone else None
+        # A manager only from the owner's own words: a file's "kierownik" (often a shift leader) or a planted line
+        # must not hide a manager in a long list (Prelint on #77).
+        demoted = bool(row.manager and raw and phones.only_in_file(row.phone))
+        role = Role.MANAGER if row.manager and not demoted else Role.EMPLOYEE
+        person = invitations.Person(
+            phone=raw or "",
+            first_name=row.first_name.strip()[:80],
+            last_name=row.last_name.strip()[:120],
+            position_ids=position_ids,
+            location_id=target.pk if target else location.pk,
+            role=role,
+        )
+        if target is None:
+            person.problem = f"nie ma lokalu „{row.location.strip()[:60]}”"
+        elif row.phone and raw is None:
+            person.problem = "numeru nie ma w Twojej wiadomości ani w pliku"
+        people.append((person, missing))
+        if demoted:
+            as_employees.append(person)
+    to_check = [person for person, _ in people if person.problem is None]
+    invitations.check_people(inviter, location, to_check)
+    invites, lines, skipped = [], [], []
+    several = any(person.problem is None and person.location.pk != location.pk for person, _ in people)
+    for person, missing in people:
+        name = _person_words(person.first_name, person.last_name)
+        if person.problem is not None:
+            skipped.append(f"{name} ({invitations.short_problem(person.problem)})")
+            continue
+        invites.append(
+            {
+                "location_id": str(person.location.pk),
+                "phone": person.phone_e164,
+                "first_name": person.first_name,
+                "last_name": person.last_name,
+                "position_ids": [str(pk) for pk in person.position_ids],
+                "role": person.role,
+            }
+        )
+        names = {pk: label for label, pk in _position_names(person.location).items()}
+        parts = [name, pretty_phone(person.phone_e164)]
+        chosen = [names[pk] for pk in person.position_ids if pk in names]
+        if chosen:
+            parts.append(", ".join(chosen))
+        if person.role == Role.MANAGER:
+            parts.append("kierownik")
+        line = "Zaproszę: " + ", ".join(parts)
+        if several:
+            line += f" (lokal {person.location.name})"
+        lines.append(line + ".")
+        if missing:
+            unknown.append(f"{name}: {', '.join(missing)}")
+    notes = []
+    demoted = [_person_words(p.first_name, p.last_name) for p in as_employees if p.problem is None]
+    if demoted:
+        hint = (
+            " Kierownika zaprosisz w „Pracownicy” albo podając mi jego numer w wiadomości."
+            if inviter.role == Role.OWNER
+            else ""
+        )
+        notes.append(
+            "Z pliku zapraszam tylko pracowników, więc jako pracownika zaproszę: "
+            + ", ".join(demoted[:MAX_LISTED_SKIPS])
+            + "."
+            + hint
+        )
+    if skipped:
+        listed = "; ".join(skipped[:MAX_LISTED_SKIPS])
+        more = f" i {len(skipped) - MAX_LISTED_SKIPS} innych" if len(skipped) > MAX_LISTED_SKIPS else ""
+        notes.append(f"Nie zaproszę: {listed}{more}.")
+    if unknown:
+        notes.append(
+            "Tych stanowisk nie ma w lokalu, więc ich nie ustawię: "
+            + "; ".join(unknown[:MAX_LISTED_SKIPS])
+            + ". Dodasz je w „Ustawieniach lokalu”, a osobom ustawisz w „Pracownicy”."
+        )
+    if len(rows) > MAX_INVITES:
+        notes.append(
+            f"Naraz zapraszam najwyżej {MAX_INVITES} osób. Resztę listy wyślij w kolejnej wiadomości albo zaproś "
+            "w „Pracownicy” („Zaproś kilka osób”)."
+        )
+    return invites, lines, notes
+
+
+def _position_names(location: Location) -> dict[str, Any]:
+    return {
+        p.name: p.pk
+        for p in Position.objects.for_company(location.company_id).filter(location=location, removed_at__isnull=True)
     }
 
 
@@ -1649,7 +1870,18 @@ def _changed_items(items: list, changes: list[dict[str, Any]]) -> list:
 
 
 def has_changes(plan: dict[str, Any] | None) -> bool:
-    return needs_rule_set(plan) or has_hours(plan) or arranges(plan)
+    return needs_rule_set(plan) or has_hours(plan) or arranges(plan) or has_invites(plan)
+
+
+def has_invites(plan: dict[str, Any] | None) -> bool:
+    """The plan invites people (saved at once on acceptance, whatever the period)."""
+    return bool((plan or {}).get("invites"))
+
+
+def outside_agreements(plan: dict[str, Any] | None) -> bool:
+    """Only hours and invitations: the plan does not depend on the period's agreements, so publishing the period's
+    schedule does not close it."""
+    return (has_hours(plan) or has_invites(plan)) and not needs_rule_set(plan) and not arranges(plan)
 
 
 def arranges(plan: dict[str, Any] | None) -> bool:
@@ -1686,11 +1918,46 @@ def apply_command(ctx: TenantContext, command: AssistantCommand) -> None:
         _apply_hours(ctx, location, plan)
         if arranges(plan):
             locked.generation_run = _apply_arrange(ctx, locked, location, plan["arrange"])
+        if has_invites(plan):
+            left_out = _apply_invites(ctx, location, plan)
+            if left_out:
+                locked.plan = {**plan, "notes": [*(plan.get("notes") or []), left_out]}
         locked.status = AssistantCommand.Status.APPLIED
         locked.decided_at = timezone.now()
-        locked.save(update_fields=["status", "decided_at", "generation_run"])
+        locked.save(update_fields=["status", "decided_at", "generation_run", "plan"])
     command.status, command.decided_at = locked.status, locked.decided_at
-    command.generation_run = locked.generation_run
+    command.generation_run, command.plan = locked.generation_run, locked.plan
+
+
+def drop_file_text(attachment: dict | None) -> dict | None:
+    """Once the assistant has read the file, only its name stays: the plan holds what it found, and the file may
+    hold more than the list (addresses, PESEL)."""
+    return {"name": attachment.get("name", "")} if attachment else attachment
+
+
+def _apply_invites(ctx: TenantContext, location: Location, plan: dict[str, Any]) -> str:
+    """Invite the plan's people (the manager's rights now). Who cannot be invited any more is left out, the rest is
+    saved: the returned note names them ("" when everyone was invited)."""
+    people = [
+        invitations.Person(
+            phone=entry["phone"],
+            first_name=entry.get("first_name", ""),
+            last_name=entry.get("last_name", ""),
+            position_ids=entry.get("position_ids") or [],
+            location_id=entry.get("location_id"),
+            role=entry.get("role", Role.EMPLOYEE),
+        )
+        for entry in plan.get("invites") or []
+    ]
+    _, skipped = invitations.invite_people(ctx, location, people)
+    if not skipped:
+        return ""
+    words = "; ".join(
+        f"{_person_words(p.first_name, p.last_name)} ({invitations.short_problem(p.problem or '')})"
+        for p in skipped[:MAX_LISTED_SKIPS]
+    )
+    more = f" i {len(skipped) - MAX_LISTED_SKIPS} innych" if len(skipped) > MAX_LISTED_SKIPS else ""
+    return f"Tych osób nie zaprosiłem, bo w międzyczasie coś się zmieniło: {words}{more}."
 
 
 def _apply_arrange(ctx: TenantContext, command: AssistantCommand, location: Location, entry: dict[str, Any]):

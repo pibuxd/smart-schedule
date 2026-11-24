@@ -123,6 +123,8 @@ class Invitation(CompanyOwnedModel):
         choices=[(Role.MANAGER, Role.MANAGER.label), (Role.EMPLOYEE, Role.EMPLOYEE.label)],
         default=Role.EMPLOYEE,
     )
+    # Positions the person gets in this location on acceptance (employees only), e.g. from a list of people.
+    positions = models.ManyToManyField("staffing.Position", blank=True, related_name="+", verbose_name="stanowiska")
     status = models.CharField(max_length=16, choices=InvitationStatus.choices, default=InvitationStatus.PENDING)
     invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(default=timezone.now)

@@ -600,6 +600,177 @@
         ]
       }
     },
+    "/api/locations/{location_id}/invitations/read": {
+      "post": {
+        "operationId": "read_people_list",
+        "summary": "Read People List",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeopleListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Find people in a pasted list or a file (CSV, XLSX, PDF) for a preview. Nothing is saved, the file neither.\n\nRead without the assistant: a row with a phone number is a person (or a header row says which column is\nwhat). Positions and locations are matched by name; each person says what stands in the way of inviting them.",
+        "tags": [
+          "tenancy"
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "title": "MultiPartBodyParams",
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "default": "",
+                    "title": "Text",
+                    "type": "string"
+                  },
+                  "file": {
+                    "format": "binary",
+                    "title": "File",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations/{location_id}/invitations/many": {
+      "post": {
+        "operationId": "invite_many",
+        "summary": "Invite Many",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitedPeopleOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invite everyone on the list who can be invited (as employees); the others come back with the reason.",
+        "tags": [
+          "tenancy"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeopleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/invitations/{invitation_id}/cancel": {
       "post": {
         "operationId": "cancel_invitation",
@@ -7528,6 +7699,143 @@
         ]
       }
     },
+    "/api/locations/{location_id}/assistant-commands/file": {
+      "post": {
+        "operationId": "send_assistant_file",
+        "summary": "Send Assistant File",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantCommandOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "A message with a file (CSV, XLSX, PDF, text): usually a list of people to invite. The file is read here,\nin the request; the assistant gets its text with phone numbers hidden, and only the file's name is kept.",
+        "tags": [
+          "assistant"
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "title": "File",
+                    "type": "string"
+                  },
+                  "text": {
+                    "default": "",
+                    "title": "Text",
+                    "type": "string"
+                  },
+                  "period_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Period Id"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "title": "MultiPartBodyParams",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/assistant-commands/{command_id}": {
       "get": {
         "operationId": "assistant_command",
@@ -9833,6 +10141,14 @@
             "title": "Status",
             "type": "string"
           },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Position Ids",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -9859,6 +10175,7 @@
           "last_name",
           "role",
           "status",
+          "position_ids",
           "created_at",
           "decided_at"
         ],
@@ -9892,12 +10209,188 @@
             "maxLength": 120,
             "title": "Last Name",
             "type": "string"
+          },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Position Ids",
+            "type": "array"
           }
         },
         "required": [
           "phone"
         ],
         "title": "InvitationIn",
+        "type": "object"
+      },
+      "ListedPersonOut": {
+        "properties": {
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "first_name": {
+            "title": "First Name",
+            "type": "string"
+          },
+          "last_name": {
+            "title": "Last Name",
+            "type": "string"
+          },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Position Ids",
+            "type": "array"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "unknown_positions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unknown Positions",
+            "type": "array"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          }
+        },
+        "required": [
+          "phone",
+          "first_name",
+          "last_name",
+          "position_ids",
+          "location_id",
+          "unknown_positions",
+          "problem"
+        ],
+        "title": "ListedPersonOut",
+        "type": "object"
+      },
+      "PeopleListOut": {
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/ListedPersonOut"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "skipped_lines": {
+            "title": "Skipped Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "people",
+          "skipped_lines"
+        ],
+        "title": "PeopleListOut",
+        "type": "object"
+      },
+      "InvitedPeopleOut": {
+        "properties": {
+          "invited": {
+            "items": {
+              "$ref": "#/components/schemas/InvitationOut"
+            },
+            "title": "Invited",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/ListedPersonOut"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "invited",
+          "skipped"
+        ],
+        "title": "InvitedPeopleOut",
+        "type": "object"
+      },
+      "ListedPersonIn": {
+        "description": "One person of a list to invite (employees). Without `location_id`: the location in the address.",
+        "properties": {
+          "phone": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Phone",
+            "type": "string"
+          },
+          "first_name": {
+            "default": "",
+            "maxLength": 80,
+            "title": "First Name",
+            "type": "string"
+          },
+          "last_name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Last Name",
+            "type": "string"
+          },
+          "position_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Position Ids",
+            "type": "array"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          }
+        },
+        "title": "ListedPersonIn",
+        "type": "object"
+      },
+      "PeopleIn": {
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/ListedPersonIn"
+            },
+            "maxItems": 300,
+            "minItems": 1,
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people"
+        ],
+        "title": "PeopleIn",
         "type": "object"
       },
       "ExperiencedShortOut": {
@@ -15678,6 +16171,17 @@
             "title": "Text",
             "type": "string"
           },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
           "status": {
             "enum": [
               "queued",
@@ -15787,6 +16291,14 @@
             "title": "Hours Only",
             "type": "boolean"
           },
+          "has_invites": {
+            "title": "Has Invites",
+            "type": "boolean"
+          },
+          "outside_agreements": {
+            "title": "Outside Agreements",
+            "type": "boolean"
+          },
           "changes_agreements": {
             "title": "Changes Agreements",
             "type": "boolean"
@@ -15811,6 +16323,7 @@
         "required": [
           "id",
           "text",
+          "file_name",
           "status",
           "reply",
           "question",
@@ -15826,6 +16339,8 @@
           "consumed_at",
           "has_hours",
           "hours_only",
+          "has_invites",
+          "outside_agreements",
           "changes_agreements",
           "arranges",
           "run_id"

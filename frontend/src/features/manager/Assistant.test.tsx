@@ -27,6 +27,9 @@ const command: AssistantCommandOut = {
   consumed_at: null,
   has_hours: false,
   hours_only: false,
+  has_invites: false,
+  outside_agreements: false,
+  file_name: null,
   changes_agreements: true,
   arranges: false,
   run_id: null,
@@ -354,6 +357,7 @@ it("keeps a plan of hours open after the period is published and says where the 
       consumed_at: new Date().toISOString(),
       has_hours: true,
       hours_only: true,
+      outside_agreements: true,
       changes_agreements: false,
     },
   ]);
@@ -408,4 +412,80 @@ it("follows the arranging an accepted plan started, with a link to the new draft
   expect(screen.queryByText(/Zapisane/)).not.toBeInTheDocument();
   expect(await screen.findByRole("link", { name: "Zobacz szkic" }, { timeout: 4000 })).toBeInTheDocument();
   expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/cmd1/apply"))).toBe(true);
+});
+
+it("sends a file with a list of people and shows the invitations to accept", async () => {
+  let rows: AssistantCommandOut[] = [];
+  const calls = mockApi((_method, path, body) => {
+    if (path.endsWith("/instructions")) return [200, instructions()];
+    if (path === "/api/locations/l1/assistant-commands") return [200, rows];
+    if (path === "/api/locations/l1/assistant-commands/file") {
+      const sent = body as { file: File; text: string };
+      rows = [
+        {
+          ...command,
+          id: "cmd9",
+          file_name: sent.file.name,
+          text: sent.text || "Zaproś osoby z tego pliku.",
+          reply: "Znalazłem 2 osoby.",
+          lines: [
+            "Zaproszę: Anna Kowalska, 512 345 678, Kasa.",
+            "Zaproszę: Jan Nowak, 600 100 200.",
+          ],
+          has_invites: true,
+          outside_agreements: true,
+          changes_agreements: false,
+        },
+      ];
+      return [201, rows[0]];
+    }
+    if (path.endsWith("/cmd9/apply")) {
+      rows = [{ ...rows[0], status: "applied", can_apply: false }];
+      return [200, rows[0]];
+    }
+    return [404, { detail: "Nie znaleziono." }];
+  });
+  panel();
+  const file = new File(["Anna Kowalska;512345678"], "lista.csv", {
+    type: "text/csv",
+  });
+  fireEvent.change(
+    await screen.findByLabelText("Plik z listą osób do zaproszenia"),
+    { target: { files: [file] } },
+  );
+  expect(await screen.findByText("lista.csv")).toBeInTheDocument();
+  // A file alone can be sent: the server words the message.
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Wyślij wiadomość" }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Wyślij wiadomość" }));
+
+  expect(
+    await screen.findByText("Zaproszę: Anna Kowalska, 512 345 678, Kasa."),
+  ).toBeInTheDocument();
+  const upload = calls.find((c) => c.url.endsWith("/assistant-commands/file"));
+  expect((upload?.body as { file: File }).file.name).toBe("lista.csv");
+  expect(
+    screen.queryByRole("button", { name: "Usuń plik lista.csv" }),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Zatwierdź zmiany" }));
+  expect(
+    await screen.findByText(/Zaproszenia czekają w „Pracownicy”/),
+  ).toBeInTheDocument();
+});
+
+it("refuses a file over 2 MB before sending", async () => {
+  const calls = chatApi();
+  panel();
+  const big = new File(["x"], "duzy.pdf", { type: "application/pdf" });
+  Object.defineProperty(big, "size", { value: 3 * 1024 * 1024 });
+  fireEvent.change(
+    await screen.findByLabelText("Plik z listą osób do zaproszenia"),
+    { target: { files: [big] } },
+  );
+  expect(await screen.findByText(/Plik jest za duży/)).toBeInTheDocument();
+  expect(calls.some((c) => c.url.endsWith("/file"))).toBe(false);
 });

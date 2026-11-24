@@ -1391,3 +1391,61 @@ limitu.” na ekranie „Dostęp”).
 Założenia: tabela `GenerationUsage` miała tylko liczniki ułożeń; ta sama informacja (z czasem solvera) jest w
 `GenerationRun`, więc usuwamy ją razem z danymi. Linia `GENERATION_MONTHLY_LIMIT=0` w `.env` serwera po wdrożeniu nic
 nie robi i można ją skasować.
+
+## 40. Zapraszanie wielu osób naraz i plik dla asystenta (23.11.2026)
+
+Prośba Piotra (spec.md, „Zapraszanie wielu osób naraz”): zaprosić wielu pracowników naraz, a asystent ma przyjąć plik
+(PDF, CSV) i wrzucić osoby do aplikacji.
+
+- `apps/tenancy/people_list.py` (bez modelu językowego, nic nie zapisuje): `file_lines(name, data)` czyta plik w
+  pamięci: CSV/TXT/TSV (UTF-8, inaczej Windows-1250 jak z polskiego Excela; separator: tabulator, średnik, pionowa
+  kreska albo przecinek, ten, który ma większość wierszy), XLSX (pierwszy arkusz, biblioteka standardowa: `zipfile`
+  i ElementTree, bez formuł; część XML ponad 20 MB po rozpakowaniu albo z DTD jest odrzucana) i PDF z tekstem
+  (`pypdf`, do 30 stron; skan bez tekstu i PDF z hasłem dostają zdanie dla kierownika). Stary `.xls`, `.docx` i inne
+  dostają 400 z prośbą o CSV, XLSX albo PDF. Limit 2 MB, 40 000 znaków, 400 wierszy.
+  `find_people(rows, positions, locations)`: wiersz nagłówków (pierwszy bez numeru, z co najmniej dwiema znanymi
+  nazwami kolumn albo z „Telefon”) mówi, gdzie są imię, nazwisko, „imię i nazwisko” (albo „nazwisko i imię”), telefon,
+  stanowiska i lokal; wtedy osoba bez numeru zostaje (do uzupełnienia). Bez nagłówka osobą jest tylko wiersz z numerem
+  (pierwszy, który jest polskim numerem, inaczej pierwszy ciąg 7–15 cyfr); z reszty wiersza wypadają nazwy lokali
+  (pełne albo słowo, które ma tylko jeden lokal), stanowisk, e-maile i numer porządkowy, a pierwsze słowo to imię.
+  `PhoneMask` zamienia numery na `[TEL1]`… (daty zostają) i oddaje numer po znaczniku; `without_numbers` daje
+  „[numer]” w historii rozmowy.
+- `Invitation.positions` (M2M do `staffing.Position`, migracja tenancy 0005). `accept_invitation` dodaje osobie
+  stanowiska zaproszenia z tego lokalu, które nie są usunięte. `InvitationIn.position_ids`, `InvitationOut.position_ids`.
+- `apps/tenancy/invitations.py`: `invitation_problem` (już pracuje, już zarządza, oczekujące zaproszenie; wcześniej
+  w `create_invitation`), `check_people(ctx, default, people)` (lokale, którymi kierownik zarządza, numer, kierownika
+  tylko właściciel, powtórka na liście; stanowiska spoza lokalu wypadają) i `invite_people` (jedna transakcja; kto nie
+  przejdzie, wraca z powodem). `short_problem` skraca powody do listy w zdaniu.
+- API: `POST /api/locations/{id}/invitations/read` (multipart: `file` albo `text`; 200 `PeopleListOut` z osobami
+  i ich `problem`, nic nie zapisuje, 400 gdy nikogo nie ma) i `POST /api/locations/{id}/invitations/many`
+  (`{"people": [...]}`, do 300 osób, pracownicy; 200 `InvitedPeopleOut`: `invited` i `skipped` z powodem). Oba tylko
+  dla kierownika lokalu z adresu; `many` z `require_writable`.
+- Asystent: `POST /api/locations/{id}/assistant-commands/file` (multipart `file`, `text`, `period_id`; pusty tekst =
+  „Zaproś osoby z tego pliku.”) czyta plik w żądaniu i zapisuje `AssistantCommand.attachment` = `{"name", "text"}`
+  (migracja assistant 0006). `run_command` ukrywa numery w tekście wiadomości i pliku (`PhoneMask`), woła
+  `llm.plan_command(..., file_text, file_name)` (plik w `<plik>`, `MAX_TOKENS_WITH_FILE` = 20 000) i od razu zostawia
+  w `attachment` tylko nazwę (także przy błędzie, „asystent wyłączony” i przeterminowaniu). Kontekst ma linię „Lokale
+  tego kierownika (do zaproszeń)”. `CommandPlan.invitations` (`PersonToInvite`: imię, nazwisko, znacznik numeru,
+  stanowiska, lokal, `manager`); prompt punkt 5. `check_plan` → `_checked_invites` (`inviter` =
+  `manager_context(command)`, `phones` = maska): znacznik spoza tekstu, lokal spoza listy kierownika, brak numeru i
+  powody z `check_people` dają notatkę „Nie zaproszę: …” zamiast blokady całego planu; nieznane stanowiska notatkę;
+  najwyżej `MAX_INVITES` = 100 osób. Rola kierownika tylko ze znacznikiem z wiadomości: znacznik, który jest tylko
+  w pliku (`PhoneMask.only_in_file`; ten sam numer zapisany inaczej ma jeden znacznik), daje zaproszenie pracownika
+  i notatkę „Z pliku zapraszam tylko pracowników…” (Prelint na #77: „kierownik” w pliku nie może ukryć kierownika
+  w długiej liście). Plan `invites` (lokal, numer E.164, imię, nazwisko, stanowiska, rola), linie
+  „Zaproszę: Anna Kowalska, 512 345 678, Kasa.” (z „(lokal …)”, gdy któraś osoba idzie do innego lokalu) i
+  `INVITES_NOTE` (znika po decyzji). `apply_command` → `_apply_invites` (`invite_people` z uprawnieniami
+  zatwierdzającego; kto w międzyczasie dostał zaproszenie albo zaczął pracować, jest pominięty z notatką).
+- `AssistantCommandOut`: `file_name`, `has_invites`, `outside_agreements` (tylko godziny i zaproszenia: publikacja
+  okresu nie zamyka planu; `can_apply` używa tego zamiast `hours_only`). Historia dla modelu (`command_history`) ma
+  tekst i linie bez numerów i nazwę pliku.
+- Frontend: `features/manager/InviteMany.tsx` (przycisk „Zaproś kilka osób” w nagłówku „Zaproś do lokalu”, arkusz:
+  wklej albo wybierz plik → lista z „Popraw” i „Usuń z listy” → „Zaproś N osób”; podpowiedź „Otwórz asystenta”).
+  Czat kierownika: spinacz w `ChatComposer` (`attachButton`, `attachment`, `hasAttachment`), plik nad polem z „Usuń
+  plik”, nazwa pliku w dymku, czekanie do 3 minut przy pliku, po zatwierdzeniu „Zaproszenia czekają w „Pracownicy””.
+  `mockApi` w testach zapisuje treść `FormData` jako pola.
+
+Założenia: biblioteka `pypdf` (czysty Python) to jedyna nowa zależność, bo PDF-a nie da się przeczytać biblioteką
+standardową; XLSX czytamy bez `openpyxl`. Plik nie jest zapisywany (przy limicie 2 MB Django trzyma go w pamięci). Zapraszanie kierowników
+z ekranu „Zaproś kilka osób” pominięte (zostaje pojedyncze zaproszenie i asystent). Pliki ze skanem (bez tekstu) nie
+są czytane (OCR poza prototypem).

@@ -12,6 +12,7 @@ dependencies = [
     "phonenumbers>=9.0.43",
     "procrastinate[django]>=3.11.0",
     "psycopg[binary]>=3.3.9",
+    "pypdf>=7.1.1",
 ]
 
 [dependency-groups]

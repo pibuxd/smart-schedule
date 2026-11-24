@@ -31,12 +31,16 @@ import type {
   GroupOut,
   InvitationIn,
   InvitationOut,
+  InvitedPeopleOut,
   LocationIn,
   LocationOut,
   LocationUpdateIn,
   ManagerOverviewOut,
   ManagerOverviewParams,
-  MyInvitationOut
+  MyInvitationOut,
+  PeopleIn,
+  PeopleListOut,
+  ReadPeopleListBody
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -753,6 +757,243 @@ export const useInviteToLocation = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getInviteToLocationMutationOptions(options), queryClient);
+    }
+    export type readPeopleListResponse200 = {
+  data: PeopleListOut
+  status: 200
+}
+
+export type readPeopleListResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type readPeopleListResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type readPeopleListResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type readPeopleListResponseSuccess = (readPeopleListResponse200) & {
+  headers: Headers;
+};
+export type readPeopleListResponseError = (readPeopleListResponse400 | readPeopleListResponse403 | readPeopleListResponse404) & {
+  headers: Headers;
+};
+
+export type readPeopleListResponse = (readPeopleListResponseSuccess | readPeopleListResponseError)
+
+export const getReadPeopleListUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/invitations/read`
+}
+
+/**
+ * Find people in a pasted list or a file (CSV, XLSX, PDF) for a preview. Nothing is saved, the file neither.
+ *
+ * Read without the assistant: a row with a phone number is a person (or a header row says which column is
+ * what). Positions and locations are matched by name; each person says what stands in the way of inviting them.
+ * @summary Read People List
+ */
+export const readPeopleList = async (locationId: string,
+    readPeopleListBody: ReadPeopleListBody, options?: Parameters<typeof apiFetch>[1]): Promise<readPeopleListResponse> => {
+    const formData = new FormData();
+if(readPeopleListBody.text !== undefined) {
+ formData.append(`text`, readPeopleListBody.text);
+ }
+if(readPeopleListBody.file !== undefined) {
+ formData.append(`file`, readPeopleListBody.file);
+ }
+
+  return apiFetch<readPeopleListResponse>(getReadPeopleListUrl(locationId),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getReadPeopleListMutationKey = () => ['readPeopleList'] as const;
+
+export const getReadPeopleListMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readPeopleList>>, TError,ReadPeopleListMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof readPeopleList>>, TError,ReadPeopleListMutationVariables, TContext> => {
+
+const mutationKey = getReadPeopleListMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof readPeopleList>>, ReadPeopleListMutationVariables> = (props) => {
+          const {locationId,data} = props ?? {};
+
+          return  readPeopleList(locationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReadPeopleListMutationResult = NonNullable<Awaited<ReturnType<typeof readPeopleList>>>
+    export type ReadPeopleListMutationBody = ReadPeopleListBody
+    export type ReadPeopleListMutationError = ErrorOut
+    export type ReadPeopleListMutationVariables = {locationId: string;data: ReadPeopleListBody}
+
+    /**
+ * Find people in a pasted list or a file (CSV, XLSX, PDF) for a preview. Nothing is saved, the file neither.
+ *
+ * Read without the assistant: a row with a phone number is a person (or a header row says which column is
+ * what). Positions and locations are matched by name; each person says what stands in the way of inviting them.
+ * @summary Read People List
+ */
+export const useReadPeopleList = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readPeopleList>>, TError,ReadPeopleListMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof readPeopleList>>,
+        TError,
+        ReadPeopleListMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReadPeopleListMutationOptions(options), queryClient);
+    }
+    export type inviteManyResponse200 = {
+  data: InvitedPeopleOut
+  status: 200
+}
+
+export type inviteManyResponse402 = {
+  data: ErrorOut
+  status: 402
+}
+
+export type inviteManyResponse403 = {
+  data: ErrorOut
+  status: 403
+}
+
+export type inviteManyResponse404 = {
+  data: ErrorOut
+  status: 404
+}
+
+export type inviteManyResponseSuccess = (inviteManyResponse200) & {
+  headers: Headers;
+};
+export type inviteManyResponseError = (inviteManyResponse402 | inviteManyResponse403 | inviteManyResponse404) & {
+  headers: Headers;
+};
+
+export type inviteManyResponse = (inviteManyResponseSuccess | inviteManyResponseError)
+
+export const getInviteManyUrl = (locationId: string,) => {
+
+
+
+
+  return `/api/locations/${locationId}/invitations/many`
+}
+
+/**
+ * Invite everyone on the list who can be invited (as employees); the others come back with the reason.
+ * @summary Invite Many
+ */
+export const inviteMany = async (locationId: string,
+    peopleIn: PeopleIn, options?: Parameters<typeof apiFetch>[1]): Promise<inviteManyResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<inviteManyResponse>(getInviteManyUrl(locationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(peopleIn)
+  }
+);}
+
+
+
+
+
+export const getInviteManyMutationKey = () => ['inviteMany'] as const;
+
+export const getInviteManyMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteMany>>, TError,InviteManyMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof inviteMany>>, TError,InviteManyMutationVariables, TContext> => {
+
+const mutationKey = getInviteManyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof inviteMany>>, InviteManyMutationVariables> = (props) => {
+          const {locationId,data} = props ?? {};
+
+          return  inviteMany(locationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InviteManyMutationResult = NonNullable<Awaited<ReturnType<typeof inviteMany>>>
+    export type InviteManyMutationBody = PeopleIn
+    export type InviteManyMutationError = ErrorOut
+    export type InviteManyMutationVariables = {locationId: string;data: PeopleIn}
+
+    /**
+ * Invite everyone on the list who can be invited (as employees); the others come back with the reason.
+ * @summary Invite Many
+ */
+export const useInviteMany = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteMany>>, TError,InviteManyMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof inviteMany>>,
+        TError,
+        InviteManyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getInviteManyMutationOptions(options), queryClient);
     }
     export type cancelInvitationResponse200 = {
   data: InvitationOut
