@@ -1633,7 +1633,9 @@ Spec: „Poprawki po raporcie z testów (25.11.2026)”.
 Założenia: przycisk „Zaznacz „Mogę” do 9:00 i od 11:00” pojawia się także przy dniach, które pracownik sam
 zablokował na cały dzień; to tylko propozycja, kalendarz zmienia się dopiero po naciśnięciu, a zdanie przy przycisku
 mówi, że cały dzień wolny może zostać. Nocna zmiana, która zaczyna się przed północą i kończy rano, nie mieści się w
-„od 11:00” (do północy), więc po migracji „nie mogę 9–11” blokuje też nocki zaczynające się tego dnia; przy
-dzisiejszych danych testowych to bez znaczenia. Odpowiedzi modelu nie da się sprawdzić bez klucza w testach: zachowanie asystenta zmieniły prompt i uwagi
+„od 11:00” (do północy), więc „nie mogę 9–11” (po migracji i po przycisku) blokuje też nocki zaczynające się tego
+dnia; kto je robi, wydłuża przedział w oknie dnia do rana (11:00–6:00). Wybrane świadomie: okno do 9:00 następnego
+dnia byłoby dokładniejsze, ale w kalendarzu czytałoby się jako „11–9”, a prośbę „do 10” i tak dałoby się zapisać
+tylko w przybliżeniu. Odpowiedzi modelu nie da się sprawdzić bez klucza w testach: zachowanie asystenta zmieniły prompt i uwagi
 aplikacji; zapis godzin, przyciski i silnik mają testy. Przyczyny 503 nie ustalono w logach serwera; restart przy
 automatycznym wdrożeniu (co 5 minut z `main`) to najbardziej prawdopodobne wyjaśnienie.

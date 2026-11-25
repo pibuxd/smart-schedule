@@ -20,8 +20,9 @@ def rest_of_day(start, end):
 
 
 def cannot_whole_day(apps, schema_editor):
-    """ "Nie mogę" in some hours becomes "mogę" in the rest of the day (the same for the generator); with two
-    windows, or hours that cover the whole day, it stays "nie mogę" for the whole day."""
+    """ "Nie mogę" in some hours becomes "mogę" in the rest of the day; with two windows, or hours that cover the whole
+    day, it stays "nie mogę" for the whole day. Almost the same for the generator: the window "od 11:00" ends at
+    midnight, so a night shift starting that day (22–6) no longer fits it (it did not overlap "nie mogę 9–11")."""
     Day = apps.get_model("availability", "AvailabilityDay")
     Pattern = apps.get_model("availability", "AvailabilityPattern")
     rows = Day.objects.filter(state="cannot").exclude(from_time__isnull=True, to_time__isnull=True)

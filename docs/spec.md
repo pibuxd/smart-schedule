@@ -13,11 +13,14 @@ sprawdzone z kalendarzem, przejęciami i raportem godzin). Piotr przysłał go b
   mogę« na przedział godzin, zbędna funkcja”). W oknie dnia przy „Nie mogę” nie ma godzin, tylko zdanie, że w części
   dnia zaznacza się „Mogę” i godziny, w których się może; serwer i generator nie przyjmują „nie mogę” z godzinami.
   Zapisane wcześniej „nie mogę” w godzinach zamieniamy na „Mogę” w pozostałych godzinach („nie mogę 9–11” = „mogę do
-  9:00 lub od 11:00”), co dla generatora znaczy to samo; z dwoma przedziałami zostaje „nie mogę” na cały dzień.
+  9:00 lub od 11:00”), co dla generatora znaczy prawie to samo: przedział „od 11:00” kończy się o północy, więc
+  nocka, która zaczyna się tego dnia (np. 22–6), już się w nim nie mieści. Kto pracuje na nocki, wydłuża w oknie
+  dnia przedział do rana (np. 11:00–6:00). Z dwoma przedziałami zostaje „nie mogę” na cały dzień.
 - Niedostępność w części dnia w prośbie: „we wtorki nie mogę od 9:00 do 11:00” nie zamienia się już w całe dni wolne
   (wcześniej pięć wtorków zrobiło się całymi dniami „nie mogę”). Piotr wybrał 25.11.2026: przycisk pod prośbą
   „Zaznacz „Mogę” do 9:00 i od 11:00” zaznacza te dni jako „Mogę” tylko w tych godzinach (dzień z „Chętnie” zostaje
-  „Chętnie” z tymi godzinami), więc generator nie da zmiany, która nachodzi na 9–11. Dni, które kalendarz ma jako
+  „Chętnie” z tymi godzinami), więc generator nie da zmiany, która nachodzi na 9–11 (ani, tak jak wyżej, nocki
+  zaczynającej się tego dnia, dopóki pracownik nie wydłuży przedziału do rana). Dni, które kalendarz ma jako
   „Nie mogę” na cały dzień, ten sam przycisk otwiera na resztę dnia (tak naprawia się wcześniejszy zły odczyt; tekst
   mówi, że cały dzień wolny może zostać). Dni z własnymi godzinami („mogę tylko 14–22”) zostają, jak są. Sama prośba
   nie jest liczona przez generator (to nie życzenie, tylko propozycja dla kalendarza); „wolę nie pracować od 9 do
