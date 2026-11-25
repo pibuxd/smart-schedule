@@ -800,6 +800,8 @@ export const getReadPeopleListUrl = (locationId: string,) => {
  *
  * Read without the assistant: a row with a phone number is a person (or a header row says which column is
  * what). Positions and locations are matched by name; each person says what stands in the way of inviting them.
+ * Numbers without a country code are from `region` (Poland unless the manager picks another country: a list of
+ * a Ukrainian crew, where Excel also drops the leading 0, so 050… arrives as a Polish-looking 50…).
  * @summary Read People List
  */
 export const readPeopleList = async (locationId: string,
@@ -807,6 +809,9 @@ export const readPeopleList = async (locationId: string,
     const formData = new FormData();
 if(readPeopleListBody.text !== undefined) {
  formData.append(`text`, readPeopleListBody.text);
+ }
+if(readPeopleListBody.region !== undefined) {
+ formData.append(`region`, readPeopleListBody.region);
  }
 if(readPeopleListBody.file !== undefined) {
  formData.append(`file`, readPeopleListBody.file);
@@ -864,6 +869,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  *
  * Read without the assistant: a row with a phone number is a person (or a header row says which column is
  * what). Positions and locations are matched by name; each person says what stands in the way of inviting them.
+ * Numbers without a country code are from `region` (Poland unless the manager picks another country: a list of
+ * a Ukrainian crew, where Excel also drops the leading 0, so 050… arrives as a Polish-looking 50…).
  * @summary Read People List
  */
 export const useReadPeopleList = <TError = ErrorOut,
@@ -879,6 +886,11 @@ export const useReadPeopleList = <TError = ErrorOut,
     export type inviteManyResponse200 = {
   data: InvitedPeopleOut
   status: 200
+}
+
+export type inviteManyResponse400 = {
+  data: ErrorOut
+  status: 400
 }
 
 export type inviteManyResponse402 = {
@@ -899,7 +911,7 @@ export type inviteManyResponse404 = {
 export type inviteManyResponseSuccess = (inviteManyResponse200) & {
   headers: Headers;
 };
-export type inviteManyResponseError = (inviteManyResponse402 | inviteManyResponse403 | inviteManyResponse404) & {
+export type inviteManyResponseError = (inviteManyResponse400 | inviteManyResponse402 | inviteManyResponse403 | inviteManyResponse404) & {
   headers: Headers;
 };
 

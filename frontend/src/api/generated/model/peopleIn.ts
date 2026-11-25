@@ -12,4 +12,6 @@ export interface PeopleIn {
      * @maxItems 300
      */
   people: ListedPersonIn[];
+  /** @maxLength 2 */
+  region?: string;
 }

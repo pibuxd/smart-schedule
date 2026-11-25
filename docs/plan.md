@@ -1552,13 +1552,24 @@ Spec: „Logowanie i zaproszenia”. Piotr: „daj możliwość też innych kod�
   IP jak każda inna).
 - Lista osób (`people_list`): `PhoneMask` porównuje numery po E.164 (`_number_key`), więc „+380 600 100 200” i
   „600 100 200” dostają różne znaczniki; wcześniej liczyło się 9 ostatnich cyfr. Numer bez „+”/„00” jest polski, więc
-  np. PESEL nadal nie udaje numeru.
+  np. PESEL nadal nie udaje numeru, chyba że kierownik wybierze nad listą inny kraj (`region` w
+  `invitations/read` i `invitations/many`, sprawdzany przez `accounts.models.is_phone_region`; `find_people`,
+  `check_people`, `invite_people` i `normalize_phone(region=…)` czytają wtedy numery bez kierunkowego jako z tego
+  kraju). Powód (Prelint, poprawka po PR #80): Excel gubi zero na początku, więc ukraińskie 050 123 4567 przychodzi
+  jako 501234567 i bez wyboru kraju przeszłoby po cichu jako polski numer. Asystent czyta pliki jak dotąd (Polska),
+  ale gdy w planie są numery innego kraju obok numerów bez kierunkowego, dodaje uwagę `MIXED_COUNTRIES_NOTE` (sprawdź
+  je albo użyj „Zaproś kilka osób” z wyborem kraju). Podgląd listy mówi „Numery bez kierunkowego czytam jako: …”, gdy
+  kraj nie jest Polską albo gdy na polskiej liście są numery innego kraju.
+- Zaproszenie (`invitations.invitable_phone`, pojedyncze i z listy): zagraniczny numer musi być komórką, chyba że ma
+  już konto. Superadmin dodaje w adminie prawdziwą komórkę, którą dane phonenumbers nazywają inaczej, a wtedy
+  kierownik ją zaprasza i osoba trafia do lokalu.
 - Ekran: `features/auth/PhoneInput.tsx` (kraj przed numerem: widoczny kierunkowy z ikoną strzałki, pod nim zwykła
   lista `select`, więc otwiera się jak każda inna lista telefonu) na „Zaloguj się”, „Załóż firmę” i w „Zaproś do
   lokalu”. `features/auth/phone.ts`: `PHONE_COUNTRIES` (Polska, Ukraina, potem alfabetycznie), `phoneToSend` (numer
   z „+” lub „00” idzie w całości, inaczej kierunkowy wybranego kraju z przodu), `phoneProblem` (9 cyfr dla Polski,
   cały numer dla innych; resztę sprawdza serwer), `prettyPhone` dzieli kierunkowy od reszty dla każdego kraju (lista
-  kierunkowych ITU). Podgląd „Zaproś kilka osób” zostawia zwykłe pole tekstowe (numer z pliku poprawia się z „+”).
+  kierunkowych ITU). „Zaproś kilka osób” ma nad listą „Numery bez kierunkowego są z kraju” (domyślnie Polska); podgląd
+  mówi, jak czyta numery, gdy kraj jest inny, a poprawiony numer wysyła się z tym samym krajem.
   Edycja osoby: numer zmienia nadal tylko administrator (admin Django korzysta z tego samego `normalize_phone`).
 
 Założenia: domyślny kraj zawsze Polska (bez zgadywania z języka przeglądarki); po wysłaniu zaproszenia formularz wraca
@@ -1568,9 +1579,9 @@ Właściciel tylko z numerem zagranicznym: administrator dodaje jego numer w adm
 wyborze sprawdzić cenę i dostarczanie SMS-ów za granicę (np. Ukraina) i zostawić w panelu bramki tylko potrzebne kraje.
 Strona z kodami SMS na serwerze (`deploy/local`, poza repozytorium) czyta wiersze „SMS to +…” z logu; format wiersza
 się nie zmienił, ale jeśli filtruje po „+48”, kody zagranicznych numerów trzeba tam dopisać.
-Do obserwacji w pilotażu (przegląd Prelint PR #80): czy kraje na liście pasują do załóg; czy listy kadrowe mają
-zagraniczne numery bez kierunkowego (wtedy w podglądzie „Zaproś kilka osób” dodać wybór „numery bez kierunkowego są z
-kraju…”); czy ktoś z prawdziwą komórką dostaje „podaj numer komórki” (wtedy superadmin dodaje go w adminie). Przed podłączeniem bramki SMS zdecydować o ochronie kosztów: lista krajów w panelu bramki, ewentualnie
+Do obserwacji w pilotażu (przegląd Prelint PR #80): czy kraje na liście pasują do załóg; czy listy kadrowe mieszają
+numery polskie i zagraniczne bez kierunkowego (wybór kraju dotyczy całej listy, resztę poprawia się z „+”); czy ktoś z
+prawdziwą komórką dostaje „podaj numer komórki” (wtedy superadmin dodaje go w adminie, a kierownik zaprasza). Przed podłączeniem bramki SMS zdecydować o ochronie kosztów: lista krajów w panelu bramki, ewentualnie
 dzienny limit zaproszeń na numery zagraniczne na firmę.
 
 ## 44. Poprawki po raporcie z testów (25.11.2026)

@@ -7,5 +7,6 @@
 
 export type ReadPeopleListBody = {
   text?: string;
+  region?: string;
   file?: Blob | File;
 };

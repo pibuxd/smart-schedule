@@ -79,13 +79,16 @@ def make_xlsx(rows: list[list[object]]) -> bytes:
     return out.getvalue()
 
 
-def read(api, location, *, text=None, file=None):
+def read(api, location, *, text=None, file=None, region=None):
     data = {"text": text} if text is not None else {"file": file}
+    if region:
+        data["region"] = region
     return api.client.post(f"/api/locations/{location.id}/invitations/read", data)
 
 
-def invite_many(api, location, people):
-    return api.post(f"/api/locations/{location.id}/invitations/many", {"people": people})
+def invite_many(api, location, people, region=None):
+    body = {"people": people, **({"region": region} if region else {})}
+    return api.post(f"/api/locations/{location.id}/invitations/many", body)
 
 
 # --- reading a list -------------------------------------------------------------------------------------
@@ -144,6 +147,25 @@ def test_numbers_from_other_countries_are_read_with_their_code(api, a):
     assert people[0]["problem"] is None and people[1]["problem"] is None
     # Without its code the number is not one: the manager adds +380 in the preview.
     assert people[2]["problem"] == WRONG_PHONE
+
+
+def test_a_list_from_another_country_reads_numbers_without_a_code_from_there(api, a):
+    api.login(a["manager"])
+    # Excel drops the leading 0, so 050 123 4567 often arrives as 501234567: Polish-looking, but Ukrainian here.
+    text = "Olena Shevchenko 501234567\nTaras Bondar 067 123 4567\nJan Nowak +48 600 100 200\n"
+
+    people = read(api, a["location"], text=text, region="UA").json()["people"]
+
+    assert [(p["first_name"], p["phone"], p["problem"]) for p in people] == [
+        ("Olena", "+380501234567", None),
+        ("Taras", "+380671234567", None),
+        ("Jan", "+48600100200", None),
+    ]
+    # A number corrected in the preview is read the same way when the list is sent.
+    sent = invite_many(api, a["location"], [{"phone": "50 765 4321", "first_name": "Iryna"}], region="UA").json()
+    assert [i["phone"] for i in sent["invited"]] == ["+380507654321"]
+
+    assert read(api, a["location"], text=text, region="XX").status_code == 400
 
 
 def test_csv_with_header_keeps_people_without_a_number(api, a):

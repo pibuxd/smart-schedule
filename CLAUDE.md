@@ -103,7 +103,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   cannot be invited is left out with a note instead of blocking the plan.
 - Users: `apps.accounts.User`, login field `phone_e164` (E.164, normalized with `normalize_phone`: no
   code = Polish; another country needs its code, and invitations also a mobile number, `mobile=False` for the
-  account, admin and login; a new company registers only with +48).
+  account, admin and login; `invitations.invitable_phone` lets in a number with an account; a list may say its
+  numbers without a code are from another country, `region`; a new company registers only with +48).
   Screens type numbers in `features/auth/PhoneInput.tsx` (country before the number, +48 by default). App users
   have no password; only the Django admin superuser has one.
   `User.bank_account` (optional plain text as written, any bank; `normalize_bank_account` only tidies spaces) belongs
