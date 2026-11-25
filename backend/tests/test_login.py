@@ -104,7 +104,7 @@ def test_disabled_account_gets_no_code(api, sms_outbox):
 
 
 @pytest.mark.parametrize("phone", ["abc", "12345", "+49 30 901820", "+380 50 123", ""])
-def test_only_valid_mobile_or_polish_numbers_are_accepted(api, sms_outbox, phone):
+def test_invalid_or_foreign_numbers_get_no_registration_code(api, sms_outbox, phone):
     response = request_code(api, phone, purpose="register")
 
     assert response.status_code == 400

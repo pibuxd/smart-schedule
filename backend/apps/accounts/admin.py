@@ -9,7 +9,8 @@ from apps.tenancy.models import Invitation, InvitationStatus
 
 class PhoneCleanMixin:
     def clean_phone_e164(self):
-        return normalize_phone(self.cleaned_data["phone_e164"])
+        # Any valid number: the superadmin may let in a foreign mobile that the number data calls something else.
+        return normalize_phone(self.cleaned_data["phone_e164"], mobile=False)
 
 
 class UserCreateForm(PhoneCleanMixin, AdminUserCreationForm):

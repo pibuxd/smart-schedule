@@ -53,9 +53,9 @@ class IssuedCode:
     resend_after_s: int
 
 
-def parse_phone(raw: str) -> str:
+def parse_phone(raw: str, *, mobile: bool = True) -> str:
     try:
-        return normalize_phone(raw)
+        return normalize_phone(raw, mobile=mobile)
     except ValidationError as exc:
         raise HttpError(400, exc.messages[0]) from exc
 
@@ -83,7 +83,7 @@ def _lock(key: str) -> None:
 
 
 def request_login_code(raw_phone: str, purpose: Purpose, ip: str | None) -> IssuedCode:
-    phone = parse_phone(raw_phone)
+    phone = parse_phone(raw_phone, mobile=False)  # codes go only to known numbers (or +48 registering)
     now = timezone.now()
     hour_ago = now - timedelta(hours=1)
 
@@ -175,7 +175,7 @@ def _issue_code(phone: str, ip: str | None) -> None:
 
 def verify_login_code(raw_phone: str, raw_code: str) -> User:
     """Check the code and return the account (created on first login). Raises HttpError when the code is wrong."""
-    phone = parse_phone(raw_phone)
+    phone = parse_phone(raw_phone, mobile=False)  # codes go only to known numbers (or +48 registering)
     submitted = "".join(ch for ch in str(raw_code) if not ch.isspace())
     error: HttpError | None = None
     user: User | None = None

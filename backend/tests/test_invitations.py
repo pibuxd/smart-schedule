@@ -63,6 +63,9 @@ def test_manager_invites_a_number_from_another_country(api, a):
     wrong = invite(api, a["location"], "050 123 4567")
     assert wrong.status_code == 400
     assert "+380" in wrong.json()["detail"]
+    # A foreign landline cannot get the SMS code.
+    landline = invite(api, a["location"], "+49 30 901820")
+    assert landline.status_code == 400 and "komórki" in landline.json()["detail"]
 
 
 def test_one_pending_invitation_per_location_and_number(api, a):

@@ -69,6 +69,12 @@ def test_invalid_phone_is_rejected_with_a_reason(raw, message):
     assert error.value.messages == [message]
 
 
+def test_the_mobile_check_can_be_skipped_for_known_numbers():
+    assert normalize_phone("+49 30 901820", mobile=False) == "+4930901820"
+    with pytest.raises(ValidationError):
+        normalize_phone("+380 50 123", mobile=False)
+
+
 @pytest.mark.parametrize(
     ("e164", "text"),
     [("+48512345678", "512\u00a0345\u00a0678"), ("+380501234567", "+380\u00a050\u00a0123\u00a04567")],

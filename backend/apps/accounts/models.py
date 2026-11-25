@@ -19,17 +19,21 @@ NOT_MOBILE = "Kod logowania przychodzi SMS-em, więc podaj numer komórki."
 SMS_NUMBER_TYPES = frozenset({phonenumbers.PhoneNumberType.MOBILE, phonenumbers.PhoneNumberType.FIXED_LINE_OR_MOBILE})
 
 
-def normalize_phone(raw: str) -> str:
+def normalize_phone(raw: str, *, mobile: bool = True) -> str:
     """Return a phone number in E.164 form, or raise ValidationError. A number without a country code is Polish
     (+48); one from another country is written with its code ("+380 50 123 4567", "00380…") and must be a mobile
-    (Piotr, 25.11.2026: people from Ukraine and elsewhere keep their own numbers)."""
+    (Piotr, 25.11.2026: people from Ukraine and elsewhere keep their own numbers).
+
+    `mobile=False` skips the mobile check: for the account itself, the admin (who may let in a real mobile the
+    metadata misreads) and login, which sends codes only to numbers that already have an account or an invitation.
+    Numbers enter through invitations, which keep the check."""
     try:
         number = phonenumbers.parse(str(raw), "PL")
     except phonenumbers.NumberParseException as exc:
         raise ValidationError(NOT_A_PHONE) from exc
     if not phonenumbers.is_valid_number(number):
         raise ValidationError(WRONG_PHONE if number.country_code == 48 else WRONG_FOREIGN_PHONE)
-    if number.country_code != 48 and phonenumbers.number_type(number) not in SMS_NUMBER_TYPES:
+    if mobile and number.country_code != 48 and phonenumbers.number_type(number) not in SMS_NUMBER_TYPES:
         raise ValidationError(NOT_MOBILE)
     return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
 
@@ -79,7 +83,7 @@ class UserManager(BaseUserManager):
     use_in_migrations = True
 
     def create_user(self, phone_e164: str, password: str | None = None, **extra):
-        user = self.model(phone_e164=normalize_phone(phone_e164), **extra)
+        user = self.model(phone_e164=normalize_phone(phone_e164, mobile=False), **extra)
         if password:
             user.set_password(password)
         else:
@@ -126,7 +130,7 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
 
     def clean(self) -> None:
         super().clean()
-        self.phone_e164 = normalize_phone(self.phone_e164)
+        self.phone_e164 = normalize_phone(self.phone_e164, mobile=False)
         try:
             self.bank_account = normalize_bank_account(self.bank_account)
         except ValidationError as exc:

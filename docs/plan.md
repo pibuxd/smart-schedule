@@ -1540,7 +1540,10 @@ Spec: „Logowanie i zaproszenia”. Piotr: „daj możliwość też innych kod�
 - Backend: `accounts.models.normalize_phone` czyta numer z regionem PL (bez kierunkowego = polski) i przyjmuje każdy
   poprawny numer z kierunkowym („+380 50 123 4567”, „00380…”, też z krajowym zerem po kierunkowym, które
   phonenumbers sam usuwa). Polski: jak wcześniej każdy poprawny. Zagraniczny: tylko komórka (`SMS_NUMBER_TYPES`), bo
-  kod idzie SMS-em, a numery premium nie wchodzą do budżetu SMS. Komunikaty: `NOT_A_PHONE`, `WRONG_PHONE` (mówi, że
+  kod idzie SMS-em, a numery premium nie wchodzą do budżetu SMS. Sprawdzają to zaproszenia (pojedyncze, lista,
+  asystent); `mobile=False` pomija to sprawdzenie dla konta (`User.clean`, `create_user`), admina Django (superadmin
+  wpuści prawdziwą komórkę, którą dane phonenumbers nazywają inaczej; uwaga Prelint) i logowania, które i tak wysyła
+  kod tylko na numer z kontem albo zaproszeniem. Komunikaty: `NOT_A_PHONE`, `WRONG_PHONE` (mówi, że
   zagraniczny zaczyna się od + i kierunkowego), `WRONG_FOREIGN_PHONE`, `NOT_MOBILE`. Pole `phone_e164` (16 znaków)
   mieści każdy numer E.164, więc bez migracji. `phone_for_text` pisze numer dla ludzi („512 345 678”, „+380 50 123
   4567”); używa go `assistant.services.pretty_phone` w liniach planu zaproszeń.
@@ -1567,6 +1570,5 @@ Strona z kodami SMS na serwerze (`deploy/local`, poza repozytorium) czyta wiersz
 się nie zmienił, ale jeśli filtruje po „+48”, kody zagranicznych numerów trzeba tam dopisać.
 Do obserwacji w pilotażu (przegląd Prelint PR #80): czy kraje na liście pasują do załóg; czy listy kadrowe mają
 zagraniczne numery bez kierunkowego (wtedy w podglądzie „Zaproś kilka osób” dodać wybór „numery bez kierunkowego są z
-kraju…”); czy ktoś z prawdziwą komórką dostaje „podaj numer komórki” (dziś nie pomoże też admin, bo używa tej samej
-reguły). Przed podłączeniem bramki SMS zdecydować o ochronie kosztów: lista krajów w panelu bramki, ewentualnie
+kraju…”); czy ktoś z prawdziwą komórką dostaje „podaj numer komórki” (wtedy superadmin dodaje go w adminie). Przed podłączeniem bramki SMS zdecydować o ochronie kosztów: lista krajów w panelu bramki, ewentualnie
 dzienny limit zaproszeń na numery zagraniczne na firmę.
