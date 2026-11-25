@@ -103,6 +103,10 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   cannot be invited is left out with a note instead of blocking the plan.
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
+  `User.bank_account` (optional plain text as written, any bank; `normalize_bank_account` only tidies spaces) belongs
+  to the person like the name: set in "Twoje dane" (`PATCH /me`) or by a manager with the name's rule
+  (`staffing.api._changed_account`, `EmployeeOut.other_company`; the person gets `bank_account_set`). Only the person
+  and the managers of their locations see it; never put it in the assistant's tool results (`tools.DROPPED_KEYS`).
 - A person can work in several locations of a company: `EmployeeProfile.home_location` (main) plus
   `extra_locations`. "People of a location" is `works_in_q(location)` / `profile.works_in(location)`, never
   `home_location=` alone; in the engine `Employee.works_in`. Availability and monthly hours are per person.
@@ -176,9 +180,11 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   so a change never moves earlier months; a person's step without an amount means the position's rate again.
   Supplement changes split the row at `change_from`. Hours without a rate are `unpriced_hours`, never 0 zł, get no
   supplement, and `pay` is null when nothing had a rate (screens then show no pay). Only the location's managers see
-  rate settings; a person's own rate and pay per shift are in `MyShiftOut` (`hourly_rate`, `pay`; not on the screen).
+  rate settings (position rates in "Stanowiska i stawki", one "Zmień" per position opens name, rate and removal;
+  supplements in "Dodatki do stawek" right under it); a person's own rate and pay per shift are in `MyShiftOut` (`hourly_rate`, `pay`; not on the screen).
   The generator, validator and scores never read them. Since 23.11.2026 the assistant reads pay, rates and
-  supplements to work out earnings (`assistant/tools.DROPPED_KEYS` drops only phones and screen fields).
+  supplements to work out earnings (`assistant/tools.DROPPED_KEYS` drops only phone and bank account numbers and
+  screen fields).
 - Assistant (a language model): only `apps/assistant/llm.py` calls the API, always from a worker job, never in a request.
   On OpenRouter the structured answer is a call of the `final_answer` tool (never `response_format` next to tools:
   providers then force JSON on every round and no tool gets called); on Anthropic it is `output_config.format`.

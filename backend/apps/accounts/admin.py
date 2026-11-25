@@ -3,7 +3,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 
-from apps.accounts.models import LoginCode, User, normalize_phone
+from apps.accounts.models import LoginCode, User, normalize_bank_account, normalize_phone
 from apps.tenancy.models import Invitation, InvitationStatus
 
 
@@ -19,6 +19,12 @@ class UserCreateForm(PhoneCleanMixin, AdminUserCreationForm):
 
 
 class UserEditForm(PhoneCleanMixin, UserChangeForm):
+    # Longer than the stored 100 characters, so extra spaces reach `clean_bank_account`, which tidies them.
+    bank_account = forms.CharField(label="Numer konta", max_length=200, required=False)
+
+    def clean_bank_account(self):
+        return normalize_bank_account(self.cleaned_data.get("bank_account"))
+
     class Meta:
         model = User
         fields = "__all__"
@@ -35,7 +41,7 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ("phone_e164", "first_name", "last_name")
     fieldsets = (
         (None, {"fields": ("phone_e164", "password")}),
-        ("Dane osobowe", {"fields": ("first_name", "last_name")}),
+        ("Dane osobowe", {"fields": ("first_name", "last_name", "bank_account")}),
         ("Uprawnienia", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Daty", {"fields": ("last_login", "date_joined")}),
     )

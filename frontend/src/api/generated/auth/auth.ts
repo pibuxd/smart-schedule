@@ -505,12 +505,19 @@ export type updateMeResponse200 = {
   status: 200
 }
 
+export type updateMeResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
 export type updateMeResponseSuccess = (updateMeResponse200) & {
   headers: Headers;
 };
-;
+export type updateMeResponseError = (updateMeResponse400) & {
+  headers: Headers;
+};
 
-export type updateMeResponse = (updateMeResponseSuccess)
+export type updateMeResponse = (updateMeResponseSuccess | updateMeResponseError)
 
 export const getUpdateMeUrl = () => {
 
@@ -521,6 +528,7 @@ export const getUpdateMeUrl = () => {
 }
 
 /**
+ * My name and my bank account number (optional, for pay; managers of my locations see it).
  * @summary Update Me
  */
 export const updateMe = async (meIn: MeIn, options?: Parameters<typeof apiFetch>[1]): Promise<updateMeResponse> => {
@@ -554,7 +562,7 @@ return apiFetch<updateMeResponse>(getUpdateMeUrl(),
 
 export const getUpdateMeMutationKey = () => ['updateMe'] as const;
 
-export const getUpdateMeMutationOptions = <TError = unknown,
+export const getUpdateMeMutationOptions = <TError = ErrorOut,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,UpdateMeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,UpdateMeMutationVariables, TContext> => {
 
@@ -583,11 +591,14 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateMeMutationResult = NonNullable<Awaited<ReturnType<typeof updateMe>>>
     export type UpdateMeMutationBody = MeIn
-    export type UpdateMeMutationError = unknown
+    export type UpdateMeMutationError = ErrorOut
     export type UpdateMeMutationVariables = {data: MeIn}
 
-    /** @summary Update Me */
-export const useUpdateMe = <TError = unknown,
+    /**
+ * My name and my bank account number (optional, for pay; managers of my locations see it).
+ * @summary Update Me
+ */
+export const useUpdateMe = <TError = ErrorOut,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,UpdateMeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateMe>>,

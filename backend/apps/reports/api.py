@@ -13,6 +13,7 @@ from django.db.models import Max
 from django.http import HttpResponse
 from ninja import Router, Schema
 
+from apps.accounts.models import bank_account_text
 from apps.core.months import month_range
 from apps.core.schemas import ErrorOut
 from apps.pay.services import Pay, PayRules, amounts_total
@@ -54,6 +55,8 @@ class EmployeeHoursOut(Schema):
     supplements_pay: float | None = None
     # Hours on shifts without a rate (not in `pay`).
     unpriced_hours: float = 0
+    # Where to send the pay (as written, any bank; "" when the person has not given it).
+    bank_account: str = ""
 
 
 class HoursReportOut(Schema):
@@ -148,6 +151,7 @@ def _report(request, company_id: UUID, month: str) -> HoursReportOut:
                 pay=pay[employee_id].amount,
                 supplements_pay=pay[employee_id].supplements,
                 unpriced_hours=pay[employee_id].unpriced_hours,
+                bank_account=profile.membership.user.bank_account,
             )
         )
     result.sort(key=lambda r: (r.home_location_name, r.name))
@@ -211,6 +215,7 @@ def hours_report_csv(request, company_id: UUID, month: str):
             "Wypłata brutto, zł",
             "W tym dodatki, zł",
             "Godziny bez stawki",
+            "Numer konta",
             "Uwagi",
         ]
     )
@@ -228,6 +233,7 @@ def hours_report_csv(request, company_id: UUID, month: str):
                 _number(row.pay) if row.pay is not None else "",
                 _number(row.supplements_pay) if row.supplements_pay is not None else "",
                 _number(row.unpriced_hours),
+                bank_account_text(row.bank_account),
                 ELSEWHERE_NOTE if row.elsewhere else "",
             ]
         )

@@ -1,8 +1,9 @@
-// Rates and supplements (docs/plan.md, section 35): a rate counts from a chosen day, so a change never moves the
-// pay of earlier months. Used by "Stawki i dodatki" in the location settings and "Stawki" in the employee form.
+// Rates and supplements (docs/plan.md, sections 35 and 42): a rate counts from a chosen day, so a change never moves
+// the pay of earlier months. Used by "Stanowiska" and "Dodatki do stawek" in the location settings and "Stawki" in
+// the employee form.
 
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Plus } from 'lucide-react'
+import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type {
@@ -25,6 +26,7 @@ import {
   useSetPositionRate,
   useUpdateSupplement,
 } from '../../api/generated/pay/pay'
+import { useDeletePosition, useUpdatePosition } from '../../api/generated/staffing/staffing'
 import { Button } from '../../components/ui/button'
 import { ConfirmSheet } from '../../components/ui/confirm'
 import { Disclosure } from '../../components/ui/disclosure'
@@ -49,17 +51,93 @@ import { useManager } from './ManagerContext'
 
 const hhmm = (value: string) => value.slice(0, 5)
 
-/** Said next to a day before this month: the change reaches pay that may already be paid. */
-function PastMonthsNote() {
+/** A warning under a form: what saving it will do that is easy to miss. */
+function WarningNote({ children }: { children: string }) {
   return (
     <p className="m-0 flex basis-full items-center gap-2 text-sm font-semibold">
       <AlertTriangle aria-hidden="true" size={16} className="shrink-0 text-cannot" />
-      {PAST_MONTHS}
+      {children}
     </p>
   )
 }
 
+/** Said next to a day before this month: the change reaches pay that may already be paid. */
+const PastMonthsNote = () => <WarningNote>{PAST_MONTHS}</WarningNote>
+
+const NO_RATE_FROM_DAY = 'Puste pole: od tego dnia stanowisko będzie bez stawki, a godziny bez wypłaty.'
+
 // --------------------------------------------------------------------------------------------- rate steps
+
+const stepAmount = (step: RateStep | undefined, fallback: string) =>
+  step?.hourly_rate != null ? rateText(step.hourly_rate) : fallback
+
+const fromWords = (step: RateStep) => (step.valid_from ? `od ${fullDay(step.valid_from)}` : 'od początku')
+
+/** The rate that counts today, and the changes entered ahead ("Od 1 stycznia 2027: 33,00 zł/h"). */
+export function RateNow({ steps, today, fallback }: { steps: RateStep[]; today: string; fallback: string }) {
+  return (
+    <span className="grid min-h-(--touch) content-center">
+      <span className="tabular-nums">{stepAmount(stepOn(steps, today), fallback)}</span>
+      {stepsAfter(steps, today).map((s) => (
+        <span key={s.id} className="text-sm tabular-nums">{`Od ${fullDay(s.valid_from ?? today)}: ${stepAmount(s, fallback)}`}</span>
+      ))}
+    </span>
+  )
+}
+
+/** "Zmiany stawki (n)": every step with "Usuń" (a step before this month asks first). */
+function RateHistory({
+  name,
+  steps,
+  fallback,
+  today,
+  disabled,
+  onDelete,
+}: {
+  name: string
+  steps: RateStep[]
+  fallback: string
+  today: string
+  disabled: boolean
+  onDelete: (id: string) => void
+}) {
+  const [removing, setRemoving] = useState<RateStep | null>(null)
+  if (steps.length === 0) return null
+  return (
+    <>
+      <Disclosure summary={<span className="text-sm">{`Zmiany stawki (${steps.length})`}</span>}>
+        <ul className="m-0 grid list-none gap-1 p-0 pb-2">
+          {[...steps].sort(byDay).map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="tabular-nums">{`${fromWords(s)}: ${stepAmount(s, fallback)}`}</span>
+              <Button
+                variant="quiet"
+                size="normal"
+                disabled={disabled}
+                aria-label={`Usuń stawkę ${name} ${fromWords(s)}`}
+                onClick={() => (inPastMonth(s.valid_from, today) ? setRemoving(s) : onDelete(s.id))}
+              >
+                Usuń
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </Disclosure>
+      <ConfirmSheet
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Usunąć stawkę ${removing ? fromWords(removing) : ''}?`}
+        confirmLabel="Tak, usuń stawkę"
+        onConfirm={() => {
+          if (removing) onDelete(removing.id)
+          setRemoving(null)
+        }}
+      >
+        <p className="m-0">{PAST_MONTHS}</p>
+      </ConfirmSheet>
+    </>
+  )
+}
 
 /** One rate by day: what counts today, changes entered ahead, "Zmień stawkę" from a day, and the steps to fix. */
 export function RateSteps({
@@ -95,20 +173,13 @@ export function RateSteps({
   const [rate, setRate] = useState('')
   const [from, setFrom] = useState(today)
   const [bad, setBad] = useState(false)
-  const [removing, setRemoving] = useState<RateStep | null>(null)
   const now = stepOn(steps, today)
-  const amount = (step: RateStep | undefined) => (step?.hourly_rate != null ? rateText(step.hourly_rate) : fallback)
   const first = steps.length === 0 && firstForAll
 
   return (
     <div className="grid gap-1">
       <div className="flex flex-wrap items-start justify-between gap-x-3">
-        <span className="grid min-h-(--touch) content-center">
-          <span className="tabular-nums">{amount(now)}</span>
-          {stepsAfter(steps, today).map((s) => (
-            <span key={s.id} className="text-sm tabular-nums">{`Od ${fullDay(s.valid_from ?? today)}: ${amount(s)}`}</span>
-          ))}
-        </span>
+        <RateNow steps={steps} today={today} fallback={fallback} />
         {!editing && (
           <Button
             variant="quiet"
@@ -161,118 +232,153 @@ export function RateSteps({
           {Boolean(error) && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
         </form>
       )}
-      {steps.length > 0 && (
-        <Disclosure summary={<span className="text-sm">{`Zmiany stawki (${steps.length})`}</span>}>
-          <ul className="m-0 grid list-none gap-1 p-0 pb-2">
-            {[...steps].sort(byDay).map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span className="tabular-nums">{`${s.valid_from ? `od ${fullDay(s.valid_from)}` : 'od początku'}: ${amount(s)}`}</span>
-                <Button
-                  variant="quiet"
-                  size="normal"
-                  disabled={disabled}
-                  aria-label={`Usuń stawkę ${name} ${s.valid_from ? `od ${fullDay(s.valid_from)}` : 'od początku'}`}
-                  onClick={() => (inPastMonth(s.valid_from, today) ? setRemoving(s) : onDelete(s.id))}
-                >
-                  Usuń
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Disclosure>
-      )}
-      <ConfirmSheet
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
-        title={`Usunąć stawkę ${removing?.valid_from ? `od ${fullDay(removing.valid_from)}` : 'od początku'}?`}
-        confirmLabel="Tak, usuń stawkę"
-        onConfirm={() => {
-          if (removing) onDelete(removing.id)
-          setRemoving(null)
-        }}
-      >
-        <p className="m-0">{PAST_MONTHS}</p>
-      </ConfirmSheet>
+      <RateHistory name={name} steps={steps} fallback={fallback} today={today} disabled={disabled} onDelete={onDelete} />
     </div>
   )
 }
 
 // --------------------------------------------------------------------------------------------- settings
 
-/** "Stawki i dodatki" in the location settings: the rate of each position by day, and supplements. */
-export function PaySection({ locationId, today = new Date() }: { locationId: string; today?: Date }) {
-  const settings = usePaySettings(locationId)
-  const day = toIsoDate(today)
-  const data = settings.data?.data as PaySettingsOut | undefined
-  const priced = data ? data.positions.filter((p) => stepOn(p.rates, day)?.hourly_rate != null).length : 0
-  const supplements = data ? data.supplements.filter((s) => !s.valid_until || s.valid_until >= day).length : 0
-  const status = data
-    ? priced === 0 && supplements === 0
-      ? 'bez stawek'
-      : `stawki: ${priced} z ${data.positions.length}${supplements ? `, dodatki: ${supplements}` : ''}`
-    : undefined
+/** "Zmień" at a position in "Stanowiska i stawki": its name and its rate from a day in one form, the steps to fix,
+ * and removing the position. */
+export function PositionForm({
+  position,
+  steps,
+  today,
+  onDone,
+}: {
+  position: PositionOut
+  steps: RateStep[]
+  today: string
+  onDone: () => void
+}) {
+  const rename = useUpdatePosition()
+  const save = useSetPositionRate()
+  const removeRate = useDeletePositionRate()
+  const remove = useDeletePosition()
+  const queryClient = useQueryClient()
+  const refresh = () => void queryClient.invalidateQueries()
+  const now = stepOn(steps, today)
+  const first = steps.length === 0
+  const [name, setName] = useState(position.name)
+  const [rate, setRate] = useState(rateInput(now?.hourly_rate))
+  const [from, setFrom] = useState(today)
+  const [bad, setBad] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const error = rename.error ?? save.error ?? removeRate.error ?? remove.error
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const value = parseRate(rate)
+    setBad(Number.isNaN(value))
+    if (Number.isNaN(value)) return
+    // A new step only when the amount differs from what already counts on that day.
+    const newRate = first ? value !== null : value !== (stepOn(steps, from)?.hourly_rate ?? null)
+    try {
+      if (name.trim() !== position.name) await rename.mutateAsync({ positionId: position.id, data: { name: name.trim() } })
+      if (newRate) {
+        await save.mutateAsync({ positionId: position.id, data: { hourly_rate: value, valid_from: first ? null : from } })
+      }
+    } catch {
+      return // the error shows under the form
+    } finally {
+      refresh()
+    }
+    onDone()
+  }
 
   return (
-    <Section
-      title="Stawki i dodatki"
-      collapsible
-      status={status}
-      description="Liczą wypłatę brutto przy godzinach. Zmiana działa od wybranego dnia, więc minione miesiące się nie zmieniają."
-    >
-      {settings.isPending ? (
-        <Loading>Wczytuję stawki…</Loading>
-      ) : settings.isError || !data ? (
-        <ErrorState onRetry={() => void settings.refetch()}>
-          {errorMessage(settings.error, 'Nie udało się wczytać stawek. Spróbuj jeszcze raz.')}
-        </ErrorState>
+    <div className="grid gap-4">
+      <form onSubmit={(e) => void submit(e)} className="grid gap-4">
+        <TextField label="Nazwa" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Stawka, zł/h"
+            inputMode="decimal"
+            placeholder="np. 34,00"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
+          {!first && <TextField label="Od dnia" type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />}
+        </div>
+        {first ? (
+          <p className="m-0 text-sm text-ink-muted">Pierwsza stawka liczy się dla wszystkich zmian.</p>
+        ) : (
+          <p className="m-0 text-sm text-ink-muted">Zmiany przed tym dniem zostają przy starej stawce.</p>
+        )}
+        {!first && from && inPastMonth(from, today) && <PastMonthsNote />}
+        {/* An emptied field ends the rate from that day: said before saving, since it is easy to do by mistake. */}
+        {!first && rate.trim() === '' && stepOn(steps, from)?.hourly_rate != null && (
+          <WarningNote>{NO_RATE_FROM_DAY}</WarningNote>
+        )}
+        {bad && <InlineError>{BAD_RATE}</InlineError>}
+        {Boolean(error) && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
+        <Button type="submit" wide disabled={rename.isPending || save.isPending}>
+          Zapisz stanowisko
+        </Button>
+      </form>
+      <RateHistory
+        name={position.name}
+        steps={steps}
+        fallback="bez stawki"
+        today={today}
+        disabled={removeRate.isPending}
+        onDelete={(rateId) => removeRate.mutate({ rateId }, { onSuccess: refresh })}
+      />
+      {!removing ? (
+        <Button variant="danger" wide onClick={() => setRemoving(true)}>
+          <Trash2 aria-hidden="true" size={18} />
+          Usuń to stanowisko
+        </Button>
       ) : (
-        <>
-          <PositionRates data={data} today={day} />
-          <Supplements locationId={locationId} data={data} today={day} />
-        </>
+        <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
+          <p className="m-0">
+            <b>{`Usunąć stanowisko „${position.name}”?`}</b> Zniknie z obsady i z wyjątków.
+            {position.employees > 0 ? ` Stracą je też osoby, które je mają (${position.employees}).` : ''} W ułożonych
+            już grafikach zostaje.
+          </p>
+          <Button
+            variant="danger"
+            wide
+            disabled={remove.isPending}
+            onClick={() => remove.mutate({ positionId: position.id }, { onSuccess: () => { refresh(); onDone() } })}
+          >
+            Tak, usuń stanowisko
+          </Button>
+          <Button variant="secondary" wide onClick={() => setRemoving(false)}>
+            Zostaw
+          </Button>
+        </div>
       )}
-    </Section>
+    </div>
   )
 }
 
-function PositionRates({ data, today }: { data: PaySettingsOut; today: string }) {
-  const { readOnly } = useManager()
-  const save = useSetPositionRate()
-  const remove = useDeletePositionRate()
-  const queryClient = useQueryClient()
-  const [saving, setSaving] = useState<string | null>(null)
-  const refresh = () => void queryClient.invalidateQueries()
+/** "Dodatki do stawek" in the location settings, right under "Stanowiska" (where the rates are). */
+export function SupplementsSection({ locationId, today = new Date() }: { locationId: string; today?: Date }) {
+  const settings = usePaySettings(locationId)
+  const day = toIsoDate(today)
+  const data = settings.data?.data as PaySettingsOut | undefined
+  const live = data ? data.supplements.filter((s) => !s.valid_until || s.valid_until >= day).length : 0
+  const status = data ? (live ? `dodatki: ${live}` : 'bez dodatków') : undefined
 
   return (
-    <div className="grid gap-2">
-      <h3 className="m-0 text-base font-extrabold">Stawki stanowisk</h3>
-      {data.positions.length === 0 ? (
-        <p className="m-0 text-ink-muted">Najpierw dodaj stanowiska.</p>
+    <Section
+      title="Dodatki do stawek"
+      collapsible
+      status={status}
+      description="Np. za noc albo niedzielę. Liczy się tylko część zmiany w tych godzinach."
+    >
+      {settings.isPending ? (
+        <Loading>Wczytuję dodatki…</Loading>
+      ) : settings.isError || !data ? (
+        <ErrorState onRetry={() => void settings.refetch()}>
+          {errorMessage(settings.error, 'Nie udało się wczytać dodatków. Spróbuj jeszcze raz.')}
+        </ErrorState>
       ) : (
-        <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
-          {data.positions.map((p) => (
-            <li key={p.position_id} className="grid gap-x-3 border-b border-line px-4 py-1.5 last:border-b-0 sm:grid-cols-[10rem_1fr]">
-              <b className="grid min-h-(--touch) content-center">{p.name}</b>
-              <RateSteps
-                name={p.name}
-                steps={p.rates}
-                fallback="bez stawki"
-                today={today}
-                disabled={readOnly}
-                pending={save.isPending}
-                error={saving === p.position_id ? save.error : null}
-                onSave={(rate, done) => {
-                  setSaving(p.position_id)
-                  save.mutate({ positionId: p.position_id, data: rate }, { onSuccess: () => { done(); refresh() } })
-                }}
-                onDelete={(rateId) => remove.mutate({ rateId }, { onSuccess: refresh })}
-              />
-            </li>
-          ))}
-        </ul>
+        <Supplements locationId={locationId} data={data} today={day} />
       )}
-      {remove.isError && <InlineError>{errorMessage(remove.error, NETWORK_PROBLEM)}</InlineError>}
-    </div>
+    </Section>
   )
 }
 
@@ -478,8 +584,6 @@ function Supplements({ locationId, data, today }: { locationId: string; data: Pa
 
   return (
     <div className="grid gap-2">
-      <h3 className="m-0 text-base font-extrabold">Dodatki</h3>
-      <p className="m-0 text-sm text-ink-muted">Np. za noc albo niedzielę. Liczy się tylko część zmiany w tych godzinach.</p>
       {live.length > 0 ? (
         <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
           {live.map((s) => item(s, true))}

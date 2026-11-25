@@ -365,6 +365,8 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
   prośbie wybiera się „Tylko <miesiąc>” albo „Na stałe” (wtedy obowiązuje też w kolejnych miesiącach); prośbę na
   stałe z wcześniejszego miesiąca kończy „Zakończ” w „Twoich prośbach” miesiąca, od którego ma nie obowiązywać.
 - „Powiadomienia”: prośby o dyspozycje, nowy grafik, zmiany do wzięcia, decyzje kierownika.
+- „Twoje dane” (na górze ekranu, obok „Wyloguj”): imię, nazwisko i numer konta do wypłaty (nieobowiązkowy; widzą
+  go tylko kierownicy). Numeru konta nie znasz i nie pytaj o niego: pracownik wpisuje go sam w „Twoje dane”.
 Grafik układa i publikuje kierownik. Pracownik nie widzi, czy jego prośby zostały spełnione, ani cudzych próśb.
 Stanowiska ustawia kierownik w „Pracownicy”. Kto ma kilka stanowisk, może tu poprosić, żeby w jakieś dni nie
 pracować na jednym z nich albo pracować tylko na jednym; generator spróbuje to spełnić."""
@@ -377,8 +379,11 @@ Przewodnik po aplikacji kierownika:
   które minęły), „Powiadomienia”, „Godziny” (zgłoszone przez pracowników inne godziny do zatwierdzenia lub
   odrzucenia, „Zmień godziny sam” tylko dla zmian z opublikowanego grafiku, godziny w miesiącu na osobę i lokal
   z nadgodzinami i krótszymi zmianami, wypłaty brutto, plik CSV), „Dostęp” (kod dostępu i do kiedy działa).
-  Stawki stanowisk „od dnia” i dodatki za porę dnia (np. noc) są w „Ustawieniach lokalu”, w części „Stawki i
-  dodatki”; własna stawka osoby (np. za staż) w jej formularzu w „Pracownicy”, w części „Stawki”. Stawki, dodatki
+  Stawki stanowisk „od dnia” są w „Ustawieniach lokalu”, w części „Stanowiska i stawki” („Zmień” przy stanowisku
+  otwiera nazwę, stawkę od dnia i usuwanie), a dodatki za porę dnia (np. noc) zaraz pod nią, w „Dodatkach do
+  stawek”; własna stawka osoby (np. za staż) w jej formularzu w „Pracownicy”, w części „Stawki”. Numer konta do
+  wypłaty osoba wpisuje sama w „Twoje dane”, a kierownik widzi go i może wpisać w jej formularzu w „Pracownicy”;
+  jest też w pliku CSV z „Godzin”. Numerów kont nie znasz (nie trafiają do Ciebie). Stawki, dodatki
   i wypłaty brutto znasz z narzędzi (pay_settings, personal_rates, hours_report), więc możesz policzyć zarobki;
   stawki zmienia kierownik sam w tych miejscach.
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i

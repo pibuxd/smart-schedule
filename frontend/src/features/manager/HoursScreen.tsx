@@ -184,7 +184,7 @@ function HoursTable({
       </div>
       {!pay && (
         <p className="m-0 text-sm text-ink-muted">
-          Wpisz stawki w ustawieniach lokalu, w części „Stawki i dodatki”, a zobaczysz tu wypłaty.
+          Wpisz stawki w ustawieniach lokalu, przy stanowiskach, a zobaczysz tu wypłaty.
         </p>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
@@ -66,3 +66,43 @@ it('shows each day’s staffing in a calendar and saves one day with other numbe
   fireEvent.click(await screen.findByRole('button', { name: 'Wróć do zwykłej obsady' }))
   await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')[1]?.body).toEqual({ cells: [], note: '' }))
 })
+
+it('shows each position’s rate in “Stanowiska i stawki” and changes it behind one “Zmień”', async () => {
+  const setup = {
+    positions: [{ id: 'p', name: 'Kasa', employees: 2 }, { id: 'q', name: 'Piec', employees: 1 }],
+    shift_types: [], staffing: [], closures: [], exceptions: [], arranged: [],
+  }
+  const pay = {
+    positions: [
+      { position_id: 'p', name: 'Kasa', rates: [{ id: 'r', valid_from: null, hourly_rate: 31.4 }] },
+      { position_id: 'q', name: 'Piec', rates: [] },
+    ],
+    supplements: [],
+  }
+  const calls = mockApi((method, path) => {
+    if (path.endsWith('/setup')) return [200, setup]
+    if (path.endsWith('/overview')) return [200, { groups: [] }]
+    if (path.endsWith('/pay-settings')) return [200, pay]
+    if (method === 'POST') return [200, pay.positions[1]]
+    return [200, { id: 'l', name: 'Lokal', address: '', schedule_period: 'month', availability_deadline_days: 7 }]
+  })
+  renderScreen(<AsManager><LocationSettingsScreen locationId="l" /></AsManager>)
+
+  expect(await screen.findByRole('heading', { name: 'Stanowiska i stawki' })).toBeInTheDocument()
+  const till = (await screen.findByRole('button', { name: 'Zmień stanowisko Kasa' })).closest('li')!
+  expect(till).toHaveTextContent(/^Kasa2 os\.31,40\szł\/hZmień$/)
+  const oven = screen.getByText('Piec', { selector: 'b' }).closest('li')!
+  expect(oven).toHaveTextContent('bez stawki')
+  expect(screen.getByText('bez dodatków')).toBeInTheDocument()
+
+  fireEvent.click(within(oven).getByRole('button', { name: 'Zmień stanowisko Piec' }))
+  const sheet = await screen.findByRole('dialog', { name: 'Piec' })
+  expect(within(sheet).getByLabelText('Nazwa')).toHaveValue('Piec')
+  fireEvent.change(within(sheet).getByLabelText('Stawka, zł/h'), { target: { value: '36' } })
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz stanowisko' }))
+  await waitFor(() => expect(calls.find((c) => c.method === 'POST')).toMatchObject({
+    url: '/api/positions/q/rates',
+    body: { hourly_rate: 36, valid_from: null },
+  }))
+})
+

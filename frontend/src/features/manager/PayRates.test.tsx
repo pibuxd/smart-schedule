@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
-import { OwnRates, PaySection } from './PayRates'
+import { OwnRates, PositionForm, RateNow, SupplementsSection } from './PayRates'
 import { AsManager } from './test-utils'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -39,57 +39,84 @@ const settings = {
   ],
 }
 
-function show() {
-  const calls = mockApi((method, path) => {
+function answers() {
+  return mockApi((method, path) => {
     if (path === '/api/locations/l1/pay-settings') return [200, settings]
     if (method === 'POST' && path.startsWith('/api/positions/')) return [200, settings.positions[0]]
     if (method === 'POST' && path === '/api/locations/l1/supplements') return [201, night]
+    if (method === 'PATCH' && path.startsWith('/api/positions/')) return [200, { id: 'p1', name: 'Kasa', employees: 2 }]
     if (method === 'PATCH') return [200, night]
     if (method === 'DELETE') return [204, null]
     return [404, { detail: 'Nie ma.' }]
   })
+}
+
+/** The sheet behind "Zmień" at a position in "Stanowiska i stawki". */
+async function show(index: number) {
+  const calls = answers()
+  const onDone = vi.fn()
+  const p = settings.positions[index]
   renderScreen(
     <AsManager>
-      <PaySection locationId="l1" today={today} />
+      <PositionForm position={{ id: p.position_id, name: p.name, employees: 2 }} steps={p.rates} today="2026-11-22" onDone={onDone} />
+    </AsManager>,
+  )
+  await screen.findByLabelText('Nazwa')
+  return { calls, onDone }
+}
+
+function showSupplements() {
+  const calls = answers()
+  renderScreen(
+    <AsManager>
+      <SupplementsSection locationId="l1" today={today} />
     </AsManager>,
   )
   return calls
 }
 
-describe('PaySection', () => {
-  it('shows the rate of today and the raise ahead, and changes a rate from a day', async () => {
-    const calls = show()
-    const seller = (await screen.findByText('Sprzedawca')).closest('li')!
-    expect(seller).toHaveTextContent(/31,40\szł\/h/)
-    expect(seller).toHaveTextContent(/Od 1 stycznia 2027: 33,00\szł\/h/)
-    expect(screen.getByText(/stawki: 1 z 2, dodatki: 1/)).toBeInTheDocument()
+describe('RateNow', () => {
+  it('shows the rate of today and the raise ahead', async () => {
+    renderScreen(<RateNow steps={settings.positions[0].rates} today="2026-11-22" fallback="bez stawki" />)
+    expect(await screen.findByText(/^31,40\szł\/h$/)).toBeInTheDocument()
+    expect(screen.getByText(/^Od 1 stycznia 2027: 33,00\szł\/h$/)).toBeInTheDocument()
+  })
+})
 
-    fireEvent.click(within(seller).getByRole('button', { name: 'Zmień stawkę: Sprzedawca' }))
-    fireEvent.change(within(seller).getByLabelText('Stawka, zł/h'), { target: { value: '32,50' } })
-    expect(within(seller).getByLabelText('Od dnia')).toHaveValue('2026-11-22')
-    fireEvent.change(within(seller).getByLabelText('Od dnia'), { target: { value: '2026-12-01' } })
-    fireEvent.click(within(seller).getByRole('button', { name: 'Zapisz stawkę' }))
-    await waitFor(() =>
-      expect(calls.find((c) => c.method === 'POST')).toMatchObject({
-        url: '/api/positions/p1/rates',
-        body: { hourly_rate: 32.5, valid_from: '2026-12-01' },
-      }),
-    )
+describe('PositionForm', () => {
+  it('renames a position and changes its rate from a day in one save', async () => {
+    const { calls, onDone } = await show(0)
+    expect(screen.getByLabelText('Stawka, zł/h')).toHaveValue('31,40')
+    expect(screen.getByLabelText('Od dnia')).toHaveValue('2026-11-22')
+    fireEvent.change(screen.getByLabelText('Nazwa'), { target: { value: 'Sprzedawczyni' } })
+    fireEvent.change(screen.getByLabelText('Stawka, zł/h'), { target: { value: '32,50' } })
+    fireEvent.change(screen.getByLabelText('Od dnia'), { target: { value: '2026-12-01' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz stanowisko' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(calls.filter((c) => c.method !== 'GET')).toMatchObject([
+      { method: 'PATCH', url: '/api/positions/p1', body: { name: 'Sprzedawczyni' } },
+      { method: 'POST', url: '/api/positions/p1/rates', body: { hourly_rate: 32.5, valid_from: '2026-12-01' } },
+    ])
+  })
+
+  it('keeps the rate when only the name changes', async () => {
+    const { calls, onDone } = await show(0)
+    fireEvent.change(screen.getByLabelText('Nazwa'), { target: { value: 'Kasa' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz stanowisko' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(calls.filter((c) => c.method !== 'GET').map((c) => c.method)).toEqual(['PATCH'])
   })
 
   it('warns when a rate change or a removed step reaches months that have passed', async () => {
-    const calls = show()
-    const seller = (await screen.findByText('Sprzedawca')).closest('li')!
-    fireEvent.click(within(seller).getByRole('button', { name: 'Zmień stawkę: Sprzedawca' }))
-    expect(within(seller).queryByText('To zmieni wypłatę za minione miesiące.')).not.toBeInTheDocument()
-    fireEvent.change(within(seller).getByLabelText('Od dnia'), { target: { value: '2026-10-15' } })
-    expect(within(seller).getByText('To zmieni wypłatę za minione miesiące.')).toBeInTheDocument()
-    fireEvent.click(within(seller).getByRole('button', { name: 'Anuluj' }))
+    const { calls } = await show(0)
+    expect(screen.queryByText('To zmieni wypłatę za minione miesiące.')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Od dnia'), { target: { value: '2026-10-15' } })
+    expect(screen.getByText('To zmieni wypłatę za minione miesiące.')).toBeInTheDocument()
 
-    fireEvent.click(within(seller).getByText('Zmiany stawki (2)'))
-    fireEvent.click(within(seller).getByRole('button', { name: 'Usuń stawkę Sprzedawca od 1 stycznia 2027' }))
+    fireEvent.click(screen.getByText('Zmiany stawki (2)'))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń stawkę Sprzedawca od 1 stycznia 2027' }))
     await waitFor(() => expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/position-rates/r2'))
-    fireEvent.click(within(seller).getByRole('button', { name: 'Usuń stawkę Sprzedawca od początku' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń stawkę Sprzedawca od początku' }))
     expect(await screen.findByRole('dialog', { name: 'Usunąć stawkę od początku?' })).toHaveTextContent(
       'To zmieni wypłatę za minione miesiące.',
     )
@@ -98,25 +125,50 @@ describe('PaySection', () => {
     await waitFor(() => expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toContain('/api/position-rates/r1'))
   })
 
-  it('saves the first rate of a position for every shift and catches a typo', async () => {
-    const calls = show()
-    const baker = (await screen.findByText('Piekarz')).closest('li')!
-    expect(baker).toHaveTextContent('bez stawki')
-    fireEvent.click(within(baker).getByRole('button', { name: 'Zmień stawkę: Piekarz' }))
-    expect(within(baker).queryByLabelText('Od dnia')).not.toBeInTheDocument()
-    expect(within(baker).getByText('Pierwsza stawka liczy się dla wszystkich zmian.')).toBeInTheDocument()
-    fireEvent.change(within(baker).getByLabelText('Stawka, zł/h'), { target: { value: 'dużo' } })
-    fireEvent.click(within(baker).getByRole('button', { name: 'Zapisz stawkę' }))
-    expect(within(baker).getByText('Wpisz stawkę w złotych, np. 31,40.')).toBeInTheDocument()
-    fireEvent.change(within(baker).getByLabelText('Stawka, zł/h'), { target: { value: '36' } })
-    fireEvent.click(within(baker).getByRole('button', { name: 'Zapisz stawkę' }))
-    await waitFor(() =>
-      expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ hourly_rate: 36, valid_from: null }),
-    )
+  it('warns before an emptied rate ends pay from that day', async () => {
+    const { calls, onDone } = await show(0)
+    const warning = 'Puste pole: od tego dnia stanowisko będzie bez stawki, a godziny bez wypłaty.'
+    expect(screen.queryByText(warning)).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Stawka, zł/h'), { target: { value: '' } })
+    expect(screen.getByText(warning)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Od dnia'), { target: { value: '2026-12-01' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz stanowisko' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ hourly_rate: null, valid_from: '2026-12-01' })
   })
 
+  it('saves the first rate of a position for every shift and catches a typo', async () => {
+    const { calls, onDone } = await show(1)
+    expect(screen.queryByLabelText('Od dnia')).not.toBeInTheDocument()
+    expect(screen.getByText('Pierwsza stawka liczy się dla wszystkich zmian.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Stawka, zł/h'), { target: { value: 'dużo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz stanowisko' }))
+    expect(screen.getByText('Wpisz stawkę w złotych, np. 31,40.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Stawka, zł/h'), { target: { value: '36' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz stanowisko' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(calls.filter((c) => c.method !== 'GET')).toMatchObject([
+      { method: 'POST', url: '/api/positions/p2/rates', body: { hourly_rate: 36, valid_from: null } },
+    ])
+  })
+
+  it('removes the position only after asking', async () => {
+    const { calls, onDone } = await show(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń to stanowisko' }))
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Usunąć stanowisko „Piekarz”? Zniknie z obsady i z wyjątków. Stracą je też osoby, które je mają (2).',
+    )
+    expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Tak, usuń stanowisko' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(calls.find((c) => c.method === 'DELETE')?.url).toBe('/api/positions/p2')
+  })
+})
+
+describe('SupplementsSection', () => {
   it('lists supplements in words, keeps ended ones apart, and changes one from a day', async () => {
-    const calls = show()
+    const calls = showSupplements()
+    expect(await screen.findByText('dodatki: 1')).toBeInTheDocument()
     const item = (await screen.findByText('Noc')).closest('li')!
     expect(item).toHaveTextContent(/22:00–6:00 · codziennie · \+6,00\szł\/h · wszystkie stanowiska/)
     expect(screen.getByText('Zakończone dodatki (1)')).toBeInTheDocument()
@@ -137,7 +189,7 @@ describe('PaySection', () => {
   })
 
   it('adds a supplement for chosen days and positions, and ends one from a day', async () => {
-    const calls = show()
+    const calls = showSupplements()
     fireEvent.click(await screen.findByRole('button', { name: 'Dodaj dodatek' }))
     fireEvent.change(screen.getByLabelText('Nazwa'), { target: { value: 'Weekend' } })
     fireEvent.click(screen.getByLabelText('Cała doba'))

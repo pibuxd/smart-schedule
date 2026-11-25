@@ -6,6 +6,7 @@ import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { EmployeeContext } from '../features/auth/EmployeeContext'
 import { EmployeeChatProvider, EmployeeChatTab } from '../features/availability/EmployeeChat'
+import { MyDataButton } from '../features/auth/MyData'
 import { ProfileNameForm } from '../features/auth/ProfileNameForm'
 import { useSession } from '../features/auth/session'
 import { isManagerRole } from '../features/manager/ManagerContext'
@@ -14,6 +15,9 @@ import { useUnreadNotifications } from '../features/notifications/unread'
 export const Route = createFileRoute('/_pracownik')({
   component: EmployeeLayout,
 })
+
+const HEADER_LINK =
+  'min-h-(--touch) shrink-0 cursor-pointer rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft'
 
 const TABS = [
   { to: '/grafik', label: 'Mój grafik', Icon: CalendarDays },
@@ -61,13 +65,12 @@ function EmployeeLayout() {
                 {`${me.first_name} ${me.last_name}`.trim() || 'Twoje konto'}
                 {me.companies.length === 1 && <span>, {company.name}</span>}
               </span>
-              <button
-                type="button"
-                onClick={signOut}
-                className="min-h-(--touch) shrink-0 cursor-pointer rounded-sm px-2 font-semibold text-accent underline underline-offset-4 hover:bg-accent-soft"
-              >
-                Wyloguj
-              </button>
+              <span className="flex shrink-0 items-center">
+                <MyDataButton me={me} className={`${HEADER_LINK} inline-flex items-center gap-1.5`} />
+                <button type="button" onClick={signOut} className={HEADER_LINK}>
+                  Wyloguj
+                </button>
+              </span>
             </div>
             {me.companies.length > 1 && (
               <select

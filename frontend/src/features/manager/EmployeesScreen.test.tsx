@@ -224,4 +224,59 @@ describe('EmployeesScreen', () => {
     const body = calls.find((c) => c.method === 'PATCH')!.body as Record<string, unknown>
     expect(body).toEqual({ revision: undefined, location_id: 'l1', position_ids: [] })
   })
+
+  it('shows the bank account number for pay and sends only a changed one', async () => {
+    const ala = { ...person('e1', 'Ala', 2), bank_account: 'PL61 1090 1014 0000 0712 1981 2874', revision: 'r1' }
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) return [200, [ala]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      if (method === 'PATCH') return [400, { detail: 'Numer konta może mieć najwyżej 100 znaków.' }]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    const field = within(sheet).getByLabelText('Numer konta do wypłaty')
+    expect(field).toHaveValue('PL61 1090 1014 0000 0712 1981 2874')
+    // Extra spaces are not a change.
+    fireEvent.change(field, { target: { value: 'PL61 1090 1014 0000 0712 1981  2874 ' } })
+    fireEvent.change(within(sheet).getByLabelText('Najwyżej godzin w miesiącu'), { target: { value: '160' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
+    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(1))
+    expect(calls.find((c) => c.method === 'PATCH')!.body).not.toHaveProperty('bank_account')
+
+    fireEvent.change(field, { target: { value: 'UA21 3223 1300 0002 6007 2335 6600 1' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
+    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2))
+    expect(calls.filter((c) => c.method === 'PATCH')[1].body).toMatchObject({ bank_account: 'UA21 3223 1300 0002 6007 2335 6600 1' })
+    expect(await within(sheet).findByText('Numer konta może mieć najwyżej 100 znaków.')).toBeInTheDocument()
+  })
+
+  it('says up front when only the person changes their name and account (another company)', async () => {
+    const ala = { ...person('e1', 'Ala', 2), other_company: true }
+    mockApi((_method, path) => {
+      if (path.endsWith('/employees')) return [200, [ala]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByLabelText('Numer konta do wypłaty')).toBeDisabled()
+    expect(within(sheet).getByLabelText('Imię')).toBeDisabled()
+    expect(
+      within(sheet).getByText('Ta osoba ma konto także w innej firmie, więc imię i numer konta zmienia tylko ona sama w „Twoje dane”.'),
+    ).toBeInTheDocument()
+    expect(within(sheet).getByLabelText('Najwyżej godzin w miesiącu')).toBeEnabled()
+  })
 })

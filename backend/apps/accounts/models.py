@@ -21,6 +21,34 @@ def normalize_phone(raw: str) -> str:
     return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
 
 
+BANK_ACCOUNT_MAX = 100
+BANK_ACCOUNT_TOO_LONG = f"Numer konta może mieć najwyżej {BANK_ACCOUNT_MAX} znaków."
+
+
+def normalize_bank_account(raw: str | None) -> str:
+    """The bank account number for pay as the person wrote it, with the spaces tidied, or "" for none. Any bank
+    (Polish, Revolut, Ukrainian…), so it is plain text and not checked (Piotr, 25.11.2026)."""
+    text = " ".join((raw or "").split())
+    if len(text) > BANK_ACCOUNT_MAX:
+        raise ValidationError(BANK_ACCOUNT_TOO_LONG)
+    return text
+
+
+def bank_account_text(account: str) -> str:
+    """The number for a spreadsheet: digits alone are grouped ("61 1090 1014 0000 0712 1981 2874"), so Excel does
+    not read them as a number like 6,11E+25; anything else stays as written."""
+    if not account.isascii() or not account.isdigit():
+        return account
+    head = 2 if len(account) == 26 else 0  # a Polish number starts with its two check digits
+    groups = [account[:head]] if head else []
+    return " ".join([*groups, *(account[i : i + 4] for i in range(head, len(account), 4))])
+
+
+def bank_account_ending(account: str) -> str:
+    """The last four characters (without spaces): enough to recognise the number, never the whole of it."""
+    return "".join(account.split())[-4:]
+
+
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
@@ -44,6 +72,11 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
     phone_e164 = models.CharField("numer telefonu", max_length=16, unique=True)
     first_name = models.CharField("imię", max_length=80, blank=True)
     last_name = models.CharField("nazwisko", max_length=120, blank=True)
+    # For pay transfers, optional (docs/plan.md, section 42): plain text as written (`normalize_bank_account`), since
+    # people use any bank. Like the name it belongs to the person, so every company they work for sees the same
+    # number; only the person, the managers of their locations and the superadmin read it, and it never goes to the
+    # assistant's model.
+    bank_account = models.CharField("numer konta", max_length=BANK_ACCOUNT_MAX, blank=True)
     is_staff = models.BooleanField("dostęp do panelu admina", default=False)
     is_active = models.BooleanField("aktywne", default=True)
     date_joined = models.DateTimeField("utworzone", default=timezone.now)
@@ -68,6 +101,10 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
     def clean(self) -> None:
         super().clean()
         self.phone_e164 = normalize_phone(self.phone_e164)
+        try:
+            self.bank_account = normalize_bank_account(self.bank_account)
+        except ValidationError as exc:
+            raise ValidationError({"bank_account": exc.messages}) from exc
 
     def _get_session_auth_hash(self, secret=None):
         # The phone number is the identity. When the superadmin changes it, every existing session of

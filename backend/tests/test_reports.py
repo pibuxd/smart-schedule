@@ -47,10 +47,11 @@ def test_csv_opens_in_a_polish_spreadsheet(api, shop, published):
     header, *lines = text.strip().splitlines()
     assert header.startswith("Osoba;Lokal domowy;Zmiany;")
     assert header.endswith(
-        ";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Wypłata brutto, zł;W tym dodatki, zł;Godziny bez stawki;Uwagi"
+        ";Razem;Nadgodziny (ponad grafik);Krótsze zmiany;Wypłata brutto, zł;W tym dodatki, zł;Godziny bez stawki;"
+        "Numer konta;Uwagi"
     )
-    assert len(lines) == 3 and all(line.split(";")[-7].endswith(",00") for line in lines)
-    assert all(line.split(";")[-6:-4] == ["0,00", "0,00"] for line in lines)  # nobody worked other hours
+    assert len(lines) == 3 and all(line.split(";")[-8].endswith(",00") for line in lines)
+    assert all(line.split(";")[-7:-5] == ["0,00", "0,00"] for line in lines)  # nobody worked other hours
 
 
 def test_bad_month_and_other_companies(api, shop, published, make_company):
@@ -108,3 +109,16 @@ def test_an_empty_month_points_to_the_newest_month_with_hours(api, shop, publish
     api.login(shop["manager"])
     body = api.get(f"/api/reports/hours?company_id={shop['company'].id}&month=2026-10").json()
     assert body["rows"] == [] and body["latest_month"] == "2026-12"
+
+
+def test_csv_has_the_account_number_for_the_transfer(api, shop, published):
+    from apps.accounts.models import User
+
+    User.objects.filter(pk=shop["worker"].pk).update(bank_account="61109010140000071219812874")
+    api.login(shop["manager"])
+
+    text = api.get(f"/api/reports/hours.csv?company_id={shop['company'].id}&month=2026-12").content.decode("utf-8-sig")
+
+    accounts = [line.split(";")[-2] for line in text.strip().splitlines()[1:]]
+    # With spaces, as banks print it, so a spreadsheet keeps it as text rather than 6.11E+25.
+    assert "61 1090 1014 0000 0712 1981 2874" in accounts and "" in accounts

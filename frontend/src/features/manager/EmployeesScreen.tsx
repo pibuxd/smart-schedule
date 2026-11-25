@@ -17,6 +17,7 @@ import { CheckField, Section, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
+import { tidyBankAccount } from '../auth/bank-account'
 import { prettyPhone } from '../auth/phone'
 import { InviteManyButton } from './InviteMany'
 import { useManager } from './ManagerContext'
@@ -218,6 +219,7 @@ function EmployeeForm({
   const [active, setActive] = useState(employee.is_active)
   const [first, setFirst] = useState(employee.first_name)
   const [last, setLast] = useState(employee.last_name)
+  const [account, setAccount] = useState(employee.bank_account ?? '')
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -225,6 +227,7 @@ function EmployeeForm({
     const data: EmployeeIn = { revision: employee.revision, location_id: locationId }
     if (first !== employee.first_name) data.first_name = first
     if (last !== employee.last_name) data.last_name = last
+    if (tidyBankAccount(account) !== (employee.bank_account ?? '')) data.bank_account = account
     if (experience !== employee.experience) data.experience = experience
     if (toNumber(max) !== employee.max_hours_month) data.max_hours_month = toNumber(max)
     if (toNumber(target) !== employee.target_hours_month) data.target_hours_month = toNumber(target)
@@ -252,16 +255,32 @@ function EmployeeForm({
   const toggle = (id: string) => setChosen((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]))
   // Experience, hours and switching off are shared by all the person's locations: the main location sets them.
   const shared = employee.is_home !== false
+  // The account is shared with another company: only the person changes their name and bank account number.
+  const ownData = Boolean(employee.other_company)
 
   return (
     <div className="grid gap-5">
       <form onSubmit={submit} className="grid gap-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextField label="Imię" value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} required />
-          <TextField label="Nazwisko" value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} />
+          <TextField label="Imię" value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} required disabled={ownData} />
+          <TextField label="Nazwisko" value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} disabled={ownData} />
           <p className="m-0 text-sm text-ink-muted sm:col-span-2">
             Numer {prettyPhone(employee.phone)} służy do logowania, więc zmienia go tylko administrator Grafikomatu.
           </p>
+          <TextField
+            label="Numer konta do wypłaty"
+            className="sm:col-span-2"
+            autoComplete="off"
+            maxLength={100}
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+            disabled={ownData}
+            hint={
+              ownData
+                ? 'Ta osoba ma konto także w innej firmie, więc imię i numer konta zmienia tylko ona sama w „Twoje dane”.'
+                : 'Nieobowiązkowy. Pracownik może go wpisać sam w „Twoje dane”.'
+            }
+          />
         </div>
         <fieldset className="m-0 grid gap-1 border-0 p-0">
           <legend className="mb-1 font-semibold">Stanowiska</legend>
