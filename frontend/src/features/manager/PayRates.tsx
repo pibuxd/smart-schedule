@@ -51,15 +51,20 @@ import { useManager } from './ManagerContext'
 
 const hhmm = (value: string) => value.slice(0, 5)
 
-/** Said next to a day before this month: the change reaches pay that may already be paid. */
-function PastMonthsNote() {
+/** A warning under a form: what saving it will do that is easy to miss. */
+function WarningNote({ children }: { children: string }) {
   return (
     <p className="m-0 flex basis-full items-center gap-2 text-sm font-semibold">
       <AlertTriangle aria-hidden="true" size={16} className="shrink-0 text-cannot" />
-      {PAST_MONTHS}
+      {children}
     </p>
   )
 }
+
+/** Said next to a day before this month: the change reaches pay that may already be paid. */
+const PastMonthsNote = () => <WarningNote>{PAST_MONTHS}</WarningNote>
+
+const NO_RATE_FROM_DAY = 'Puste pole: od tego dnia stanowisko będzie bez stawki, a godziny bez wypłaty.'
 
 // --------------------------------------------------------------------------------------------- rate steps
 
@@ -302,6 +307,10 @@ export function PositionForm({
           <p className="m-0 text-sm text-ink-muted">Zmiany przed tym dniem zostają przy starej stawce.</p>
         )}
         {!first && from && inPastMonth(from, today) && <PastMonthsNote />}
+        {/* An emptied field ends the rate from that day: said before saving, since it is easy to do by mistake. */}
+        {!first && rate.trim() === '' && stepOn(steps, from)?.hourly_rate != null && (
+          <WarningNote>{NO_RATE_FROM_DAY}</WarningNote>
+        )}
         {bad && <InlineError>{BAD_RATE}</InlineError>}
         {Boolean(error) && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
         <Button type="submit" wide disabled={rename.isPending || save.isPending}>

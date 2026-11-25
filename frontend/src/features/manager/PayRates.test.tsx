@@ -125,6 +125,18 @@ describe('PositionForm', () => {
     await waitFor(() => expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toContain('/api/position-rates/r1'))
   })
 
+  it('warns before an emptied rate ends pay from that day', async () => {
+    const { calls, onDone } = await show(0)
+    const warning = 'Puste pole: od tego dnia stanowisko będzie bez stawki, a godziny bez wypłaty.'
+    expect(screen.queryByText(warning)).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Stawka, zł/h'), { target: { value: '' } })
+    expect(screen.getByText(warning)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Od dnia'), { target: { value: '2026-12-01' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz stanowisko' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ hourly_rate: null, valid_from: '2026-12-01' })
+  })
+
   it('saves the first rate of a position for every shift and catches a typo', async () => {
     const { calls, onDone } = await show(1)
     expect(screen.queryByLabelText('Od dnia')).not.toBeInTheDocument()
