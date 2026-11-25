@@ -1558,8 +1558,15 @@ Spec: „Logowanie i zaproszenia”. Piotr: „daj możliwość też innych kod�
   kierunkowych ITU). Podgląd „Zaproś kilka osób” zostawia zwykłe pole tekstowe (numer z pliku poprawia się z „+”).
   Edycja osoby: numer zmienia nadal tylko administrator (admin Django korzysta z tego samego `normalize_phone`).
 
-Założenia: domyślny kraj zawsze Polska (bez zgadywania z języka przeglądarki); kraj w formularzu zaproszenia zostaje po
-wysłaniu, bo kierownik często zaprasza kilka osób z jednego kraju. Bramka SMS nie jest jeszcze podłączona; przy jej
+Założenia: domyślny kraj zawsze Polska (bez zgadywania z języka przeglądarki); po wysłaniu zaproszenia formularz wraca
+do Polski, bo polski numer wpisany przy wybranej Ukrainie mógłby przejść jako ukraiński („+380 501…”; uwaga Prelint).
+Właściciel tylko z numerem zagranicznym: administrator dodaje jego numer w adminie Django (konto bez firmy), a wtedy
+„Załóż firmę” wysyła mu kod; komunikat odmowy to mówi. Bramka SMS nie jest jeszcze podłączona; przy jej
 wyborze sprawdzić cenę i dostarczanie SMS-ów za granicę (np. Ukraina) i zostawić w panelu bramki tylko potrzebne kraje.
 Strona z kodami SMS na serwerze (`deploy/local`, poza repozytorium) czyta wiersze „SMS to +…” z logu; format wiersza
 się nie zmienił, ale jeśli filtruje po „+48”, kody zagranicznych numerów trzeba tam dopisać.
+Do obserwacji w pilotażu (przegląd Prelint PR #80): czy kraje na liście pasują do załóg; czy listy kadrowe mają
+zagraniczne numery bez kierunkowego (wtedy w podglądzie „Zaproś kilka osób” dodać wybór „numery bez kierunkowego są z
+kraju…”); czy ktoś z prawdziwą komórką dostaje „podaj numer komórki” (dziś nie pomoże też admin, bo używa tej samej
+reguły). Przed podłączeniem bramki SMS zdecydować o ochronie kosztów: lista krajów w panelu bramki, ewentualnie
+dzienny limit zaproszeń na numery zagraniczne na firmę.

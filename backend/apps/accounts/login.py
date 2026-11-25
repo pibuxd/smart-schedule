@@ -33,7 +33,8 @@ UNKNOWN_PHONE = (
     "Jeśli tak, poproś kierownika o zaproszenie. Prowadzisz lokal? Załóż firmę."
 )
 FOREIGN_REGISTRATION = (
-    "Nową firmę zakładasz polskim numerem (+48). Numer z innego kraju działa, gdy kierownik zaprosi Cię do lokalu."
+    "Nową firmę zakładasz polskim numerem (+48). Masz tylko numer z innego kraju? Poproś administratora "
+    "Grafikomatu, żeby dodał Twój numer, a potem załóż firmę. Pracujesz w lokalu? Poproś kierownika o zaproszenie."
 )
 TOO_MANY_CODES = "Za dużo kodów w krótkim czasie. Spróbuj ponownie za godzinę."
 TOO_MANY_REGISTRATIONS = (

@@ -75,6 +75,8 @@ describe('EmployeesScreen', () => {
     expect(await screen.findByText(/Zaproszenie czeka na numer \+380 501 234 567/)).toBeInTheDocument()
     const post = calls.find((c) => c.method === 'POST')!
     expect((post.body as { phone: string }).phone).toBe('+380501234567')
+    // The next person starts from Poland again.
+    expect(screen.getByLabelText('Kraj numeru')).toHaveValue('PL')
   })
 
   it('lets the manager set another level on one position', async () => {

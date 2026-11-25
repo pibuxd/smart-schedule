@@ -514,6 +514,8 @@ function InvitationsSection({ locationId, positions }: { locationId: string; pos
             `Zaproszenie czeka na numer ${prettyPhone(out.phone)}. Nie wysyłamy SMS-a, więc powiedz tej osobie, żeby zalogowała się w Grafikomacie tym numerem. Zaproszenie zobaczy od razu.`,
           )
           setPhone('')
+          // Back to Poland: a Polish number typed after a foreign one could pass as that country's (+380 501…).
+          setRegion(POLAND.region)
           setFirst('')
           setLast('')
           void queryClient.invalidateQueries()

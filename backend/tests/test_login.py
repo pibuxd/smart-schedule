@@ -136,7 +136,7 @@ def test_a_company_is_registered_only_with_a_polish_number(api, sms_outbox, make
     response = request_code(api, FOREIGN, purpose="register")
 
     assert response.status_code == 400
-    assert "polskim numerem" in response.json()["detail"]
+    assert "polskim numerem" in response.json()["detail"] and "administratora" in response.json()["detail"]
     assert sms_outbox == []
     # A refused number still counts against the address, like any refused number.
     assert LoginCode.objects.filter(phone_e164=FOREIGN, code_hash="").exists()
