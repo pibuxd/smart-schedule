@@ -52,7 +52,7 @@ class MeOut(Schema):
     phone: str
     first_name: str
     last_name: str
-    # My account number for pay transfers: 26 digits, "" when not given.
+    # My account number for pay transfers, as I wrote it (any bank), "" when not given.
     bank_account: str = ""
     companies: list[MyCompanyOut]
     pending_invitations: int
@@ -63,7 +63,7 @@ class MeIn(Schema):
     first_name: str | None = Field(None, min_length=1, max_length=80)
     last_name: str | None = Field(None, min_length=1, max_length=120)
     # Spaces, dashes and "PL" are fine; "" removes the number.
-    bank_account: str | None = Field(None, max_length=40)
+    bank_account: str | None = Field(None, max_length=200)
 
 
 def _works_shifts(membership) -> bool:

@@ -55,7 +55,7 @@ class EmployeeHoursOut(Schema):
     supplements_pay: float | None = None
     # Hours on shifts without a rate (not in `pay`).
     unpriced_hours: float = 0
-    # Where to send the pay (26 digits, "" when the person has not given it).
+    # Where to send the pay (as written, any bank; "" when the person has not given it).
     bank_account: str = ""
 
 

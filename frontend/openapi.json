@@ -10000,7 +10000,7 @@
           "bank_account": {
             "anyOf": [
               {
-                "maxLength": 40,
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -15093,7 +15093,7 @@
           "bank_account": {
             "anyOf": [
               {
-                "maxLength": 40,
+                "maxLength": 200,
                 "type": "string"
               },
               {

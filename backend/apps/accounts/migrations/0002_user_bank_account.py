@@ -15,18 +15,7 @@ class Migration(migrations.Migration):
             model_name="user",
             name="bank_account",
             field=models.CharField(
-                blank=True, max_length=26, verbose_name="numer konta"
-            ),
-        ),
-        migrations.AddConstraint(
-            model_name="user",
-            constraint=models.CheckConstraint(
-                condition=models.Q(
-                    ("bank_account", ""),
-                    ("bank_account__regex", "^[0-9]{26}$"),
-                    _connector="OR",
-                ),
-                name="user_bank_account_26_digits",
+                blank=True, max_length=100, verbose_name="numer konta"
             ),
         ),
     ]

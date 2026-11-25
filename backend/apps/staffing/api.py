@@ -15,7 +15,7 @@ from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
-from apps.accounts.models import normalize_bank_account
+from apps.accounts.models import bank_account_ending, normalize_bank_account
 from apps.core.schemas import ErrorOut
 from apps.notifications.services import notify
 from apps.rules.models import RuleSetting
@@ -167,7 +167,7 @@ class EmployeeOut(Schema):
     first_name: str
     last_name: str
     phone: str
-    # For pay transfers (26 digits, "" when not given): the person enters it in "Twoje dane"; never shown to
+    # For pay transfers (as written, any bank; "" when not given): the person enters it in "Twoje dane"; never shown to
     # other employees.
     bank_account: str = ""
     # The person also has an account in another company, so only they change their name and bank account number.
@@ -202,7 +202,7 @@ class EmployeeIn(Schema):
     first_name: str | None = Field(None, max_length=80)
     last_name: str | None = Field(None, max_length=80)
     # Also on the account, with the same rule as the name; "" removes it. The person gets a notification.
-    bank_account: str | None = Field(None, max_length=40)
+    bank_account: str | None = Field(None, max_length=200)
     position_ids: list[UUID] | None = None
     experience: ExperienceLevel | None = None
     # Levels for single positions; replaces what was set before. A position left out gets the default level.
@@ -822,7 +822,9 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
             user.save(update_fields=fields)
             if "bank_account" in fields and user.pk != request.user.pk:
                 # Someone else changed where the person's pay goes: they should know (only the last digits).
-                notify(ctx.company.pk, [user.pk], "bank_account_set", {"ending": user.bank_account[-4:]})
+                notify(
+                    ctx.company.pk, [user.pk], "bank_account_set", {"ending": bank_account_ending(user.bank_account)}
+                )
         profile.save()
         here = set(_positions(ctx, location).values_list("pk", flat=True))
         if "position_ids" in sent and payload.position_ids is not None:

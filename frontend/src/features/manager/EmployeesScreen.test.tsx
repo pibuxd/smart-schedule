@@ -226,12 +226,12 @@ describe('EmployeesScreen', () => {
   })
 
   it('shows the bank account number for pay and sends only a changed one', async () => {
-    const ala = { ...person('e1', 'Ala', 2), bank_account: '61109010140000071219812874', revision: 'r1' }
+    const ala = { ...person('e1', 'Ala', 2), bank_account: 'PL61 1090 1014 0000 0712 1981 2874', revision: 'r1' }
     const calls = mockApi((method, path) => {
       if (path.endsWith('/employees')) return [200, [ala]]
       if (path.endsWith('/setup')) return [200, setup]
       if (path.endsWith('/invitations')) return [200, []]
-      if (method === 'PATCH') return [400, { detail: 'W tym numerze konta jest błąd. Sprawdź cyfry.' }]
+      if (method === 'PATCH') return [400, { detail: 'Numer konta może mieć najwyżej 100 znaków.' }]
       return [404, { detail: 'Nie ma' }]
     })
     renderScreen(
@@ -242,19 +242,19 @@ describe('EmployeesScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
     const sheet = await screen.findByRole('dialog')
     const field = within(sheet).getByLabelText('Numer konta do wypłaty')
-    expect(field).toHaveValue('61 1090 1014 0000 0712 1981 2874')
-    // Written differently, the same number is not a change.
-    fireEvent.change(field, { target: { value: 'PL61109010140000071219812874' } })
+    expect(field).toHaveValue('PL61 1090 1014 0000 0712 1981 2874')
+    // Extra spaces are not a change.
+    fireEvent.change(field, { target: { value: 'PL61 1090 1014 0000 0712 1981  2874 ' } })
     fireEvent.change(within(sheet).getByLabelText('Najwyżej godzin w miesiącu'), { target: { value: '160' } })
     fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
     await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(1))
     expect(calls.find((c) => c.method === 'PATCH')!.body).not.toHaveProperty('bank_account')
 
-    fireEvent.change(field, { target: { value: '61 1090 1014 0000 0712 1981 2875' } })
+    fireEvent.change(field, { target: { value: 'UA21 3223 1300 0002 6007 2335 6600 1' } })
     fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz' }))
     await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2))
-    expect(calls.filter((c) => c.method === 'PATCH')[1].body).toMatchObject({ bank_account: '61 1090 1014 0000 0712 1981 2875' })
-    expect(await within(sheet).findByText('W tym numerze konta jest błąd. Sprawdź cyfry.')).toBeInTheDocument()
+    expect(calls.filter((c) => c.method === 'PATCH')[1].body).toMatchObject({ bank_account: 'UA21 3223 1300 0002 6007 2335 6600 1' })
+    expect(await within(sheet).findByText('Numer konta może mieć najwyżej 100 znaków.')).toBeInTheDocument()
   })
 
   it('says up front when only the person changes their name and account (another company)', async () => {

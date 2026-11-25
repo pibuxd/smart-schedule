@@ -103,10 +103,10 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   cannot be invited is left out with a note instead of blocking the plan.
 - Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
   have no password; only the Django admin superuser has one.
-  `User.bank_account` (optional, 26 digits, `normalize_bank_account`) belongs to the person like the name: set in
-  "Twoje dane" (`PATCH /me`) or by a manager with the name's rule (`staffing.api._changed_account`; the person gets
-  `bank_account_set`). Only the person and the managers of their locations see it; never put it in the assistant's
-  tool results (`tools.DROPPED_KEYS`).
+  `User.bank_account` (optional plain text as written, any bank; `normalize_bank_account` only tidies spaces) belongs
+  to the person like the name: set in "Twoje dane" (`PATCH /me`) or by a manager with the name's rule
+  (`staffing.api._changed_account`, `EmployeeOut.other_company`; the person gets `bank_account_set`). Only the person
+  and the managers of their locations see it; never put it in the assistant's tool results (`tools.DROPPED_KEYS`).
 - A person can work in several locations of a company: `EmployeeProfile.home_location` (main) plus
   `extra_locations`. "People of a location" is `works_in_q(location)` / `profile.works_in(location)`, never
   `home_location=` alone; in the engine `Employee.works_in`. Availability and monthly hours are per person.

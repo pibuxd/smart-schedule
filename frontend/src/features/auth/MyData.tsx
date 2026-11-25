@@ -9,7 +9,7 @@ import { TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
-import { bankAccountDigits, prettyBankAccount } from './bank-account'
+import { tidyBankAccount } from './bank-account'
 import { prettyPhone } from './phone'
 
 /** "Twoje dane" at the top of the employee's screens: name and the bank account number for pay (optional). */
@@ -31,14 +31,14 @@ export function MyDataButton({ me, className }: { me: MeOut; className?: string 
 export function MyDataForm({ me, onDone }: { me: MeOut; onDone: () => void }) {
   const [first, setFirst] = useState(me.first_name)
   const [last, setLast] = useState(me.last_name)
-  const [account, setAccount] = useState(prettyBankAccount(me.bank_account ?? ''))
+  const [account, setAccount] = useState(me.bank_account ?? '')
   const save = useUpdateMe()
   const queryClient = useQueryClient()
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
     const data: MeIn = { first_name: first.trim(), last_name: last.trim() }
-    if (bankAccountDigits(account) !== (me.bank_account ?? '')) data.bank_account = account
+    if (tidyBankAccount(account) !== (me.bank_account ?? '')) data.bank_account = account
     save.mutate(
       { data },
       {
@@ -58,10 +58,8 @@ export function MyDataForm({ me, onDone }: { me: MeOut; onDone: () => void }) {
       </div>
       <TextField
         label="Numer konta do wypłaty"
-        inputMode="numeric"
         autoComplete="off"
-        maxLength={40}
-        placeholder="26 cyfr"
+        maxLength={100}
         value={account}
         onChange={(e) => {
           setAccount(e.target.value)

@@ -19,8 +19,8 @@ class UserCreateForm(PhoneCleanMixin, AdminUserCreationForm):
 
 
 class UserEditForm(PhoneCleanMixin, UserChangeForm):
-    # Longer than the 26 stored digits, so a number typed with spaces or "PL" reaches `clean_bank_account`.
-    bank_account = forms.CharField(label="Numer konta", max_length=40, required=False)
+    # Longer than the stored 100 characters, so extra spaces reach `clean_bank_account`, which tidies them.
+    bank_account = forms.CharField(label="Numer konta", max_length=200, required=False)
 
     def clean_bank_account(self):
         return normalize_bank_account(self.cleaned_data.get("bank_account"))
