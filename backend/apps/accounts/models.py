@@ -9,16 +9,42 @@ from django.utils.crypto import salted_hmac
 
 from apps.tenancy.base import UUIDModel
 
+POLISH_PREFIX = "+48"
+NOT_A_PHONE = "To nie wygląda na numer telefonu."
+WRONG_PHONE = "Sprawdź numer. Polski ma 9 cyfr. Numer z innego kraju zacznij od + i kierunkowego, na przykład +380."
+WRONG_FOREIGN_PHONE = "Sprawdź numer. Nie pasuje do numerów z kraju o tym kierunkowym."
+NOT_MOBILE = "Kod logowania przychodzi SMS-em, więc podaj numer komórki."
+# Number types that can get an SMS. Polish numbers are taken as before (any valid one); a foreign one must be a mobile,
+# which also keeps premium-rate and other costly numbers out of the SMS budget.
+SMS_NUMBER_TYPES = frozenset({phonenumbers.PhoneNumberType.MOBILE, phonenumbers.PhoneNumberType.FIXED_LINE_OR_MOBILE})
+
 
 def normalize_phone(raw: str) -> str:
-    """Return a Polish (+48) mobile or landline number in E.164 form, or raise ValidationError."""
+    """Return a phone number in E.164 form, or raise ValidationError. A number without a country code is Polish
+    (+48); one from another country is written with its code ("+380 50 123 4567", "00380…") and must be a mobile
+    (Piotr, 25.11.2026: people from Ukraine and elsewhere keep their own numbers)."""
     try:
         number = phonenumbers.parse(str(raw), "PL")
     except phonenumbers.NumberParseException as exc:
-        raise ValidationError("To nie wygląda na numer telefonu.") from exc
-    if number.country_code != 48 or not phonenumbers.is_valid_number(number):
-        raise ValidationError("Podaj polski numer telefonu (+48).")
+        raise ValidationError(NOT_A_PHONE) from exc
+    if not phonenumbers.is_valid_number(number):
+        raise ValidationError(WRONG_PHONE if number.country_code == 48 else WRONG_FOREIGN_PHONE)
+    if number.country_code != 48 and phonenumbers.number_type(number) not in SMS_NUMBER_TYPES:
+        raise ValidationError(NOT_MOBILE)
     return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
+
+
+def phone_for_text(e164: str) -> str:
+    """How a stored number is written for people: "512 345 678" for a Polish one, "+380 50 123 4567" for another
+    country. Non-breaking spaces keep it on one line."""
+    if e164.startswith(POLISH_PREFIX) and len(e164) == 12:
+        digits = e164.removeprefix(POLISH_PREFIX)
+        return " ".join(digits[i : i + 3] for i in range(0, 9, 3))
+    try:
+        number = phonenumbers.parse(e164, None)
+    except phonenumbers.NumberParseException:
+        return e164
+    return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.INTERNATIONAL).replace(" ", " ")
 
 
 BANK_ACCOUNT_MAX = 100

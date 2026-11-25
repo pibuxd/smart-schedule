@@ -8,7 +8,15 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.accounts.models import User, normalize_phone
+from apps.accounts.models import (
+    NOT_A_PHONE,
+    NOT_MOBILE,
+    WRONG_FOREIGN_PHONE,
+    WRONG_PHONE,
+    User,
+    normalize_phone,
+    phone_for_text,
+)
 from apps.availability.models import AvailabilityDay, AvailabilityState
 from apps.billing.models import AccessCode, Subscription
 from apps.rules.models import RuleSetting, WeightProfile
@@ -26,16 +34,47 @@ def violates(callable_):
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
-    [("600 100 200", "+48600100200"), ("+48 600-100-200", "+48600100200"), ("0048600100200", "+48600100200")],
+    [
+        ("600 100 200", "+48600100200"),
+        ("+48 600-100-200", "+48600100200"),
+        ("0048600100200", "+48600100200"),
+        ("+48 22 123 45 67", "+48221234567"),  # Polish numbers stay as they were: landlines too
+        # Another country: with its code, also with the national 0 people often write after it.
+        ("+380 50 123 4567", "+380501234567"),
+        ("+380 050 123 45 67", "+380501234567"),
+        ("00380501234567", "+380501234567"),
+        ("+44 7911 123456", "+447911123456"),
+        ("+995 555 12 34 56", "+995555123456"),
+    ],
 )
 def test_phone_is_normalized_to_e164(raw, expected):
     assert normalize_phone(raw) == expected
 
 
-@pytest.mark.parametrize("raw", ["123", "+49 1512 3456789", "abc"])
-def test_non_polish_or_invalid_phone_is_rejected(raw):
-    with pytest.raises(ValidationError):
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ("123", WRONG_PHONE),
+        ("abc", NOT_A_PHONE),
+        # A Ukrainian number written without its code reads as a wrong Polish one.
+        ("050 123 4567", WRONG_PHONE),
+        ("+380 50 123", WRONG_FOREIGN_PHONE),
+        # Codes come by SMS: a foreign landline is refused.
+        ("+49 30 901820", NOT_MOBILE),
+    ],
+)
+def test_invalid_phone_is_rejected_with_a_reason(raw, message):
+    with pytest.raises(ValidationError) as error:
         normalize_phone(raw)
+    assert error.value.messages == [message]
+
+
+@pytest.mark.parametrize(
+    ("e164", "text"),
+    [("+48512345678", "512\u00a0345\u00a0678"), ("+380501234567", "+380\u00a050\u00a0123\u00a04567")],
+)
+def test_phone_is_written_for_people(e164, text):
+    assert phone_for_text(e164) == text
 
 
 @pytest.mark.django_db

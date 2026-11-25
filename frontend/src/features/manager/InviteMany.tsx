@@ -15,7 +15,7 @@ import { CheckField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
-import { prettyPhone } from '../auth/phone'
+import { isE164, prettyPhone } from '../auth/phone'
 import { useAssistantDrawer } from './assistant-drawer'
 import { useManager } from './ManagerContext'
 import { people, persons } from './words'
@@ -278,7 +278,7 @@ function PersonRow({
         <span className="grid min-w-0">
           <b className="truncate">{name}</b>
           <span className="text-sm text-ink-muted tabular-nums">
-            {/^\+48\d{9}$/.test(row.phone) ? prettyPhone(row.phone) : row.phone || 'brak numeru'}
+            {isE164(row.phone) ? prettyPhone(row.phone) : row.phone || 'brak numeru'}
           </span>
         </span>
         <span className="flex shrink-0 gap-1">

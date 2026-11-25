@@ -11,16 +11,18 @@ import { Button } from '../../components/ui/button'
 import { InlineError } from '../../components/ui/status'
 import { Wordmark } from '../../components/Wordmark'
 import { CodeInput } from './CodeInput'
-import { prettyPhone } from './phone'
+import { POLAND, phoneProblem, phoneToSend, prettyPhone } from './phone'
+import { PhoneInput } from './PhoneInput'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { takeSessionEnded } from '../../lib/session-ended'
 
-const phoneSchema = z.object({
-  phone: z
-    .string()
-    .transform((value) => value.replace(/[\s-]/g, '').replace(/^(\+48|0048)/, ''))
-    .refine((value) => /^\d{9}$/.test(value), 'Wpisz 9 cyfr numeru, na przykład 512 345 678.'),
-})
+const phoneSchema = z
+  .object({ region: z.string(), phone: z.string() })
+  .superRefine(({ region, phone }, ctx) => {
+    const problem = phoneProblem(region, phone)
+    if (problem) ctx.addIssue({ code: 'custom', path: ['phone'], message: problem })
+  })
+  .transform(({ region, phone }) => ({ phone: phoneToSend(region, phone) }))
 type PhoneForm = z.input<typeof phoneSchema>
 
 type Purpose = 'login' | 'register'
@@ -82,13 +84,14 @@ function PhoneStep({ purpose, onSent }: { purpose: Purpose; onSent: (sent: Reque
   const [sessionEnded] = useState(takeSessionEnded)
   const form = useForm<PhoneForm, unknown, z.output<typeof phoneSchema>>({
     resolver: zodResolver(phoneSchema),
-    defaultValues: { phone: '' },
+    defaultValues: { region: POLAND.region, phone: '' },
   })
   const fieldError = form.formState.errors.phone?.message
+  const region = form.watch('region')
 
   const submit = form.handleSubmit(({ phone }) => {
     requestCode.mutate(
-      { data: { phone: `+48${phone}`, purpose } },
+      { data: { phone, purpose } },
       { onSuccess: (response) => onSent(response.data as RequestCodeOut) },
     )
   })
@@ -112,22 +115,16 @@ function PhoneStep({ purpose, onSent }: { purpose: Purpose; onSent: (sent: Reque
         <label htmlFor="phone" className="font-semibold">
           Numer telefonu
         </label>
-        <div className="flex min-h-(--touch-main) overflow-hidden rounded-md border-2 border-ink bg-surface focus-within:border-accent focus-within:ring-3 focus-within:ring-accent-soft">
-          <span className="flex items-center bg-grid px-3.5 font-semibold" aria-hidden="true">
-            +48
-          </span>
-          <input
-            id="phone"
-            className="min-w-0 flex-1 bg-transparent px-3.5 text-lg tracking-wide outline-none"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel-national"
-            placeholder="512 345 678"
-            aria-invalid={fieldError ? true : undefined}
-            aria-describedby={fieldError ? 'phone-error' : undefined}
-            {...form.register('phone')}
-          />
-        </div>
+        <PhoneInput
+          id="phone"
+          region={region}
+          onRegionChange={(value) => form.setValue('region', value)}
+          // The whole number with its "+": it works for any country (`phoneToSend`).
+          autoComplete="tel"
+          aria-invalid={fieldError ? true : undefined}
+          aria-describedby={fieldError ? 'phone-error' : undefined}
+          {...form.register('phone')}
+        />
         {fieldError && (
           <p id="phone-error" className="m-0 text-sm text-cannot">
             {fieldError}

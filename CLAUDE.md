@@ -101,7 +101,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   assistant reads a file too (`assistant-commands/file`, `AssistantCommand.attachment`, text dropped once read) and
   proposes `invites`; phone numbers reach the model only as `[TEL1]` marks (`people_list.PhoneMask`), and a person who
   cannot be invited is left out with a note instead of blocking the plan.
-- Users: `apps.accounts.User`, login field `phone_e164` (normalized with `normalize_phone`, +48 only). App users
+- Users: `apps.accounts.User`, login field `phone_e164` (E.164, normalized with `normalize_phone`: no
+  code = Polish; another country needs its code and a mobile number; a new company registers only with +48).
+  Screens type numbers in `features/auth/PhoneInput.tsx` (country before the number, +48 by default). App users
   have no password; only the Django admin superuser has one.
   `User.bank_account` (optional plain text as written, any bank; `normalize_bank_account` only tidies spaces) belongs
   to the person like the name: set in "Twoje dane" (`PATCH /me`) or by a manager with the name's rule

@@ -1532,3 +1532,34 @@ kierownikowi; powiadomienie chroni przed cichą zmianą. Inni pracownicy i asyst
 Hipotezy na pilotaż (uwagi z przeglądu PR #78): czy ktoś pracuje w dwóch firmach i chce w nich różnych kont (wtedy
 numer przenieść do profilu w firmie); czy kierownicy naprawdę wpisują numery za innych (jeśli nie, zostawić to tylko
 osobie, bo powiadomienie w aplikacji można przeoczyć); komu kierownik daje plik CSV z numerami kont.
+
+## 43. Numery telefonów z innych krajów (25.11.2026)
+
+Spec: „Logowanie i zaproszenia”. Piotr: „daj możliwość też innych kodów krajowych numerów telefonów”.
+
+- Backend: `accounts.models.normalize_phone` czyta numer z regionem PL (bez kierunkowego = polski) i przyjmuje każdy
+  poprawny numer z kierunkowym („+380 50 123 4567”, „00380…”, też z krajowym zerem po kierunkowym, które
+  phonenumbers sam usuwa). Polski: jak wcześniej każdy poprawny. Zagraniczny: tylko komórka (`SMS_NUMBER_TYPES`), bo
+  kod idzie SMS-em, a numery premium nie wchodzą do budżetu SMS. Komunikaty: `NOT_A_PHONE`, `WRONG_PHONE` (mówi, że
+  zagraniczny zaczyna się od + i kierunkowego), `WRONG_FOREIGN_PHONE`, `NOT_MOBILE`. Pole `phone_e164` (16 znaków)
+  mieści każdy numer E.164, więc bez migracji. `phone_for_text` pisze numer dla ludzi („512 345 678”, „+380 50 123
+  4567”); używa go `assistant.services.pretty_phone` w liniach planu zaproszeń.
+- Logowanie (`accounts/login.py`): kod dostaje każdy numer z kontem albo oczekującym zaproszeniem. Rejestracja firmy
+  numerem bez konta i zaproszenia tylko dla +48 (`FOREIGN_REGISTRATION`, 400; odmowa liczy się w limicie na adres
+  IP jak każda inna).
+- Lista osób (`people_list`): `PhoneMask` porównuje numery po E.164 (`_number_key`), więc „+380 600 100 200” i
+  „600 100 200” dostają różne znaczniki; wcześniej liczyło się 9 ostatnich cyfr. Numer bez „+”/„00” jest polski, więc
+  np. PESEL nadal nie udaje numeru.
+- Ekran: `features/auth/PhoneInput.tsx` (kraj przed numerem: widoczny kierunkowy z ikoną strzałki, pod nim zwykła
+  lista `select`, więc otwiera się jak każda inna lista telefonu) na „Zaloguj się”, „Załóż firmę” i w „Zaproś do
+  lokalu”. `features/auth/phone.ts`: `PHONE_COUNTRIES` (Polska, Ukraina, potem alfabetycznie), `phoneToSend` (numer
+  z „+” lub „00” idzie w całości, inaczej kierunkowy wybranego kraju z przodu), `phoneProblem` (9 cyfr dla Polski,
+  cały numer dla innych; resztę sprawdza serwer), `prettyPhone` dzieli kierunkowy od reszty dla każdego kraju (lista
+  kierunkowych ITU). Podgląd „Zaproś kilka osób” zostawia zwykłe pole tekstowe (numer z pliku poprawia się z „+”).
+  Edycja osoby: numer zmienia nadal tylko administrator (admin Django korzysta z tego samego `normalize_phone`).
+
+Założenia: domyślny kraj zawsze Polska (bez zgadywania z języka przeglądarki); kraj w formularzu zaproszenia zostaje po
+wysłaniu, bo kierownik często zaprasza kilka osób z jednego kraju. Bramka SMS nie jest jeszcze podłączona; przy jej
+wyborze sprawdzić cenę i dostarczanie SMS-ów za granicę (np. Ukraina) i zostawić w panelu bramki tylko potrzebne kraje.
+Strona z kodami SMS na serwerze (`deploy/local`, poza repozytorium) czyta wiersze „SMS to +…” z logu; format wiersza
+się nie zmienił, ale jeśli filtruje po „+48”, kody zagranicznych numerów trzeba tam dopisać.

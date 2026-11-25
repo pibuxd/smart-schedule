@@ -19,6 +19,7 @@ from django.db import transaction
 from django.utils import timezone
 from ninja.errors import HttpError
 
+from apps.accounts.models import phone_for_text
 from apps.assistant import agreements, costs, llm, readings, tools
 from apps.assistant import context as facts
 from apps.assistant.models import AssistantCommand, AssistantUsage, ManagerInstruction
@@ -1755,9 +1756,8 @@ MAX_LISTED_SKIPS = 15
 
 
 def pretty_phone(e164: str) -> str:
-    """+48512345678 → 512 345 678 (as the app shows numbers; non-breaking spaces keep it on one line)."""
-    digits = e164.removeprefix("+48")
-    return "\u00a0".join(digits[i : i + 3] for i in range(0, len(digits), 3)) if len(digits) == 9 else e164
+    """+48512345678 → 512 345 678, +380501234567 → +380 50 123 4567 (as the app shows numbers)."""
+    return phone_for_text(e164)
 
 
 def _person_words(first: str, last: str) -> str:

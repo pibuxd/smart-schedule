@@ -393,7 +393,8 @@ Przewodnik po aplikacji kierownika:
   kliknięciu zmiany, „Opublikuj”, „Usuń szkic”; opublikowany grafik zmienia się przez „Popraw grafik” i ponowną
   publikację), „Ustalenia” (to, co zatwierdzono w rozmowie z asystentem dla okresu; kopiowanie z poprzedniego
   okresu), „Pracownicy”
-  (zaproszenie po numerze telefonu, „Zaproś kilka osób” z wklejonej listy albo pliku CSV, XLSX lub PDF,
+  (zaproszenie po numerze telefonu, także z innego kraju: kraj wybiera się przed numerem albo numer zaczyna od +
+  i kierunkowego, np. +380; „Zaproś kilka osób” z wklejonej listy albo pliku CSV, XLSX lub PDF,
   stanowiska, stopień doświadczenia, maksimum i cel godzin, wyłączenie z grafiku, „Usuń z lokalu”, „Dodaj
   siebie do grafiku”), „Ustawienia lokalu” (stanowiska, zmiany i godziny,
   obsada na dni tygodnia, „Obsada w wybrane dni” np. Wigilia albo krótszy dzień, dni zamknięcia, okres grafiku i

@@ -1,7 +1,8 @@
 """Login with a 6-digit SMS code: who may get a code, rate limits, and checking the code.
 
 Rules (docs/spec.md, "Logowanie i zaproszenia"):
-- a code goes only to a +48 number that has an account or a pending invitation, or when a new manager registers;
+- a code goes only to a number that has an account or a pending invitation, or when a new manager registers
+  a company with a Polish (+48) number; numbers from other countries work once a manager invites them;
 - the code lives 5 minutes and allows 5 wrong tries; only its hash is stored;
 - a few codes per phone number per hour and a limit per IP address.
 """
@@ -19,7 +20,7 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from ninja.errors import HttpError
 
-from apps.accounts.models import LoginCode, User, normalize_phone
+from apps.accounts.models import POLISH_PREFIX, LoginCode, User, normalize_phone
 from apps.accounts.sms import get_sms_sender
 from apps.tenancy.models import Invitation, InvitationStatus
 
@@ -30,6 +31,9 @@ Purpose = Literal["login", "register"]
 UNKNOWN_PHONE = (
     "Nie znamy tego numeru. Sprawdź, czy jest wpisany dobrze. "
     "Jeśli tak, poproś kierownika o zaproszenie. Prowadzisz lokal? Załóż firmę."
+)
+FOREIGN_REGISTRATION = (
+    "Nową firmę zakładasz polskim numerem (+48). Numer z innego kraju działa, gdy kierownik zaprosi Cię do lokalu."
 )
 TOO_MANY_CODES = "Za dużo kodów w krótkim czasie. Spróbuj ponownie za godzinę."
 TOO_MANY_REGISTRATIONS = (
@@ -64,7 +68,9 @@ def may_receive_code(phone_e164: str, purpose: Purpose) -> bool:
     user = User.objects.filter(phone_e164=phone_e164).first()
     if user is not None:
         return user.is_active
-    if purpose == "register":
+    # Registering sends a code to a number nobody vouched for, so only to a Polish one: an SMS abroad costs more and is
+    # what SMS fraud is after. Foreign numbers get codes once a manager has invited them.
+    if purpose == "register" and phone_e164.startswith(POLISH_PREFIX):
         return True
     return Invitation.objects.filter(phone_e164=phone_e164, status=InvitationStatus.PENDING).exists()
 
@@ -104,6 +110,8 @@ def request_login_code(raw_phone: str, purpose: Purpose, ip: str | None) -> Issu
             )
     if not allowed:
         # Raised after the block, so the row above is kept.
+        if purpose == "register" and not phone.startswith(POLISH_PREFIX):
+            raise HttpError(400, FOREIGN_REGISTRATION)
         raise HttpError(404, UNKNOWN_PHONE)
     return IssuedCode(phone, settings.LOGIN_CODE_TTL_S, settings.LOGIN_CODE_RESEND_AFTER_S)
 

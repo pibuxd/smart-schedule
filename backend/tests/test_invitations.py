@@ -52,6 +52,19 @@ def test_manager_invites_by_phone_number_and_no_sms_is_sent(api, a, sms_outbox):
     assert [row["id"] for row in listed] == [body["id"]]
 
 
+def test_manager_invites_a_number_from_another_country(api, a):
+    api.login(a["manager"])
+
+    response = invite(api, a["location"], "+380 50 123 45 67", first_name="Olena")
+    assert response.status_code == 201
+    assert response.json()["phone"] == "+380501234567"
+
+    # Without its code the number reads as a wrong Polish one, and the message says how to write it.
+    wrong = invite(api, a["location"], "050 123 4567")
+    assert wrong.status_code == 400
+    assert "+380" in wrong.json()["detail"]
+
+
 def test_one_pending_invitation_per_location_and_number(api, a):
     api.login(a["manager"])
     assert invite(api, a["location"]).status_code == 201
