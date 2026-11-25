@@ -1556,7 +1556,10 @@ Spec: „Logowanie i zaproszenia”. Piotr: „daj możliwość też innych kod�
   `invitations/read` i `invitations/many`, sprawdzany przez `accounts.models.is_phone_region`; `find_people`,
   `check_people`, `invite_people` i `normalize_phone(region=…)` czytają wtedy numery bez kierunkowego jako z tego
   kraju). Powód (Prelint, poprawka po PR #80): Excel gubi zero na początku, więc ukraińskie 050 123 4567 przychodzi
-  jako 501234567 i bez wyboru kraju przeszłoby po cichu jako polski numer. Asystent czyta pliki jak dotąd (Polska).
+  jako 501234567 i bez wyboru kraju przeszłoby po cichu jako polski numer. Asystent czyta pliki jak dotąd (Polska),
+  ale gdy w planie są numery innego kraju obok numerów bez kierunkowego, dodaje uwagę `MIXED_COUNTRIES_NOTE` (sprawdź
+  je albo użyj „Zaproś kilka osób” z wyborem kraju). Podgląd listy mówi „Numery bez kierunkowego czytam jako: …”, gdy
+  kraj nie jest Polską albo gdy na polskiej liście są numery innego kraju.
 - Zaproszenie (`invitations.invitable_phone`, pojedyncze i z listy): zagraniczny numer musi być komórką, chyba że ma
   już konto. Superadmin dodaje w adminie prawdziwą komórkę, którą dane phonenumbers nazywają inaczej, a wtedy
   kierownik ją zaprasza i osoba trafia do lokalu.

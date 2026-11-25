@@ -100,6 +100,11 @@ function InviteMany({
     // A corrected person is checked again on sending.
     setRows((now) => (now ?? []).map((row) => (row.key === key ? { ...row, ...fields, problem: null } : row)))
   const ready = (rows ?? []).filter((row) => !row.problem)
+  // Said when the country is not Poland, or when a Polish-read list also has numbers of another country (a crew
+  // list where Excel dropped the leading 0 of some numbers).
+  const country = phoneCountry(region)
+  const sayCountry =
+    region !== POLAND.region || (rows ?? []).some((row) => isE164(row.phone) && !row.phone.startsWith(`+${POLAND.code}`))
   const fix = (rows ?? []).length - ready.length
 
   const send = () => {
@@ -213,8 +218,8 @@ function InviteMany({
           {fix > 0
             ? `Na liście: ${people(rows.length)}. Do poprawienia: ${fix}.`
             : `Na liście: ${people(rows.length)}. Sprawdź imiona i numery.`}
-          {region !== POLAND.region && (
-            <span className="block text-sm text-ink-muted">{`Numery bez kierunkowego czytam jako: ${phoneCountry(region)?.name} +${phoneCountry(region)?.code}.`}</span>
+          {sayCountry && country && (
+            <span className="block text-sm text-ink-muted">{`Numery bez kierunkowego czytam jako: ${country.name} +${country.code}.`}</span>
           )}
           {skippedLines > 0 && invited === 0 && (
             <span className="block text-sm text-ink-muted">{`Pominięte wiersze bez numeru telefonu: ${skippedLines}.`}</span>

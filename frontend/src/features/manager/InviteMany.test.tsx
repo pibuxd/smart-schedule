@@ -55,6 +55,8 @@ describe('Zaproś kilka osób', () => {
 
     expect(await within(sheet).findByText('Na liście: 2 osoby. Do poprawienia: 1.')).toBeInTheDocument()
     expect(within(sheet).getByText('+48 512 345 678')).toBeInTheDocument()
+    // A Polish list with no numbers of other countries needs no word about the country.
+    expect(within(sheet).queryByText(/Numery bez kierunkowego czytam jako/)).not.toBeInTheDocument()
     expect(within(sheet).getByText('Kasa')).toBeInTheDocument()
     expect(within(sheet).getByRole('alert')).toHaveTextContent('Podaj polski numer telefonu (+48).')
     expect(within(sheet).getByText('Pominięte wiersze bez numeru telefonu: 1.')).toBeInTheDocument()
@@ -92,6 +94,20 @@ describe('Zaproś kilka osób', () => {
     fireEvent.click(within(sheet).getByRole('button', { name: 'Zaproś 1 osobę' }))
     await vi.waitFor(() => expect(calls.some((c) => c.url.endsWith('/invitations/many'))).toBe(true))
     expect((calls.find((c) => c.url.endsWith('/invitations/many'))!.body as { region: string }).region).toBe('UA')
+  })
+
+  it('says how numbers are read when a Polish list also has foreign ones', async () => {
+    screenWith((_method, path) => {
+      if (path.endsWith('/invitations/read')) return [200, { people: [listed('Olena', '+380501234567'), listed('Iryna', '+48501234568')], skipped_lines: 0 }]
+      return [404, { detail: 'Nie ma' }]
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Zaproś kilka osób' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.change(within(sheet).getByLabelText('Wklej listę'), { target: { value: 'Olena +380501234567\nIryna 501234568' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Sprawdź listę' }))
+
+    expect(await within(sheet).findByText('Numery bez kierunkowego czytam jako: Polska +48.')).toBeInTheDocument()
   })
 
   it('sends a chosen file and shows why it could not be read', async () => {
