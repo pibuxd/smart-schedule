@@ -213,6 +213,8 @@ describe("RequestsSection", () => {
     expect(screen.getByText(/nadal do pracy także w godzinach 9:00–11:00: 8.12, 15.12/)).toBeInTheDocument();
     // Opening a whole day says what it costs, and that a whole day off can stay.
     expect(screen.getByText(/Nie możesz przez cały dzień\? Zostaw tak, jak jest/)).toBeInTheDocument();
+    // Until the button is pressed the generator knows nothing about those hours, so the text says so.
+    expect(screen.getByText(/Tego jeszcze nie ma w kalendarzu. Naciśnij przycisk/)).toBeInTheDocument();
     const [whole, open] = screen.getAllByRole("button", { name: "Zaznacz „Mogę” do 9:00 i od 11:00" });
     fireEvent.click(whole);
     await waitFor(() =>

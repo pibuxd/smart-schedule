@@ -113,9 +113,9 @@ function CannotMark({
       <p className="m-0 text-sm">{text}</p>
       {rest && (
         <p className="m-0 text-sm text-ink-muted">
-          Nie dostaniesz wtedy zmiany, która zahacza o godziny {hours}.
-          {mark.whole_day &&
-            " Nie możesz przez cały dzień? Zostaw tak, jak jest."}
+          {mark.whole_day
+            ? `Nie dostaniesz wtedy zmiany, która zahacza o godziny ${hours}. Nie możesz przez cały dzień? Zostaw tak, jak jest.`
+            : `Tego jeszcze nie ma w kalendarzu. Naciśnij przycisk, a nie dostaniesz zmiany, która zahacza o godziny ${hours}.`}
         </p>
       )}
       <div>
