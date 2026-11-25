@@ -1,12 +1,11 @@
-import { useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link, Navigate, Outlet, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, Navigate, Outlet } from '@tanstack/react-router'
 
-import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { Wordmark } from '../components/Wordmark'
 import { cn } from '../lib/cn'
 import { ProfileNameForm } from '../features/auth/ProfileNameForm'
 import { useSession } from '../features/auth/session'
+import { useSignOut } from '../features/auth/sign-out'
 import { AccessBanner } from '../features/manager/AccessBanner'
 import { AssistantDrawerProvider } from '../features/manager/AssistantDrawer'
 import { isManagerRole, ManagerContext } from '../features/manager/ManagerContext'
@@ -27,9 +26,7 @@ export const Route = createFileRoute('/kierownik')({
  */
 function ManagerLayout() {
   const session = useSession()
-  const logout = useLogout()
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  const signOut = useSignOut()
 
   if (session.state === 'loading') return <Loading>Otwieram panel kierownika…</Loading>
   if (session.state === 'logged-out') return <Navigate to="/logowanie" replace />
@@ -44,14 +41,6 @@ function ManagerLayout() {
   const managed = me.companies.filter((c) => isManagerRole(c.role))
   const company = managed.find((c) => c.id === session.company?.id) ?? managed[0]
   if (!company || !isManagerRole(company.role)) return <Navigate to="/grafik" replace />
-
-  const signOut = () =>
-    logout.mutate(undefined, {
-      onSettled: async () => {
-        queryClient.clear()
-        await navigate({ to: '/logowanie' })
-      },
-    })
 
   return (
     <ManagerContext.Provider value={{ companyId: company.id, role: company.role, readOnly: company.read_only }}>

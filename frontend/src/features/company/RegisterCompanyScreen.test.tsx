@@ -27,6 +27,13 @@ describe('RegisterCompanyScreen', () => {
     })
   })
 
+  it('lets a person who changed their mind log out', async () => {
+    const calls = mockApi(() => [204, null])
+    renderScreen(<RegisterCompanyScreen me={me} onCreated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Wyloguj' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/auth/logout')).toBe(true))
+  })
+
   it('shows the reason when the company cannot be created', async () => {
     mockApi(() => [400, { detail: 'Ten kod nie istnieje albo został już wykorzystany.' }])
     renderScreen(<RegisterCompanyScreen me={me} onCreated={vi.fn()} />)

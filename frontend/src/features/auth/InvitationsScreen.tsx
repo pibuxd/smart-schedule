@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { getMeQueryKey } from '../../api/generated/auth/auth'
-import type { MyInvitationOut } from '../../api/generated/model'
+import type { MeOut, MyInvitationOut } from '../../api/generated/model'
 import {
   getMyInvitationsQueryKey,
   useAcceptInvitation,
@@ -13,18 +13,31 @@ import {
 import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { prettyPhone } from './phone'
+import { ProfileNameForm } from './ProfileNameForm'
+import { SignOutButton } from './SignOutButton'
 
 const ROLE_WORDS: Record<MyInvitationOut['role'], string> = {
   employee: 'pracownik',
   manager: 'kierownik',
 }
 
-export function InvitationsScreen({ name }: { name: string }) {
+/**
+ * Invitations waiting for this phone number. Also the screen of a person with no company yet, so it has its own
+ * "Wyloguj" (someone who logged in with the wrong number must be able to try another one).
+ */
+export function InvitationsScreen({ me }: { me: MeOut }) {
   const invitations = useMyInvitations()
+  const name = `${me.first_name} ${me.last_name}`.trim()
+  const phone = prettyPhone(me.phone)
 
   return (
-    <main className="mx-auto grid max-w-(--column) gap-5 px-4 pt-6 pb-10">
-      {name && <p className="m-0 text-sm text-ink-muted">{name}</p>}
+    <main className="mx-auto grid max-w-(--column) gap-5 px-4 pt-4 pb-10">
+      <div className="flex min-w-0 items-center justify-between gap-3 text-base text-ink-muted">
+        <span className="min-w-0 truncate">{name || phone}</span>
+        <SignOutButton />
+      </div>
+      {!name && me.companies.length > 0 && <ProfileNameForm me={me} />}
       <h1 className="m-0 text-xl font-extrabold">Zaproszenia do pracy</h1>
       {invitations.isPending ? (
         <Loading>Sprawdzam zaproszenia…</Loading>
@@ -35,11 +48,15 @@ export function InvitationsScreen({ name }: { name: string }) {
       ) : (invitations.data.data as MyInvitationOut[]).length === 0 ? (
         <EmptyState title="Nie masz żadnych zaproszeń">
           <p className="m-0">
-            Gdy kierownik zaprosi Cię do pracy na ten numer telefonu, zaproszenie pojawi się tutaj.
+            Gdy kierownik zaprosi Cię na numer <b className="whitespace-nowrap text-ink">{phone}</b>, zaproszenie
+            pojawi się tutaj.
           </p>
-          <Link to="/" className="font-semibold text-accent underline underline-offset-4">
-            Wróć do grafiku
-          </Link>
+          {/* Without a company "/" leads straight back here. */}
+          {me.companies.length > 0 && (
+            <Link to="/" className="font-semibold text-accent underline underline-offset-4">
+              Wróć do grafiku
+            </Link>
+          )}
           <Link to="/rejestracja" className="font-semibold text-accent underline underline-offset-4">
             Prowadzisz lokal? Załóż firmę
           </Link>

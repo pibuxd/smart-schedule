@@ -1,14 +1,13 @@
-import { useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link, Navigate, Outlet, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, Navigate, Outlet } from '@tanstack/react-router'
 import { Bell, CalendarCheck, CalendarDays } from 'lucide-react'
 
-import { useLogout } from '../api/generated/auth/auth'
 import { ErrorState, Loading } from '../components/ui/status'
 import { EmployeeContext } from '../features/auth/EmployeeContext'
 import { EmployeeChatProvider, EmployeeChatTab } from '../features/availability/EmployeeChat'
 import { MyDataButton } from '../features/auth/MyData'
 import { ProfileNameForm } from '../features/auth/ProfileNameForm'
 import { useSession } from '../features/auth/session'
+import { useSignOut } from '../features/auth/sign-out'
 import { isManagerRole } from '../features/manager/ManagerContext'
 import { useUnreadNotifications } from '../features/notifications/unread'
 
@@ -31,9 +30,7 @@ const TABS = [
  */
 function EmployeeLayout() {
   const session = useSession()
-  const logout = useLogout()
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  const signOut = useSignOut()
 
   if (session.state === 'loading') return <Loading>Otwieram Grafikomat…</Loading>
   if (session.state === 'logged-out') return <Navigate to="/logowanie" replace />
@@ -46,14 +43,6 @@ function EmployeeLayout() {
   }
   const { me, company } = session
   if (!company) return <Navigate to="/zaproszenia" replace />
-
-  const signOut = () =>
-    logout.mutate(undefined, {
-      onSettled: async () => {
-        queryClient.clear()
-        await navigate({ to: '/logowanie' })
-      },
-    })
 
   return (
     <EmployeeContext.Provider value={{ companyId: company.id, readOnly: company.read_only }}>
