@@ -11807,6 +11807,13 @@
               }
             ],
             "title": "Pay"
+          },
+          "supplements": {
+            "items": {
+              "$ref": "#/components/schemas/ShiftSupplementOut"
+            },
+            "title": "Supplements",
+            "type": "array"
           }
         },
         "required": [
@@ -11850,6 +11857,40 @@
           "end"
         ],
         "title": "PreparingOut",
+        "type": "object"
+      },
+      "ShiftSupplementOut": {
+        "description": "One supplement a shift of mine gets: for how many of its hours and how much.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "start_time",
+          "end_time",
+          "hours",
+          "amount"
+        ],
+        "title": "ShiftSupplementOut",
         "type": "object"
       },
       "WaitingHoursOut": {
@@ -13509,6 +13550,51 @@
         "title": "AskedOut",
         "type": "object"
       },
+      "CannotMarkOut": {
+        "description": "Days a request says the person cannot work that the calendar does not show so (and that can still change):\nthe screen offers to mark them \"nie mogę\" through `PUT /me/calendar`.",
+        "properties": {
+          "days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "from_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Time"
+          },
+          "to_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Time"
+          },
+          "whole_day": {
+            "default": false,
+            "title": "Whole Day",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "CannotMarkOut",
+        "type": "object"
+      },
       "HoursProposalOut": {
         "description": "A report of other hours of my published shift, prepared by the assistant (nothing is sent by itself).",
         "properties": {
@@ -13642,12 +13728,11 @@
             ],
             "title": "Reply"
           },
-          "unmarked_days": {
+          "cannot_marks": {
             "items": {
-              "format": "date",
-              "type": "string"
+              "$ref": "#/components/schemas/CannotMarkOut"
             },
-            "title": "Unmarked Days",
+            "title": "Cannot Marks",
             "type": "array"
           },
           "notes": {
@@ -13753,7 +13838,6 @@
           "status",
           "summary",
           "reply",
-          "unmarked_days",
           "notes",
           "created_at"
         ],
@@ -16215,6 +16299,17 @@
             ],
             "title": "Link",
             "type": "string"
+          },
+          "month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month"
           },
           "created_at": {
             "format": "date-time",

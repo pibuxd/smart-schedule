@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -366,8 +367,20 @@ def cancel_generation_run(request, run_id: UUID):
 
 # --- The employee's "Mój grafik" -------------------------------------------------------------------------
 
-# How far ahead "Mój grafik" lists shifts (about two monthly periods).
-MY_SCHEDULE_DAYS = 62
+# How far ahead "Mój grafik" lists shifts: every published one, up to a year ahead (a schedule published early for
+# February must show in November; the notification about it opens this screen).
+MY_SCHEDULE_DAYS = 366
+
+
+class ShiftSupplementOut(Schema):
+    """One supplement a shift of mine gets: for how many of its hours and how much."""
+
+    name: str
+    # The supplement's hours ("09:00", "10:30"); it counts for the part of the shift inside them.
+    start_time: str
+    end_time: str
+    hours: float
+    amount: float  # złoty before tax
 
 
 class MyShiftOut(Schema):
@@ -400,6 +413,8 @@ class MyShiftOut(Schema):
     # None without a rate. Not on the screen (it shows the month): for the assistant, to work out earnings.
     hourly_rate: float | None = None
     pay: float | None = None
+    # The supplements in `pay`, each with the hours of this shift it counts for (not on the screen either).
+    supplements: list[ShiftSupplementOut] = Field(default_factory=list)
 
 
 class MonthHoursOut(Schema):
@@ -495,8 +510,9 @@ def my_schedule(request, company_id: UUID):
     def shift_out(assignment: Assignment) -> MyShiftOut:
         shift = assignment.shift
         tz = ZoneInfo(shift.location.timezone)
-        rate, shift_pay = near_rules.rate(assignment), Pay()
-        near_rules.add(shift_pay, assignment, worked[assignment.pk])
+        rate, shift_pay, counted = near_rules.rate(assignment), Pay(), worked[assignment.pk]
+        near_rules.add(shift_pay, assignment, counted)
+        parts = near_rules.supplement_parts(assignment, counted.start_at, counted.end_at, rate) if rate else []
         start, end = shift.start_at.astimezone(tz), shift.end_at.astimezone(tz)
         overlapping = [
             o
@@ -525,6 +541,16 @@ def my_schedule(request, company_id: UUID):
             can_report=shift.date >= today - timedelta(days=PAST_DAYS),
             hourly_rate=float(rate) if rate is not None else None,
             pay=shift_pay.amount,
+            supplements=[
+                ShiftSupplementOut(
+                    name=supplement.name,
+                    start_time=f"{supplement.start_time:%H:%M}",
+                    end_time=f"{supplement.end_time:%H:%M}",
+                    hours=round(seconds / 3600, 2),
+                    amount=float(amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                )
+                for supplement, seconds, amount in parts
+            ],
         )
 
     shifts = [shift_out(a) for a in upcoming]

@@ -776,6 +776,9 @@ def _checked_preference(
         shifts_per_day=preference.shifts_per_day,
         position=preference.position,
         avoid_position=preference.avoid_position,
+        rather=preference.rather,
+        from_time=preference.from_time,
+        to_time=preference.to_time,
         people=people,
         shift_types=shift_types,
         positions=positions,
@@ -1682,7 +1685,16 @@ def check_plan(
         invites, invite_notes = [], []
     if new_instructions or removed:
         effects.extend(_personal_effects(sc, location, new_instructions, removed, names, shift_names, period))
-    hard = sum(1 for item in _changed_items(items, rule_changes) if item.enabled and item.is_hard)
+    changed = _changed_items(items, rule_changes)
+    hard = sum(1 for item in changed if item.enabled and item.is_hard)
+    if rule_changes:
+        # The model once promised "nikt nie dostanie więcej niż 4 dni pod rząd" and sent the manager to "Zasady".
+        soft = [
+            item
+            for item in changed
+            if item.enabled and not item.is_hard and any(c["code"] == item.code for c in rule_changes)
+        ]
+        notes.append(RULES_GO_TO_AGREEMENTS + (SOFT_RULES_NOTE if soft else ""))
     if any(change.get("is_hard") for change in rule_changes) and hard >= 3:
         notes.append(
             f"Będziesz mieć {hard} zasady „bez wyjątków”. Im więcej takich zasad, tym częściej zostaną zmiany "
@@ -1939,6 +1951,13 @@ def _personal_effects(sc, location, additions, removed, names, shift_names, peri
     if removed_ids - {r.id for r in old_requests}:
         lines.append(f"Usuwane polecenie nie dotyczy grafiku {when}.")
     return lines
+
+
+RULES_GO_TO_AGREEMENTS = "Zmiany zasad zapiszę w „Ustaleniach” okresu. „Zasady” lokalu zostaną bez zmian."
+SOFT_RULES_NOTE = (
+    " Zasada bez „bez wyjątków” jest mocnym życzeniem: generator może ją złamać, gdy inaczej zostałaby zmiana bez "
+    "obsady."
+)
 
 
 def _changed_items(items: list, changes: list[dict[str, Any]]) -> list:

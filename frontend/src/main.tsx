@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 
 import '@fontsource-variable/atkinson-hyperlegible-next'
 import './index.css'
-import { errorStatus } from './lib/api-error'
+import { errorStatus, shouldRetry } from './lib/api-error'
 import { noteUnauthorized, rememberSession } from './lib/session-ended'
 import { getLogoutMutationKey, getMeQueryKey } from './api/generated/auth/auth'
 import { routeTree } from './routeTree.gen'
@@ -28,7 +28,7 @@ window.addEventListener('vite:preloadError', (event) => {
 })
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: { queries: { retry: shouldRetry, refetchOnWindowFocus: false } },
   queryCache: new QueryCache({
     onError: onApiError,
     onSuccess: (_, query) => { if (query.queryKey[0] === getMeQueryKey()[0]) rememberSession(true) },

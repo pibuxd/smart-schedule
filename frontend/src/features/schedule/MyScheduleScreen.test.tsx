@@ -37,10 +37,10 @@ const offer = {
   my_claim_status: null,
 }
 
-function schedule(shifts: unknown[], offers: unknown[] = []) {
+function schedule(shifts: unknown[], offers: unknown[] = [], told = { notified: 3, notified_here: 1 }) {
   return mockApi((method, path) => {
     if (path === '/api/me/offers') return [200, offers]
-    if (method === 'POST' && path === '/api/me/shifts/a1/offer') return [201, { id: 'o9', status: 'open', notified: 3, notified_here: 1 }]
+    if (method === 'POST' && path === '/api/me/shifts/a1/offer') return [201, { id: 'o9', status: 'open', ...told }]
     if (method === 'POST' && path === '/api/offers/o1/claim') return [201, { ...offer, my_claim_id: 'c1', my_claim_status: 'pending' }]
     return [200, { home_location_name: 'Wieliczka – Rynek', shifts, months: [{ month: '2026-11', hours: 112 }] }]
   })
@@ -110,6 +110,17 @@ describe('MyScheduleScreen', () => {
     fireEvent.click(within(sheet).getByRole('button', { name: 'Oddaj zmianę' }))
     expect(await within(sheet).findByText(/Daliśmy znać 3 osobom: 1 z Twojego lokalu i 2 z innych lokali firmy/)).toBeInTheDocument()
     expect(calls.some((c) => c.method === 'POST' && c.url === '/api/me/shifts/a1/offer')).toBe(true)
+  })
+
+  it('tells in the right words that one person can take the shift', async () => {
+    schedule([shift], [], { notified: 1, notified_here: 1 })
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Oddaj tę zmianę' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Oddaj zmianę' }))
+    expect(
+      await within(sheet).findByText(/Daliśmy znać jednej osobie z Twojego lokalu, która może wziąć tę zmianę\./),
+    ).toBeInTheDocument()
   })
 
   it('shows a shift being given away and lets me keep it', async () => {

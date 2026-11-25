@@ -11,7 +11,7 @@ import {
   useSaveMyCalendar,
   useUpdateMyRequest,
 } from "../../api/generated/availability/availability";
-import type { MyRequestOut } from "../../api/generated/model";
+import type { CannotMarkOut, MyRequestOut } from "../../api/generated/model";
 import {
   ChatComposer,
   ChatMessage,
@@ -21,7 +21,7 @@ import { Button } from "../../components/ui/button";
 import { Disclosure } from "../../components/ui/disclosure";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
-import { periodWords, sinceWords } from "../../lib/dates";
+import { periodWords, shortTime, sinceWords } from "../../lib/dates";
 import { useEmployeeChat, useScreenChatScope } from "./employee-chat";
 import { HoursProposals } from "./HoursProposals";
 
@@ -38,6 +38,65 @@ const isCarried = (request: MyRequestOut) => Boolean(request.carried_from);
 /** "14.12" for "2026-12-14". */
 const shortDate = (iso: string) =>
   `${Number(iso.slice(8, 10))}.${iso.slice(5, 7)}`;
+
+/** "9:00–11:00", "od 10:00", "do 11:00"; "" for the whole day. */
+function markHours(mark: CannotMarkOut): string {
+  const from = mark.from_time ? shortTime(mark.from_time) : null;
+  const to = mark.to_time ? shortTime(mark.to_time) : null;
+  if (from && to) return `${from}–${to}`;
+  if (from) return `od ${from}`;
+  return to ? `do ${to}` : "";
+}
+
+/**
+ * Days the request says the person cannot work that the calendar does not show so. With hours ("we wtorki nie mogę
+ * od 9 do 11") the button marks "nie mogę" only in those hours, so the rest of the day stays open to work; days the
+ * calendar blocks for the whole day can be narrowed to them.
+ */
+function CannotMark({
+  mark,
+  disabled,
+  marking,
+  onMark,
+}: {
+  mark: CannotMarkOut;
+  disabled: boolean;
+  marking: boolean;
+  onMark: () => void;
+}) {
+  const hours = markHours(mark);
+  const days = mark.days.map(shortDate).join(", ");
+  const text = mark.whole_day
+    ? `W kalendarzu te dni mają „Nie mogę” przez cały dzień, a prośba mówi tylko o godzinach ${hours}: ${days}.`
+    : hours
+      ? `W kalendarzu te dni są nadal do pracy w godzinach ${hours}: ${days}.`
+      : `W kalendarzu te dni są nadal do pracy: ${days}.`;
+  const label = mark.whole_day
+    ? `Zmień na „nie mogę” ${hours}`
+    : hours
+      ? `Zaznacz „nie mogę” ${hours}`
+      : "Zaznacz „nie mogę”";
+  return (
+    <div className="grid gap-2 rounded-md border border-line p-3">
+      <p className="m-0 text-sm">{text}</p>
+      {hours && (
+        <p className="m-0 text-sm text-ink-muted">
+          W pozostałych godzinach tych dni możesz pracować.
+        </p>
+      )}
+      <div>
+        <Button
+          variant="secondary"
+          size="normal"
+          disabled={disabled || marking}
+          onClick={onMark}
+        >
+          {marking ? "Zapisuję…" : label}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 /** The assistant's own words to the person: an answer, or a word about the request. */
 function Reply({ request }: { request: MyRequestOut }) {
@@ -228,7 +287,7 @@ function RequestStatus({
   only: string;
   onRewrite: (text: string) => void;
   onToManager: () => void;
-  onMarkCannot: (days: string[]) => void;
+  onMarkCannot: (mark: CannotMarkOut) => void;
   onLasting: (lasting: boolean) => void;
 }) {
   if (request.status === "rejected")
@@ -289,7 +348,7 @@ function RequestStatus({
     );
   }
   if (request.status === "interpreted" && request.summary) {
-    const days = request.unmarked_days;
+    const marks = request.cannot_marks ?? [];
     return (
       <div className="grid gap-2">
         <Reply request={request} />
@@ -311,24 +370,16 @@ function RequestStatus({
           />
         )}
         <Notes notes={request.notes} />
-        {editable && days.length > 0 && (
-          <div className="grid gap-2 rounded-md border border-line p-3">
-            <p className="m-0 text-sm">
-              W kalendarzu te dni są nadal do pracy:{" "}
-              {days.map(shortDate).join(", ")}.
-            </p>
-            <div>
-              <Button
-                variant="secondary"
-                size="normal"
-                disabled={busy || marking}
-                onClick={() => onMarkCannot(days)}
-              >
-                {marking ? "Zapisuję…" : "Zaznacz „nie mogę”"}
-              </Button>
-            </div>
-          </div>
-        )}
+        {editable &&
+          marks.map((mark) => (
+            <CannotMark
+              key={`${mark.from_time}-${mark.to_time}-${mark.whole_day}`}
+              mark={mark}
+              disabled={busy}
+              marking={marking}
+              onMark={() => onMarkCannot(mark)}
+            />
+          ))}
         {editable && (
           <WrongChoice
             request={request}
@@ -1070,13 +1121,15 @@ export function RequestsChat({
                       data: { understood: false },
                     })
                   }
-                  onMarkCannot={(days) =>
+                  onMarkCannot={(mark) =>
                     markCannot.mutate({
                       data: {
                         company_id: companyId,
-                        days: days.map((date) => ({
+                        days: mark.days.map((date) => ({
                           date,
                           state: "cannot",
+                          from_time: mark.from_time ?? null,
+                          to_time: mark.to_time ?? null,
                         })),
                       },
                     })

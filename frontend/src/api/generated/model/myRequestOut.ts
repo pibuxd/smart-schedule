@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AskedOut } from './askedOut';
+import type { CannotMarkOut } from './cannotMarkOut';
 import type { HoursProposalOut } from './hoursProposalOut';
 import type { MyRequestOutEndedBy } from './myRequestOutEndedBy';
 import type { MyRequestOutStatus } from './myRequestOutStatus';
@@ -15,7 +16,7 @@ export interface MyRequestOut {
   status: MyRequestOutStatus;
   summary: string | null;
   reply: string | null;
-  unmarked_days: string[];
+  cannot_marks?: CannotMarkOut[];
   notes: string[];
   created_at: string;
   hours_reports?: HoursProposalOut[];

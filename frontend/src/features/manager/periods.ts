@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import type { LocationOut, LocationSummaryOut, PeriodOut } from '../../api/generated/model'
 import { addDays, parseDate, toIsoDate } from '../../lib/dates'
 import type { ArrangeTarget } from './ArrangeSchedule'
@@ -8,6 +10,20 @@ export function pickPeriod(periods: PeriodOut[], today: Date): PeriodOut | undef
   const iso = toIsoDate(today)
   const upcoming = periods.filter((p) => p.end >= iso).sort((a, b) => a.start.localeCompare(b.start))
   return upcoming[0] ?? [...periods].sort((a, b) => b.start.localeCompare(a.start))[0]
+}
+
+// The period the manager last picked in each location, so "Dyspozycje" and "Grafik" open on the same one (until the
+// page is reloaded): after choosing December in "Dyspozycje", "Grafik" must not fall back to the published November.
+const chosenPeriods = new Map<string, string>()
+
+/** The period picked in this location's tabs (null = none yet, use `pickPeriod`) and how to pick one. */
+export function useChosenPeriod(locationId: string): [string | null, (periodId: string) => void] {
+  const [, rerender] = useState(0)
+  const choose = (periodId: string) => {
+    chosenPeriods.set(locationId, periodId)
+    rerender((n) => n + 1)
+  }
+  return [chosenPeriods.get(locationId) ?? null, choose]
 }
 
 /** Dates for a new period: right after the last one, a month or a week long as the location is set up. */

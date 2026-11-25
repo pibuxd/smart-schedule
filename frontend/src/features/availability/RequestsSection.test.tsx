@@ -48,7 +48,7 @@ const request = (over = {}) => ({
   status: "interpreted",
   summary: "Wolne w piątki, jeśli się da.",
   reply: null,
-  unmarked_days: [],
+  cannot_marks: [],
   notes: [],
   created_at: "2026-11-01T10:00:00Z",
   ...over,
@@ -137,7 +137,7 @@ describe("RequestsSection", () => {
               request({
                 reply: "Powodzenia na sesji.",
                 summary: "Wolne 14.12–16.12 („nie mogę”).",
-                unmarked_days: ["2026-12-14", "2026-12-15"],
+                cannot_marks: [{ days: ["2026-12-14", "2026-12-15"] }],
                 notes: [
                   "W kalendarzu masz „Chętnie” w dni, w które prośba mówi o wolnym: 15.12.",
                 ],
@@ -159,12 +159,48 @@ describe("RequestsSection", () => {
       expect(calls.find((c) => c.method === "PUT")!.body).toEqual({
         company_id: "c1",
         days: [
-          { date: "2026-12-14", state: "cannot" },
-          { date: "2026-12-15", state: "cannot" },
+          { date: "2026-12-14", state: "cannot", from_time: null, to_time: null },
+          { date: "2026-12-15", state: "cannot", from_time: null, to_time: null },
         ],
       }),
     );
     expect(calls.find((c) => c.method === "PUT")!.url).toBe("/api/me/calendar");
+  });
+
+  it("marks only the hours the person cannot work and can narrow whole days to them", async () => {
+    // "We wtorki nie mogę od 9:00 do 11:00": the rest of those days stays open to work.
+    const calls = mockApi((method) =>
+      method === "PUT"
+        ? [204, null]
+        : [
+            200,
+            [
+              request({
+                summary: "Wolne 1.12, 8.12 tylko w godz. 9:00–11:00 („nie mogę”).",
+                cannot_marks: [
+                  { days: ["2026-12-01"], from_time: "09:00", to_time: "11:00", whole_day: true },
+                  { days: ["2026-12-08"], from_time: "09:00", to_time: "11:00", whole_day: false },
+                ],
+              }),
+            ],
+          ],
+    );
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    await openChat();
+    expect(
+      await screen.findByText(/mają „Nie mogę” przez cały dzień, a prośba mówi tylko o godzinach 9:00–11:00: 1.12/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/nadal do pracy w godzinach 9:00–11:00: 8.12/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Zmień na „nie mogę” 9:00–11:00" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PUT")!.body).toEqual({
+        company_id: "c1",
+        days: [{ date: "2026-12-01", state: "cannot", from_time: "09:00", to_time: "11:00" }],
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Zaznacz „nie mogę” 9:00–11:00" })).toBeInTheDocument();
   });
 
   it("a request nobody interpreted simply goes to the manager", async () => {

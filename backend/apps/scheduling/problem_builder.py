@@ -81,6 +81,21 @@ def _positions(data: dict) -> frozenset[str]:
     return frozenset(str(v) for v in values) if isinstance(values, list) else frozenset()
 
 
+def _hours(data: dict) -> dict[str, time | None]:
+    """wolne_dni only in some hours ("09:00"–"11:00"); the whole day otherwise."""
+    if data.get("type") != "wolne_dni":
+        return {}
+
+    def clock(value) -> time | None:
+        try:
+            return time.fromisoformat(value) if isinstance(value, str) and value else None
+        except ValueError:
+            return None
+
+    start, end = clock(data.get("from_time")), clock(data.get("to_time"))
+    return {"from_time": start, "to_time": end} if start != end else {}
+
+
 REQUEST_TYPES = {
     "unikaj_osoby": RequestType.AVOID_PERSON,
     "preferuj_osobe": RequestType.PREFER_PERSON,
@@ -134,6 +149,7 @@ def instruction_request(data, employee_id, instruction_id, rank, start, end, nam
         summary=readings.describe(data, names[employee_id], names, shift_names),
         by_manager=True,
         rank=rank,
+        **_hours(data),
     )
 
 
@@ -575,6 +591,7 @@ class _Reader:
             summary=str(data.get("part_summary") or data.get("summary") or row.text[:200]),
             # A request for a month (no period) or a lasting one is about the person: it counts where they work.
             location=str(row.period.location_id) if row.period_id and not row.lasting else None,
+            **_hours(data),
         )
 
     def instructions(self, employee_ids: set[str]) -> list[Request]:

@@ -91,7 +91,8 @@ EMPLOYEE_TOOLS = (
         "Ekran „Mój grafik”: moje opublikowane zmiany, które się nie skończyły (shifts: data, godziny z grafiku, "
         "lokal, stanowisko, kto jest ze mną, czy oddaję zmianę), moje zmiany z ostatnich 14 dni (recent), przy "
         "zmianie godziny naprawdę zatwierdzone przez kierownika (worked), moje zgłoszenie czekające na kierownika "
-        "(report), moja stawka za godzinę (hourly_rate) i wypłata brutto za zmianę z dodatkami (pay), suma moich "
+        "(report), moja stawka za godzinę (hourly_rate) i wypłata brutto za zmianę z dodatkami (pay; dodatki tej "
+        "zmiany w supplements: nazwa, godziny dodatku, ile godzin zmiany obejmuje, kwota), suma moich "
         "godzin i wypłata brutto w każdym miesiącu (months: hours, pay, z tego dodatki supplements_pay, godziny bez "
         "stawki unpriced_hours) oraz grafiki ułożone, ale jeszcze nieopublikowane (preparing).",
         fixed=_company(),

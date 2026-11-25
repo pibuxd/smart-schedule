@@ -528,7 +528,9 @@ class TestCommands:
             "Zasada „Zmiany w tygodniu”: włączę, liczba zmian: 4, miejsce 1 na liście zasad.",
             "Zasada „Równy podział weekendów”: wyłączę.",
         ]
-        assert body["notes"] == []
+        # Where the change goes and that a rule with exceptions is no promise (said by the app, not the model).
+        assert body["notes"] == [services.RULES_GO_TO_AGREEMENTS + services.SOFT_RULES_NOTE]
+        assert "„Ustaleniach”" in body["notes"][0] and "może ją złamać" in body["notes"][0]
         assert RuleSetting.objects.filter(location=shop["location"], rule_code="max_shifts_per_week").count() == 0
 
         assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200

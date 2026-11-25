@@ -9,6 +9,7 @@ from django.utils import timezone
 from apps.availability.models import AvailabilityDay
 from apps.marketplace.models import ShiftClaim, ShiftOffer
 from apps.notifications.models import Notification
+from apps.notifications.services import notification_text
 from apps.scheduling.editing import publish, start_draft
 from apps.scheduling.generation import request_generation, run_generation
 from apps.scheduling.models import Assignment, AssignmentEvent
@@ -614,3 +615,10 @@ def test_read_only_company_cannot_change_shifts_by_hand(api, market, subscribe):
     assert api.post(f"/api/assignments/{m['row'].pk}/reassign", {"employee_id": str(m["free"].pk)}).status_code == 402
     assert api.post(f"/api/assignments/{m['row'].pk}/offer").status_code == 402
     assert api.get(f"/api/assignments/{m['row'].pk}/handover-candidates").status_code == 200
+
+
+def test_the_number_of_people_told_agrees_with_its_words():
+    one = notification_text("offer_made", {"offered_by_name": "Anna", "able": 1})
+    assert "Daliśmy znać jednej osobie, która może ją wziąć." in one
+    assert "Daliśmy znać 3 osobom, które mogą ją wziąć." in notification_text("offer_made", {"able": 3})
+    assert "Daliśmy znać jednej osobie." in notification_text("offer_opened_for_you", {"able": 1})

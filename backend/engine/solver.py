@@ -758,7 +758,8 @@ class _Builder:
                     return
                 by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
                 for slot, var in own:
-                    by_day[slot.date].append(var)
+                    if request.off_slot(self.p, slot):
+                        by_day[slot.date].append(var)
                 for day, vars_ in by_day.items():
                     self.add_penalty(weight / len(request.dates), self._or(vars_, f"day_off[{request.id},{day}]"))
             case RequestType.WANT_WORK:

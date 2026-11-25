@@ -91,6 +91,23 @@ describe('AvailabilityScreen', () => {
     })
   })
 
+  it('opens on the month a notification links to, but not beyond what the calendar reaches', async () => {
+    api()
+    const { unmount } = renderScreen(
+      <EmployeeChatProvider companyId="c1" readOnly={false}>
+        <AvailabilityScreen companyId="c1" readOnly={false} month="2027-01" today={TODAY} />
+      </EmployeeChatProvider>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Styczeń 2027' })).toBeInTheDocument()
+    unmount()
+    renderScreen(
+      <EmployeeChatProvider companyId="c1" readOnly={false}>
+        <AvailabilityScreen companyId="c1" readOnly={false} month="2026-01" today={TODAY} />
+      </EmployeeChatProvider>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Grudzień 2026' })).toBeInTheDocument() // the asked period
+  })
+
   it('opens on the period the manager asked about and shows the deadline', async () => {
     api()
     show()

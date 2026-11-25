@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MyShiftOutOfferStatus } from './myShiftOutOfferStatus';
+import type { ShiftSupplementOut } from './shiftSupplementOut';
 import type { WaitingHoursOut } from './waitingHoursOut';
 import type { WorkedOut } from './workedOut';
 
@@ -29,4 +30,5 @@ export interface MyShiftOut {
   can_report?: boolean;
   hourly_rate?: number | null;
   pay?: number | null;
+  supplements?: ShiftSupplementOut[];
 }

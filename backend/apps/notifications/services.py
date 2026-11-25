@@ -115,8 +115,13 @@ def hours_words(payload: dict) -> str:
 
 
 def _people_dative(count: int) -> str:
-    """'1 osobie', '38 osobom'."""
-    return f"{count} osobie" if count == 1 else f"{count} osobom"
+    """'jednej osobie', '38 osobom'."""
+    return "jednej osobie" if count == 1 else f"{count} osobom"
+
+
+def _people_who_can(count: int) -> str:
+    """'jednej osobie, która może', '3 osobom, które mogą'."""
+    return f"{_people_dative(count)}, {'która może' if count == 1 else 'które mogą'}"
 
 
 def notification_text(kind: str, payload: dict) -> str:
@@ -126,10 +131,15 @@ def notification_text(kind: str, payload: dict) -> str:
     taker = p.get("claimed_by_name") or "Ktoś"
     match kind:
         case "availability_requested":
-            return (
-                f"Kierownik prosi o dyspozycje na okres {_range(p)} ({p.get('location_name', '')}). "
-                f"Zaznacz, kiedy możesz pracować, najpóźniej do {_day(p.get('deadline'))}."
-            )
+            asked = f"o dyspozycje na okres {_range(p)} ({p.get('location_name', '')})"
+            if p.get("closed") == "published":
+                return f"Kierownik prosił {asked}. Grafik na ten okres jest już opublikowany. Sprawdź swoje zmiany."
+            if p.get("closed"):
+                return (
+                    f"Kierownik prosił {asked}. Grafik na ten okres jest już układany, więc tych dni nie zmienisz. "
+                    "Swoje zmiany zobaczysz w „Mój grafik”, gdy kierownik go opublikuje."
+                )
+            return f"Kierownik prosi {asked}. Zaznacz, kiedy możesz pracować, najpóźniej do {_day(p.get('deadline'))}."
         case "schedule_published":
             where = f"na okres {_range(p)} ({p.get('location_name', '')})"
             if p.get("changed"):
@@ -143,7 +153,7 @@ def notification_text(kind: str, payload: dict) -> str:
                     f"{giver} oddaje zmianę {shift}, ale nikt inny nie może jej teraz wziąć. "
                     "Do decyzji ta osoba nadal ma tę zmianę; może warto porozmawiać."
                 )
-            return f"{giver} oddaje zmianę {shift}. Daliśmy znać {_people_dative(p['able'])}, które mogą ją wziąć."
+            return f"{giver} oddaje zmianę {shift}. Daliśmy znać {_people_who_can(p['able'])} ją wziąć."
         case "borrowed":
             if p.get("auto"):
                 return (

@@ -35,13 +35,13 @@ import { AssistantRulesTable } from './AssistantRulesTable'
 import { AskAvailabilityButton } from './AskAvailabilityButton'
 import { AvailabilityGrid, GridLegend } from './AvailabilityGrid'
 import { useManager } from './ManagerContext'
-import { nextPeriodDates, pickPeriod } from './periods'
+import { nextPeriodDates, pickPeriod, useChosenPeriod } from './periods'
 import { Progress } from './OverviewScreen'
 import { daysUntil, deadlineWords, namesList, PERIOD_STATUS, periodTitle, shortDay } from './words'
 
 export function AvailabilityOverviewScreen({ locationId, today = new Date() }: { locationId: string; today?: Date }) {
   const periods = useLocationPeriods(locationId)
-  const [chosen, setChosen] = useState<string | null>(null)
+  const [chosen, setChosen] = useChosenPeriod(locationId)
   const [adding, setAdding] = useState(false)
 
   if (periods.isPending) return <Loading>Wczytuję okresy grafiku…</Loading>

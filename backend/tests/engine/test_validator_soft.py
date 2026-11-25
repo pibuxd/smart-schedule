@@ -4,7 +4,7 @@ from datetime import date, time, timedelta
 
 import pytest
 
-from engine.problem import Availability, ExternalShift, Request, RuleConfig, shift_bounds
+from engine.problem import Availability, ExternalShift, ProblemError, Request, RuleConfig, shift_bounds
 from engine.validator import Code, RequestKind, validate
 from tests.engine.factory import BAKER, LOC, SALES, employee, problem, slot
 
@@ -306,6 +306,15 @@ class TestTextRequests:
         assert self.degree(request, {"a1": "anna"}) == 0.5
         assert self.degree(request, {"a1": "anna", "a2": "anna"}) == 1.0
         assert self.degree(Request("r", "anna", "days_off"), {"a1": "anna"}) is None  # no dates: for the manager
+
+    def test_days_off_in_some_hours_count_only_shifts_that_overlap_them(self):
+        # The shifts are 6:00–14:00. "Nie mogę od 9 do 11" is broken by them (they overlap two hours), "po 15" is not.
+        morning = Request("r", "anna", "days_off", dates=frozenset({MON, day(1)}), from_time=time(9), to_time=time(11))
+        evening = Request("r", "anna", "days_off", dates=frozenset({MON}), from_time=time(15))
+        assert self.degree(morning, {"a1": "anna"}) == 0.5
+        assert self.degree(evening, {"a1": "anna"}) == 0.0
+        with pytest.raises(ProblemError):
+            Request("r", "anna", "days_off", from_time=time(9), to_time=time(9))
 
     def test_hours_limit(self):
         request = Request("r", "anna", "hours_limit", max_hours=8)

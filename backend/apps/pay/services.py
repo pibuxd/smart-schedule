@@ -100,8 +100,15 @@ class PayRules:
 
     def supplement(self, assignment: Assignment, start_at: datetime, end_at: datetime, rate: Decimal) -> Decimal:
         """Złoty of the supplements for the counted hours of the shift (not rounded)."""
+        return sum((amount for _, _, amount in self.supplement_parts(assignment, start_at, end_at, rate)), Decimal(0))
+
+    def supplement_parts(
+        self, assignment: Assignment, start_at: datetime, end_at: datetime, rate: Decimal
+    ) -> list[tuple[PaySupplement, float, Decimal]]:
+        """Each supplement the counted hours of the shift get: (supplement, seconds inside its hours, złoty, not
+        rounded)."""
         shift = assignment.shift
-        total = Decimal(0)
+        parts = []
         tz = None
         for supplement, chosen in self.supplements.get(shift.location_id, []):
             if (chosen is not None and shift.position_id not in chosen) or not supplement.valid_on(shift.date):
@@ -113,8 +120,8 @@ class PayRules:
             per_hour = supplement.value
             if supplement.kind == PaySupplement.Kind.PERCENT:
                 per_hour = rate * supplement.value / 100
-            total += Decimal(round(seconds)) * per_hour / 3600
-        return total
+            parts.append((supplement, seconds, Decimal(round(seconds)) * per_hour / 3600))
+        return parts
 
     def add(self, pay: Pay, assignment: Assignment, worked) -> None:
         """Add one published assignment with its `worktime.services.Worked` hours."""

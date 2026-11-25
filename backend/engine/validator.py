@@ -814,7 +814,7 @@ class _Checker:
             case RequestType.DAYS_OFF:
                 if not request.dates:
                     return None
-                worked = {s.date for s in own}
+                worked = {s.date for s in own if request.off_slot(self.p, s)}
                 return len(worked & request.dates) / len(request.dates)
             case RequestType.WANT_WORK:
                 if not request.dates:

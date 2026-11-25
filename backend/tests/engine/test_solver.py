@@ -382,6 +382,20 @@ def test_keeps_days_off_asked_for_in_text():
     assert result.schedule == {"m0": "ewa", "m1": "anna"}
 
 
+def test_days_off_in_some_hours_leave_the_rest_of_the_day_to_work():
+    # Anna cannot 9:00–11:00: the morning shift goes to Ewa, but Anna can still take the evening one.
+    people = [employee("anna"), employee("ewa")]
+    p = problem(
+        people,
+        [slot("m0", day(0), "08:00", "12:00"), slot("e0", day(0), "14:00", "22:00")],
+        requests=[Request("off", "anna", "days_off", dates=frozenset({day(0)}), from_time=time(9), to_time=time(11))],
+    )
+    result, _ = solved(p)
+    assert result.schedule["m0"] == "ewa"
+    alone = problem([employee("anna")], [slot("e0", day(0), "14:00", "22:00")], requests=p.requests)
+    assert solved(alone)[0].schedule == {"e0": "anna"}
+
+
 def test_days_off_without_dates_is_left_to_the_manager():
     p = problem([employee("anna")], [slot("m0", day(0))], requests=[Request("off", "anna", "days_off")])
     result, report = solved(p)
