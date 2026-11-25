@@ -195,19 +195,19 @@ def phone_spans(text: str) -> list[re.Match]:
     return [m for m in PHONE_LIKE.finditer(text) if not DATE_LIKE.fullmatch(m.group().strip())]
 
 
-def _e164(raw: str) -> str | None:
+def _e164(raw: str, region: str = "PL") -> str | None:
     from django.core.exceptions import ValidationError
 
     from apps.accounts.models import normalize_phone
 
     try:
-        return normalize_phone(raw)
+        return normalize_phone(raw, region=region)
     except ValidationError:
         return None
 
 
-def is_phone(raw: str) -> bool:
-    return _e164(raw) is not None
+def is_phone(raw: str, region: str = "PL") -> bool:
+    return _e164(raw, region) is not None
 
 
 def without_numbers(text: str) -> str:
@@ -364,13 +364,17 @@ def _match(cell: str, known: dict[str, object]) -> object | None:
 
 
 def find_people(
-    rows: list[list[str]], positions: dict[str, object], locations: dict[str, object] | None = None
+    rows: list[list[str]],
+    positions: dict[str, object],
+    locations: dict[str, object] | None = None,
+    region: str = "PL",
 ) -> tuple[list[Listed], int]:
     """People in the rows, and how many non-empty rows were not a person (titles, headers, notes).
 
     `positions` and `locations` map names to ids. With a header row, its columns say what is where, and a person
     without a number is kept (the manager types it in). Without one, a row is a person only when it has a phone
-    number: the rest of the row gives positions, the location and the name (first word = first name).
+    number: the rest of the row gives positions, the location and the name (first word = first name). Numbers
+    without a country code are from `region`.
     """
     locations = locations or {}
     people: list[Listed] = []
@@ -384,7 +388,11 @@ def find_people(
             if found is not None:
                 header = found
                 continue
-        person = _from_columns(row, header, positions, locations) if header else _from_text(row, positions, locations)
+        person = (
+            _from_columns(row, header, positions, locations)
+            if header
+            else _from_text(row, positions, locations, region)
+        )
         if person is None:
             skipped += 1
         else:
@@ -421,13 +429,15 @@ def _from_columns(row, header, positions, locations) -> Listed | None:
     return person
 
 
-def _from_text(row, positions, locations) -> Listed | None:
+def _from_text(row, positions, locations, region="PL") -> Listed | None:
     text = " | ".join(cell for cell in row if cell.strip())
     spans = phone_spans(text)
     if not spans:
         return None
     # Another long number (PESEL, an account) may come first: take the first one that is a phone number.
-    person = Listed(phone=next((m.group().strip() for m in spans if is_phone(m.group())), spans[0].group().strip()))
+    person = Listed(
+        phone=next((m.group().strip() for m in spans if is_phone(m.group(), region)), spans[0].group().strip())
+    )
     for match in reversed(spans):
         text = text[: match.start()] + " " + text[match.end() :]
     found, text = _find_names(text, _with_short_names(locations))

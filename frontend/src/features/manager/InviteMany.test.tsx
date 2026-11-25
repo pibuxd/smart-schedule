@@ -72,6 +72,28 @@ describe('Zaproś kilka osób', () => {
     expect(within(sheet).getByRole('button', { name: 'Gotowe' })).toBeInTheDocument()
   })
 
+  it('reads numbers without a code as the chosen country', async () => {
+    const calls = screenWith((_method, path) => {
+      if (path.endsWith('/invitations/read')) return [200, { people: [listed('Olena', '+380501234567')], skipped_lines: 0 }]
+      if (path.endsWith('/invitations/many')) return [200, { invited: [], skipped: [] }]
+      return [404, { detail: 'Nie ma' }]
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Zaproś kilka osób' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByLabelText('Numery bez kierunkowego są z kraju')).toHaveValue('PL')
+    fireEvent.change(within(sheet).getByLabelText('Numery bez kierunkowego są z kraju'), { target: { value: 'UA' } })
+    fireEvent.change(within(sheet).getByLabelText('Wklej listę'), { target: { value: 'Olena Nowak 501234567' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Sprawdź listę' }))
+
+    expect(await within(sheet).findByText('+380 501 234 567')).toBeInTheDocument()
+    expect(within(sheet).getByText('Numery bez kierunkowego czytam jako: Ukraina +380.')).toBeInTheDocument()
+    expect((calls.find((c) => c.url.endsWith('/invitations/read'))!.body as { region: string }).region).toBe('UA')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Zaproś 1 osobę' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.url.endsWith('/invitations/many'))).toBe(true))
+    expect((calls.find((c) => c.url.endsWith('/invitations/many'))!.body as { region: string }).region).toBe('UA')
+  })
+
   it('sends a chosen file and shows why it could not be read', async () => {
     const calls = screenWith((_method, path) => {
       if (path.endsWith('/invitations/read')) return [400, { detail: 'To stary plik Excela (.xls). Zapisz go jako .xlsx albo CSV i wgraj jeszcze raz.' }]

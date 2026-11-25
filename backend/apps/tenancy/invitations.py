@@ -10,7 +10,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from ninja.errors import HttpError
 
-from apps.accounts.models import normalize_phone
+from apps.accounts.models import NOT_MOBILE, User, normalize_phone
 from apps.staffing.models import EmployeeProfile, Position
 from apps.staffing.removal import restore_employee
 from apps.tenancy.models import Invitation, InvitationStatus, Location, Membership, Role
@@ -19,6 +19,21 @@ ALREADY_DECIDED = "To zaproszenie nie jest już aktualne."
 ALREADY_PENDING = "Ten numer ma już oczekujące zaproszenie do tego lokalu."
 # People invited at once from one list (the screen and the assistant).
 MAX_PEOPLE = 300
+
+
+def invitable_phone(raw: str, region: str = "PL") -> str:
+    """The number to invite in E.164, or ValidationError. Without a country code it is from `region` (Poland unless
+    the manager says a list is from elsewhere). A foreign number must be a mobile, since the code comes by SMS, unless
+    it already has an account: the superadmin may add a real mobile that the number data calls something else."""
+    try:
+        return normalize_phone(raw, region=region)
+    except ValidationError as exc:
+        if exc.messages != [NOT_MOBILE]:
+            raise
+        phone = normalize_phone(raw, region=region, mobile=False)
+        if User.objects.filter(phone_e164=phone).exists():
+            return phone
+        raise
 
 
 def invitation_problem(location: Location, phone_e164: str, role: str) -> str | None:
@@ -125,9 +140,10 @@ class Person:
     problem: str | None = None
 
 
-def check_people(ctx, default: Location, people: list[Person]) -> list[Person]:
+def check_people(ctx, default: Location, people: list[Person], region: str = "PL") -> list[Person]:
     """Find what stands in the way of each invitation (`problem`); nothing is saved. `ctx` is the TenantContext of
-    the manager who sends the list: only locations they manage, only the owner invites managers."""
+    the manager who sends the list: only locations they manage, only the owner invites managers. Numbers without a
+    country code are from `region`."""
     managed = {str(loc.pk): loc for loc in ctx.managed_locations()}
     seen: set[tuple] = set()
     for person in people:
@@ -142,7 +158,7 @@ def check_people(ctx, default: Location, people: list[Person]) -> list[Person]:
             person.problem = "Brak numeru telefonu."
             continue
         try:
-            person.phone_e164 = normalize_phone(person.phone)
+            person.phone_e164 = invitable_phone(person.phone, region)
         except ValidationError as exc:
             person.problem = exc.messages[0]
             continue
@@ -159,10 +175,12 @@ def check_people(ctx, default: Location, people: list[Person]) -> list[Person]:
 
 
 @transaction.atomic
-def invite_people(ctx, default: Location, people: list[Person]) -> tuple[list[Invitation], list[Person]]:
+def invite_people(
+    ctx, default: Location, people: list[Person], region: str = "PL"
+) -> tuple[list[Invitation], list[Person]]:
     """Invite everyone on the list who can be invited; the rest come back with their `problem`."""
     invited, skipped = [], []
-    for person in check_people(ctx, default, people):
+    for person in check_people(ctx, default, people, region):
         if person.problem is None:
             try:
                 invited.append(

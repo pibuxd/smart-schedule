@@ -11,11 +11,11 @@ import type {
 } from '../../api/generated/model'
 import { useInviteMany, useManagerOverview, useReadPeopleList } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
-import { CheckField, Tag, TextField } from '../../components/ui/field'
+import { CheckField, SelectField, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
-import { isE164, prettyPhone } from '../auth/phone'
+import { isE164, PHONE_COUNTRIES, phoneCountry, POLAND, prettyPhone } from '../auth/phone'
 import { useAssistantDrawer } from './assistant-drawer'
 import { useManager } from './ManagerContext'
 import { people, persons } from './words'
@@ -70,6 +70,9 @@ function InviteMany({
   const fileInput = useRef<HTMLInputElement>(null)
   const pasteId = useId()
   const [text, setText] = useState('')
+  // Country of the numbers written without a code: a list of a Ukrainian crew says "Ukraina" (Excel drops the 0,
+  // so 050 123 4567 arrives as 501234567, which would otherwise read as a Polish number).
+  const [region, setRegion] = useState(POLAND.region)
   const [rows, setRows] = useState<Row[] | null>(null)
   const [skippedLines, setSkippedLines] = useState(0)
   const [fileProblem, setFileProblem] = useState<string | null>(null)
@@ -91,7 +94,7 @@ function InviteMany({
       setFileProblem('Plik jest za duży. Najwyżej 2 MB: podziel listę na mniejsze części.')
       return
     }
-    read.mutate({ locationId, data: { file } }, { onSuccess: onRead })
+    read.mutate({ locationId, data: { file, region } }, { onSuccess: onRead })
   }
   const change = (key: number, fields: Partial<Row>) =>
     // A corrected person is checked again on sending.
@@ -112,6 +115,7 @@ function InviteMany({
             position_ids: row.position_ids,
             location_id: row.location_id,
           })),
+          region,
         },
       },
       {
@@ -130,6 +134,11 @@ function InviteMany({
   if (rows === null) {
     return (
       <div className="grid gap-4">
+        <SelectField label="Numery bez kierunkowego są z kraju" value={region} onChange={(event) => setRegion(event.target.value)}>
+          {PHONE_COUNTRIES.map((c) => (
+            <option key={c.region} value={c.region}>{`${c.name} +${c.code}`}</option>
+          ))}
+        </SelectField>
         <div className="grid gap-1">
           <label htmlFor={pasteId} className="text-sm font-semibold">
             Wklej listę
@@ -145,7 +154,7 @@ function InviteMany({
           />
           <p className="m-0 text-sm text-ink-muted">Jedna osoba w wierszu: imię, nazwisko i numer. Może być stanowisko.</p>
         </div>
-        <Button wide disabled={!text.trim() || read.isPending} onClick={() => read.mutate({ locationId, data: { text } }, { onSuccess: onRead })}>
+        <Button wide disabled={!text.trim() || read.isPending} onClick={() => read.mutate({ locationId, data: { text, region } }, { onSuccess: onRead })}>
           {read.isPending ? 'Sprawdzam…' : 'Sprawdź listę'}
         </Button>
         <div className="flex items-center gap-3 text-sm text-ink-muted" aria-hidden="true">
@@ -204,6 +213,9 @@ function InviteMany({
           {fix > 0
             ? `Na liście: ${people(rows.length)}. Do poprawienia: ${fix}.`
             : `Na liście: ${people(rows.length)}. Sprawdź imiona i numery.`}
+          {region !== POLAND.region && (
+            <span className="block text-sm text-ink-muted">{`Numery bez kierunkowego czytam jako: ${phoneCountry(region)?.name} +${phoneCountry(region)?.code}.`}</span>
+          )}
           {skippedLines > 0 && invited === 0 && (
             <span className="block text-sm text-ink-muted">{`Pominięte wiersze bez numeru telefonu: ${skippedLines}.`}</span>
           )}

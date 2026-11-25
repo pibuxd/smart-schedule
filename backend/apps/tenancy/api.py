@@ -4,13 +4,14 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
 from ninja import Field, File, Form, Router, Schema, UploadedFile
 from ninja.errors import HttpError
 from ninja.responses import Status
 
-from apps.accounts.login import parse_phone
+from apps.accounts.models import is_phone_region
 from apps.billing.models import Subscription
 from apps.billing.services import (
     CodeRejected,
@@ -95,6 +96,8 @@ class ListedPersonIn(Schema):
 
 class PeopleIn(Schema):
     people: list[ListedPersonIn] = Field(min_length=1, max_length=invitations.MAX_PEOPLE)
+    # Country of the numbers written without a code ("PL", "UA"…); the list preview sends what the manager chose.
+    region: str = Field("PL", max_length=2)
 
 
 class ListedPersonOut(Schema):
@@ -242,9 +245,13 @@ def invite_to_location(request, location_id: UUID, payload: InvitationIn):
     ctx.require_writable()
     if payload.role == Role.MANAGER and ctx.role != Role.OWNER:
         raise HttpError(403, "Menedżera może zaprosić tylko właściciel firmy.")
+    try:
+        phone = invitations.invitable_phone(payload.phone)
+    except ValidationError as exc:
+        raise HttpError(400, exc.messages[0]) from exc
     invitation = invitations.create_invitation(
         location,
-        parse_phone(payload.phone),
+        phone,
         payload.role,
         ctx.user,
         payload.first_name,
@@ -254,18 +261,28 @@ def invite_to_location(request, location_id: UUID, payload: InvitationIn):
     return Status(201, _invitation_out(invitation))
 
 
+def _check_region(region: str) -> None:
+    if not is_phone_region(region):
+        raise HttpError(400, "Nie znam tego kraju. Wybierz kraj z listy.")
+
+
 @router.post(
     "/locations/{location_id}/invitations/read",
     response={200: PeopleListOut, 400: ErrorOut, 403: ErrorOut, 404: ErrorOut},
 )
-def read_people_list(request, location_id: UUID, text: Form[str] = "", file: File[UploadedFile] = None):
+def read_people_list(
+    request, location_id: UUID, text: Form[str] = "", file: File[UploadedFile] = None, region: Form[str] = "PL"
+):
     """Find people in a pasted list or a file (CSV, XLSX, PDF) for a preview. Nothing is saved, the file neither.
 
     Read without the assistant: a row with a phone number is a person (or a header row says which column is
     what). Positions and locations are matched by name; each person says what stands in the way of inviting them.
+    Numbers without a country code are from `region` (Poland unless the manager picks another country: a list of
+    a Ukrainian crew, where Excel also drops the leading 0, so 050… arrives as a Polish-looking 50…).
     """
     ctx, location = context_for(request, Location, location_id)
     ctx.require_manager_of(location)
+    _check_region(region)
     if file is not None:
         if file.size and file.size > people_list.MAX_FILE_BYTES:
             raise HttpError(400, people_list.TOO_BIG)
@@ -276,7 +293,7 @@ def read_people_list(request, location_id: UUID, text: Form[str] = "", file: Fil
         rows = people_list.text_lines(text)
     positions = {p.name: p.pk for p in ctx.qs(Position).filter(location=location, removed_at__isnull=True)}
     managed = {loc.name: loc.pk for loc in ctx.managed_locations().filter(archived_at__isnull=True)}
-    found, skipped = people_list.find_people(rows, positions, managed)
+    found, skipped = people_list.find_people(rows, positions, managed, region)
     if not found:
         raise HttpError(
             400,
@@ -294,7 +311,7 @@ def read_people_list(request, location_id: UUID, text: Form[str] = "", file: Fil
         )
         for row in found
     ]
-    invitations.check_people(ctx, location, people)
+    invitations.check_people(ctx, location, people, region)
     return PeopleListOut(
         people=[_listed_out(person, row.unknown_positions) for person, row in zip(people, found, strict=True)],
         skipped_lines=skipped,
@@ -303,13 +320,14 @@ def read_people_list(request, location_id: UUID, text: Form[str] = "", file: Fil
 
 @router.post(
     "/locations/{location_id}/invitations/many",
-    response={200: InvitedPeopleOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
+    response={200: InvitedPeopleOut, 400: ErrorOut, 402: ErrorOut, 403: ErrorOut, 404: ErrorOut},
 )
 def invite_many(request, location_id: UUID, payload: PeopleIn):
     """Invite everyone on the list who can be invited (as employees); the others come back with the reason."""
     ctx, location = context_for(request, Location, location_id)
     ctx.require_manager_of(location)
     ctx.require_writable()
+    _check_region(payload.region)
     people = [
         invitations.Person(
             phone=row.phone,
@@ -320,7 +338,7 @@ def invite_many(request, location_id: UUID, payload: PeopleIn):
         )
         for row in payload.people
     ]
-    invited, skipped = invitations.invite_people(ctx, location, people)
+    invited, skipped = invitations.invite_people(ctx, location, people, payload.region)
     return InvitedPeopleOut(
         invited=[_invitation_out(invitation) for invitation in invited],
         skipped=[_listed_out(person) for person in skipped],
