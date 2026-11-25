@@ -104,6 +104,20 @@ def test_a_file_becomes_a_plan_of_invitations_without_numbers_for_the_model(api,
     assert anna.invited_by == a["manager"]
 
 
+def test_a_number_from_another_country_is_hidden_and_invited(api, a, with_key, monkeypatch):
+    api.login(a["manager"])
+    content = "Imię i nazwisko;Telefon\nOlena Shevchenko;+380 50 123 45 67\n"
+
+    body, seen = send_file(
+        api, a["location"], monkeypatch, plan(invitations=[person("Olena", "Shevchenko", "[TEL1]")]), content=content
+    )
+
+    assert "380" not in seen["file_text"] and "[TEL1]" in seen["file_text"]
+    assert body["lines"] == shown(["Zaproszę: Olena Shevchenko, +380 50 123 4567."])
+    assert api.post(f"/api/assistant-commands/{body['id']}/apply").status_code == 200
+    assert Invitation.objects.get().phone_e164 == "+380501234567"
+
+
 def test_people_who_cannot_be_invited_are_left_out_with_a_note(api, a, with_key, monkeypatch):
     api.login(a["manager"])
     answer = plan(

@@ -37,6 +37,18 @@ def test_superadmin_can_add_user_with_normalized_phone(superadmin_client):
     assert User.objects.filter(phone_e164="+48601222333").exists()
 
 
+def test_superadmin_may_add_a_foreign_number_that_is_not_called_a_mobile(superadmin_client, api, sms_outbox):
+    # Managers cannot invite it (codes come by SMS); the superadmin can let in a real mobile the data misreads.
+    response = superadmin_client.post(
+        reverse("admin:accounts_user_add"),
+        {"phone_e164": "+49 30 901820", "first_name": "Jonas", "last_name": "", "usable_password": "false"},
+    )
+    assert response.status_code == 302, response.content.decode()[:2000]
+    assert User.objects.filter(phone_e164="+4930901820").exists()
+    assert api.post("/api/auth/request-code", {"phone": "+49 30 901820", "purpose": "login"}).status_code == 200
+    assert sms_outbox[-1][0] == "+4930901820"
+
+
 def test_location_added_in_admin_gets_company_from_form(superadmin_client):
     from apps.core.demo_data import CAFE_COMPANY_ID
     from apps.tenancy.models import Location

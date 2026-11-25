@@ -62,7 +62,8 @@ docker compose logs api --since 5m | grep "SMS to"
 ```
 
 Dopóki tak jest, zalogować może się tylko ktoś, komu podasz kod z logu. Przed wpuszczeniem prawdziwych pracowników
-trzeba podłączyć bramkę SMS (nowa klasa wskazana w `SMS_BACKEND`).
+trzeba podłączyć bramkę SMS (nowa klasa wskazana w `SMS_BACKEND`). Przy tym w panelu bramki zostaw tylko kraje, do
+których naprawdę idą kody (od PR #80 logują się też numery zagraniczne; `docs/plan.md`, sekcja 43).
 
 ### Asystent (OpenRouter)
 

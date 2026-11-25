@@ -98,7 +98,7 @@ class PeopleIn(Schema):
 
 
 class ListedPersonOut(Schema):
-    # +48… when the number is right, otherwise as written, so the manager can correct it.
+    # E.164 (+48…, +380…) when the number is right, otherwise as written, so the manager can correct it.
     phone: str
     first_name: str
     last_name: str

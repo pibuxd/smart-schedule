@@ -7,6 +7,7 @@ import zipfile
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from apps.accounts.models import WRONG_PHONE
 from apps.staffing.models import EmployeeProfile, Position
 from apps.tenancy import people_list
 from apps.tenancy.models import Invitation, InvitationStatus, Location, Membership, Role
@@ -125,6 +126,26 @@ def test_pasted_list_gives_people_with_positions_and_problems(api, a):
     assert Invitation.objects.count() == 0
 
 
+def test_numbers_from_other_countries_are_read_with_their_code(api, a):
+    api.login(a["manager"])
+
+    response = read(
+        api,
+        a["location"],
+        text="Olena Shevchenko +380 50 123 45 67\nTaras Bondar 00380 67 123 4567\nIryna Koval 050 123 4567\n",
+    )
+
+    people = response.json()["people"]
+    assert [(p["first_name"], p["phone"]) for p in people] == [
+        ("Olena", "+380501234567"),
+        ("Taras", "+380671234567"),
+        ("Iryna", "050 123 4567"),
+    ]
+    assert people[0]["problem"] is None and people[1]["problem"] is None
+    # Without its code the number is not one: the manager adds +380 in the preview.
+    assert people[2]["problem"] == WRONG_PHONE
+
+
 def test_csv_with_header_keeps_people_without_a_number(api, a):
     api.login(a["manager"])
     csv = "Nazwisko;Imię;Telefon;Stanowisko\nKowalska;Anna;512345678;Sprzedawca\nNowak;Jan;;Piekarz\n"
@@ -217,7 +238,7 @@ def test_invite_many_invites_the_ready_ones_and_returns_the_rest(api, a):
     assert body["invited"][0]["position_ids"] == [str(a["position"].id)]
     assert [(s["first_name"], s["problem"]) for s in body["skipped"]] == [
         ("Anna again", "Ten numer jest już wyżej na liście."),
-        ("Zły numer", "Podaj polski numer telefonu (+48)."),
+        ("Zły numer", WRONG_PHONE),
         ("", "Ta osoba już pracuje w tym lokalu."),
     ]
     assert Invitation.objects.filter(status=InvitationStatus.PENDING).count() == 2
@@ -302,3 +323,5 @@ def test_phone_mask_hides_numbers_but_not_dates():
     # The same number written another way keeps its mark; a number only in the file is marked as such.
     assert mask.hide("Jan 600100200, Ewa 601 200 300", file=True) == "Jan [TEL2], Ewa [TEL3]"
     assert not mask.only_in_file("[TEL2]") and mask.only_in_file("[TEL3]")
+    # The same nine digits after another country's code are another number.
+    assert mask.hide("Olena +380 600 100 200") == "Olena [TEL4]"

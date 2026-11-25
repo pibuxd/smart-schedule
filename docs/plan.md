@@ -330,13 +330,13 @@ Etap 1 robię w tym wątku po akceptacji planu; kolejne poproszę jako osobne w�
 
 - Usuwanie a historia (od etapu 2 pilnuje tego baza, `on_delete=RESTRICT`): nie da się usunąć pojedynczo lokalu z okresami grafiku, okresu z wersjami, stanowiska użytego w zmianach ani pracownika z przypisaniami. Usunięcie całej firmy (tylko superadmin, np. firma testowa) nadal usuwa wszystko. Etap 7: pracownika wyłącza się przez `is_active = false`, a lokal archiwizuje (nowe pole przy ekranach). Od 18.11.2026 (sekcja 25) da się też usuwać: tam, gdzie baza blokuje, osoba i stanowisko są ukrywane (`removed_at`), lokal usuwa się tylko bez pracowników i okresów, a okres tylko przed pierwszą publikacją (razem ze szkicami).
 - Etap 7 (zrobione): lista zasad lokalu pokazuje, które zasady są dziedziczone z grupy, a które zmienione lub wyłączone w lokalu.
-- Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: poza prototypem.
+- Etap 3: zmiana numeru telefonu pracownika robi superadmin w panelu (historia zostaje, bo jest przypięta do konta, nie do numeru); zaproszenia oczekujące na stary numer trzeba wysłać ponownie. Numery spoza Polski: od 25.11.2026 obsługiwane (sekcja 43).
 - Etap 6/7 (z przeglądu etapu 3): na ekranie zaproszeń menedżer widzi podpowiedź "Powiedz tej osobie, żeby zalogowała się tym numerem" (SMS z zaproszeniem nie idzie) oraz informację, że zaproszona osoba pracuje już w innym lokalu firmy i zachowa tamten lokal domowy. Komunikat trybu tylko do odczytu rozróżnia firmę bez kodu od firmy po wygaśnięciu. W trybie tylko do odczytu pracownik nadal widzi swój opublikowany grafik.
 - Etap 7/8 (z przeglądu etapu 4): ~~przy wyniku dla umowy o pracę uwaga o uproszczonym Kodeksie pracy~~ (nieaktualne: typ umowy usunięty 13.11.2026); przy zasadzie "Cel godzin" z "bez wyjątków" napis "do 10 % odchylenia"; zasady bez niczego do oceny pokazane jako "nic do oceny", a prośby "inne" jako "do oceny przez kierownika" obok procentów; zmiany pożyczonych osób widoczne w grafiku lokalu, który je przyjmuje. Do sprawdzenia z pilotem: czy równy podział weekendów ma też wyłapywać osoby bez żadnej zmiany (dziś pomija je, łapie je tylko cel godzin).
 - Decyzje Piotra po przeglądzie etapu 5 (12.11.2026): każdy lokal generujemy osobno, lokale są niezależne, chyba że kierownik w poleceniu powie inaczej; daty okresu wpisuje kierownik, razem z dniem układania grafiku, i może jednym przyciskiem poprosić wszystkich pracowników o dyspozycje (etap 7: przycisk, etap 9: powiadomienie); ponowne generowanie usuwa nieprzypięte ręczne poprawki (etap 8: uprzedzić o tym przy przycisku), a zmiany w wyniku kierownik wprowadza poleceniem do asystenta; generator ma być w pełni ustawialny poleceniami (etap 10 obejmie też polecenia kierownika, nie tylko prośby pracowników).
 - Do sprawdzenia z pilotem (z przeglądu etapu 6): czy pracownicy rozumieją, że "chętnie" z godzinami blokuje inne zmiany tego dnia (krótki test z 3–5 osobami); kierownik nie chce twardego zamknięcia dyspozycji w terminie, tylko oznaczenia "zmienione po terminie" w siatce (decyzja Piotra z 12.11.2026, zrobione w etapie 7).
 - Do sprawdzenia z pilotem: porównanie jakości z grafikami układanymi ręcznie. Etap 7/8: prośby "inne" i przypięcia wyraźnie widoczne na ekranie.
-- Przed wdrożeniem dla prawdziwych użytkowników: bramka SMS (bez niej kody logowania są w logach serwera; `manage.py check` ostrzega: `accounts.W001`), sprawdzenie limitu 20 próśb o kod na adres IP przy wspólnym Wi-Fi w lokalu. (Okres próbny dla firmy bez kodu: rozstrzygnięte w etapie 8, 30 dni.)
+- Przed wdrożeniem dla prawdziwych użytkowników: bramka SMS (bez niej kody logowania są w logach serwera; `manage.py check` ostrzega: `accounts.W001`), sprawdzenie limitu 20 próśb o kod na adres IP przy wspólnym Wi-Fi w lokalu, a przy tym samym kroku ochrona kosztów SMS-ów za granicę (od sekcji 43: w panelu bramki tylko potrzebne kraje; decyzja Piotra, czy dodać dzienny limit zaproszeń na numery zagraniczne na firmę albo wpuszczać je tylko firmom z kodem dostępu). (Okres próbny dla firmy bez kodu: rozstrzygnięte w etapie 8, 30 dni.)
 
 ## 9. Etap 3: jak to działa i przyjęte założenia
 
@@ -1406,7 +1406,7 @@ Prośba Piotra (spec.md, „Zapraszanie wielu osób naraz”): zaprosić wielu p
   `find_people(rows, positions, locations)`: wiersz nagłówków (pierwszy bez numeru, z co najmniej dwiema znanymi
   nazwami kolumn albo z „Telefon”) mówi, gdzie są imię, nazwisko, „imię i nazwisko” (albo „nazwisko i imię”), telefon,
   stanowiska i lokal; wtedy osoba bez numeru zostaje (do uzupełnienia). Bez nagłówka osobą jest tylko wiersz z numerem
-  (pierwszy, który jest polskim numerem, inaczej pierwszy ciąg 7–15 cyfr); z reszty wiersza wypadają nazwy lokali
+  (pierwszy, który jest poprawnym numerem: polskim albo z kierunkowym, inaczej pierwszy ciąg 7–15 cyfr); z reszty wiersza wypadają nazwy lokali
   (pełne albo słowo, które ma tylko jeden lokal), stanowisk, e-maile i numer porządkowy, a pierwsze słowo to imię.
   `PhoneMask` zamienia numery na `[TEL1]`… (daty zostają) i oddaje numer po znaczniku; `without_numbers` daje
   „[numer]” w historii rozmowy.
@@ -1532,3 +1532,43 @@ kierownikowi; powiadomienie chroni przed cichą zmianą. Inni pracownicy i asyst
 Hipotezy na pilotaż (uwagi z przeglądu PR #78): czy ktoś pracuje w dwóch firmach i chce w nich różnych kont (wtedy
 numer przenieść do profilu w firmie); czy kierownicy naprawdę wpisują numery za innych (jeśli nie, zostawić to tylko
 osobie, bo powiadomienie w aplikacji można przeoczyć); komu kierownik daje plik CSV z numerami kont.
+
+## 43. Numery telefonów z innych krajów (25.11.2026)
+
+Spec: „Logowanie i zaproszenia”. Piotr: „daj możliwość też innych kodów krajowych numerów telefonów”.
+
+- Backend: `accounts.models.normalize_phone` czyta numer z regionem PL (bez kierunkowego = polski) i przyjmuje każdy
+  poprawny numer z kierunkowym („+380 50 123 4567”, „00380…”, też z krajowym zerem po kierunkowym, które
+  phonenumbers sam usuwa). Polski: jak wcześniej każdy poprawny. Zagraniczny: tylko komórka (`SMS_NUMBER_TYPES`), bo
+  kod idzie SMS-em, a numery premium nie wchodzą do budżetu SMS. Sprawdzają to zaproszenia (pojedyncze, lista,
+  asystent); `mobile=False` pomija to sprawdzenie dla konta (`User.clean`, `create_user`), admina Django (superadmin
+  wpuści prawdziwą komórkę, którą dane phonenumbers nazywają inaczej; uwaga Prelint) i logowania, które i tak wysyła
+  kod tylko na numer z kontem albo zaproszeniem. Komunikaty: `NOT_A_PHONE`, `WRONG_PHONE` (mówi, że
+  zagraniczny zaczyna się od + i kierunkowego), `WRONG_FOREIGN_PHONE`, `NOT_MOBILE`. Pole `phone_e164` (16 znaków)
+  mieści każdy numer E.164, więc bez migracji. `phone_for_text` pisze numer dla ludzi („512 345 678”, „+380 50 123
+  4567”); używa go `assistant.services.pretty_phone` w liniach planu zaproszeń.
+- Logowanie (`accounts/login.py`): kod dostaje każdy numer z kontem albo oczekującym zaproszeniem. Rejestracja firmy
+  numerem bez konta i zaproszenia tylko dla +48 (`FOREIGN_REGISTRATION`, 400; odmowa liczy się w limicie na adres
+  IP jak każda inna).
+- Lista osób (`people_list`): `PhoneMask` porównuje numery po E.164 (`_number_key`), więc „+380 600 100 200” i
+  „600 100 200” dostają różne znaczniki; wcześniej liczyło się 9 ostatnich cyfr. Numer bez „+”/„00” jest polski, więc
+  np. PESEL nadal nie udaje numeru.
+- Ekran: `features/auth/PhoneInput.tsx` (kraj przed numerem: widoczny kierunkowy z ikoną strzałki, pod nim zwykła
+  lista `select`, więc otwiera się jak każda inna lista telefonu) na „Zaloguj się”, „Załóż firmę” i w „Zaproś do
+  lokalu”. `features/auth/phone.ts`: `PHONE_COUNTRIES` (Polska, Ukraina, potem alfabetycznie), `phoneToSend` (numer
+  z „+” lub „00” idzie w całości, inaczej kierunkowy wybranego kraju z przodu), `phoneProblem` (9 cyfr dla Polski,
+  cały numer dla innych; resztę sprawdza serwer), `prettyPhone` dzieli kierunkowy od reszty dla każdego kraju (lista
+  kierunkowych ITU). Podgląd „Zaproś kilka osób” zostawia zwykłe pole tekstowe (numer z pliku poprawia się z „+”).
+  Edycja osoby: numer zmienia nadal tylko administrator (admin Django korzysta z tego samego `normalize_phone`).
+
+Założenia: domyślny kraj zawsze Polska (bez zgadywania z języka przeglądarki); po wysłaniu zaproszenia formularz wraca
+do Polski, bo polski numer wpisany przy wybranej Ukrainie mógłby przejść jako ukraiński („+380 501…”; uwaga Prelint).
+Właściciel tylko z numerem zagranicznym: administrator dodaje jego numer w adminie Django (konto bez firmy), a wtedy
+„Załóż firmę” wysyła mu kod; komunikat odmowy to mówi. Bramka SMS nie jest jeszcze podłączona; przy jej
+wyborze sprawdzić cenę i dostarczanie SMS-ów za granicę (np. Ukraina) i zostawić w panelu bramki tylko potrzebne kraje.
+Strona z kodami SMS na serwerze (`deploy/local`, poza repozytorium) czyta wiersze „SMS to +…” z logu; format wiersza
+się nie zmienił, ale jeśli filtruje po „+48”, kody zagranicznych numerów trzeba tam dopisać.
+Do obserwacji w pilotażu (przegląd Prelint PR #80): czy kraje na liście pasują do załóg; czy listy kadrowe mają
+zagraniczne numery bez kierunkowego (wtedy w podglądzie „Zaproś kilka osób” dodać wybór „numery bez kierunkowego są z
+kraju…”); czy ktoś z prawdziwą komórką dostaje „podaj numer komórki” (wtedy superadmin dodaje go w adminie). Przed podłączeniem bramki SMS zdecydować o ochronie kosztów: lista krajów w panelu bramki, ewentualnie
+dzienny limit zaproszeń na numery zagraniczne na firmę.

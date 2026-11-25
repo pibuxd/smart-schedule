@@ -53,6 +53,32 @@ describe('EmployeesScreen', () => {
     expect((patch.body as { experience: number }).experience).toBe(2)
   })
 
+  it('invites a number from another country', async () => {
+    const calls = mockApi((method, path) => {
+      if (path.endsWith('/employees')) return [200, []]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations') && method === 'GET') return [200, []]
+      if (path.endsWith('/invitations'))
+        return [201, { id: 'i1', location_id: 'l1', phone: '+380501234567', first_name: 'Olena', last_name: '', role: 'employee', status: 'pending', position_ids: [], created_at: '2026-11-25T10:00:00Z', decided_at: null }]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.change(await screen.findByLabelText('Kraj numeru'), { target: { value: 'UA' } })
+    fireEvent.change(screen.getByLabelText('Numer telefonu'), { target: { value: '50 123 4567' } })
+    fireEvent.change(screen.getByLabelText('Imię (nieobowiązkowo)'), { target: { value: 'Olena' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zaproś' }))
+
+    expect(await screen.findByText(/Zaproszenie czeka na numer \+380 501 234 567/)).toBeInTheDocument()
+    const post = calls.find((c) => c.method === 'POST')!
+    expect((post.body as { phone: string }).phone).toBe('+380501234567')
+    // The next person starts from Poland again.
+    expect(screen.getByLabelText('Kraj numeru')).toHaveValue('PL')
+  })
+
   it('lets the manager set another level on one position', async () => {
     const two = {
       ...person('e1', 'Ala', 3),

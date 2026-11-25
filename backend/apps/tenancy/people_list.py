@@ -195,16 +195,19 @@ def phone_spans(text: str) -> list[re.Match]:
     return [m for m in PHONE_LIKE.finditer(text) if not DATE_LIKE.fullmatch(m.group().strip())]
 
 
-def is_phone(raw: str) -> bool:
+def _e164(raw: str) -> str | None:
     from django.core.exceptions import ValidationError
 
     from apps.accounts.models import normalize_phone
 
     try:
-        normalize_phone(raw)
+        return normalize_phone(raw)
     except ValidationError:
-        return False
-    return True
+        return None
+
+
+def is_phone(raw: str) -> bool:
+    return _e164(raw) is not None
 
 
 def without_numbers(text: str) -> str:
@@ -212,10 +215,10 @@ def without_numbers(text: str) -> str:
     return PHONE_LIKE.sub(lambda m: m.group() if DATE_LIKE.fullmatch(m.group().strip()) else "[numer]", text)
 
 
-def _same_number(one: str, other: str) -> bool:
-    """ "600-100-200", "600 100 200" and "+48 600100200" are one number (one mark for the model)."""
-    a, b = re.sub(r"\D", "", one), re.sub(r"\D", "", other)
-    return a == b or (len(a) >= 9 and len(b) >= 9 and a[-9:] == b[-9:])
+def _number_key(raw: str) -> str:
+    """ "600-100-200", "600 100 200" and "+48 600100200" are one number (one mark for the model); "+380 501 234 567"
+    is another one."""
+    return _e164(raw) or re.sub(r"\D", "", raw)
 
 
 class PhoneMask:
@@ -224,6 +227,7 @@ class PhoneMask:
 
     def __init__(self) -> None:
         self.numbers: dict[str, str] = {}
+        self._marks: dict[str, str] = {}  # _number_key → mark
         # Marks first seen in a file, not in the manager's own words (hide the message first).
         self.from_file: set[str] = set()
 
@@ -232,10 +236,12 @@ class PhoneMask:
             raw = match.group()
             if DATE_LIKE.fullmatch(raw.strip()):
                 return raw
-            token = next((t for t, number in self.numbers.items() if _same_number(number, raw)), None)
+            key = _number_key(raw)
+            token = self._marks.get(key)
             if token is None:
                 token = f"TEL{len(self.numbers) + 1}"
                 self.numbers[token] = raw
+                self._marks[key] = token
                 if file:
                     self.from_file.add(token)
             return f"[{token}]"

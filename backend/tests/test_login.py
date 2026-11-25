@@ -103,12 +103,48 @@ def test_disabled_account_gets_no_code(api, sms_outbox):
     assert sms_outbox == []
 
 
-@pytest.mark.parametrize("phone", ["abc", "12345", "+49 30 901820", "+1 202 555 0123", ""])
-def test_only_valid_polish_numbers_are_accepted(api, sms_outbox, phone):
+@pytest.mark.parametrize("phone", ["abc", "12345", "+49 30 901820", "+380 50 123", ""])
+def test_invalid_or_foreign_numbers_get_no_registration_code(api, sms_outbox, phone):
     response = request_code(api, phone, purpose="register")
 
     assert response.status_code == 400
     assert sms_outbox == []
+
+
+FOREIGN = "+380501234567"
+
+
+def test_invited_number_from_another_country_logs_in(api, sms_outbox, make_company):
+    a = make_company()
+    Invitation.objects.create(location=a["location"], phone_e164=FOREIGN, invited_by=a["manager"])
+
+    response = request_code(api, "+380 50 123 45 67")
+    assert response.status_code == 200
+    assert response.json()["phone"] == FOREIGN
+    assert sms_outbox[-1][0] == FOREIGN
+    # Typed again in another way (00 instead of +, the national 0 kept): the same number.
+    assert verify(api, code_from(sms_outbox), phone="00380 050 123 4567").status_code == 200
+    assert api.get("/api/me").json()["phone"] == FOREIGN
+
+
+def test_unknown_number_from_another_country_gets_no_code(api, sms_outbox):
+    assert request_code(api, FOREIGN).status_code == 404
+    assert sms_outbox == []
+
+
+def test_a_company_is_registered_only_with_a_polish_number(api, sms_outbox, make_company):
+    response = request_code(api, FOREIGN, purpose="register")
+
+    assert response.status_code == 400
+    assert "polskim numerem" in response.json()["detail"] and "administratora" in response.json()["detail"]
+    assert sms_outbox == []
+    # A refused number still counts against the address, like any refused number.
+    assert LoginCode.objects.filter(phone_e164=FOREIGN, code_hash="").exists()
+
+    # Someone already invited (or with an account) may register their own company with that number.
+    a = make_company()
+    Invitation.objects.create(location=a["location"], phone_e164=FOREIGN, invited_by=a["manager"])
+    assert request_code(api, FOREIGN, purpose="register").status_code == 200
 
 
 # --- the code itself ----------------------------------------------------------------------------------

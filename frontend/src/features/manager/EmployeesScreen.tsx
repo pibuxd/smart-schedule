@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Pencil, Trash2, UserPlus } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import type { EmployeeIn, EmployeeOut, InvitationOut, LocationSetupOut, MeOut, PositionOut } from '../../api/generated/model'
 import { useMe } from '../../api/generated/auth/auth'
@@ -18,7 +18,8 @@ import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
 import { tidyBankAccount } from '../auth/bank-account'
-import { prettyPhone } from '../auth/phone'
+import { POLAND, phoneToSend, prettyPhone } from '../auth/phone'
+import { PhoneInput } from '../auth/PhoneInput'
 import { InviteManyButton } from './InviteMany'
 import { useManager } from './ManagerContext'
 import { OwnRates } from './PayRates'
@@ -487,6 +488,8 @@ function InvitationsSection({ locationId, positions }: { locationId: string; pos
   const cancel = useCancelInvitation()
   const queryClient = useQueryClient()
   const [phone, setPhone] = useState('')
+  const [region, setRegion] = useState(POLAND.region)
+  const phoneId = useId()
   const [first, setFirst] = useState('')
   const [last, setLast] = useState('')
   const [asManager, setAsManager] = useState(false)
@@ -497,7 +500,12 @@ function InvitationsSection({ locationId, positions }: { locationId: string; pos
     invite.mutate(
       {
         locationId,
-        data: { phone, first_name: first, last_name: last, role: asManager ? 'manager' : 'employee' },
+        data: {
+          phone: phoneToSend(region, phone),
+          first_name: first,
+          last_name: last,
+          role: asManager ? 'manager' : 'employee',
+        },
       },
       {
         onSuccess: (response) => {
@@ -506,6 +514,8 @@ function InvitationsSection({ locationId, positions }: { locationId: string; pos
             `Zaproszenie czeka na numer ${prettyPhone(out.phone)}. Nie wysyłamy SMS-a, więc powiedz tej osobie, żeby zalogowała się w Grafikomacie tym numerem. Zaproszenie zobaczy od razu.`,
           )
           setPhone('')
+          // Back to Poland: a Polish number typed after a foreign one could pass as that country's (+380 501…).
+          setRegion(POLAND.region)
           setFirst('')
           setLast('')
           void queryClient.invalidateQueries()
@@ -523,7 +533,21 @@ function InvitationsSection({ locationId, positions }: { locationId: string; pos
       action={<InviteManyButton locationId={locationId} positions={positions} />}
     >
       <form onSubmit={submit} className="grid gap-4 rounded-md border border-line bg-surface p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-        <TextField label="Numer telefonu" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="512 345 678" />
+        <div className="grid content-start gap-1">
+          <label htmlFor={phoneId} className="text-sm font-semibold">
+            Numer telefonu
+          </label>
+          <PhoneInput
+            id={phoneId}
+            variant="form"
+            region={region}
+            onRegionChange={setRegion}
+            autoComplete="off"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
+        </div>
         <TextField label="Imię (nieobowiązkowo)" value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} />
         <TextField label="Nazwisko (nieobowiązkowo)" value={last} onChange={(e) => setLast(e.target.value)} maxLength={120} />
         <Button type="submit" size="normal" disabled={invite.isPending || readOnly}>

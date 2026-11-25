@@ -51,6 +51,28 @@ describe('LoginScreen', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('sends a number from another country with its code', async () => {
+    const calls = mockApi(() => [200, { phone: '+380501234567', expires_in_s: 300, resend_after_s: 60 }])
+    renderScreen(<LoginScreen />)
+    expect(await screen.findByLabelText('Kraj numeru')).toHaveValue('PL')
+    fireEvent.change(screen.getByLabelText('Kraj numeru'), { target: { value: 'UA' } })
+    expect(screen.getByText('+380')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Numer telefonu'), { target: { value: '050 123 45 67' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij kod SMS' }))
+    expect(await screen.findByText('+380 501 234 567')).toBeInTheDocument()
+    // The server drops the national 0 and answers with the stored form.
+    expect(calls[0].body).toEqual({ phone: '+3800501234567', purpose: 'login' })
+  })
+
+  it('takes a number typed with + whatever country is picked', async () => {
+    const calls = mockApi(() => [200, { phone: '+995555123456', expires_in_s: 300, resend_after_s: 60 }])
+    renderScreen(<LoginScreen />)
+    fireEvent.change(await screen.findByLabelText('Numer telefonu'), { target: { value: '+995 555 12 34 56' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij kod SMS' }))
+    expect(await screen.findByText('Wpisz kod z SMS-a')).toBeInTheDocument()
+    expect(calls[0].body).toEqual({ phone: '+995555123456', purpose: 'login' })
+  })
+
   it('keeps the code step after a page refresh', async () => {
     mockApi(() => [200, { phone: '+48512345678', expires_in_s: 300, resend_after_s: 60 }])
     const first = renderScreen(<LoginScreen />)
