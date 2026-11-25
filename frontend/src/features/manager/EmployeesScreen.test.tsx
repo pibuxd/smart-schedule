@@ -256,4 +256,27 @@ describe('EmployeesScreen', () => {
     expect(calls.filter((c) => c.method === 'PATCH')[1].body).toMatchObject({ bank_account: '61 1090 1014 0000 0712 1981 2875' })
     expect(await within(sheet).findByText('W tym numerze konta jest błąd. Sprawdź cyfry.')).toBeInTheDocument()
   })
+
+  it('says up front when only the person changes their name and account (another company)', async () => {
+    const ala = { ...person('e1', 'Ala', 2), other_company: true }
+    mockApi((_method, path) => {
+      if (path.endsWith('/employees')) return [200, [ala]]
+      if (path.endsWith('/setup')) return [200, setup]
+      if (path.endsWith('/invitations')) return [200, []]
+      return [404, { detail: 'Nie ma' }]
+    })
+    renderScreen(
+      <AsManager>
+        <EmployeesScreen locationId="l1" />
+      </AsManager>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Zmień: Ala Nowak' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByLabelText('Numer konta do wypłaty')).toBeDisabled()
+    expect(within(sheet).getByLabelText('Imię')).toBeDisabled()
+    expect(
+      within(sheet).getByText('Ta osoba ma konto także w innej firmie, więc imię i numer konta zmienia tylko ona sama w „Twoje dane”.'),
+    ).toBeInTheDocument()
+    expect(within(sheet).getByLabelText('Najwyżej godzin w miesiącu')).toBeEnabled()
+  })
 })

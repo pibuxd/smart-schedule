@@ -32,7 +32,7 @@ from apps.staffing.models import (
     works_in_q,
 )
 from apps.tenancy.context import TenantContext, context_for
-from apps.tenancy.models import Location
+from apps.tenancy.models import Location, Membership
 
 router = Router(tags=["staffing"])
 
@@ -170,6 +170,8 @@ class EmployeeOut(Schema):
     # For pay transfers (26 digits, "" when not given): the person enters it in "Twoje dane"; never shown to
     # other employees.
     bank_account: str = ""
+    # The person also has an account in another company, so only they change their name and bank account number.
+    other_company: bool = False
     position_ids: list[UUID]
     experience: ExperienceLevel
     # The level on each of the person's positions (the default `experience` unless set otherwise).
@@ -554,11 +556,14 @@ def _employee_out(
     levels: dict | None = None,
     location: Location | None = None,
     here: set | None = None,
+    other_company: bool | None = None,
 ) -> EmployeeOut:
     """`position_ids`: all of the person's positions (the revision covers them all). With `location`, only that
     location's positions are shown."""
     levels = levels or {}
     user = profile.membership.user
+    if other_company is None:
+        other_company = user.memberships.exclude(company_id=profile.company_id).exists()  # tenant-ok: only exists
     # Include settings stored on the account and position links as well as the profile row.
     snapshot = (
         user.first_name,
@@ -591,6 +596,7 @@ def _employee_out(
         last_name=user.last_name,
         phone=user.phone_e164,
         bank_account=user.bank_account,
+        other_company=other_company,
         position_ids=position_ids,
         experience=profile.experience,
         position_experience=[
@@ -639,8 +645,14 @@ def location_employees(request, location_id: UUID):
     drafts = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.DRAFT)
     published = _upcoming_shifts(ctx, profiles, ScheduleVersion.Status.PUBLISHED)
     here = set(_positions(ctx, location).values_list("pk", flat=True))
+    users = [p.membership.user_id for p in profiles]
+    elsewhere = set(
+        Membership.objects.filter(user_id__in=users)  # tenant-ok: only whether these people have another company
+        .exclude(company=ctx.company)
+        .values_list("user_id", flat=True)
+    )
     return [
-        _employee_out(p, positions[p.pk], levels[p.pk], location, here).model_copy(
+        _employee_out(p, positions[p.pk], levels[p.pk], location, here, p.membership.user_id in elsewhere).model_copy(
             update={"draft_shifts": drafts.get(p.pk, 0), "published_shifts": published.get(p.pk, 0)}
         )
         for p in profiles

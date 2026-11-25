@@ -14,7 +14,8 @@ była tak schowana nisko tylko np była w tym panelu co "Stanowiska"”.
   wpisać za nią (np. za piekarza, który nie lubi telefonu). Wtedy osoba dostaje powiadomienie z czterema ostatnimi
   cyframi, żeby zmiana, dokąd idzie wypłata, nie przeszła po cichu. Plik CSV z „Godzin” ma kolumnę „Numer konta”.
 - Numer należy do osoby, tak jak imię: jest jeden we wszystkich firmach, w których pracuje. Dlatego kierownik zmienia
-  go tylko wtedy, gdy osoba nie ma konta w innej firmie (tak samo jak imię); inaczej zmienia go tylko ona sama.
+  go tylko wtedy, gdy osoba nie ma konta w innej firmie (tak samo jak imię); inaczej zmienia go tylko ona sama, a
+  formularz kierownika mówi o tym od razu (pola imienia i numeru są wtedy wyszarzone).
 - Tylko polski numer (26 cyfr, także z „PL”, spacjami albo myślnikami). Aplikacja sprawdza cyfry kontrolne, więc
   pomyłka w jednej cyfrze albo zamiana dwóch cyfr daje „W tym numerze konta jest błąd. Sprawdź cyfry.”.
 - Numer widzą tylko: sama osoba, kierownicy lokali, w których pracuje (także w pliku CSV z „Godzin”), i administrator

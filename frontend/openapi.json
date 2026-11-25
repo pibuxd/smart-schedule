@@ -14912,6 +14912,11 @@
             "title": "Bank Account",
             "type": "string"
           },
+          "other_company": {
+            "default": false,
+            "title": "Other Company",
+            "type": "boolean"
+          },
           "position_ids": {
             "items": {
               "format": "uuid",

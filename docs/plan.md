@@ -1503,7 +1503,8 @@ Spec: „Numer konta i stawki przy stanowiskach”.
   („61 1090 1014 …”). Admin Django pokazuje pole w „Dane osobowe” i sprawdza je tak samo.
 - API: `MeOut.bank_account`; `PATCH /me` zmienia tylko wysłane pola (imię, nazwisko, `bank_account`, "" usuwa numer).
   `EmployeeOut.bank_account` (tylko kierownicy lokalu, jak cała lista) i `EmployeeIn.bank_account` z tą samą zasadą co
-  imię (`_changed_account`: 409, gdy osoba ma członkostwo w innej firmie). Numer wchodzi do `revision`, więc formularz
+  imię (`_changed_account`: 409, gdy osoba ma członkostwo w innej firmie; `EmployeeOut.other_company` mówi to
+  formularzowi z góry, więc imię, nazwisko i numer są tam wyszarzone z wyjaśnieniem). Numer wchodzi do `revision`, więc formularz
   otwarty przed zmianą numeru dostaje 409 zamiast go cofnąć. Zmiana cudzego numeru przez kierownika zapisuje
   powiadomienie `bank_account_set` z `ending` (cztery ostatnie cyfry, nigdy cały numer; puste = usunięty).
   `EmployeeHoursOut.bank_account` i kolumna CSV „Numer konta” przed „Uwagi” (ze spacjami, więc arkusz trzyma tekst,

@@ -14,6 +14,7 @@ export interface EmployeeOut {
   last_name: string;
   phone: string;
   bank_account?: string;
+  other_company?: boolean;
   position_ids: string[];
   experience: EmployeeOutExperience;
   position_experience: PositionLevel[];

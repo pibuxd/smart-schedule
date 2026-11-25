@@ -116,10 +116,15 @@ def test_a_manager_sets_the_number_and_the_person_is_told(api, shop):
 
 
 def test_only_the_person_changes_a_number_shared_with_another_company(api, shop, make_company):
+    api.login(shop["manager"])
+    [row] = api.get(f"/api/locations/{shop['location'].pk}/employees").json()
+    assert row["other_company"] is False
     other = make_company("Inna")
     Membership.objects.create(company=other["company"], user=shop["worker"])
-    api.login(shop["manager"])
 
+    # The manager's form says so before anything is typed.
+    [row] = api.get(f"/api/locations/{shop['location'].pk}/employees").json()
+    assert row["other_company"] is True
     response = api.patch(f"/api/employees/{shop['employee'].pk}", {"bank_account": VALID})
 
     assert response.status_code == 409
@@ -127,6 +132,7 @@ def test_only_the_person_changes_a_number_shared_with_another_company(api, shop,
         "Ta osoba ma konto także w innej firmie, więc numer konta może zmienić tylko ona sama."
     )
     assert User.objects.get(pk=shop["worker"].pk).bank_account == ""
+    assert api.patch(f"/api/employees/{shop['employee'].pk}", {"max_hours_month": 100}).json()["other_company"] is True
 
 
 def test_a_manager_who_works_shifts_sets_their_own_number_without_a_notification(api, shop):
