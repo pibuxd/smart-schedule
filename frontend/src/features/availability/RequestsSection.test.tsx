@@ -193,6 +193,8 @@ describe("RequestsSection", () => {
       await screen.findByText(/mają „Nie mogę” przez cały dzień, a prośba mówi tylko o godzinach 9:00–11:00: 1.12/),
     ).toBeInTheDocument();
     expect(screen.getByText(/nadal do pracy w godzinach 9:00–11:00: 8.12/)).toBeInTheDocument();
+    // Narrowing a whole day says what it costs: the rest of the day can get a shift.
+    expect(screen.getByText(/możesz dostać zmianę w pozostałych godzinach tych dni/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Zmień na „nie mogę” 9:00–11:00" }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PUT")!.body).toEqual({

@@ -79,10 +79,17 @@ function CannotMark({
   return (
     <div className="grid gap-2 rounded-md border border-line p-3">
       <p className="m-0 text-sm">{text}</p>
-      {hours && (
+      {mark.whole_day ? (
         <p className="m-0 text-sm text-ink-muted">
-          W pozostałych godzinach tych dni możesz pracować.
+          Po zmianie możesz dostać zmianę w pozostałych godzinach tych dni. Nie
+          możesz przez cały dzień? Zostaw tak, jak jest.
         </p>
+      ) : (
+        hours && (
+          <p className="m-0 text-sm text-ink-muted">
+            W pozostałych godzinach tych dni możesz pracować.
+          </p>
+        )
       )}
       <div>
         <Button
