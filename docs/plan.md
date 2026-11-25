@@ -1619,7 +1619,8 @@ Spec: „Poprawki po raporcie z testów (25.11.2026)”.
 - Zapytania: `shouldRetry` w `lib/api-error.ts` (502/503/504 i brak połączenia do 4 razy, inny 5xx raz, 4xx nigdy).
 
 Założenia: przycisk „Zmień na „nie mogę” 9:00–11:00” pojawia się także wtedy, gdy pracownik sam zablokował cały dzień;
-to tylko propozycja, kalendarz zmienia się dopiero po naciśnięciu. Dzień z „Chętnie” bez godzin przy prośbie „nie mogę
+to tylko propozycja, kalendarz zmienia się dopiero po naciśnięciu, a zdanie przy przycisku mówi, że w pozostałych
+godzinach można wtedy dostać zmianę. Dzień z „Chętnie” bez godzin przy prośbie „nie mogę
 9–11” jest do zaznaczenia i po naciśnięciu traci „Chętnie” (tak jak dotąd przy całych dniach; uwaga o „Chętnie” to
 mówi). Odpowiedzi modelu nie da się sprawdzić bez klucza w testach: zachowanie asystenta zmieniły prompt i uwagi
 aplikacji; zapis godzin, przyciski i silnik mają testy. Przyczyny 503 nie ustalono w logach serwera; restart przy
