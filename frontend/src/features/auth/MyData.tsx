@@ -67,7 +67,7 @@ export function MyDataForm({ me, onDone }: { me: MeOut; onDone: () => void }) {
           setAccount(e.target.value)
           save.reset()
         }}
-        hint="Nieobowiązkowy. Widzą go tylko Twoi kierownicy, także w pliku z godzinami do wypłaty."
+        hint="Nieobowiązkowy. Widzą go tylko Twoi kierownicy (też w pliku z godzinami) i administrator Grafikomatu."
       />
       <p className="m-0 text-sm text-ink-muted">{`Logujesz się numerem ${prettyPhone(me.phone)}.`}</p>
       {save.isError && <InlineError>{errorMessage(save.error, NETWORK_PROBLEM)}</InlineError>}

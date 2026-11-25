@@ -17,9 +17,9 @@ była tak schowana nisko tylko np była w tym panelu co "Stanowiska"”.
   go tylko wtedy, gdy osoba nie ma konta w innej firmie (tak samo jak imię); inaczej zmienia go tylko ona sama.
 - Tylko polski numer (26 cyfr, także z „PL”, spacjami albo myślnikami). Aplikacja sprawdza cyfry kontrolne, więc
   pomyłka w jednej cyfrze albo zamiana dwóch cyfr daje „W tym numerze konta jest błąd. Sprawdź cyfry.”.
-- Numer widzą tylko: sama osoba, kierownicy lokali, w których pracuje (także w pliku CSV z „Godzin”, o czym mówi tekst
-  pod polem), i administrator Grafikomatu. Inni pracownicy go nie widzą, a asystent AI nigdy go nie dostaje (jak
-  numerów telefonów).
+- Numer widzą tylko: sama osoba, kierownicy lokali, w których pracuje (także w pliku CSV z „Godzin”), i administrator
+  Grafikomatu; tekst pod polem wymienia ich wszystkich. Inni pracownicy go nie widzą, a asystent AI nigdy go nie
+  dostaje (jak numerów telefonów).
 - Stawki stanowisk są w ustawieniach lokalu w panelu „Stanowiska i stawki”: przy każdym stanowisku jego nazwa, liczba
   osób, stawka dziś (albo „bez stawki”), zaplanowana zmiana i jeden przycisk „Zmień” (Piotr, 25.11.2026: zamiast
   osobnych „Zmień stawkę”, „Zmień nazwę” i „Usuń”). Otwiera okno jak przy „Zmianach i godzinach”: nazwa, stawka „od

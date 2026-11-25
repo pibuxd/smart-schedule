@@ -1512,8 +1512,8 @@ Spec: „Numer konta i stawki przy stanowiskach”.
   numer, i że asystent go nie zna.
 - UI pracownika: `features/auth/MyData.tsx`, przycisk „Twoje dane” obok „Wyloguj” w nagłówku ekranów pracownika
   otwiera `Sheet` z imieniem, nazwiskiem i „Numer konta do wypłaty” („Nieobowiązkowy. Widzą go tylko Twoi
-  kierownicy, także w pliku z godzinami do wypłaty.”); numer wysyła się tylko, gdy cyfry się zmieniły. Kierownik: pole „Numer konta do wypłaty” w formularzu
-  osoby (`EmployeesScreen`).
+  kierownicy (też w pliku z godzinami) i administrator Grafikomatu.”); numer wysyła się tylko, gdy cyfry się
+  zmieniły. Kierownik: pole „Numer konta do wypłaty” w formularzu osoby (`EmployeesScreen`).
 - Ustawienia lokalu: `PositionsSection` nazywa się „Stanowiska i stawki”; wiersz to nazwa, liczba osób,
   `PayRates.RateNow` (stawka dziś i zaplanowane zmiany) i jeden przycisk „Zmień”, który otwiera `Sheet` z
   `PayRates.PositionForm`: nazwa (`PATCH /positions/{id}` tylko gdy się zmieniła), stawka i „Od dnia”
