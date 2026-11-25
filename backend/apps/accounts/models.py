@@ -19,16 +19,17 @@ NOT_MOBILE = "Kod logowania przychodzi SMS-em, więc podaj numer komórki."
 SMS_NUMBER_TYPES = frozenset({phonenumbers.PhoneNumberType.MOBILE, phonenumbers.PhoneNumberType.FIXED_LINE_OR_MOBILE})
 
 
-def normalize_phone(raw: str, *, mobile: bool = True) -> str:
+def normalize_phone(raw: str, *, mobile: bool = True, region: str = "PL") -> str:
     """Return a phone number in E.164 form, or raise ValidationError. A number without a country code is Polish
-    (+48); one from another country is written with its code ("+380 50 123 4567", "00380…") and must be a mobile
-    (Piotr, 25.11.2026: people from Ukraine and elsewhere keep their own numbers).
+    (+48), or from `region` when a manager says a whole list is from there; one from another country is written
+    with its code ("+380 50 123 4567", "00380…") and must be a mobile (Piotr, 25.11.2026: people from Ukraine and
+    elsewhere keep their own numbers).
 
     `mobile=False` skips the mobile check: for the account itself, the admin (who may let in a real mobile the
     metadata misreads) and login, which sends codes only to numbers that already have an account or an invitation.
     Numbers enter through invitations, which keep the check."""
     try:
-        number = phonenumbers.parse(str(raw), "PL")
+        number = phonenumbers.parse(str(raw), region)
     except phonenumbers.NumberParseException as exc:
         raise ValidationError(NOT_A_PHONE) from exc
     if not phonenumbers.is_valid_number(number):
@@ -36,6 +37,11 @@ def normalize_phone(raw: str, *, mobile: bool = True) -> str:
     if mobile and number.country_code != 48 and phonenumbers.number_type(number) not in SMS_NUMBER_TYPES:
         raise ValidationError(NOT_MOBILE)
     return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
+
+
+def is_phone_region(region: str) -> bool:
+    """A country code ("PL", "UA") that numbers without a country code can be read in."""
+    return region in phonenumbers.SUPPORTED_REGIONS
 
 
 def phone_for_text(e164: str) -> str:

@@ -66,6 +66,9 @@ def test_manager_invites_a_number_from_another_country(api, a):
     # A foreign landline cannot get the SMS code.
     landline = invite(api, a["location"], "+49 30 901820")
     assert landline.status_code == 400 and "komórki" in landline.json()["detail"]
+    # Unless the superadmin has added that number (a real mobile the number data misreads): then it is invited.
+    User.objects.create_user("+49 30 901820")
+    assert invite(api, a["location"], "+49 30 901820").status_code == 201
 
 
 def test_one_pending_invitation_per_location_and_number(api, a):

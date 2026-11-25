@@ -19,7 +19,7 @@ from django.db import transaction
 from django.utils import timezone
 from ninja.errors import HttpError
 
-from apps.accounts.models import phone_for_text
+from apps.accounts.models import POLISH_PREFIX, phone_for_text
 from apps.assistant import agreements, costs, llm, readings, tools
 from apps.assistant import context as facts
 from apps.assistant.models import AssistantCommand, AssistantUsage, ManagerInstruction
@@ -1753,6 +1753,21 @@ INVITES_NOTE = (
     "swoim numerem, a zobaczą zaproszenie."
 )
 MAX_LISTED_SKIPS = 15
+# The assistant reads numbers without a country code as Polish. Excel drops a leading 0, so a Ukrainian 050… arrives
+# as a Polish-looking 50…: when a list also has numbers of another country, the manager is told (Prelint on #81).
+MIXED_COUNTRIES_NOTE = (
+    "Część numerów ma kierunkowy innego kraju, a numery bez kierunkowego czytam jako polskie. Sprawdź je. Listę osób "
+    "z jednego kraju zaprosisz też w „Pracownicy” → „Zaproś kilka osób”, gdzie wybierzesz kraj numerów."
+)
+
+
+def _mixed_countries(people: list[invitations.Person]) -> bool:
+    """Some numbers have another country's code while others, written without a code, were read as Polish."""
+    foreign = any(not p.phone_e164.startswith(POLISH_PREFIX) for p in people)
+    codeless = any(
+        p.phone_e164.startswith(POLISH_PREFIX) and not p.phone.strip().startswith(("+", "00")) for p in people
+    )
+    return foreign and codeless
 
 
 def pretty_phone(e164: str) -> str:
@@ -1821,6 +1836,7 @@ def _checked_invites(
     invitations.check_people(inviter, location, to_check)
     invites, lines, skipped = [], [], []
     several = any(person.problem is None and person.location.pk != location.pk for person, _ in people)
+    ready = [person for person, _ in people if person.problem is None]
     for person, missing in people:
         name = _person_words(person.first_name, person.last_name)
         if person.problem is not None:
@@ -1850,6 +1866,8 @@ def _checked_invites(
         if missing:
             unknown.append(f"{name}: {', '.join(missing)}")
     notes = []
+    if _mixed_countries(ready):
+        notes.append(MIXED_COUNTRIES_NOTE)
     demoted = [_person_words(p.first_name, p.last_name) for p in as_employees if p.problem is None]
     if demoted:
         hint = (

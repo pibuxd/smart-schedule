@@ -669,7 +669,7 @@
             }
           }
         },
-        "description": "Find people in a pasted list or a file (CSV, XLSX, PDF) for a preview. Nothing is saved, the file neither.\n\nRead without the assistant: a row with a phone number is a person (or a header row says which column is\nwhat). Positions and locations are matched by name; each person says what stands in the way of inviting them.",
+        "description": "Find people in a pasted list or a file (CSV, XLSX, PDF) for a preview. Nothing is saved, the file neither.\n\nRead without the assistant: a row with a phone number is a person (or a header row says which column is\nwhat). Positions and locations are matched by name; each person says what stands in the way of inviting them.\nNumbers without a country code are from `region` (Poland unless the manager picks another country: a list of\na Ukrainian crew, where Excel also drops the leading 0, so 050… arrives as a Polish-looking 50…).",
         "tags": [
           "tenancy"
         ],
@@ -683,6 +683,11 @@
                   "text": {
                     "default": "",
                     "title": "Text",
+                    "type": "string"
+                  },
+                  "region": {
+                    "default": "PL",
+                    "title": "Region",
                     "type": "string"
                   },
                   "file": {
@@ -726,6 +731,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvitedPeopleOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             }
@@ -10423,6 +10438,12 @@
             "minItems": 1,
             "title": "People",
             "type": "array"
+          },
+          "region": {
+            "default": "PL",
+            "maxLength": 2,
+            "title": "Region",
+            "type": "string"
           }
         },
         "required": [

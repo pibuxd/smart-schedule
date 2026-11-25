@@ -118,6 +118,20 @@ def test_a_number_from_another_country_is_hidden_and_invited(api, a, with_key, m
     assert Invitation.objects.get().phone_e164 == "+380501234567"
 
 
+def test_a_file_mixing_foreign_and_code_less_numbers_gets_a_note(api, a, with_key, monkeypatch):
+    api.login(a["manager"])
+    # Excel dropped Iryna's 0: 050 123 4567 became 501234567, which reads as a Polish number.
+    content = "Imię i nazwisko;Telefon\nOlena Shevchenko;+380 50 123 45 67\nIryna Koval;501234567\n"
+    answer = plan(invitations=[person("Olena", "Shevchenko", "[TEL1]"), person("Iryna", "Koval", "[TEL2]")])
+
+    body, _ = send_file(api, a["location"], monkeypatch, answer, content=content)
+
+    assert services.MIXED_COUNTRIES_NOTE in body["notes"]
+    # A Polish list alone gets no such note.
+    plain, _ = send_file(api, a["location"], monkeypatch, plan(invitations=[person("Anna", "Kowalska", "[TEL1]")]))
+    assert services.MIXED_COUNTRIES_NOTE not in plain["notes"]
+
+
 def test_people_who_cannot_be_invited_are_left_out_with_a_note(api, a, with_key, monkeypatch):
     api.login(a["manager"])
     answer = plan(
