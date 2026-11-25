@@ -76,32 +76,38 @@ export function hasHours(mark: Mark): boolean {
   return mark.from !== null || mark.to !== null
 }
 
-/** True when the hours run past midnight into the next morning. */
+/** True when the hours run past midnight into the next morning (an end at 0:00 is midnight, not a night). */
 export function overnight(mark: Mark): boolean {
-  return mark.from !== null && mark.to !== null && mark.to <= mark.from
+  return mark.from !== null && mark.to !== null && mark.to !== '00:00' && mark.to <= mark.from
 }
 
-/** Short label inside a calendar cell: "14–22", "od 14", "do 12", "6–10/16–22". */
+/** One window in words: "14:00–22:00", "do 9:00" (from midnight), "od 11:00" (to midnight). */
+export function windowWords(from: string | null, to: string | null, time: (value: string) => string): string {
+  if (from === null || from === '00:00') return to === null || to === '00:00' ? '' : `do ${time(to)}`
+  if (to === null || to === '00:00') return `od ${time(from)}`
+  return `${time(from)}–${time(to)}`
+}
+
+/** Short label inside a calendar cell: "14–22", "od 14", "do 12", "6–10/16–22", "do 9/od 11". */
 export function cellHours(mark: Mark): string | null {
-  const first = mark.from && mark.to ? `${compactTime(mark.from)}–${compactTime(mark.to)}` : null
-  if (first && hasSecondWindow(mark)) return `${first}/${compactTime(mark.from2!)}–${compactTime(mark.to2!)}`
-  if (first) return first
-  if (mark.from) return `od ${compactTime(mark.from)}`
-  if (mark.to) return `do ${compactTime(mark.to)}`
-  return null
+  if (!hasHours(mark)) return null
+  const first = windowWords(mark.from, mark.to, compactTime)
+  return hasSecondWindow(mark) ? `${first}/${windowWords(mark.from2!, mark.to2!, compactTime)}` : first
 }
 
-/** Spoken description, e.g. "chętnie, tylko 14:00–22:00". */
+/** Spoken description, e.g. "chętnie, tylko 14:00–22:00", "mogę, tylko do 9:00 lub od 11:00". "Nie mogę" has no
+ * hours: it is always the whole day. */
 export function describeMark(mark: Mark): string {
-  if (!hasHours(mark)) return STATE_LABEL[mark.state].toLowerCase()
   const state = STATE_LABEL[mark.state].toLowerCase()
-  let window = `${mark.from ?? '0:00'}–${mark.to ?? '24:00'}${overnight(mark) ? ' (do rana)' : ''}`
+  if (!hasHours(mark) || mark.state === 'cannot') return state
+  const plain = (value: string) => value
+  let window = `${windowWords(mark.from, mark.to, plain)}${overnight(mark) ? ' (do rana)' : ''}`
   if (hasSecondWindow(mark)) {
-    const second = `${mark.from2}–${mark.to2}${mark.to2! <= mark.from2! ? ' (do rana)' : ''}`
-    if (mark.state === 'cannot') window = `${window} i ${second}`
-    else window = mark.oneShift ? `${window} albo ${second} (jedna zmiana)` : `${window} lub ${second}`
+    const night = mark.to2 !== '00:00' && mark.to2! <= mark.from2!
+    const second = `${windowWords(mark.from2!, mark.to2!, plain)}${night ? ' (do rana)' : ''}`
+    window = mark.oneShift ? `${window} albo ${second} (jedna zmiana)` : `${window} lub ${second}`
   }
-  return mark.state === 'cannot' ? `${state} w godzinach ${window}` : `${state}, tylko ${window}`
+  return `${state}, tylko ${window}`
 }
 
 export function countStates(marks: Marks, dates: string[]): Record<AvailabilityState, number> {

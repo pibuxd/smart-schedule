@@ -162,7 +162,7 @@ RYNEK = [
         S,
         120,
         None,
-        "bardzo długie nazwisko (test układu ekranu); 'nie mogę' tylko w części dnia",
+        "bardzo długie nazwisko (test układu ekranu); 'mogę' tylko w części dnia",
     ),
     Person(
         "henryk", "Henryk", "Wójcik", ["Kierowca", "Sprzedawca"], E, 168, 140, "dwa stanowiska: kierowca i sprzedawca"
@@ -677,8 +677,8 @@ def _company_a(rng, built: Built) -> None:
     )  # "albo rano, albo nocka"
     _set_day(dar, wed, AvailabilityState.PREFER, from_time=time(22), to_time=time(6))  # night only
     _set_day(
-        profiles["grazyna"], mon + timedelta(days=7), AvailabilityState.CANNOT, from_time=time(14), to_time=time(22)
-    )
+        profiles["grazyna"], mon + timedelta(days=7), AvailabilityState.NEUTRAL, from_time=time(6), to_time=time(14)
+    )  # "mogę tylko rano": "nie mogę" is always the whole day
     _ask(company, r1, [profiles[x.key] for x in RYNEK if x.active], read_by={"anna", "bartosz"}, profiles=profiles)
 
     # Dworcowa, next month: deadline yesterday, everything entered before it except Natalia's changes.

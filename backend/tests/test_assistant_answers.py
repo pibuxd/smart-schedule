@@ -369,7 +369,14 @@ class TestEmployee:
         assert row.interpretation["summary"].endswith("(„nie mogę”).")
         [mine] = my_requests(api, shop)
         assert mine["cannot_marks"] == [
-            {"days": [days[1].isoformat(), days[2].isoformat()], "from_time": None, "to_time": None, "whole_day": False}
+            {
+                "days": [days[1].isoformat(), days[2].isoformat()],
+                "from_time": None,
+                "to_time": None,
+                "windows": [],
+                "prefer_days": [],
+                "whole_day": False,
+            }
         ]
         assert any("„Chętnie”" in note for note in mine["notes"])
         api.client.put(
@@ -383,45 +390,93 @@ class TestEmployee:
         [mine] = my_requests(api, shop)
         assert mine["cannot_marks"] == [] and mine["notes"] == []
 
-    def test_cannot_in_some_hours_keeps_the_rest_of_the_day(self, api, shop, with_key, monkeypatch):
-        # "We wtorki nie mogę od 9:00 do 11:00" once became five whole days off (tests 25.11.2026).
+    def test_cannot_in_some_hours_marks_the_rest_of_the_day_as_can(self, api, shop, with_key, monkeypatch):
+        # "We wtorki nie mogę od 9:00 do 11:00" once became five whole days off (tests 25.11.2026). "Nie mogę" is
+        # always a whole day (Piotr, 25.11.2026), so those days get "mogę" (or keep "chętnie") only outside the hours.
         start = shop["period"].start
-        days = [start + timedelta(days=n) for n in (0, 7, 14)]
+        days = [start + timedelta(days=n) for n in (0, 7, 14, 21)]
         AvailabilityDay.objects.create(employee=shop["employee"], date=days[0], state="cannot")  # an earlier reading
         AvailabilityDay.objects.create(
             employee=shop["employee"], date=days[2], state="neutral", from_time=time(14), to_time=time(22)
         )
+        AvailabilityDay.objects.create(employee=shop["employee"], date=days[3], state="prefer")
         answer = reading(
             weekdays=[], dates=[d.isoformat() for d in days], cannot=True, from_time="9:00", to_time="11:00"
         )
         status, row, _ = read(api, shop, monkeypatch, answer, "We wtorki nie mogę od 9:00 do 11:00.")
         assert status == "interpreted"
         assert (row.interpretation["from_time"], row.interpretation["to_time"]) == ("09:00", "11:00")
-        assert "tylko w godz. 9:00–11:00 („nie mogę”)" in row.interpretation["summary"]
-        [request] = [r for r in build_problem([shop["period"]]).problem.requests if r.id == str(row.pk)]
-        assert (request.from_time, request.to_time) == (time(9), time(11))
+        assert row.interpretation["summary"].endswith("„Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00).")
+        # Not a wish for the generator: only the calendar keeps it.
+        assert str(row.pk) not in {r.id for r in build_problem([shop["period"]]).problem.requests}
         [mine] = my_requests(api, shop)
-        # The day with "mogę tylko 14–22" is the person's own setting and stays; the whole-day mark may be narrowed.
+        rest = [{"start": "00:00", "end": "09:00"}, {"start": "11:00", "end": "00:00"}]
+        # The day with "mogę tylko 14–22" is the person's own setting and stays; the whole-day mark may be opened.
         assert mine["cannot_marks"] == [
-            {"days": [days[0].isoformat()], "from_time": "09:00", "to_time": "11:00", "whole_day": True},
-            {"days": [days[1].isoformat()], "from_time": "09:00", "to_time": "11:00", "whole_day": False},
+            {
+                "days": [days[0].isoformat()],
+                "from_time": "09:00",
+                "to_time": "11:00",
+                "windows": rest,
+                "prefer_days": [],
+                "whole_day": True,
+            },
+            {
+                "days": [days[1].isoformat(), days[3].isoformat()],
+                "from_time": "09:00",
+                "to_time": "11:00",
+                "windows": rest,
+                "prefer_days": [days[3].isoformat()],
+                "whole_day": False,
+            },
         ]
-        api.client.put(
+        assert mine["notes"] == []  # "chętnie" stays, so there is nothing to correct
+        refused = api.client.put(
+            "/api/me/calendar",
+            {
+                "company_id": str(shop["company"].pk),
+                "days": [{"date": days[1].isoformat(), "state": "cannot", "from_time": "09:00", "to_time": "11:00"}],
+            },
+            content_type="application/json",
+        )
+        assert refused.status_code == 400
+        saved = api.client.put(
             "/api/me/calendar",
             {
                 "company_id": str(shop["company"].pk),
                 "days": [
-                    {"date": d, "state": "cannot", "from_time": "09:00", "to_time": "11:00"}
+                    {
+                        "date": d,
+                        "state": "prefer" if d in mark["prefer_days"] else "neutral",
+                        "from_time": "00:00",
+                        "to_time": "09:00",
+                        "from_time_2": "11:00",
+                        "to_time_2": "00:00",
+                    }
                     for mark in mine["cannot_marks"]
                     for d in mark["days"]
                 ],
             },
             content_type="application/json",
         )
+        assert saved.status_code == 204, saved.content
         [mine] = my_requests(api, shop)
         assert mine["cannot_marks"] == []
         marked = AvailabilityDay.objects.get(employee=shop["employee"], date=days[0])
-        assert (marked.state, marked.from_time, marked.to_time) == ("cannot", time(9), time(11))
+        assert (marked.state, marked.from_time, marked.to_time, marked.from_time_2, marked.to_time_2) == (
+            "neutral",
+            time(0),
+            time(9),
+            time(11),
+            time(0),
+        )
+        assert AvailabilityDay.objects.get(employee=shop["employee"], date=days[3]).state == "prefer"
+
+    def test_hours_someone_only_prefers_not_to_work_go_to_the_manager(self, api, shop, with_key, monkeypatch):
+        start = shop["period"].start
+        answer = reading(weekdays=[], dates=[start.isoformat()], cannot=False, from_time="9:00", to_time="11:00")
+        status, _, _ = read(api, shop, monkeypatch, answer, "Wolę nie pracować od 9 do 11.")
+        assert status == "needs_manager"
 
     def test_rather_a_position_is_not_only_that_position(self, api, shop, with_key, monkeypatch):
         second = Position.objects.create(location=shop["location"], name="Bar")
@@ -582,13 +637,42 @@ def test_days_off_may_name_hours():
         "to_time": "11:00",
     }
     assert clean(from_time="18:00")["from_time"] == "18:00" and "to_time" not in clean(from_time="18:00")
-    assert clean(to_time="24:00")["to_time"] == "00:00"
+    assert "from_time" not in clean(to_time="24:00") and "to_time" not in clean(to_time="24:00")  # the whole day
+    assert clean(from_time="18:00", to_time="24:00") == clean(from_time="18:00")
     assert clean(from_time="9:00", to_time="9:00") is None  # an empty window
     assert clean(from_time="dziewiąta") is None
     assert readings.clean(type="limit_godzin", max_hours=6, from_time="9:00", people={}, shift_types={}) is None
     morning = {"type": "wolne_dni", "weekdays": [1], "from_time": "09:00", "to_time": "11:00", "cannot": True}
-    assert readings.describe(morning, "Borys", {}, {}) == "Borys: wolne we wtorki tylko w godz. 9:00–11:00 („nie mogę”)"
-    assert readings.describe({**morning, "to_time": None}, "Ola", {}, {}) == "Ola: wolne we wtorki od 9:00 („nie mogę”)"
+    assert readings.calendar_only(morning) and not readings.calendar_only(
+        {**morning, "from_time": None, "to_time": None}
+    )
+    assert readings.describe(morning, "Borys", {}, {}) == (
+        "Borys: we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)"
+    )
+    assert readings.describe({**morning, "to_time": None}, "Ola", {}, {}) == (
+        "Ola: we wtorki „Mogę” tylko do 9:00 (nie może od 9:00)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("hours", "rest"),
+    [
+        (("09:00", "11:00"), [("00:00", "09:00"), ("11:00", "00:00")]),
+        (("18:00", None), [("00:00", "18:00")]),
+        ((None, "10:00"), [("10:00", "00:00")]),
+        (("22:00", "06:00"), [("06:00", "22:00")]),  # overnight
+    ],
+)
+def test_the_rest_of_the_day_outside_hours_someone_cannot_work(hours, rest):
+    from datetime import time as clock
+    from importlib import import_module
+
+    data = {"type": "wolne_dni", "from_time": hours[0], "to_time": hours[1]}
+    assert readings.complement(data) == rest
+    # The migration that turned saved "nie mogę" in some hours into "mogę" in the rest of the day agrees.
+    migration = import_module("apps.availability.migrations.0014_cannot_whole_day")
+    as_time = [clock.fromisoformat(value) if value else None for value in hours]
+    assert migration.rest_of_day(*as_time) == [(clock.fromisoformat(a), clock.fromisoformat(b)) for a, b in rest]
 
 
 @pytest.mark.parametrize("kind", ["request_for_manager"])

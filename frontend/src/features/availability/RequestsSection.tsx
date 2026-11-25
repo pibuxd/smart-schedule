@@ -11,7 +11,12 @@ import {
   useSaveMyCalendar,
   useUpdateMyRequest,
 } from "../../api/generated/availability/availability";
-import type { CannotMarkOut, MyRequestOut } from "../../api/generated/model";
+import type {
+  CannotMarkOut,
+  DayIn,
+  MyRequestOut,
+  WindowOut,
+} from "../../api/generated/model";
 import {
   ChatComposer,
   ChatMessage,
@@ -48,10 +53,40 @@ function markHours(mark: CannotMarkOut): string {
   return to ? `do ${to}` : "";
 }
 
+/** "do 9:00 i od 11:00", "do 18:00", "od 10:00", "6:00–22:00": the hours left to work on those days. */
+function windowsWords(windows: WindowOut[]): string {
+  return windows
+    .map(({ start, end }) =>
+      start === "00:00"
+        ? `do ${shortTime(end)}`
+        : end === "00:00"
+          ? `od ${shortTime(start)}`
+          : `${shortTime(start)}–${shortTime(end)}`,
+    )
+    .join(" i ");
+}
+
+/** The calendar days the button writes: "nie mogę" for a whole day, otherwise "mogę" (or "chętnie") in `windows`. */
+function markedDays(mark: CannotMarkOut): DayIn[] {
+  const [first, second] = mark.windows ?? [];
+  return mark.days.map((date) =>
+    first
+      ? {
+          date,
+          state: (mark.prefer_days ?? []).includes(date) ? "prefer" : "neutral",
+          from_time: first.start,
+          to_time: first.end,
+          ...(second ? { from_time_2: second.start, to_time_2: second.end } : {}),
+        }
+      : { date, state: "cannot", from_time: null, to_time: null },
+  );
+}
+
 /**
- * Days the request says the person cannot work that the calendar does not show so. With hours ("we wtorki nie mogę
- * od 9 do 11") the button marks "nie mogę" only in those hours, so the rest of the day stays open to work; days the
- * calendar blocks for the whole day can be narrowed to them.
+ * Days the request says the person cannot work that the calendar does not show so. "Nie mogę" is always a whole day
+ * (Piotr, 25.11.2026), so with hours ("we wtorki nie mogę od 9 do 11") the button marks those days "mogę" only in the
+ * rest of the day ("do 9:00 i od 11:00"; "chętnie" stays); days the calendar blocks for the whole day can be opened
+ * like that too.
  */
 function CannotMark({
   mark,
@@ -65,31 +100,23 @@ function CannotMark({
   onMark: () => void;
 }) {
   const hours = markHours(mark);
+  const rest = windowsWords(mark.windows ?? []);
   const days = mark.days.map(shortDate).join(", ");
   const text = mark.whole_day
     ? `W kalendarzu te dni mają „Nie mogę” przez cały dzień, a prośba mówi tylko o godzinach ${hours}: ${days}.`
-    : hours
-      ? `W kalendarzu te dni są nadal do pracy w godzinach ${hours}: ${days}.`
+    : rest
+      ? `W kalendarzu te dni są nadal do pracy także w godzinach ${hours}: ${days}.`
       : `W kalendarzu te dni są nadal do pracy: ${days}.`;
-  const label = mark.whole_day
-    ? `Zmień na „nie mogę” ${hours}`
-    : hours
-      ? `Zaznacz „nie mogę” ${hours}`
-      : "Zaznacz „nie mogę”";
+  const label = rest ? `Zaznacz „Mogę” ${rest}` : "Zaznacz „nie mogę”";
   return (
     <div className="grid gap-2 rounded-md border border-line p-3">
       <p className="m-0 text-sm">{text}</p>
-      {mark.whole_day ? (
+      {rest && (
         <p className="m-0 text-sm text-ink-muted">
-          Po zmianie możesz dostać zmianę w pozostałych godzinach tych dni. Nie
-          możesz przez cały dzień? Zostaw tak, jak jest.
+          Nie dostaniesz wtedy zmiany, która zahacza o godziny {hours}.
+          {mark.whole_day &&
+            " Nie możesz przez cały dzień? Zostaw tak, jak jest."}
         </p>
-      ) : (
-        hours && (
-          <p className="m-0 text-sm text-ink-muted">
-            W pozostałych godzinach tych dni możesz pracować.
-          </p>
-        )
       )}
       <div>
         <Button
@@ -1132,12 +1159,7 @@ export function RequestsChat({
                     markCannot.mutate({
                       data: {
                         company_id: companyId,
-                        days: mark.days.map((date) => ({
-                          date,
-                          state: "cannot",
-                          from_time: mark.from_time ?? null,
-                          to_time: mark.to_time ?? null,
-                        })),
+                        days: markedDays(mark),
                       },
                     })
                   }

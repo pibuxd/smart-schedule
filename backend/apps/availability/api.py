@@ -182,16 +182,25 @@ class HoursProposalOut(Schema):
     sent_status: Literal["pending", "approved", "rejected", "cancelled", "replaced", "expired"] | None
 
 
+class WindowOut(Schema):
+    start: str  # "HH:MM"
+    end: str  # "HH:MM"; "00:00" = midnight
+
+
 class CannotMarkOut(Schema):
     """Days a request says the person cannot work that the calendar does not show so (and that can still change):
-    the screen offers to mark them "nie mogę" through `PUT /me/calendar`."""
+    the screen offers to mark them through `PUT /me/calendar`. Without hours: "nie mogę". With hours ("we wtorki nie
+    mogę od 9 do 11"): "nie mogę" is always a whole day, so the days get "mogę" (or keep "chętnie", `prefer_days`)
+    only in `windows`, the rest of the day ("do 9:00 i od 11:00")."""
 
     days: list[date]
-    # "Nie mogę" only in these hours ("09:00"; either may be None); both None = the whole day.
+    # The hours the person cannot work ("09:00"; either may be None); both None = the whole day.
     from_time: str | None = None
     to_time: str | None = None
-    # The calendar has "nie mogę" for the whole day there, the request only these hours: the screen offers to change
-    # the days to these hours (after "nie mogę od 9 do 11" was first read as whole days).
+    windows: list[WindowOut] = Field(default_factory=list)
+    prefer_days: list[date] = Field(default_factory=list)
+    # The calendar has "nie mogę" for the whole day there, the request only some hours: the screen offers to open
+    # the rest of the day (after "nie mogę od 9 do 11" was first read as whole days).
     whole_day: bool = False
 
 
@@ -288,8 +297,18 @@ def _day_out(day: AvailabilityDay) -> AvailabilityDayOut:
     return AvailabilityDayOut(date=day.date, state=day.state, **{f: getattr(day, f) for f in HOUR_FIELDS})
 
 
+CANNOT_HOURS = (
+    "„Nie mogę” zaznaczysz tylko na cały dzień. Jeśli możesz w części dnia, wybierz „Mogę” i godziny, w których możesz."
+)
+
+
 def _hours_in(day: DayIn) -> Hours:
-    """The hours of one marked day, checked; a day without hours has no second window and no "albo"."""
+    """The hours of one marked day, checked; a day without hours has no second window and no "albo". "Nie mogę" is
+    always the whole day (Piotr, 25.11.2026)."""
+    if day.state == AvailabilityState.CANNOT and any(
+        value is not None for value in (day.from_time, day.to_time, day.from_time_2, day.to_time_2)
+    ):
+        raise HttpError(400, CANNOT_HOURS)
     if day.from_time is not None and day.from_time == day.to_time:
         raise HttpError(400, "Godzina początku i końca nie mogą być takie same.")
     first = day.from_time is not None or day.to_time is not None
@@ -561,7 +580,7 @@ class _Calendar:
     def __init__(self, ctx: TenantContext, profile: EmployeeProfile, start: date, end: date) -> None:
         rows = ctx.qs(AvailabilityDay).filter(employee=profile, date__gte=start, date__lte=end)
         self.states: dict[date, str] = {}
-        # (from, to) of a day marked with hours; "only these hours" for "mogę"/"chętnie", "not then" for "nie mogę".
+        # (from, to) of a day marked "mogę"/"chętnie" only in these hours ("nie mogę" has no hours).
         self.hours: dict[date, tuple[str | None, str | None]] = {}
         for day, state, start_at, end_at, second in rows.values_list(
             "date", "state", "from_time", "to_time", "from_time_2"
@@ -574,17 +593,16 @@ class _Calendar:
 
     def to_mark(self, days: list[date], hours: tuple[str | None, str | None]) -> tuple[list[date], list[date]]:
         """Of `days` the request says the person cannot work (only in `hours`, when given): (days the calendar still
-        leaves open to work, days it blocks for the whole day although the request names hours). Days with hours of
-        their own are the person's own setting and stay as they are."""
+        leaves open to work then, days it blocks for the whole day although the request names hours). Days with
+        hours of their own are the person's own setting and stay as they are."""
         free, whole = [], []
         for day in days:
             if day in self.locked:
                 continue
-            state, own = self.states.get(day), self.hours.get(day)
-            if state == AvailabilityState.CANNOT:
-                if own is None and hours != (None, None):
+            if self.states.get(day) == AvailabilityState.CANNOT:
+                if hours != (None, None):
                     whole.append(day)
-            elif own is None or hours == (None, None):
+            elif self.hours.get(day) is None or hours == (None, None):
                 free.append(day)
         return free, whole
 
@@ -682,7 +700,7 @@ def _hours_proposals(row: TextRequest) -> list[HoursProposalOut]:
 
 
 def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotMarkOut], list[str]]:
-    from apps.assistant.readings import dates_in
+    from apps.assistant.readings import calendar_only, complement, dates_in
     from apps.assistant.services import request_span
 
     if row.status != TextRequest.Status.INTERPRETED or not row.interpretation:
@@ -701,6 +719,8 @@ def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotM
                     if group:
                         marks.setdefault((*hours, whole_day), set()).update(group)
                         taken.update(group)
+            if calendar_only(part):
+                continue  # "chętnie" stays, only in the hours the person can
             eager = [d for d in days if calendar.states.get(d) == AvailabilityState.PREFER]
             if eager:
                 notes.append(
@@ -714,10 +734,19 @@ def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotM
                     f"W kalendarzu masz „Nie mogę” w dni, w które prośba mówi o pracy: {_dates_words(blocked)}. "
                     "Tych dni generator Ci nie da."
                 )
-    unmarked = [
-        CannotMarkOut(days=sorted(days), from_time=start_at, to_time=end_at, whole_day=whole_day)
-        for (start_at, end_at, whole_day), days in marks.items()
-    ]
+    unmarked = []
+    for (start_at, end_at, whole_day), days in marks.items():
+        windows = complement({"from_time": start_at, "to_time": end_at})
+        unmarked.append(
+            CannotMarkOut(
+                days=sorted(days),
+                from_time=start_at,
+                to_time=end_at,
+                windows=[WindowOut(start=a, end=b) for a, b in windows],
+                prefer_days=sorted(d for d in days if windows and calendar.states.get(d) == AvailabilityState.PREFER),
+                whole_day=whole_day,
+            )
+        )
     return sorted(unmarked, key=lambda mark: mark.days[0]), notes
 
 

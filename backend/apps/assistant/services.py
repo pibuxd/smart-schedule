@@ -790,6 +790,10 @@ def _checked_preference(
     doubt = f"pewność {confidence:.2f}" if confidence < settings.ASSISTANT_MIN_CONFIDENCE else ""
     if preference.cannot and data["type"] == "wolne_dni" and data["dates"]:
         data["cannot"] = True
+    if readings.calendar_only(data) and not data.get("cannot"):
+        # Hours are kept only for "nie mogę" on concrete days, marked in the calendar as "mogę" outside them; a
+        # softer "wolę nie od 9 do 11", or every Tuesday for good, has no place to keep them.
+        return None, "godziny bez „nie mogę” w konkretne dni"
     # Concrete days belong to their month: only a wish without them carries over to later periods.
     data["lasting"] = bool(preference.lasting) and not data["dates"]
     summary = readings.describe(

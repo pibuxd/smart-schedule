@@ -47,13 +47,13 @@ def test_cannot_day():
     assert report.hard[0].slots == ("s1",)
 
 
-def test_cannot_from_given_hour_allows_a_shift_ending_at_that_hour():
+def test_can_until_a_given_hour_allows_a_shift_ending_at_that_hour():
     p = problem(
         [employee("anna")],
         [slot("s1", DAY, "06:00", "14:00"), slot("s2", DAY + date.resolution, "06:00", "14:30")],
         availability=(
-            Availability("anna", DAY, "cannot", from_time=time(14)),
-            Availability("anna", DAY + date.resolution, "cannot", from_time=time(14)),
+            Availability("anna", DAY, "neutral", to_time=time(14)),
+            Availability("anna", DAY + date.resolution, "neutral", to_time=time(14)),
         ),
     )
     report = validate(p, {"s1": "anna", "s2": "anna"})
@@ -240,13 +240,12 @@ class TestTwoWindows:
         assert [v.code for v in report.hard] == [Code.ONE_SHIFT]
         assert "tylko na jednej zmianie" in report.hard[0].message
 
-    def test_cannot_covers_both_windows(self):
-        entry = Availability(
-            "anna", DAY, "cannot", from_time=time(6), to_time=time(10), from_time_2=time(16), to_time_2=time(22)
-        )
-        p = problem([employee("anna")], self.slots(), availability=(entry,))
-        assert validate(p, {"poludnie": "anna"}).ok
-        assert not validate(p, {"wieczor": "anna"}).ok
+    def test_cannot_has_no_hours(self):
+        # "Nie mogę" is always the whole day (Piotr, 25.11.2026); the hours someone can work are marked instead.
+        with pytest.raises(ProblemError):
+            Availability(
+                "anna", DAY, "cannot", from_time=time(6), to_time=time(10), from_time_2=time(16), to_time_2=time(22)
+            )
 
     def test_a_second_window_needs_both_ends(self):
         with pytest.raises(ProblemError):

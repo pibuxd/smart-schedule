@@ -4,7 +4,7 @@ import type { AvailabilityGridOut, GridDayOut, GridEmployeeOut } from '../../api
 import { Tag } from '../../components/ui/field'
 import { cn } from '../../lib/cn'
 import { addDays, compactTime, dayTitle, parseDate, toIsoDate, weekdayIndex, weekdayShort } from '../../lib/dates'
-import { STATE_LABEL } from '../availability/marks'
+import { STATE_LABEL, windowWords } from '../availability/marks'
 import { StateIcon } from '../availability/StateIcon'
 
 function periodDays(start: string, end: string): string[] {
@@ -13,12 +13,14 @@ function periodDays(start: string, end: string): string[] {
   return days
 }
 
-/** Hours of a day: "6–10 lub 16–22" for the label; `short` ("6–10/16–22") fits inside a grid cell. */
+const hhmm = (value: string | null | undefined) => (value ? value.slice(0, 5) : null)
+
+/** Hours of a day: "6–10 lub 16–22", "do 9 lub od 11" for the label; `short` ("6–10/16–22") fits inside a cell. */
 function hoursOf(day: GridDayOut, short = false): string | null {
-  if (!day.from_time || !day.to_time) return null
-  const first = `${compactTime(day.from_time.slice(0, 5))}–${compactTime(day.to_time.slice(0, 5))}`
+  const first = windowWords(hhmm(day.from_time), hhmm(day.to_time), compactTime)
+  if (!first) return null
   if (!day.from_time_2 || !day.to_time_2) return first
-  const second = `${compactTime(day.from_time_2.slice(0, 5))}–${compactTime(day.to_time_2.slice(0, 5))}`
+  const second = windowWords(hhmm(day.from_time_2), hhmm(day.to_time_2), compactTime)
   return short ? `${first}/${second}` : `${first} ${day.one_shift ? 'albo' : 'lub'} ${second}`
 }
 

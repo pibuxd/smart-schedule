@@ -236,4 +236,5 @@ export * from './versionShiftOutWish';
 export * from './versionSummaryOut';
 export * from './versionSummaryOutStatus';
 export * from './waitingHoursOut';
+export * from './windowOut';
 export * from './workedOut';

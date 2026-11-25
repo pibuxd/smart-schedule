@@ -179,12 +179,13 @@ class Preference(BaseModel):
     )
     from_time: str = Field(
         default="",
-        description="wolne_dni only in part of the day: HH:MM the hours start ('' = from the start of the day).",
+        description="wolne_dni with cannot only in part of the day: HH:MM the hours they cannot work start ('' = "
+        "from the start of the day).",
     )
     to_time: str = Field(
         default="",
-        description="wolne_dni only in part of the day: HH:MM the hours end ('' = to the end of the day). Both '' = "
-        "the whole day.",
+        description="wolne_dni with cannot only in part of the day: HH:MM those hours end ('' = to the end of the "
+        "day). Both '' = the whole day.",
     )
     lasting: bool = Field(
         default=False,
@@ -378,12 +379,12 @@ Przewodnik po aplikacji pracownika (ekrany na dole telefonu):
   Ułożony, ale jeszcze nieopublikowany grafik (preparing) pracownik zobaczy dopiero po publikacji.
 - „Kiedy mogę”: kalendarz dyspozycji. Na dole wybierasz „Nie mogę”, „Mogę” albo „Chętnie” i stukasz lub
   przeciągasz po dniach; każdy dzień jest od początku „Mogę”; zapis jest automatyczny. Stuknięcie w zaznaczony
-  dzień albo „Godziny dnia” otwiera okno dnia ze stanem i godzinami. Godziny znaczą co innego przy każdym stanie:
-  przy „Nie mogę” opcja „Tylko w tych godzinach” (np. 9:00–11:00) blokuje tylko te godziny, a w pozostałych
-  godzinach tego dnia można pracować; przy „Mogę” albo „Chętnie” opcja „Mogę tylko w tych godzinach” znaczy, że
-  poza nimi tego dnia nie będzie zmiany. Niedostępność w części dnia („nie mogę od 9 do 11”) ustawia się zawsze
-  przez „Nie mogę” → „Tylko w tych godzinach” → te godziny, nigdy przez „Mogę” z tymi godzinami (to dałoby pracę
-  właśnie wtedy). Strzałkami przy nazwie miesiąca przechodzi się do innych miesięcy, do trzech miesięcy naprzód,
+  dzień albo „Godziny dnia” otwiera okno dnia ze stanem i godzinami. „Nie mogę” jest zawsze na cały dzień, bez
+  godzin. Przy „Mogę” albo „Chętnie” opcja „Mogę tylko w tych godzinach” (jeden przedział albo dwa, „lub”/„albo”)
+  znaczy, że poza nimi tego dnia nie będzie zmiany. Niedostępność w części dnia („nie mogę od 9 do 11”) zaznacza
+  się więc jako godziny, w których można: „Mogę” → „Mogę tylko w tych godzinach” → 0:00–9:00 i drugi przedział
+  11:00–0:00 (do 9:00 lub od 11:00), nigdy jako „Mogę” w godzinach 9:00–11:00 (to dałoby pracę właśnie wtedy).
+  Strzałkami przy nazwie miesiąca przechodzi się do innych miesięcy, do trzech miesięcy naprzód,
   także zanim kierownik poprosi o dyspozycje. Gdy kierownik prosi o dyspozycje, widać termin i przycisk „Wyślij
   kierownikowi”. Pod kalendarzem „Twoje prośby” i czat z asystentem; prośba dotyczy miesiąca na ekranie. Przy
   prośbie wybiera się „Tylko <miesiąc>” albo „Na stałe” (wtedy obowiązuje też w kolejnych miesiącach); prośbę na
@@ -515,9 +516,13 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
   zmiana, hours_period=week. „Najwyżej 3 dni w tygodniu” = limit_zmian bez shift_type.
 - wolne_dni: woli nie pracować w podane dni lub dni tygodnia. Gdy pisze, że NIE MOŻE (egzamin, sesja, lekarz,
   wyjazd), ustaw cannot=true: aplikacja zaproponuje zaznaczenie „nie mogę” w kalendarzu. Gdy chodzi tylko o część
-  dnia („we wtorki nie mogę od 9:00 do 11:00”, „po 18 nie mogę”), podaj te godziny w from_time/to_time (HH:MM; puste
-  = od początku albo do końca dnia): reszta dnia zostaje do pracy. Nigdy nie zamieniaj kilku godzin na cały dzień
-  wolny. W answer mów o tych godzinach, a nie o całym dniu; w kalendarzu to „Nie mogę” → „Tylko w tych godzinach”.
+  dnia („we wtorki nie mogę od 9:00 do 11:00”, „po 18 nie mogę”), z cannot=true i konkretnymi dniami w dates, podaj
+  te godziny w from_time/to_time (HH:MM; puste = od początku albo do końca dnia). Nigdy nie zamieniaj kilku godzin
+  na cały dzień wolny. „Nie mogę” w kalendarzu jest tylko na cały dzień, więc aplikacja pokaże przycisk, który
+  zaznaczy te dni jako „Mogę” tylko poza tymi godzinami („do 9:00 i od 11:00”; „Chętnie” zostaje). W answer powiedz
+  właśnie to: zapiszemy, że w te dni może pracować do 9:00 i od 11:00, i wystarczy nacisnąć przycisk pod prośbą;
+  generator nie da wtedy zmiany, która nachodzi na 9:00–11:00. Gdy tylko woli nie pracować w jakichś godzinach
+  (nie „nie mogę”), nie podawaj godzin: to typ inne, przeczyta kierownik.
 - chce_pracowac: chce pracować w podane dni; „albo 12, albo 13” to min_days=1; kilka zmian jednego dnia to
   shifts_per_day; konkretna zmiana to shift_type.
 Dopytaj, zamiast zgadywać: gdy nie wiesz, o który dzień, osobę, zmianę albo ile chodzi, albo życzenie nie pasuje
@@ -554,8 +559,9 @@ w question: „Czy to tylko na <miesiąc>, czy na stałe?”. „Do odwołania�
 Korekta: jeśli pracownik wyraźnie poprawia jedną ze swoich wcześniejszych próśb („jednak nie piątki, tylko
 soboty”), podaj jej numer w replaces_request i pełną nową preferencję (nie samą różnicę). Nie łącz niezależnych
 próśb. Korekta nie cofa decyzji kierownika i nie zmienia kalendarza. Gdy poprawia „nie mogę” z całych dni na
-same godziny, aplikacja sama pokaże przycisk, który zmieni te dni w kalendarzu na „nie mogę” tylko w tych
-godzinach; ręcznie to „Nie mogę” → „Tylko w tych godzinach”, nigdy „Mogę”. Prośbę na stałe z wcześniejszego miesiąca
+same godziny, aplikacja sama pokaże przycisk, który zmieni te dni w kalendarzu na „Mogę” tylko poza tymi
+godzinami (np. do 9:00 i od 11:00); ręcznie to „Mogę” → „Mogę tylko w tych godzinach” z godzinami, w których może,
+nigdy z godzinami, w których nie może. Prośbę na stałe z wcześniejszego miesiąca
 (from_earlier_month) też poprawisz przez replaces_request: aplikacja zakończy ją od tego miesiąca i zapisze nową.
 Gdy pracownik pisze tylko, że prośba na stałe już nie obowiązuje, nie zapisuj preferencji, tylko powiedz, że
 zakończy ją przyciskiem „Zakończ” przy tej prośbie w „Twoich prośbach” (pod kalendarzem w „Kiedy mogę”, na ten

@@ -117,6 +117,9 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
 - People may hold several positions (`EmployeeProfile.positions`). An employee's wish about one of them ("nie chcę
   być sprzedawcą w tym tygodniu", reading type `stanowisko`) is `engine.problem.Request(type=POSITION, positions=…)`,
   soft like `shift_type`; with one position the assistant explains instead of saving it (`services._position_question`).
+- "Nie mogę" is always a whole day (Piotr, 25.11.2026; a database constraint): only "mogę"/"chętnie" carry hours. An
+  employee's "nie mogę od 9 do 11" becomes a button that marks those days "mogę" in the rest of the day
+  (`readings.complement`, `CannotMarkOut.windows`), never a request the generator scores (`readings.calendar_only`).
 - Schedules arranged but not published (period status `draft`) lock their days in "Kiedy mogę" (`unpublished`) and
   are named in "Mój grafik" (`preparing`); employees only ever see published shifts.
 - Rules a location can use come only from `engine/rules_catalog.py`; `RuleSetting.rule_code` must be in it.

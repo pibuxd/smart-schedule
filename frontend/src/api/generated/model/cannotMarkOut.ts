@@ -4,14 +4,19 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { WindowOut } from './windowOut';
 
 /**
  * Days a request says the person cannot work that the calendar does not show so (and that can still change):
- * the screen offers to mark them "nie mogę" through `PUT /me/calendar`.
+ * the screen offers to mark them through `PUT /me/calendar`. Without hours: "nie mogę". With hours ("we wtorki nie
+ * mogę od 9 do 11"): "nie mogę" is always a whole day, so the days get "mogę" (or keep "chętnie", `prefer_days`)
+ * only in `windows`, the rest of the day ("do 9:00 i od 11:00").
  */
 export interface CannotMarkOut {
   days: string[];
   from_time?: string | null;
   to_time?: string | null;
+  windows?: WindowOut[];
+  prefer_days?: string[];
   whole_day?: boolean;
 }

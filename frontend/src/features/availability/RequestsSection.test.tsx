@@ -167,8 +167,12 @@ describe("RequestsSection", () => {
     expect(calls.find((c) => c.method === "PUT")!.url).toBe("/api/me/calendar");
   });
 
-  it("marks only the hours the person cannot work and can narrow whole days to them", async () => {
-    // "We wtorki nie mogę od 9:00 do 11:00": the rest of those days stays open to work.
+  it("marks the rest of the day as „Mogę” when the person cannot work some hours", async () => {
+    // "We wtorki nie mogę od 9:00 do 11:00": "nie mogę" is always a whole day, so those days get "mogę do 9 i od 11".
+    const rest = [
+      { start: "00:00", end: "09:00" },
+      { start: "11:00", end: "00:00" },
+    ];
     const calls = mockApi((method) =>
       method === "PUT"
         ? [204, null]
@@ -176,10 +180,24 @@ describe("RequestsSection", () => {
             200,
             [
               request({
-                summary: "Wolne 1.12, 8.12 tylko w godz. 9:00–11:00 („nie mogę”).",
+                summary: "1.12, 8.12 „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00).",
                 cannot_marks: [
-                  { days: ["2026-12-01"], from_time: "09:00", to_time: "11:00", whole_day: true },
-                  { days: ["2026-12-08"], from_time: "09:00", to_time: "11:00", whole_day: false },
+                  {
+                    days: ["2026-12-01"],
+                    from_time: "09:00",
+                    to_time: "11:00",
+                    windows: rest,
+                    prefer_days: [],
+                    whole_day: true,
+                  },
+                  {
+                    days: ["2026-12-08", "2026-12-15"],
+                    from_time: "09:00",
+                    to_time: "11:00",
+                    windows: rest,
+                    prefer_days: ["2026-12-15"],
+                    whole_day: false,
+                  },
                 ],
               }),
             ],
@@ -192,17 +210,36 @@ describe("RequestsSection", () => {
     expect(
       await screen.findByText(/mają „Nie mogę” przez cały dzień, a prośba mówi tylko o godzinach 9:00–11:00: 1.12/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/nadal do pracy w godzinach 9:00–11:00: 8.12/)).toBeInTheDocument();
-    // Narrowing a whole day says what it costs: the rest of the day can get a shift.
-    expect(screen.getByText(/możesz dostać zmianę w pozostałych godzinach tych dni/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Zmień na „nie mogę” 9:00–11:00" }));
+    expect(screen.getByText(/nadal do pracy także w godzinach 9:00–11:00: 8.12, 15.12/)).toBeInTheDocument();
+    // Opening a whole day says what it costs, and that a whole day off can stay.
+    expect(screen.getByText(/Nie możesz przez cały dzień\? Zostaw tak, jak jest/)).toBeInTheDocument();
+    const [whole, open] = screen.getAllByRole("button", { name: "Zaznacz „Mogę” do 9:00 i od 11:00" });
+    fireEvent.click(whole);
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PUT")!.body).toEqual({
         company_id: "c1",
-        days: [{ date: "2026-12-01", state: "cannot", from_time: "09:00", to_time: "11:00" }],
+        days: [
+          {
+            date: "2026-12-01",
+            state: "neutral",
+            from_time: "00:00",
+            to_time: "09:00",
+            from_time_2: "11:00",
+            to_time_2: "00:00",
+          },
+        ],
       }),
     );
-    expect(screen.getByRole("button", { name: "Zaznacz „nie mogę” 9:00–11:00" })).toBeInTheDocument();
+    fireEvent.click(open);
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "PUT")[1]?.body).toEqual({
+        company_id: "c1",
+        days: [
+          expect.objectContaining({ date: "2026-12-08", state: "neutral" }),
+          expect.objectContaining({ date: "2026-12-15", state: "prefer" }), // "chętnie" stays
+        ],
+      }),
+    );
   });
 
   it("a request nobody interpreted simply goes to the manager", async () => {

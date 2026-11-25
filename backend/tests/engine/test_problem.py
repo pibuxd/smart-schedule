@@ -140,11 +140,9 @@ class TestAvailability:
         p = problem([employee("a")], [night], end=date(2026, 11, 14), availability=(entry,))
         assert p.availability_for("a", night) == "neutral"
 
-    def test_cannot_with_hours_applies_only_to_overlapping_shifts(self):
-        entry = Availability("a", self.day, "cannot", from_time=time(14))
-        assert self.state(entry, slot("s", self.day, "06:00", "14:00")) == "neutral"  # ends exactly at 14:00
-        assert self.state(entry, slot("s", self.day, "06:00", "14:01")) == "cannot"
-        assert self.state(entry, slot("s", self.day, "22:00", "06:00")) == "cannot"
+    def test_cannot_is_always_the_whole_day(self):
+        with pytest.raises(ProblemError):
+            Availability("a", self.day, "cannot", from_time=time(14))
 
     def test_prefer_with_hours_means_only_inside_the_window(self):
         entry = Availability("a", self.day, "prefer", from_time=time(14), to_time=time(22))
@@ -160,10 +158,7 @@ class TestAvailability:
         entry = Availability("a", self.day, "prefer", from_time=time(22), to_time=time(6))
         assert self.state(entry, slot("s", self.day, "22:00", "06:00")) == "prefer"
         assert self.state(entry, slot("s", self.day, "06:00", "14:00")) == "cannot"
-        nights = Availability("a", self.day, "cannot", from_time=time(20), to_time=time(4))
-        assert self.state(nights, slot("s", self.day, "22:00", "06:00")) == "cannot"
-        assert self.state(nights, slot("s", self.day, "06:00", "14:00")) == "neutral"
 
     def test_hours_must_not_be_an_empty_window(self):
         with pytest.raises(ProblemError):
-            Availability("a", self.day, "cannot", from_time=time(14), to_time=time(14))
+            Availability("a", self.day, "neutral", from_time=time(14), to_time=time(14))

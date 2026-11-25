@@ -13572,7 +13572,7 @@
         "type": "object"
       },
       "CannotMarkOut": {
-        "description": "Days a request says the person cannot work that the calendar does not show so (and that can still change):\nthe screen offers to mark them \"nie mogę\" through `PUT /me/calendar`.",
+        "description": "Days a request says the person cannot work that the calendar does not show so (and that can still change):\nthe screen offers to mark them through `PUT /me/calendar`. Without hours: \"nie mogę\". With hours (\"we wtorki nie\nmogę od 9 do 11\"): \"nie mogę\" is always a whole day, so the days get \"mogę\" (or keep \"chętnie\", `prefer_days`)\nonly in `windows`, the rest of the day (\"do 9:00 i od 11:00\").",
         "properties": {
           "days": {
             "items": {
@@ -13603,6 +13603,21 @@
               }
             ],
             "title": "To Time"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/WindowOut"
+            },
+            "title": "Windows",
+            "type": "array"
+          },
+          "prefer_days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Prefer Days",
+            "type": "array"
           },
           "whole_day": {
             "default": false,
@@ -13863,6 +13878,24 @@
           "created_at"
         ],
         "title": "MyRequestOut",
+        "type": "object"
+      },
+      "WindowOut": {
+        "properties": {
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "WindowOut",
         "type": "object"
       },
       "RequestIn": {
