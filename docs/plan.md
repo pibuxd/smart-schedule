@@ -1212,7 +1212,8 @@ Model: aplikacja `apps/pay` (migracja `pay.0001`; staffing bez pól stawek).
   stawki” przed „Uwagi”. `pay` = null, gdy żadna godzina nie miała stawki.
 - Własne stawki nie znikają, gdy osoba traci stanowisko albo odchodzi: dawne zmiany liczą się dalej. Stanowisko
   usunięte całkiem (bez zmian w grafikach) zabiera kroki kaskadą.
-- UI: ustawienia lokalu, sekcja „Stawki i dodatki”: przy każdym stanowisku stawka dziś i zaplanowana zmiana, „Zmień
+- UI (od 25.11.2026 stawki w panelu „Stanowiska i stawki”, a dodatki w „Dodatki do stawek” zaraz pod nim, sekcja 42):
+  ustawienia lokalu, sekcja „Stawki i dodatki”: przy każdym stanowisku stawka dziś i zaplanowana zmiana, „Zmień
   stawkę” z polem „Od dnia” (domyślnie dziś; pierwsza stawka stanowiska bez daty, własna stawka osoby zawsze z datą),
   lista kroków w zwijanej części z „Usuń” (krok sprzed bieżącego miesiąca pyta najpierw, a dzień w minionym miesiącu
   pokazuje „To zmieni wypłatę za minione miesiące.”, też przy dodatkach); dodatki z formularzem (nazwa, od–do albo cała
@@ -1490,3 +1491,34 @@ Do zrobienia przed szerszym pilotażem (uwagi przeglądu PR #76; Piotr odłoży�
   AI; pracownicy muszą wiedzieć, że ich stawki i wypłaty trafiają do niej także przez czat kierownika.
 - Prośba o stanowisko przestaje działać, gdy kierownik odbierze osobie to stanowisko; lista próśb kierownika
   i pracownika powinna to pokazać.
+
+## 42. Numer konta i stawki przy stanowiskach (25.11.2026)
+
+Spec: „Numer konta i stawki przy stanowiskach”.
+
+- Model: `User.bank_account` (26 cyfr albo pusty, `CheckConstraint` `user_bank_account_26_digits`, migracja
+  `accounts.0002`). Numer jest na koncie, nie na `EmployeeProfile`, bo należy do osoby tak jak imię (jeden w każdej
+  firmie). `accounts.models.normalize_bank_account` przyjmuje spacje, myślniki i „PL”, sprawdza 26 cyfr i sumę kontrolną
+  IBAN (mod 97 z „PL” = 2521) i rzuca `ValidationError` z polskim zdaniem; `bank_account_text` grupuje cyfry
+  („61 1090 1014 …”). Admin Django pokazuje pole w „Dane osobowe” i sprawdza je tak samo.
+- API: `MeOut.bank_account`; `PATCH /me` zmienia tylko wysłane pola (imię, nazwisko, `bank_account`, "" usuwa numer).
+  `EmployeeOut.bank_account` (tylko kierownicy lokalu, jak cała lista) i `EmployeeIn.bank_account` z tą samą zasadą co
+  imię (`_changed_account`: 409, gdy osoba ma członkostwo w innej firmie). Numer wchodzi do `revision`, więc formularz
+  otwarty przed zmianą numeru dostaje 409 zamiast go cofnąć. Zmiana cudzego numeru przez kierownika zapisuje
+  powiadomienie `bank_account_set` z `ending` (cztery ostatnie cyfry, nigdy cały numer; puste = usunięty).
+  `EmployeeHoursOut.bank_account` i kolumna CSV „Numer konta” przed „Uwagi” (ze spacjami, więc arkusz trzyma tekst,
+  a nie 6,11E+25).
+- Asystent: `tools.DROPPED_KEYS` wycina `bank_account` z każdego wyniku narzędzia; przewodniki mówią, gdzie wpisać
+  numer, i że asystent go nie zna.
+- UI pracownika: `features/auth/MyData.tsx`, przycisk „Twoje dane” obok „Wyloguj” w nagłówku ekranów pracownika
+  otwiera `Sheet` z imieniem, nazwiskiem i „Numer konta do wypłaty” („Nieobowiązkowy. Widzą go tylko Twoi
+  kierownicy.”); numer wysyła się tylko, gdy cyfry się zmieniły. Kierownik: pole „Numer konta do wypłaty” w formularzu
+  osoby (`EmployeesScreen`).
+- Ustawienia lokalu: `PositionsSection` nazywa się „Stanowiska i stawki” i w każdym wierszu ma `PayRates.PositionRate`
+  (ten sam edytor kroków `RateSteps` co wcześniej); dodatki są w `SupplementsSection` („Dodatki do stawek”, zwijane,
+  w nagłówku „dodatki: N” albo „bez dodatków”) zaraz pod stanowiskami, w tej samej kolumnie. Sekcja „Stawki i dodatki”
+  na dole strony zniknęła.
+
+Założenia: tylko polskie numery, bo aplikacja jest tylko dla +48, a pracownicy z zagranicy w Polsce zwykle mają tu
+konto; zagraniczny IBAN można dodać później. Numer wpisuje też kierownik, bo starsi pracownicy często dają dane
+kierownikowi; powiadomienie chroni przed cichą zmianą. Inni pracownicy i asystent numeru nie widzą.

@@ -11,6 +11,7 @@ export interface MeOut {
   phone: string;
   first_name: string;
   last_name: string;
+  bank_account?: string;
   companies: MyCompanyOut[];
   pending_invitations: number;
 }

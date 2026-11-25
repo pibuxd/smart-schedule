@@ -1,9 +1,10 @@
-// Rates and supplements (docs/plan.md, section 35): a rate counts from a chosen day, so a change never moves the
-// pay of earlier months. Used by "Stawki i dodatki" in the location settings and "Stawki" in the employee form.
+// Rates and supplements (docs/plan.md, sections 35 and 42): a rate counts from a chosen day, so a change never moves
+// the pay of earlier months. Used by "Stanowiska" and "Dodatki do stawek" in the location settings and "Stawki" in
+// the employee form.
 
 import { useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import type {
   PaySettingsOut,
@@ -74,6 +75,8 @@ export function RateSteps({
   error,
   onSave,
   onDelete,
+  lead,
+  actions,
 }: {
   /** What the rate is for, in button labels: "Sprzedawca". */
   name: string
@@ -90,6 +93,10 @@ export function RateSteps({
   error: unknown
   onSave: (data: RateIn, done: () => void) => void
   onDelete: (id: string) => void
+  /** Shown first in the rate's line, e.g. the position's name. */
+  lead?: ReactNode
+  /** More buttons at the end of the rate's line. */
+  actions?: ReactNode
 }) {
   const [editing, setEditing] = useState(false)
   const [rate, setRate] = useState('')
@@ -103,28 +110,34 @@ export function RateSteps({
   return (
     <div className="grid gap-1">
       <div className="flex flex-wrap items-start justify-between gap-x-3">
+        {lead}
         <span className="grid min-h-(--touch) content-center">
           <span className="tabular-nums">{amount(now)}</span>
           {stepsAfter(steps, today).map((s) => (
             <span key={s.id} className="text-sm tabular-nums">{`Od ${fullDay(s.valid_from ?? today)}: ${amount(s)}`}</span>
           ))}
         </span>
-        {!editing && (
-          <Button
-            variant="quiet"
-            size="normal"
-            disabled={disabled}
-            aria-label={`Zmień stawkę: ${name}`}
-            onClick={() => {
-              setRate(rateInput(now?.hourly_rate))
-              setFrom(today)
-              setBad(false)
-              setEditing(true)
-            }}
-          >
-            Zmień stawkę
-          </Button>
-        )}
+        {/* One group, so on a phone the buttons wrap together under the name and the rate. */}
+        <span className="flex flex-wrap">
+          {!editing && (
+            <Button
+              variant="quiet"
+              size="normal"
+              className={actions ? 'px-2' : undefined}
+              disabled={disabled}
+              aria-label={`Zmień stawkę: ${name}`}
+              onClick={() => {
+                setRate(rateInput(now?.hourly_rate))
+                setFrom(today)
+                setBad(false)
+                setEditing(true)
+              }}
+            >
+              Zmień stawkę
+            </Button>
+          )}
+          {actions}
+        </span>
       </div>
       {editing && (
         <form
@@ -199,80 +212,85 @@ export function RateSteps({
 
 // --------------------------------------------------------------------------------------------- settings
 
-/** "Stawki i dodatki" in the location settings: the rate of each position by day, and supplements. */
-export function PaySection({ locationId, today = new Date() }: { locationId: string; today?: Date }) {
-  const settings = usePaySettings(locationId)
-  const day = toIsoDate(today)
-  const data = settings.data?.data as PaySettingsOut | undefined
-  const priced = data ? data.positions.filter((p) => stepOn(p.rates, day)?.hourly_rate != null).length : 0
-  const supplements = data ? data.supplements.filter((s) => !s.valid_until || s.valid_until >= day).length : 0
-  const status = data
-    ? priced === 0 && supplements === 0
-      ? 'bez stawek'
-      : `stawki: ${priced} z ${data.positions.length}${supplements ? `, dodatki: ${supplements}` : ''}`
-    : undefined
-
-  return (
-    <Section
-      title="Stawki i dodatki"
-      collapsible
-      status={status}
-      description="Liczą wypłatę brutto przy godzinach. Zmiana działa od wybranego dnia, więc minione miesiące się nie zmieniają."
-    >
-      {settings.isPending ? (
-        <Loading>Wczytuję stawki…</Loading>
-      ) : settings.isError || !data ? (
-        <ErrorState onRetry={() => void settings.refetch()}>
-          {errorMessage(settings.error, 'Nie udało się wczytać stawek. Spróbuj jeszcze raz.')}
-        </ErrorState>
-      ) : (
-        <>
-          <PositionRates data={data} today={day} />
-          <Supplements locationId={locationId} data={data} today={day} />
-        </>
-      )}
-    </Section>
-  )
-}
-
-function PositionRates({ data, today }: { data: PaySettingsOut; today: string }) {
+/** The rate of one position by day, in its row of "Stanowiska" in the location settings. */
+export function PositionRate({
+  positionId,
+  name,
+  steps,
+  today,
+  lead,
+  actions,
+  loading = false,
+}: {
+  positionId: string
+  name: string
+  steps: RateStep[]
+  today: string
+  lead?: ReactNode
+  actions?: ReactNode
+  /** The rates are not read yet (or could not be): only the lead and the actions show. */
+  loading?: boolean
+}) {
   const { readOnly } = useManager()
   const save = useSetPositionRate()
   const remove = useDeletePositionRate()
   const queryClient = useQueryClient()
-  const [saving, setSaving] = useState<string | null>(null)
   const refresh = () => void queryClient.invalidateQueries()
-
+  if (loading) {
+    return (
+      <div className="flex flex-wrap items-start justify-between gap-x-3">
+        {lead}
+        {actions}
+      </div>
+    )
+  }
   return (
-    <div className="grid gap-2">
-      <h3 className="m-0 text-base font-extrabold">Stawki stanowisk</h3>
-      {data.positions.length === 0 ? (
-        <p className="m-0 text-ink-muted">Najpierw dodaj stanowiska.</p>
-      ) : (
-        <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
-          {data.positions.map((p) => (
-            <li key={p.position_id} className="grid gap-x-3 border-b border-line px-4 py-1.5 last:border-b-0 sm:grid-cols-[10rem_1fr]">
-              <b className="grid min-h-(--touch) content-center">{p.name}</b>
-              <RateSteps
-                name={p.name}
-                steps={p.rates}
-                fallback="bez stawki"
-                today={today}
-                disabled={readOnly}
-                pending={save.isPending}
-                error={saving === p.position_id ? save.error : null}
-                onSave={(rate, done) => {
-                  setSaving(p.position_id)
-                  save.mutate({ positionId: p.position_id, data: rate }, { onSuccess: () => { done(); refresh() } })
-                }}
-                onDelete={(rateId) => remove.mutate({ rateId }, { onSuccess: refresh })}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="grid gap-1">
+      <RateSteps
+        name={name}
+        steps={steps}
+        fallback="bez stawki"
+        today={today}
+        disabled={readOnly}
+        pending={save.isPending}
+        error={save.error}
+        onSave={(rate, done) =>
+          save.mutate({ positionId, data: rate }, { onSuccess: () => { done(); refresh() } })
+        }
+        onDelete={(rateId) => remove.mutate({ rateId }, { onSuccess: refresh })}
+        lead={lead}
+        actions={actions}
+      />
       {remove.isError && <InlineError>{errorMessage(remove.error, NETWORK_PROBLEM)}</InlineError>}
     </div>
+  )
+}
+
+/** "Dodatki do stawek" in the location settings, right under "Stanowiska" (where the rates are). */
+export function SupplementsSection({ locationId, today = new Date() }: { locationId: string; today?: Date }) {
+  const settings = usePaySettings(locationId)
+  const day = toIsoDate(today)
+  const data = settings.data?.data as PaySettingsOut | undefined
+  const live = data ? data.supplements.filter((s) => !s.valid_until || s.valid_until >= day).length : 0
+  const status = data ? (live ? `dodatki: ${live}` : 'bez dodatków') : undefined
+
+  return (
+    <Section
+      title="Dodatki do stawek"
+      collapsible
+      status={status}
+      description="Np. za noc albo niedzielę. Liczy się tylko część zmiany w tych godzinach."
+    >
+      {settings.isPending ? (
+        <Loading>Wczytuję dodatki…</Loading>
+      ) : settings.isError || !data ? (
+        <ErrorState onRetry={() => void settings.refetch()}>
+          {errorMessage(settings.error, 'Nie udało się wczytać dodatków. Spróbuj jeszcze raz.')}
+        </ErrorState>
+      ) : (
+        <Supplements locationId={locationId} data={data} today={day} />
+      )}
+    </Section>
   )
 }
 
@@ -478,8 +496,6 @@ function Supplements({ locationId, data, today }: { locationId: string; data: Pa
 
   return (
     <div className="grid gap-2">
-      <h3 className="m-0 text-base font-extrabold">Dodatki</h3>
-      <p className="m-0 text-sm text-ink-muted">Np. za noc albo niedzielę. Liczy się tylko część zmiany w tych godzinach.</p>
       {live.length > 0 ? (
         <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
           {live.map((s) => item(s, true))}

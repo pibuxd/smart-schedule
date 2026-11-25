@@ -6,14 +6,7 @@
  */
 
 export interface MeIn {
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  first_name: string;
-  /**
-     * @minLength 1
-     * @maxLength 120
-     */
-  last_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  bank_account?: string | null;
 }

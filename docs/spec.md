@@ -4,6 +4,25 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Numer konta i stawki przy stanowiskach (prośba Piotra z 25.11.2026)
+
+Prośba Piotra: „daj też numer konta w aplikacji (jako opcjonalna rzecz którą można zapisać). chce też żeby stawka nie
+była tak schowana nisko tylko np była w tym panelu co "Stanowiska"”.
+
+- Numer konta do wypłaty jest nieobowiązkowy. Pracownik wpisuje go sam w „Twoje dane” (przycisk na górze ekranów
+  pracownika, obok „Wyloguj”; tam też imię i nazwisko). Kierownik widzi go w formularzu osoby w „Pracownicy” i może go
+  wpisać za nią (np. za piekarza, który nie lubi telefonu). Wtedy osoba dostaje powiadomienie z czterema ostatnimi
+  cyframi, żeby zmiana, dokąd idzie wypłata, nie przeszła po cichu. Plik CSV z „Godzin” ma kolumnę „Numer konta”.
+- Numer należy do osoby, tak jak imię: jest jeden we wszystkich firmach, w których pracuje. Dlatego kierownik zmienia
+  go tylko wtedy, gdy osoba nie ma konta w innej firmie (tak samo jak imię); inaczej zmienia go tylko ona sama.
+- Tylko polski numer (26 cyfr, także z „PL”, spacjami albo myślnikami). Aplikacja sprawdza cyfry kontrolne, więc
+  pomyłka w jednej cyfrze albo zamiana dwóch cyfr daje „W tym numerze konta jest błąd. Sprawdź cyfry.”.
+- Numer widzą tylko: sama osoba, kierownicy lokali, w których pracuje, i administrator Grafikomatu. Inni pracownicy go
+  nie widzą, a asystent AI nigdy go nie dostaje (jak numerów telefonów).
+- Stawki stanowisk są w ustawieniach lokalu w panelu „Stanowiska i stawki”: przy każdym stanowisku jego stawka dziś
+  (albo „bez stawki”), zaplanowana zmiana i „Zmień stawkę”, tak jak wcześniej w osobnej części na dole strony. Dodatki
+  za porę dnia są zaraz pod nim, w zwijanym „Dodatki do stawek”. Zasady stawek „od dnia” się nie zmieniają.
+
 ## Uwagi z testu pracownika na telefonie (Piotr, 23.11.2026)
 
 Piotr testował konto pracowniczki na serwerze i zgłosił pięć rzeczy.
@@ -147,7 +166,7 @@ razem. Piotr zawsze na to patrzył w Kadromierzu. Wypłata to dokładne wyliczen
 nazywają jej szacunkiem (prośba Piotra).
 
 - Stawka za godzinę należy do stanowiska: kierownik wpisuje ją w ustawieniach lokalu, przy stanowiskach (np. Sprzedawca
-  31,40 zł, Piekarz 36 zł). Stanowisko bez stawki działa jak dotąd. Stawki widzi tylko kierownik.
+  31,40 zł, Piekarz 36 zł; od 25.11.2026 w panelu „Stanowiska i stawki”). Stanowisko bez stawki działa jak dotąd. Stawki widzi tylko kierownik.
 - Osoba może mieć własną stawkę na stanowisku: kierownik wpisuje ją w formularzu pracownika, w zwijanej części
   „Stawki”. Bez własnej stawki liczy się stawka stanowiska. Stanowiska należą do lokalu, więc w każdym lokalu osoby jej
   stawki ustawia kierownik tego lokalu.
@@ -394,6 +413,7 @@ Firma -> grupa lokali (opcjonalna) -> lokal. Jeden menedżer może prowadzić wi
 4. Po publikacji pracownik widzi tylko swój grafik na najbliższy okres i sumę godzin (od 22.11.2026 z wypłatą brutto, sekcja „Oczekiwana wypłata”). Nie widzi, czy jego prośby zostały spełnione, ani powodów.
 5. Oddanie zmiany: "oddaj zmianę" -> powiadomienie w aplikacji dla osób ze wszystkich lokali firmy, które zaznaczyły wtedy dyspozycyjność, mają właściwe stanowisko i nie złamią twardych reguł -> "biorę" -> menedżer zatwierdza. Zapisuj historię przypisań zmiany, żeby później łatwo dodać zamiany zmian między dwiema osobami. Do zatwierdzenia zmiana należy do osoby, która ją oddaje. Po zatwierdzeniu zmiana od razu przechodzi w opublikowanym grafiku (bez nowej wersji: ślad zostaje w historii przypisań, z osobą, która zatwierdziła), jest przypięta, żeby ponowne układanie nie cofnęło uzgodnienia, a wszyscy zainteresowani dostają powiadomienie. Kierownik może w "Zasadach" lokalu włączyć "Przejęcie oddanej zmiany bez zatwierdzania" (domyślnie wyłączone): wtedy pierwsza osoba, która weźmie zmianę i dla której walidator nie znajduje nowego twardego problemu, dostaje ją od razu, a oddający, biorący i kierownicy lokalu dostają powiadomienie (decyzja Piotra 15.11.2026). Kierownik może też zarządzać tym sam w "Oddane zmiany" (decyzja Piotra 18.11.2026): wybrać dowolną osobę na oddawaną zmianę, zakończyć oddawanie (zmiana zostaje u oddającego), poszukać chętnych na zmianę pracownika w jego imieniu, a w opublikowanym grafiku wpisać inną osobę na dowolną zmianę albo zamienić dwie osoby zmianami (ten sam lokal i okres). Walidator sprawdza każdą taką zmianę i pokazuje zastrzeżenia, ale kierownik może je pominąć ("Wpisz mimo to", "Zamień mimo to"). Działa to też dla zmian, które już się zaczęły albo minęły, żeby godziny zgadzały się z tym, kto naprawdę pracował. Zainteresowani dostają powiadomienie, a ślad zostaje w historii przypisań. W „Mój grafik” zmiany do wzięcia są w zwijanej sekcji „Zmiany do wzięcia”, zwiniętej na start, z liczbą zmian w nagłówku (prośba Piotra z 22.11.2026: lista zajmowała za dużo miejsca).
 6. Powiadomienia tylko w aplikacji (zakładka "Powiadomienia" z licznikiem nowych): prośba o dyspozycje, nowy lub poprawiony grafik, zmiana do wzięcia, decyzja kierownika o oddanej zmianie. Kierownik widzi chętnych do wzięcia zmian w "Oddane zmiany" z licznikiem w nagłówku.
+7. „Twoje dane” na górze ekranu: imię, nazwisko i nieobowiązkowy numer konta do wypłaty (od 25.11.2026, sekcja „Numer konta i stawki przy stanowiskach”).
 
 ## Menedżer (najpierw komputer)
 

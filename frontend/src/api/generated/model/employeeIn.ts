@@ -11,6 +11,7 @@ export interface EmployeeIn {
   revision?: string | null;
   first_name?: string | null;
   last_name?: string | null;
+  bank_account?: string | null;
   position_ids?: string[] | null;
   experience?: EmployeeInExperience;
   position_experience?: PositionLevel[] | null;

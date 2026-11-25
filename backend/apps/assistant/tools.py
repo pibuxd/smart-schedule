@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 
 # One tool result goes back to the model in full up to this size; larger ones are cut with a note.
 MAX_RESULT_CHARS = 40_000
-# Never sent to the model: phone numbers (personal data) and fields that only drive the screens. Pay, rates and
-# supplements are sent since 23.11.2026 (Piotr: the assistant works out earnings; personal-data rules come later,
-# docs/plan.md section 35).
-DROPPED_KEYS = frozenset({"phone", "phone_e164", "revision", "headers", "link"})
+# Never sent to the model: phone and bank account numbers (personal data) and fields that only drive the screens.
+# Pay, rates and supplements are sent since 23.11.2026 (Piotr: the assistant works out earnings; personal-data rules
+# come later, docs/plan.md section 35).
+DROPPED_KEYS = frozenset({"phone", "phone_e164", "bank_account", "revision", "headers", "link"})
 
 NULLABLE_DATE = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "YYYY-MM-DD albo null"}
 NULLABLE_ID = {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Identyfikator (UUID) albo null"}
@@ -216,7 +216,7 @@ MANAGER_TOOLS = (
     ApiTool(
         "pay_settings",
         "/api/locations/{location_id}/pay-settings",
-        "„Stawki i dodatki” w ustawieniach lokalu: stawki stanowisk za godzinę w złotych brutto „od dnia” "
+        "Ustawienia lokalu: stawki stanowisk za godzinę w złotych brutto „od dnia” (przy stanowiskach) "
         "(valid_from null = od początku) i dodatki za porę dnia (kind amount = zł za godzinę, percent = % stawki; "
         "weekdays 0 = poniedziałek; valid_until = do kiedy).",
         fixed={"location_id": "location_id"},

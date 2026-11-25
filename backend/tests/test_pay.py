@@ -186,9 +186,9 @@ def test_the_report_counts_pay_with_own_rates_overtime_and_missing_rates(api, ba
     assert (ewa["total"], ewa["pay"], ewa["unpriced_hours"]) == (12, 282, 4)  # 8 h × 35,25 zł, 4 h without a rate
     assert body["pay"] == 580.3 and body["unpriced_hours"] == 4 and body["supplements_pay"] == 0
     header, cells = csv_lines(api, b, day)
-    assert header.endswith(";Krótsze zmiany;Wypłata brutto, zł;W tym dodatki, zł;Godziny bez stawki;Uwagi")
-    assert cells["Pracownik"][-4:-1] == ["298,30", "0,00", "0,00"]
-    assert cells["Ewa Nowak"][-4:-1] == ["282,00", "0,00", "4,00"]
+    assert header.endswith(";Krótsze zmiany;Wypłata brutto, zł;W tym dodatki, zł;Godziny bez stawki;Numer konta;Uwagi")
+    assert cells["Pracownik"][-5:-2] == ["298,30", "0,00", "0,00"]
+    assert cells["Ewa Nowak"][-5:-2] == ["282,00", "0,00", "4,00"]
 
 
 def test_without_rates_there_is_no_pay(api, bakery):
@@ -202,7 +202,7 @@ def test_without_rates_there_is_no_pay(api, bakery):
 
     assert body["pay"] is None and row_of(body, "Pracownik")["pay"] is None and body["supplements_pay"] is None
     assert body["unpriced_hours"] == 8
-    assert csv_lines(api, b, day)[1]["Pracownik"][-4:-1] == ["", "", "8,00"]
+    assert csv_lines(api, b, day)[1]["Pracownik"][-5:-2] == ["", "", "8,00"]
     api.login(user_of(b["ola"]))
     month = my_month(api, b, day)
     assert (month["hours"], month["pay"], month["unpriced_hours"]) == (8, None, 8)
@@ -255,7 +255,7 @@ def test_a_night_supplement_counts_only_the_hours_inside_it(api, bakery):
 
     assert (month["pay"], month["supplements_pay"]) == (16 * 30 + 6 * 6, 36)
     api.login(b["manager"])
-    assert csv_lines(api, b, first)[1]["Pracownik"][-4:-1] == ["516,00", "36,00", "0,00"]
+    assert csv_lines(api, b, first)[1]["Pracownik"][-5:-2] == ["516,00", "36,00", "0,00"]
 
 
 def test_supplements_by_weekday_position_and_percent_add_up(api, bakery):

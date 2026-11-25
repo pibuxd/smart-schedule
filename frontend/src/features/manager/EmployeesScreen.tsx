@@ -17,6 +17,7 @@ import { CheckField, Section, Tag, TextField } from '../../components/ui/field'
 import { Sheet } from '../../components/ui/sheet'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
+import { bankAccountDigits, prettyBankAccount } from '../auth/bank-account'
 import { prettyPhone } from '../auth/phone'
 import { InviteManyButton } from './InviteMany'
 import { useManager } from './ManagerContext'
@@ -218,6 +219,7 @@ function EmployeeForm({
   const [active, setActive] = useState(employee.is_active)
   const [first, setFirst] = useState(employee.first_name)
   const [last, setLast] = useState(employee.last_name)
+  const [account, setAccount] = useState(prettyBankAccount(employee.bank_account ?? ''))
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -225,6 +227,7 @@ function EmployeeForm({
     const data: EmployeeIn = { revision: employee.revision, location_id: locationId }
     if (first !== employee.first_name) data.first_name = first
     if (last !== employee.last_name) data.last_name = last
+    if (bankAccountDigits(account) !== (employee.bank_account ?? '')) data.bank_account = account
     if (experience !== employee.experience) data.experience = experience
     if (toNumber(max) !== employee.max_hours_month) data.max_hours_month = toNumber(max)
     if (toNumber(target) !== employee.target_hours_month) data.target_hours_month = toNumber(target)
@@ -262,6 +265,17 @@ function EmployeeForm({
           <p className="m-0 text-sm text-ink-muted sm:col-span-2">
             Numer {prettyPhone(employee.phone)} służy do logowania, więc zmienia go tylko administrator Grafikomatu.
           </p>
+          <TextField
+            label="Numer konta do wypłaty"
+            className="sm:col-span-2"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={40}
+            placeholder="26 cyfr"
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+            hint="Nieobowiązkowy. Pracownik może go wpisać sam w „Twoje dane”."
+          />
         </div>
         <fieldset className="m-0 grid gap-1 border-0 p-0">
           <legend className="mb-1 font-semibold">Stanowiska</legend>

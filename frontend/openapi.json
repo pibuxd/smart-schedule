@@ -221,8 +221,19 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         },
+        "description": "My name and my bank account number (optional, for pay; managers of my locations see it).",
         "tags": [
           "auth"
         ],
@@ -9871,6 +9882,11 @@
             "title": "Last Name",
             "type": "string"
           },
+          "bank_account": {
+            "default": "",
+            "title": "Bank Account",
+            "type": "string"
+          },
           "companies": {
             "items": {
               "$ref": "#/components/schemas/MyCompanyOut"
@@ -9956,22 +9972,44 @@
       "MeIn": {
         "properties": {
           "first_name": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "First Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
           },
           "last_name": {
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Last Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "bank_account": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Account"
           }
         },
-        "required": [
-          "first_name",
-          "last_name"
-        ],
         "title": "MeIn",
         "type": "object"
       },
@@ -14869,6 +14907,11 @@
             "title": "Phone",
             "type": "string"
           },
+          "bank_account": {
+            "default": "",
+            "title": "Bank Account",
+            "type": "string"
+          },
           "position_ids": {
             "items": {
               "format": "uuid",
@@ -15041,6 +15084,18 @@
               }
             ],
             "title": "Last Name"
+          },
+          "bank_account": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Account"
           },
           "position_ids": {
             "anyOf": [
@@ -15513,6 +15568,11 @@
             "default": 0,
             "title": "Unpriced Hours",
             "type": "number"
+          },
+          "bank_account": {
+            "default": "",
+            "title": "Bank Account",
+            "type": "string"
           }
         },
         "required": [

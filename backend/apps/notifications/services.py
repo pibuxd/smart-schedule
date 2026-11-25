@@ -37,6 +37,7 @@ LINKS = {
     "hours_rejected": "schedule",
     "hours_set": "schedule",
     "hours_lost": "schedule",
+    "bank_account_set": "none",
 }
 
 
@@ -262,5 +263,12 @@ def notification_text(kind: str, payload: dict) -> str:
             return (
                 f"{p.get('employee_name') or 'Ktoś'} pracuje w tym czasie w lokalu {p.get('moved_to', '')}, "
                 f"więc zmiana {shift} jest pusta. Znajdź kogoś na nią w „Grafik”."
+            )
+        case "bank_account_set":
+            if not p.get("ending"):
+                return "Kierownik usunął Twój numer konta do wypłaty. Możesz go wpisać w „Twoje dane” na górze ekranu."
+            return (
+                f"Kierownik zapisał Twój numer konta do wypłaty (kończy się na {p['ending']}). Jeśli to pomyłka, "
+                "popraw go w „Twoje dane” na górze ekranu."
             )
     return "Masz nowe powiadomienie."

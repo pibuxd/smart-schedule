@@ -5,12 +5,14 @@ from uuid import UUID
 
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
+from django.core.exceptions import ValidationError
 from django.middleware.csrf import get_token
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.accounts.login import request_login_code, verify_login_code
+from apps.accounts.models import normalize_bank_account
 from apps.billing.services import subscription_state
 from apps.core.http import client_ip, require_csrf
 from apps.core.schemas import ErrorOut
@@ -50,13 +52,18 @@ class MeOut(Schema):
     phone: str
     first_name: str
     last_name: str
+    # My account number for pay transfers: 26 digits, "" when not given.
+    bank_account: str = ""
     companies: list[MyCompanyOut]
     pending_invitations: int
 
 
 class MeIn(Schema):
-    first_name: str = Field(min_length=1, max_length=80)
-    last_name: str = Field(min_length=1, max_length=120)
+    # Only what is sent changes.
+    first_name: str | None = Field(None, min_length=1, max_length=80)
+    last_name: str | None = Field(None, min_length=1, max_length=120)
+    # Spaces, dashes and "PL" are fine; "" removes the number.
+    bank_account: str | None = Field(None, max_length=40)
 
 
 def _works_shifts(membership) -> bool:
@@ -83,6 +90,7 @@ def build_me(user) -> MeOut:
         phone=user.phone_e164,
         first_name=user.first_name,
         last_name=user.last_name,
+        bank_account=user.bank_account,
         companies=[
             MyCompanyOut(
                 id=m.company_id,
@@ -134,12 +142,25 @@ def me(request):
     return build_me(request.user)
 
 
-@router.patch("/me", response=MeOut)
+@router.patch("/me", response={200: MeOut, 400: ErrorOut})
 def update_me(request, payload: MeIn):
+    """My name and my bank account number (optional, for pay; managers of my locations see it)."""
     user = request.user
-    first_name, last_name = payload.first_name.strip(), payload.last_name.strip()
-    if not first_name or not last_name:
-        raise HttpError(400, "Podaj imię i nazwisko.")
-    user.first_name, user.last_name = first_name, last_name
-    user.save(update_fields=["first_name", "last_name"])
+    changed = []
+    for field_name in ("first_name", "last_name"):
+        value = getattr(payload, field_name)
+        if value is None:
+            continue
+        if not value.strip():
+            raise HttpError(400, "Podaj imię i nazwisko.")
+        setattr(user, field_name, value.strip())
+        changed.append(field_name)
+    if payload.bank_account is not None:
+        try:
+            user.bank_account = normalize_bank_account(payload.bank_account)
+        except ValidationError as exc:
+            raise HttpError(400, exc.messages[0]) from exc
+        changed.append("bank_account")
+    if changed:
+        user.save(update_fields=changed)
     return build_me(user)

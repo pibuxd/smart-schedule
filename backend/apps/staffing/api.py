@@ -7,6 +7,7 @@ from datetime import date, time
 from typing import Literal
 from uuid import UUID
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
@@ -14,7 +15,9 @@ from ninja import Field, Router, Schema
 from ninja.errors import HttpError
 from ninja.responses import Status
 
+from apps.accounts.models import normalize_bank_account
 from apps.core.schemas import ErrorOut
+from apps.notifications.services import notify
 from apps.rules.models import RuleSetting
 from apps.scheduling.models import Assignment, SchedulePeriod, ScheduleVersion, Shift
 from apps.staffing import day_staffing, removal
@@ -164,6 +167,9 @@ class EmployeeOut(Schema):
     first_name: str
     last_name: str
     phone: str
+    # For pay transfers (26 digits, "" when not given): the person enters it in "Twoje dane"; never shown to
+    # other employees.
+    bank_account: str = ""
     position_ids: list[UUID]
     experience: ExperienceLevel
     # The level on each of the person's positions (the default `experience` unless set otherwise).
@@ -193,6 +199,8 @@ class EmployeeIn(Schema):
     # number is the login, so only the superadmin changes it (docs/spec.md, "Zmiana numeru telefonu").
     first_name: str | None = Field(None, max_length=80)
     last_name: str | None = Field(None, max_length=80)
+    # Also on the account, with the same rule as the name; "" removes it. The person gets a notification.
+    bank_account: str | None = Field(None, max_length=40)
     position_ids: list[UUID] | None = None
     experience: ExperienceLevel | None = None
     # Levels for single positions; replaces what was set before. A position left out gets the default level.
@@ -555,6 +563,7 @@ def _employee_out(
     snapshot = (
         user.first_name,
         user.last_name,
+        user.bank_account,
         profile.experience,
         profile.is_active,
         profile.max_hours_month,
@@ -581,6 +590,7 @@ def _employee_out(
         first_name=user.first_name,
         last_name=user.last_name,
         phone=user.phone_e164,
+        bank_account=user.bank_account,
         position_ids=position_ids,
         experience=profile.experience,
         position_experience=[
@@ -716,21 +726,34 @@ def add_myself_as_employee(request, location_id: UUID):
 
 
 def _changed_account(ctx: TenantContext, profile: EmployeeProfile, payload: EmployeeIn):
-    """The person's account with the new name applied (not saved), or None when it does not change.
+    """The person's account with the new name and bank account number applied (not saved) and the names of the
+    changed fields, or None when nothing changes.
 
     The account is shared by every company the person works for, so nothing changes when the person also has
     another company."""
     user = profile.membership.user
     first = payload.first_name.strip() if payload.first_name is not None else user.first_name
     last = payload.last_name.strip() if payload.last_name is not None else user.last_name
-    if (first, last) == (user.first_name, user.last_name):
+    account = user.bank_account
+    if payload.bank_account is not None:
+        try:
+            account = normalize_bank_account(payload.bank_account)
+        except ValidationError as exc:
+            raise HttpError(400, exc.messages[0]) from exc
+    new = {"first_name": first, "last_name": last, "bank_account": account}
+    changed = [name for name, value in new.items() if value != getattr(user, name)]
+    if not changed:
         return None
-    if not first:
+    if not first and {"first_name", "last_name"} & set(changed):
         raise HttpError(400, "Wpisz imię.")
     if user.memberships.exclude(company=ctx.company).exists():  # tenant-ok: only checks other companies exist
-        raise HttpError(409, "Ta osoba ma konto także w innej firmie, więc imię może zmienić tylko ona sama.")
-    user.first_name, user.last_name = first, last
-    return user
+        what = "imię"
+        if "bank_account" in changed:
+            what = "numer konta" if changed == ["bank_account"] else "imię i numer konta"
+        raise HttpError(409, f"Ta osoba ma konto także w innej firmie, więc {what} może zmienić tylko ona sama.")
+    for name in changed:
+        setattr(user, name, new[name])
+    return user, changed
 
 
 @router.patch(
@@ -780,10 +803,14 @@ def update_employee(request, employee_id: UUID, payload: EmployeeIn):
         and profile.target_hours_month > profile.max_hours_month
     ):
         raise HttpError(400, "Cel godzin nie może być większy niż maksimum.")
-    user = _changed_account(ctx, profile, payload)
+    account = _changed_account(ctx, profile, payload)
     with transaction.atomic():
-        if user is not None:
-            user.save(update_fields=["first_name", "last_name"])
+        if account is not None:
+            user, fields = account
+            user.save(update_fields=fields)
+            if "bank_account" in fields and user.pk != request.user.pk:
+                # Someone else changed where the person's pay goes: they should know (only the last digits).
+                notify(ctx.company.pk, [user.pk], "bank_account_set", {"ending": user.bank_account[-4:]})
         profile.save()
         here = set(_positions(ctx, location).values_list("pk", flat=True))
         if "position_ids" in sent and payload.position_ids is not None:

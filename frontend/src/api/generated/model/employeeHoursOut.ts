@@ -19,4 +19,5 @@ export interface EmployeeHoursOut {
   pay?: number | null;
   supplements_pay?: number | null;
   unpriced_hours?: number;
+  bank_account?: string;
 }

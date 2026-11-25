@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
-import { OwnRates, PaySection } from './PayRates'
+import { OwnRates, PositionRate, SupplementsSection } from './PayRates'
 import { AsManager } from './test-utils'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -39,8 +39,8 @@ const settings = {
   ],
 }
 
-function show() {
-  const calls = mockApi((method, path) => {
+function answers() {
+  return mockApi((method, path) => {
     if (path === '/api/locations/l1/pay-settings') return [200, settings]
     if (method === 'POST' && path.startsWith('/api/positions/')) return [200, settings.positions[0]]
     if (method === 'POST' && path === '/api/locations/l1/supplements') return [201, night]
@@ -48,21 +48,42 @@ function show() {
     if (method === 'DELETE') return [204, null]
     return [404, { detail: 'Nie ma.' }]
   })
+}
+
+/** The rates as in "Stanowiska i stawki": one rate editor in each position's row. */
+function show() {
+  const calls = answers()
   renderScreen(
     <AsManager>
-      <PaySection locationId="l1" today={today} />
+      <ul>
+        {settings.positions.map((p) => (
+          <li key={p.position_id}>
+            <b>{p.name}</b>
+            <PositionRate positionId={p.position_id} name={p.name} steps={p.rates} today="2026-11-22" />
+          </li>
+        ))}
+      </ul>
     </AsManager>,
   )
   return calls
 }
 
-describe('PaySection', () => {
+function showSupplements() {
+  const calls = answers()
+  renderScreen(
+    <AsManager>
+      <SupplementsSection locationId="l1" today={today} />
+    </AsManager>,
+  )
+  return calls
+}
+
+describe('PositionRate', () => {
   it('shows the rate of today and the raise ahead, and changes a rate from a day', async () => {
     const calls = show()
     const seller = (await screen.findByText('Sprzedawca')).closest('li')!
     expect(seller).toHaveTextContent(/31,40\szł\/h/)
     expect(seller).toHaveTextContent(/Od 1 stycznia 2027: 33,00\szł\/h/)
-    expect(screen.getByText(/stawki: 1 z 2, dodatki: 1/)).toBeInTheDocument()
 
     fireEvent.click(within(seller).getByRole('button', { name: 'Zmień stawkę: Sprzedawca' }))
     fireEvent.change(within(seller).getByLabelText('Stawka, zł/h'), { target: { value: '32,50' } })
@@ -115,8 +136,12 @@ describe('PaySection', () => {
     )
   })
 
+})
+
+describe('SupplementsSection', () => {
   it('lists supplements in words, keeps ended ones apart, and changes one from a day', async () => {
-    const calls = show()
+    const calls = showSupplements()
+    expect(await screen.findByText('dodatki: 1')).toBeInTheDocument()
     const item = (await screen.findByText('Noc')).closest('li')!
     expect(item).toHaveTextContent(/22:00–6:00 · codziennie · \+6,00\szł\/h · wszystkie stanowiska/)
     expect(screen.getByText('Zakończone dodatki (1)')).toBeInTheDocument()
@@ -137,7 +162,7 @@ describe('PaySection', () => {
   })
 
   it('adds a supplement for chosen days and positions, and ends one from a day', async () => {
-    const calls = show()
+    const calls = showSupplements()
     fireEvent.click(await screen.findByRole('button', { name: 'Dodaj dodatek' }))
     fireEvent.change(screen.getByLabelText('Nazwa'), { target: { value: 'Weekend' } })
     fireEvent.click(screen.getByLabelText('Cała doba'))
