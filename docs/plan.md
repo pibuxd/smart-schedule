@@ -1512,7 +1512,7 @@ Spec: „Numer konta i stawki przy stanowiskach”.
   numer, i że asystent go nie zna.
 - UI pracownika: `features/auth/MyData.tsx`, przycisk „Twoje dane” obok „Wyloguj” w nagłówku ekranów pracownika
   otwiera `Sheet` z imieniem, nazwiskiem i „Numer konta do wypłaty” („Nieobowiązkowy. Widzą go tylko Twoi
-  kierownicy.”); numer wysyła się tylko, gdy cyfry się zmieniły. Kierownik: pole „Numer konta do wypłaty” w formularzu
+  kierownicy, także w pliku z godzinami do wypłaty.”); numer wysyła się tylko, gdy cyfry się zmieniły. Kierownik: pole „Numer konta do wypłaty” w formularzu
   osoby (`EmployeesScreen`).
 - Ustawienia lokalu: `PositionsSection` nazywa się „Stanowiska i stawki”; wiersz to nazwa, liczba osób,
   `PayRates.RateNow` (stawka dziś i zaplanowane zmiany) i jeden przycisk „Zmień”, który otwiera `Sheet` z
@@ -1526,3 +1526,6 @@ Spec: „Numer konta i stawki przy stanowiskach”.
 Założenia: tylko polskie numery, bo aplikacja jest tylko dla +48, a pracownicy z zagranicy w Polsce zwykle mają tu
 konto; zagraniczny IBAN można dodać później. Numer wpisuje też kierownik, bo starsi pracownicy często dają dane
 kierownikowi; powiadomienie chroni przed cichą zmianą. Inni pracownicy i asystent numeru nie widzą.
+Hipotezy na pilotaż (uwagi z przeglądu PR #78): czy ktoś pracuje w dwóch firmach i chce w nich różnych kont (wtedy
+numer przenieść do profilu w firmie); czy kierownicy naprawdę wpisują numery za innych (jeśli nie, zostawić to tylko
+osobie, bo powiadomienie w aplikacji można przeoczyć); komu kierownik daje plik CSV z numerami kont.

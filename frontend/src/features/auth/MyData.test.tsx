@@ -25,7 +25,7 @@ it('saves the bank account number for pay in "Twoje dane" and shows a typo in wo
   fireEvent.click(await screen.findByRole('button', { name: 'Twoje dane' }))
   const sheet = await screen.findByRole('dialog', { name: 'Twoje dane' })
   expect(within(sheet).getByText('Logujesz się numerem +48 600 100 001.')).toBeInTheDocument()
-  expect(within(sheet).getByText('Nieobowiązkowy. Widzą go tylko Twoi kierownicy.')).toBeInTheDocument()
+  expect(within(sheet).getByText('Nieobowiązkowy. Widzą go tylko Twoi kierownicy, także w pliku z godzinami do wypłaty.')).toBeInTheDocument()
   fireEvent.change(within(sheet).getByLabelText('Numer konta do wypłaty'), {
     target: { value: '61 1090 1014 0000 0712 1981 2875' },
   })
