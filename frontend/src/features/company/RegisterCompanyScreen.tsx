@@ -10,6 +10,7 @@ import { TextField } from '../../components/ui/field'
 import { InlineError } from '../../components/ui/status'
 import { Wordmark } from '../../components/Wordmark'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { SignOutButton } from '../auth/SignOutButton'
 
 /**
  * Registering a company, after the phone number is confirmed: its name, the manager's name and (if they have one)
@@ -42,7 +43,10 @@ export function RegisterCompanyScreen({ me, onCreated }: { me: MeOut; onCreated:
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-(--column) flex-col gap-6 px-4 pt-6 pb-8">
-      <Wordmark />
+      <div className="flex items-center justify-between gap-3">
+        <Wordmark />
+        <SignOutButton />
+      </div>
       <form className="mt-6 flex flex-1 flex-col gap-5" onSubmit={submit}>
         <div className="grid gap-2">
           <h1 className="m-0 text-2xl font-extrabold">Załóż firmę</h1>
