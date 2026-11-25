@@ -1604,7 +1604,7 @@ Spec: „Poprawki po raporcie z testów (25.11.2026)”.
   do 11”, każdy wtorek na stałe) odczyt nie przechodzi i prośbę czyta kierownik. `readings.calendar_only` = taki
   odczyt: `problem_builder` go pomija (generator go nie liczy), `readings.complement` daje pozostałe godziny dnia,
   `describe`: „we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)”.
-- Przycisk w czacie: `MyRequestOut.unmarked_days` zastąpiło `cannot_marks` (lista `CannotMarkOut`: dni, `from_time`,
+- Przycisk w czacie: `MyRequestOut.cannot_marks` zastąpiło `unmarked_days` (lista `CannotMarkOut`: dni, `from_time`,
   `to_time`, `windows` z `readings.complement`, `prefer_days`, `whole_day`). `_Calendar.to_mark`: dzień bez „nie
   mogę” (i bez własnych godzin, gdy prośba ma godziny) jest do zaznaczenia, dzień z całodniowym „nie mogę” przy
   prośbie z godzinami jest `whole_day`, dzień z własnymi godzinami zostaje. Ekran zapisuje tym samym
