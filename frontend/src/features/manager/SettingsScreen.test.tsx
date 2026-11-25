@@ -67,7 +67,7 @@ it('shows each day’s staffing in a calendar and saves one day with other numbe
   await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')[1]?.body).toEqual({ cells: [], note: '' }))
 })
 
-it('shows each position’s rate in “Stanowiska i stawki” and changes it there', async () => {
+it('shows each position’s rate in “Stanowiska i stawki” and changes it behind one “Zmień”', async () => {
   const setup = {
     positions: [{ id: 'p', name: 'Kasa', employees: 2 }, { id: 'q', name: 'Piec', employees: 1 }],
     shift_types: [], staffing: [], closures: [], exceptions: [], arranged: [],
@@ -89,15 +89,17 @@ it('shows each position’s rate in “Stanowiska i stawki” and changes it the
   renderScreen(<AsManager><LocationSettingsScreen locationId="l" /></AsManager>)
 
   expect(await screen.findByRole('heading', { name: 'Stanowiska i stawki' })).toBeInTheDocument()
-  const till = (await screen.findByRole('button', { name: 'Zmień stawkę: Kasa' })).closest('li')!
-  expect(till).toHaveTextContent(/^Kasa \(2 os\.\)31,40\szł\/hZmień stawkęZmień nazwęUsuń/)
+  const till = (await screen.findByRole('button', { name: 'Zmień stanowisko Kasa' })).closest('li')!
+  expect(till).toHaveTextContent(/^Kasa2 os\.31,40\szł\/hZmień$/)
   const oven = screen.getByText('Piec', { selector: 'b' }).closest('li')!
   expect(oven).toHaveTextContent('bez stawki')
   expect(screen.getByText('bez dodatków')).toBeInTheDocument()
 
-  fireEvent.click(within(oven).getByRole('button', { name: 'Zmień stawkę: Piec' }))
-  fireEvent.change(within(oven).getByLabelText('Stawka, zł/h'), { target: { value: '36' } })
-  fireEvent.click(within(oven).getByRole('button', { name: 'Zapisz stawkę' }))
+  fireEvent.click(within(oven).getByRole('button', { name: 'Zmień stanowisko Piec' }))
+  const sheet = await screen.findByRole('dialog', { name: 'Piec' })
+  expect(within(sheet).getByLabelText('Nazwa')).toHaveValue('Piec')
+  fireEvent.change(within(sheet).getByLabelText('Stawka, zł/h'), { target: { value: '36' } })
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Zapisz stanowisko' }))
   await waitFor(() => expect(calls.find((c) => c.method === 'POST')).toMatchObject({
     url: '/api/positions/q/rates',
     body: { hourly_rate: 36, valid_from: null },

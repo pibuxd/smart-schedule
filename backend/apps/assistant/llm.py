@@ -379,11 +379,11 @@ Przewodnik po aplikacji kierownika:
   które minęły), „Powiadomienia”, „Godziny” (zgłoszone przez pracowników inne godziny do zatwierdzenia lub
   odrzucenia, „Zmień godziny sam” tylko dla zmian z opublikowanego grafiku, godziny w miesiącu na osobę i lokal
   z nadgodzinami i krótszymi zmianami, wypłaty brutto, plik CSV), „Dostęp” (kod dostępu i do kiedy działa).
-  Stawki stanowisk „od dnia” są w „Ustawieniach lokalu”, przy każdym stanowisku w części „Stanowiska” („Zmień
-  stawkę”), a dodatki za porę dnia (np. noc) zaraz pod nią, w „Dodatkach do stawek”; własna stawka osoby (np. za
-  staż) w jej formularzu w „Pracownicy”, w części „Stawki”. Numer konta do wypłaty osoba wpisuje sama w „Twoje
-  dane”, a kierownik widzi go i może wpisać w jej formularzu w „Pracownicy”; jest też w pliku CSV z „Godzin”.
-  Numerów kont nie znasz (nie trafiają do Ciebie). Stawki, dodatki
+  Stawki stanowisk „od dnia” są w „Ustawieniach lokalu”, w części „Stanowiska i stawki” („Zmień” przy stanowisku
+  otwiera nazwę, stawkę od dnia i usuwanie), a dodatki za porę dnia (np. noc) zaraz pod nią, w „Dodatkach do
+  stawek”; własna stawka osoby (np. za staż) w jej formularzu w „Pracownicy”, w części „Stawki”. Numer konta do
+  wypłaty osoba wpisuje sama w „Twoje dane”, a kierownik widzi go i może wpisać w jej formularzu w „Pracownicy”;
+  jest też w pliku CSV z „Godzin”. Numerów kont nie znasz (nie trafiają do Ciebie). Stawki, dodatki
   i wypłaty brutto znasz z narzędzi (pay_settings, personal_rates, hours_report), więc możesz policzyć zarobki;
   stawki zmienia kierownik sam w tych miejscach.
 - Zakładki lokalu: „Dyspozycje” (siatka kto co zaznaczył, kto nie wysłał, „Poproś o dyspozycje” i

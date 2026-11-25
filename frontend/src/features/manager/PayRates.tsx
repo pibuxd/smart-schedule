@@ -3,8 +3,8 @@
 // the employee form.
 
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Plus } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 
 import type {
   PaySettingsOut,
@@ -26,6 +26,7 @@ import {
   useSetPositionRate,
   useUpdateSupplement,
 } from '../../api/generated/pay/pay'
+import { useDeletePosition, useUpdatePosition } from '../../api/generated/staffing/staffing'
 import { Button } from '../../components/ui/button'
 import { ConfirmSheet } from '../../components/ui/confirm'
 import { Disclosure } from '../../components/ui/disclosure'
@@ -62,6 +63,77 @@ function PastMonthsNote() {
 
 // --------------------------------------------------------------------------------------------- rate steps
 
+const stepAmount = (step: RateStep | undefined, fallback: string) =>
+  step?.hourly_rate != null ? rateText(step.hourly_rate) : fallback
+
+const fromWords = (step: RateStep) => (step.valid_from ? `od ${fullDay(step.valid_from)}` : 'od początku')
+
+/** The rate that counts today, and the changes entered ahead ("Od 1 stycznia 2027: 33,00 zł/h"). */
+export function RateNow({ steps, today, fallback }: { steps: RateStep[]; today: string; fallback: string }) {
+  return (
+    <span className="grid min-h-(--touch) content-center">
+      <span className="tabular-nums">{stepAmount(stepOn(steps, today), fallback)}</span>
+      {stepsAfter(steps, today).map((s) => (
+        <span key={s.id} className="text-sm tabular-nums">{`Od ${fullDay(s.valid_from ?? today)}: ${stepAmount(s, fallback)}`}</span>
+      ))}
+    </span>
+  )
+}
+
+/** "Zmiany stawki (n)": every step with "Usuń" (a step before this month asks first). */
+function RateHistory({
+  name,
+  steps,
+  fallback,
+  today,
+  disabled,
+  onDelete,
+}: {
+  name: string
+  steps: RateStep[]
+  fallback: string
+  today: string
+  disabled: boolean
+  onDelete: (id: string) => void
+}) {
+  const [removing, setRemoving] = useState<RateStep | null>(null)
+  if (steps.length === 0) return null
+  return (
+    <>
+      <Disclosure summary={<span className="text-sm">{`Zmiany stawki (${steps.length})`}</span>}>
+        <ul className="m-0 grid list-none gap-1 p-0 pb-2">
+          {[...steps].sort(byDay).map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="tabular-nums">{`${fromWords(s)}: ${stepAmount(s, fallback)}`}</span>
+              <Button
+                variant="quiet"
+                size="normal"
+                disabled={disabled}
+                aria-label={`Usuń stawkę ${name} ${fromWords(s)}`}
+                onClick={() => (inPastMonth(s.valid_from, today) ? setRemoving(s) : onDelete(s.id))}
+              >
+                Usuń
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </Disclosure>
+      <ConfirmSheet
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Usunąć stawkę ${removing ? fromWords(removing) : ''}?`}
+        confirmLabel="Tak, usuń stawkę"
+        onConfirm={() => {
+          if (removing) onDelete(removing.id)
+          setRemoving(null)
+        }}
+      >
+        <p className="m-0">{PAST_MONTHS}</p>
+      </ConfirmSheet>
+    </>
+  )
+}
+
 /** One rate by day: what counts today, changes entered ahead, "Zmień stawkę" from a day, and the steps to fix. */
 export function RateSteps({
   name,
@@ -75,8 +147,6 @@ export function RateSteps({
   error,
   onSave,
   onDelete,
-  lead,
-  actions,
 }: {
   /** What the rate is for, in button labels: "Sprzedawca". */
   name: string
@@ -93,51 +163,34 @@ export function RateSteps({
   error: unknown
   onSave: (data: RateIn, done: () => void) => void
   onDelete: (id: string) => void
-  /** Shown first in the rate's line, e.g. the position's name. */
-  lead?: ReactNode
-  /** More buttons at the end of the rate's line. */
-  actions?: ReactNode
 }) {
   const [editing, setEditing] = useState(false)
   const [rate, setRate] = useState('')
   const [from, setFrom] = useState(today)
   const [bad, setBad] = useState(false)
-  const [removing, setRemoving] = useState<RateStep | null>(null)
   const now = stepOn(steps, today)
-  const amount = (step: RateStep | undefined) => (step?.hourly_rate != null ? rateText(step.hourly_rate) : fallback)
   const first = steps.length === 0 && firstForAll
 
   return (
     <div className="grid gap-1">
       <div className="flex flex-wrap items-start justify-between gap-x-3">
-        {lead}
-        <span className="grid min-h-(--touch) content-center">
-          <span className="tabular-nums">{amount(now)}</span>
-          {stepsAfter(steps, today).map((s) => (
-            <span key={s.id} className="text-sm tabular-nums">{`Od ${fullDay(s.valid_from ?? today)}: ${amount(s)}`}</span>
-          ))}
-        </span>
-        {/* One group, so on a phone the buttons wrap together under the name and the rate. */}
-        <span className="flex flex-wrap">
-          {!editing && (
-            <Button
-              variant="quiet"
-              size="normal"
-              className={actions ? 'px-2' : undefined}
-              disabled={disabled}
-              aria-label={`Zmień stawkę: ${name}`}
-              onClick={() => {
-                setRate(rateInput(now?.hourly_rate))
-                setFrom(today)
-                setBad(false)
-                setEditing(true)
-              }}
-            >
-              Zmień stawkę
-            </Button>
-          )}
-          {actions}
-        </span>
+        <RateNow steps={steps} today={today} fallback={fallback} />
+        {!editing && (
+          <Button
+            variant="quiet"
+            size="normal"
+            disabled={disabled}
+            aria-label={`Zmień stawkę: ${name}`}
+            onClick={() => {
+              setRate(rateInput(now?.hourly_rate))
+              setFrom(today)
+              setBad(false)
+              setEditing(true)
+            }}
+          >
+            Zmień stawkę
+          </Button>
+        )}
       </div>
       {editing && (
         <form
@@ -174,94 +227,120 @@ export function RateSteps({
           {Boolean(error) && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
         </form>
       )}
-      {steps.length > 0 && (
-        <Disclosure summary={<span className="text-sm">{`Zmiany stawki (${steps.length})`}</span>}>
-          <ul className="m-0 grid list-none gap-1 p-0 pb-2">
-            {[...steps].sort(byDay).map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span className="tabular-nums">{`${s.valid_from ? `od ${fullDay(s.valid_from)}` : 'od początku'}: ${amount(s)}`}</span>
-                <Button
-                  variant="quiet"
-                  size="normal"
-                  disabled={disabled}
-                  aria-label={`Usuń stawkę ${name} ${s.valid_from ? `od ${fullDay(s.valid_from)}` : 'od początku'}`}
-                  onClick={() => (inPastMonth(s.valid_from, today) ? setRemoving(s) : onDelete(s.id))}
-                >
-                  Usuń
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Disclosure>
-      )}
-      <ConfirmSheet
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
-        title={`Usunąć stawkę ${removing?.valid_from ? `od ${fullDay(removing.valid_from)}` : 'od początku'}?`}
-        confirmLabel="Tak, usuń stawkę"
-        onConfirm={() => {
-          if (removing) onDelete(removing.id)
-          setRemoving(null)
-        }}
-      >
-        <p className="m-0">{PAST_MONTHS}</p>
-      </ConfirmSheet>
+      <RateHistory name={name} steps={steps} fallback={fallback} today={today} disabled={disabled} onDelete={onDelete} />
     </div>
   )
 }
 
 // --------------------------------------------------------------------------------------------- settings
 
-/** The rate of one position by day, in its row of "Stanowiska" in the location settings. */
-export function PositionRate({
-  positionId,
-  name,
+/** "Zmień" at a position in "Stanowiska i stawki": its name and its rate from a day in one form, the steps to fix,
+ * and removing the position. */
+export function PositionForm({
+  position,
   steps,
   today,
-  lead,
-  actions,
-  loading = false,
+  onDone,
 }: {
-  positionId: string
-  name: string
+  position: PositionOut
   steps: RateStep[]
   today: string
-  lead?: ReactNode
-  actions?: ReactNode
-  /** The rates are not read yet (or could not be): only the lead and the actions show. */
-  loading?: boolean
+  onDone: () => void
 }) {
-  const { readOnly } = useManager()
+  const rename = useUpdatePosition()
   const save = useSetPositionRate()
-  const remove = useDeletePositionRate()
+  const removeRate = useDeletePositionRate()
+  const remove = useDeletePosition()
   const queryClient = useQueryClient()
   const refresh = () => void queryClient.invalidateQueries()
-  if (loading) {
-    return (
-      <div className="flex flex-wrap items-start justify-between gap-x-3">
-        {lead}
-        {actions}
-      </div>
-    )
+  const now = stepOn(steps, today)
+  const first = steps.length === 0
+  const [name, setName] = useState(position.name)
+  const [rate, setRate] = useState(rateInput(now?.hourly_rate))
+  const [from, setFrom] = useState(today)
+  const [bad, setBad] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const error = rename.error ?? save.error ?? removeRate.error ?? remove.error
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const value = parseRate(rate)
+    setBad(Number.isNaN(value))
+    if (Number.isNaN(value)) return
+    // A new step only when the amount differs from what already counts on that day.
+    const newRate = first ? value !== null : value !== (stepOn(steps, from)?.hourly_rate ?? null)
+    try {
+      if (name.trim() !== position.name) await rename.mutateAsync({ positionId: position.id, data: { name: name.trim() } })
+      if (newRate) {
+        await save.mutateAsync({ positionId: position.id, data: { hourly_rate: value, valid_from: first ? null : from } })
+      }
+    } catch {
+      return // the error shows under the form
+    } finally {
+      refresh()
+    }
+    onDone()
   }
+
   return (
-    <div className="grid gap-1">
-      <RateSteps
-        name={name}
+    <div className="grid gap-4">
+      <form onSubmit={(e) => void submit(e)} className="grid gap-4">
+        <TextField label="Nazwa" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Stawka, zł/h"
+            inputMode="decimal"
+            placeholder="np. 34,00"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
+          {!first && <TextField label="Od dnia" type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />}
+        </div>
+        {first ? (
+          <p className="m-0 text-sm text-ink-muted">Pierwsza stawka liczy się dla wszystkich zmian.</p>
+        ) : (
+          <p className="m-0 text-sm text-ink-muted">Zmiany przed tym dniem zostają przy starej stawce.</p>
+        )}
+        {!first && from && inPastMonth(from, today) && <PastMonthsNote />}
+        {bad && <InlineError>{BAD_RATE}</InlineError>}
+        {Boolean(error) && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
+        <Button type="submit" wide disabled={rename.isPending || save.isPending}>
+          Zapisz stanowisko
+        </Button>
+      </form>
+      <RateHistory
+        name={position.name}
         steps={steps}
         fallback="bez stawki"
         today={today}
-        disabled={readOnly}
-        pending={save.isPending}
-        error={save.error}
-        onSave={(rate, done) =>
-          save.mutate({ positionId, data: rate }, { onSuccess: () => { done(); refresh() } })
-        }
-        onDelete={(rateId) => remove.mutate({ rateId }, { onSuccess: refresh })}
-        lead={lead}
-        actions={actions}
+        disabled={removeRate.isPending}
+        onDelete={(rateId) => removeRate.mutate({ rateId }, { onSuccess: refresh })}
       />
-      {remove.isError && <InlineError>{errorMessage(remove.error, NETWORK_PROBLEM)}</InlineError>}
+      {!removing ? (
+        <Button variant="danger" wide onClick={() => setRemoving(true)}>
+          <Trash2 aria-hidden="true" size={18} />
+          Usuń to stanowisko
+        </Button>
+      ) : (
+        <div role="alert" className="grid gap-3 rounded-md border border-cannot bg-surface p-4">
+          <p className="m-0">
+            <b>{`Usunąć stanowisko „${position.name}”?`}</b> Zniknie z obsady i z wyjątków.
+            {position.employees > 0 ? ` Stracą je też osoby, które je mają (${position.employees}).` : ''} W ułożonych
+            już grafikach zostaje.
+          </p>
+          <Button
+            variant="danger"
+            wide
+            disabled={remove.isPending}
+            onClick={() => remove.mutate({ positionId: position.id }, { onSuccess: () => { refresh(); onDone() } })}
+          >
+            Tak, usuń stanowisko
+          </Button>
+          <Button variant="secondary" wide onClick={() => setRemoving(false)}>
+            Zostaw
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

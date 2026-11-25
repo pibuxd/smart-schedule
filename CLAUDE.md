@@ -180,8 +180,8 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   so a change never moves earlier months; a person's step without an amount means the position's rate again.
   Supplement changes split the row at `change_from`. Hours without a rate are `unpriced_hours`, never 0 zł, get no
   supplement, and `pay` is null when nothing had a rate (screens then show no pay). Only the location's managers see
-  rate settings (position rates in "Stanowiska i stawki", supplements in "Dodatki do stawek" right under it); a
-  person's own rate and pay per shift are in `MyShiftOut` (`hourly_rate`, `pay`; not on the screen).
+  rate settings (position rates in "Stanowiska i stawki", one "Zmień" per position opens name, rate and removal;
+  supplements in "Dodatki do stawek" right under it); a person's own rate and pay per shift are in `MyShiftOut` (`hourly_rate`, `pay`; not on the screen).
   The generator, validator and scores never read them. Since 23.11.2026 the assistant reads pay, rates and
   supplements to work out earnings (`assistant/tools.DROPPED_KEYS` drops only phone and bank account numbers and
   screen fields).

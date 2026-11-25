@@ -1514,8 +1514,12 @@ Spec: „Numer konta i stawki przy stanowiskach”.
   otwiera `Sheet` z imieniem, nazwiskiem i „Numer konta do wypłaty” („Nieobowiązkowy. Widzą go tylko Twoi
   kierownicy.”); numer wysyła się tylko, gdy cyfry się zmieniły. Kierownik: pole „Numer konta do wypłaty” w formularzu
   osoby (`EmployeesScreen`).
-- Ustawienia lokalu: `PositionsSection` nazywa się „Stanowiska i stawki” i w każdym wierszu ma `PayRates.PositionRate`
-  (ten sam edytor kroków `RateSteps` co wcześniej); dodatki są w `SupplementsSection` („Dodatki do stawek”, zwijane,
+- Ustawienia lokalu: `PositionsSection` nazywa się „Stanowiska i stawki”; wiersz to nazwa, liczba osób,
+  `PayRates.RateNow` (stawka dziś i zaplanowane zmiany) i jeden przycisk „Zmień”, który otwiera `Sheet` z
+  `PayRates.PositionForm`: nazwa (`PATCH /positions/{id}` tylko gdy się zmieniła), stawka i „Od dnia”
+  (`POST /positions/{id}/rates` tylko gdy kwota różni się od kroku obowiązującego tego dnia), `RateHistory` („Zmiany
+  stawki” z „Usuń”, przy minionych miesiącach z pytaniem) i „Usuń to stanowisko” z potwierdzeniem w oknie, jak w
+  `ShiftTypeForm`. `RateSteps` zostaje dla własnych stawek osoby (`OwnRates`); dodatki są w `SupplementsSection` („Dodatki do stawek”, zwijane,
   w nagłówku „dodatki: N” albo „bez dodatków”) zaraz pod stanowiskami, w tej samej kolumnie. Sekcja „Stawki i dodatki”
   na dole strony zniknęła.
 

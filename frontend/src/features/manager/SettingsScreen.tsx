@@ -8,6 +8,7 @@ import type {
   LocationSetupOut,
   ManagerOverviewOut,
   PaySettingsOut,
+  PositionOut,
   ShiftTypeIn,
   ShiftTypeOut,
   StaffingCellIn,
@@ -18,11 +19,9 @@ import {
   useCreatePosition,
   useCreateShiftType,
   useDeleteClosure,
-  useDeletePosition,
   useDeleteShiftType,
   useLocationSetup,
   useSaveStaffing,
-  useUpdatePosition,
   useUpdateShiftType,
 } from '../../api/generated/staffing/staffing'
 import {
@@ -39,7 +38,7 @@ import { EmptyState, ErrorState, InlineError, Loading } from '../../components/u
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { dayTitle, parseDate, shortTime, spanHours, toIsoDate, WEEKDAY_HEADERS } from '../../lib/dates'
 import { useManager } from './ManagerContext'
-import { PositionRate, SupplementsSection } from './PayRates'
+import { PositionForm, RateNow, SupplementsSection } from './PayRates'
 import { StaffingCalendar } from './StaffingCalendar'
 
 const hhmm = (value: string | null | undefined) => (value ? value.slice(0, 5) : '')
@@ -73,7 +72,7 @@ export function LocationSettingsScreen({ locationId }: { locationId: string }) {
   return (
     <div className="grid min-w-0 grid-cols-1 gap-10">
       <LocationForm key={info.id} location={info} />
-      <div className="grid min-w-0 grid-cols-1 gap-10 xl:grid-cols-[3fr_2fr] xl:items-start">
+      <div className="grid min-w-0 grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start">
         {/* Rates sit with the positions and supplements right under them, high on the page (Piotr, 25.11.2026). */}
         <div className="grid min-w-0 content-start gap-6">
           <PositionsSection locationId={locationId} setup={data} />
@@ -251,17 +250,14 @@ function ArchiveSection({ location }: { location: LocationOut }) {
 function PositionsSection({ locationId, setup, today = new Date() }: { locationId: string; setup: LocationSetupOut; today?: Date }) {
   const { readOnly } = useManager()
   const create = useCreatePosition()
-  const rename = useUpdatePosition()
-  const remove = useDeletePosition()
   const pay = usePaySettings(locationId)
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
-  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
-  const [removing, setRemoving] = useState<{ id: string; name: string; employees: number } | null>(null)
-  const refresh = () => void queryClient.invalidateQueries()
-  const error = create.error ?? rename.error
+  const [editing, setEditing] = useState<PositionOut | null>(null)
   const rates = new Map(((pay.data?.data as PaySettingsOut | undefined)?.positions ?? []).map((p) => [p.position_id, p.rates]))
   const day = toIsoDate(today)
+  // The open sheet follows the list, so a rate step removed inside it disappears at once.
+  const open = editing && (setup.positions.find((p) => p.id === editing.id) ?? editing)
 
   return (
     <Section
@@ -271,58 +267,21 @@ function PositionsSection({ locationId, setup, today = new Date() }: { locationI
       <ul className="m-0 grid list-none overflow-hidden rounded-md border border-line bg-surface p-0">
         {setup.positions.length === 0 && <li className="px-4 py-3 text-ink-muted">Nie ma jeszcze stanowisk.</li>}
         {setup.positions.map((p) => (
-          <li key={p.id} className="border-b border-line px-4 py-1.5 last:border-b-0">
-            {editing?.id === p.id ? (
-              <form
-                className="flex flex-1 flex-wrap items-end gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  rename.mutate({ positionId: p.id, data: { name: editing.name } }, { onSuccess: () => { setEditing(null); refresh() } })
-                }}
-              >
-                <TextField label="Nowa nazwa" className="flex-1" value={editing.name} onChange={(e) => setEditing({ id: p.id, name: e.target.value })} required />
-                <Button type="submit" size="normal" disabled={rename.isPending}>
-                  Zapisz
-                </Button>
-                <Button variant="quiet" size="normal" onClick={() => setEditing(null)}>
-                  Anuluj
-                </Button>
-              </form>
-            ) : (
-              <PositionRate
-                positionId={p.id}
-                name={p.name}
-                steps={rates.get(p.id) ?? []}
-                today={day}
-                loading={!pay.isSuccess}
-                lead={
-                  <span className="min-h-(--touch) min-w-36 flex-1 content-center">
-                    <b>{p.name}</b> <span className="text-sm text-ink-muted">({p.employees} os.)</span>
-                  </span>
-                }
-                actions={
-                  <span className="flex">
-                    <Button variant="quiet" size="normal" className="px-2" disabled={readOnly} onClick={() => setEditing({ id: p.id, name: p.name })}>
-                      Zmień nazwę
-                    </Button>
-                    <Button
-                      variant="quiet"
-                      size="normal"
-                      className="px-2"
-                      aria-label={`Usuń stanowisko ${p.name}`}
-                      disabled={readOnly || remove.isPending}
-                      onClick={() => {
-                        remove.reset()
-                        setRemoving(p)
-                      }}
-                    >
-                      <Trash2 aria-hidden="true" size={18} />
-                      Usuń
-                    </Button>
-                  </span>
-                }
-              />
-            )}
+          <li key={p.id} className="flex flex-wrap items-start justify-between gap-x-3 border-b border-line px-4 py-1.5 last:border-b-0">
+            <span className="grid min-h-(--touch) min-w-24 flex-1 content-center">
+              <b>{p.name}</b>
+              <span className="text-sm text-ink-muted">{`${p.employees} os.`}</span>
+            </span>
+            {pay.isSuccess && <RateNow steps={rates.get(p.id) ?? []} today={day} fallback="bez stawki" />}
+            <Button
+              variant="quiet"
+              size="normal"
+              aria-label={`Zmień stanowisko ${p.name}`}
+              disabled={readOnly || !pay.isSuccess}
+              onClick={() => setEditing(p)}
+            >
+              Zmień
+            </Button>
           </li>
         ))}
       </ul>
@@ -335,7 +294,7 @@ function PositionsSection({ locationId, setup, today = new Date() }: { locationI
         className="flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault()
-          create.mutate({ locationId, data: { name } }, { onSuccess: () => { setName(''); refresh() } })
+          create.mutate({ locationId, data: { name } }, { onSuccess: () => { setName(''); void queryClient.invalidateQueries() } })
         }}
       >
         <TextField label="Nowe stanowisko" className="min-w-48 flex-1" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} />
@@ -344,25 +303,12 @@ function PositionsSection({ locationId, setup, today = new Date() }: { locationI
           Dodaj
         </Button>
       </form>
-      {error && <InlineError>{errorMessage(error, NETWORK_PROBLEM)}</InlineError>}
-      <ConfirmSheet
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
-        title={`Usunąć stanowisko „${removing?.name ?? ''}”?`}
-        confirmLabel="Tak, usuń stanowisko"
-        pending={remove.isPending}
-        error={remove.error}
-        onConfirm={() =>
-          removing &&
-          remove.mutate({ positionId: removing.id }, { onSuccess: () => { setRemoving(null); refresh() } })
-        }
-      >
-        <p className="m-0">
-          Zniknie z obsady i z wyjątków.
-          {removing && removing.employees > 0 ? ` Stracą je też osoby, które je mają (${removing.employees}).` : ''} W
-          ułożonych już grafikach zostaje.
-        </p>
-      </ConfirmSheet>
+      {create.error && <InlineError>{errorMessage(create.error, NETWORK_PROBLEM)}</InlineError>}
+      <Sheet open={open !== null} onOpenChange={(o) => !o && setEditing(null)} title={open?.name ?? ''}>
+        {open && (
+          <PositionForm key={open.id} position={open} steps={rates.get(open.id) ?? []} today={day} onDone={() => setEditing(null)} />
+        )}
+      </Sheet>
     </Section>
   )
 }

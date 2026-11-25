@@ -19,9 +19,13 @@ była tak schowana nisko tylko np była w tym panelu co "Stanowiska"”.
   pomyłka w jednej cyfrze albo zamiana dwóch cyfr daje „W tym numerze konta jest błąd. Sprawdź cyfry.”.
 - Numer widzą tylko: sama osoba, kierownicy lokali, w których pracuje, i administrator Grafikomatu. Inni pracownicy go
   nie widzą, a asystent AI nigdy go nie dostaje (jak numerów telefonów).
-- Stawki stanowisk są w ustawieniach lokalu w panelu „Stanowiska i stawki”: przy każdym stanowisku jego stawka dziś
-  (albo „bez stawki”), zaplanowana zmiana i „Zmień stawkę”, tak jak wcześniej w osobnej części na dole strony. Dodatki
-  za porę dnia są zaraz pod nim, w zwijanym „Dodatki do stawek”. Zasady stawek „od dnia” się nie zmieniają.
+- Stawki stanowisk są w ustawieniach lokalu w panelu „Stanowiska i stawki”: przy każdym stanowisku jego nazwa, liczba
+  osób, stawka dziś (albo „bez stawki”), zaplanowana zmiana i jeden przycisk „Zmień” (Piotr, 25.11.2026: zamiast
+  osobnych „Zmień stawkę”, „Zmień nazwę” i „Usuń”). Otwiera okno jak przy „Zmianach i godzinach”: nazwa, stawka „od
+  dnia” (pierwsza stawka liczy się dla wszystkich zmian), jedno „Zapisz stanowisko”, zwijane „Zmiany stawki” z „Usuń”
+  i „Usuń to stanowisko” z potwierdzeniem. Nowa stawka zapisuje się tylko wtedy, gdy kwota różni się od tej, która
+  już obowiązuje w wybranym dniu. Dodatki za porę dnia są zaraz pod panelem, w zwijanym „Dodatki do stawek”. Zasady
+  stawek „od dnia” się nie zmieniają.
 
 ## Uwagi z testu pracownika na telefonie (Piotr, 23.11.2026)
 
