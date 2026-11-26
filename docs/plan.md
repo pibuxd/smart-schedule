@@ -1774,7 +1774,9 @@ Założenia: „wyrobić 30 godzin” to „około 30”, nie „co najmniej 30�
 najwyżej, ma `limit_godzin`, a obie prośby mogą być naraz). Dni „najlepiej” to dni tygodnia, nie konkretne daty.
 
 Sprawdzone na danych testowych (Rynek, okres z prośbą Celiny, 26.11.2026): pierwszy tydzień 32 h (cel 30), drugi
-40 h (cel 10). Sama prośba z zasadami lokalu daje 32 h i 8 h; w drugim tygodniu godziny podnoszą inne miękkie
-rzeczy, głównie polecenie kierownika „Celinę stawiaj z Anną”: solver nagradza każdą wspólną zmianę
-(`preferuj_osobe`), więc dokłada wspólnych zmian, choć walidator liczy tylko udział wspólnych zmian. Do osobnej
-poprawki.
+40 h (cel 10). Sama prośba z zasadami lokalu daje 32 h i 8 h. W całym Rynku prośba jest jedną z wielu miękkich
+rzeczy: ocena aplikacji (`scoring.penalty`) grafiku z 40 h w drugim tygodniu to 14,03, a grafiku, w którym Celina
+ma wtedy tylko czwartek, 14,10, więc wygrywają ustawienia kierownika (80% wagi), m.in. polecenie „Celinę stawiaj
+z Anną” i zamknięcia z kierownikiem zmiany. Solver nagradza każdą wspólną zmianę przy `preferuj_osobe` (walidator
+liczy udział wspólnych zmian), ale kara za każdą zmianę bez tej osoby zamiast nagrody dała gorszy grafik (14,03 →
+15,73: zamknięcia bez kierownika zmiany), więc zostaje jak jest.
