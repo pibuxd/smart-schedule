@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 
 import { useSubscription } from '../../api/generated/billing/billing'
 import type { SubscriptionOut } from '../../api/generated/model'
+import { untilNextChange } from './access-refresh'
 import { statusWords } from './words'
 
 /**
@@ -9,7 +10,14 @@ import { statusWords } from './words'
  * 7 days before a code ends, 2 before the trial does). Until then the state is only on "Dostęp" (Piotr, 26.11.2026).
  */
 export function AccessBanner({ companyId }: { companyId: string }) {
-  const subscription = useSubscription(companyId, { query: { staleTime: 60_000 } })
+  const subscription = useSubscription(companyId, {
+    query: {
+      staleTime: 60_000,
+      // An open panel asks again when the count of days drops, so the strip appears without a reload.
+      refetchInterval: (query) => (query.state.data?.status === 200 ? untilNextChange(query.state.data.data) : false),
+      refetchIntervalInBackground: true,
+    },
+  })
   if (!subscription.isSuccess) return null
   const data = subscription.data.data as SubscriptionOut
   if (!data.read_only && !data.expiring_soon) return null

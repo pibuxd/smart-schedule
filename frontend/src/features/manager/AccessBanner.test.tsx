@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useSubscription } from '../../api/generated/billing/billing'
 import { mockApi, renderScreen } from '../../test/render'
+import { untilNextChange } from './access-refresh'
 import { AccessBanner } from './AccessBanner'
 
 const trial = {
@@ -30,8 +31,13 @@ function show(subscription: object) {
   )
 }
 
+const DAY = 24 * 60 * 60 * 1000
+
 describe('AccessBanner', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   it('stays hidden during the trial until the last 2 days', async () => {
     show(trial)
@@ -61,5 +67,33 @@ describe('AccessBanner', () => {
     show({ ...trial, is_active: false, days_left: 0, read_only: true })
     expect(await screen.findByText('Okres próbny minął. Grafiki możesz oglądać, ale nie zmieniać.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Wpisz kod dostępu' })).toBeInTheDocument()
+  })
+
+  it('shows the strip in an open panel once the last 2 days start', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-12-24T10:00:00+01:00'))
+    const endsAt = Date.parse('2026-12-26T10:00:10+01:00')
+    // Answers like the server: whole days left, rounded up; the trial's strip from 2 days.
+    const calls = mockApi(() => {
+      const daysLeft = Math.ceil((endsAt - Date.now()) / DAY)
+      return [200, { ...trial, ends_at: new Date(endsAt).toISOString(), days_left: daysLeft, expiring_soon: daysLeft <= 2 }]
+    })
+    renderScreen(<AccessBanner companyId="c1" />)
+    await vi.waitFor(() => expect(calls).toHaveLength(1))
+    await vi.advanceTimersByTimeAsync(1)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(2 * 60_000)
+
+    expect(await screen.findByText('Okres próbny: zostały 2 dni.')).toBeInTheDocument()
+    expect(calls).toHaveLength(2)
+  })
+
+  it('waits for the count of days to drop, and stops once read-only', () => {
+    const now = Date.parse('2026-12-24T10:00:00Z')
+    const endsAt = (ms: number) => new Date(now + ms).toISOString()
+    expect(untilNextChange({ ...trial, ends_at: endsAt(2 * DAY + 3_600_000), days_left: 3 }, now)).toBe(3_601_000)
+    expect(untilNextChange({ ...trial, ends_at: endsAt(10_000), days_left: 1 }, now)).toBe(60_000)
+    expect(untilNextChange({ ...trial, ends_at: endsAt(-DAY), days_left: 0, read_only: true }, now)).toBe(false)
   })
 })
