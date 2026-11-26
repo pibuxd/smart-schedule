@@ -134,6 +134,14 @@ def push_path(kind: str, payload: dict) -> str:
     return "/grafik" if kind in MY_SHIFT_KINDS or kind == "bank_account_set" else "/"
 
 
+def push_text(kind: str, payload: dict) -> str:
+    """What a push shows on the lock screen and passes through Apple's and Google's servers: the app's text, except
+    for the payout account, whose digits stay in the app."""
+    if kind == "bank_account_set":
+        return "Kierownik zmienił Twój numer konta do wypłaty. Sprawdź w „Twoje dane” w aplikacji."
+    return notification_text(kind, payload)
+
+
 def location_manager_ids(location: Location) -> list:
     """Users who decide about a location: the company's owners and the managers assigned to it."""
     rows = Membership.objects.for_company(location.company_id).filter(role__in=(Role.OWNER, Role.MANAGER))

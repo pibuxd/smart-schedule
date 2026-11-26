@@ -17,7 +17,7 @@ from procrastinate.contrib.django.models import ProcrastinateJob
 from apps.accounts.models import User
 from apps.notifications import push
 from apps.notifications.models import Notification, PushDevice
-from apps.notifications.services import notify, push_path
+from apps.notifications.services import notification_text, notify, push_path
 from tests.test_generation import shop  # noqa: F401  (fixture)
 from tests.test_marketplace import market, offer, user_of  # noqa: F401  (fixture)
 
@@ -147,6 +147,19 @@ def test_worker_sends_the_text_and_where_to_open(make_company, senders):
     assert message.company_id == str(shop["company"].pk)
     [(token, message)] = senders["android"].sent
     assert token == ANDROID_TOKEN and message.path == "/kierownik/godziny"
+
+
+def test_the_payout_account_stays_off_the_lock_screen(make_company, senders):
+    shop = make_company()
+    register(shop["worker"])
+    notify(shop["company"].pk, [shop["worker"].pk], "bank_account_set", {"ending": "1234"})
+
+    assert run_push_jobs() == 1
+
+    [(_, message)] = senders["ios"].sent
+    assert "1234" not in message.body and "numer konta" in message.body
+    # The app's own list keeps the digits.
+    assert "1234" in notification_text("bank_account_set", {"ending": "1234"})
 
 
 def test_nothing_goes_to_a_phone_whose_session_ended(make_company, senders):

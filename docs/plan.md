@@ -1702,7 +1702,7 @@ Spec: „Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)”. Inst
   w tej samej transakcji dodaje `notifications.send_push` (kolejka `default`), gdy ktoś z adresatów ma telefon.
   Prośba o dyspozycje i publikacja grafiku też idą przez `notify`. Worker (`push.deliver`) pomija przeczytane i starsze
   niż `PUSH_MAX_AGE_S`, sprawdza sesję telefonu (klucz + hash hasła sesji jak `get_user`; nieważna = telefon
-  usunięty), tekst bierze z `notification_text`, a trasę z `services.push_path`. APNs: HTTP/2 (`httpx2`), token
+  usunięty), tekst bierze z `services.push_text` (`notification_text` bez końcówki numeru konta przy `bank_account_set`), a trasę z `services.push_path`. APNs: HTTP/2 (`httpx2`), token
   ES256 z klucza .p8 (`pyjwt`), przy `BadDeviceToken` druga próba w drugim środowisku. FCM HTTP v1: konto usługi →
   token OAuth. Token nieznany usłudze = telefon usunięty; inne błędy tylko w logu (bez ponawiania, bo dubluje push).
 - Trasy (`push_path`): `/grafik?dzien=<data>` (moja zmiana), `/grafik?oferta=<id>` (zmiana do wzięcia),

@@ -92,7 +92,7 @@ def queue(notifications: list[Notification]) -> None:
 
 def deliver(notification_ids: list[str]) -> int:
     """Send these notifications to the phones of the people they are for. Returns how many pushes went out."""
-    from apps.notifications.services import notification_text, push_path
+    from apps.notifications.services import push_path, push_text
 
     senders = configured_senders()
     if not senders:
@@ -111,7 +111,7 @@ def deliver(notification_ids: list[str]) -> int:
         message = Message(
             notification_id=str(note.pk),
             company_id=str(note.company_id),
-            body=notification_text(note.kind, note.payload),
+            body=push_text(note.kind, note.payload),
             path=push_path(note.kind, note.payload),
         )
         for device in devices_of[note.user_id]:

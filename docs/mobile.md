@@ -180,6 +180,8 @@ Other in-app messages; Device or other IDs), zbierane, nieudostępniane, szyfrow
 i „Account management”. Treść wiadomości do asystenta przetwarza model językowy (OpenRouter albo Anthropic) jako
 podmiot przetwarzający, nie trzecia strona w rozumieniu Data safety, ale trzeba to opisać w polityce prywatności.
 
+Treść powiadomień push (godziny i miejsca zmian, imiona) przechodzi przez serwery Apple i Google, bez numeru konta.
+
 Uprawnienia: Android `INTERNET`, `POST_NOTIFICATIONS` (i dodane przez Firebase). Brak dostępu do SMS-ów, kontaktów,
 lokalizacji, aparatu. Dane aplikacji nie trafiają do kopii zapasowej Androida (logowanie się nie przenosi).
 

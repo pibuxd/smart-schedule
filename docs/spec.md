@@ -22,6 +22,8 @@ sklepów zostaje decyzją Piotra. Szczegóły techniczne i instrukcja sklepów: 
   nie loguje się ponownie. Zmiana numeru przez superadmina i „Wyloguj” kończą ją jak na stronie.
 - Powiadomienia push to wyjątek od zasady „powiadomienia tylko w aplikacji”: telefon z zainstalowaną aplikacją
   dostaje ten sam tekst co lista powiadomień (nowy grafik, oddana zmiana, zgłoszenie, decyzja kierownika i inne).
+  Wyjątek: o numerze konta do wypłaty push mówi tylko, że kierownik go zmienił; końcówka numeru zostaje w aplikacji
+  (nie widać jej na zablokowanym ekranie i nie przechodzi przez serwery Apple i Google).
   Zgoda na powiadomienia jest pytana raz, po zalogowaniu. Po wylogowaniu telefon przestaje je dostawać.
   Powiadomienie przeczytane w aplikacji albo starsze niż 6 godzin nie idzie już na telefon.
 - Dotknięcie powiadomienia otwiera to, czego dotyczy: swoją zmianę w „Mój grafik” (obrysowaną), zmianę do wzięcia
