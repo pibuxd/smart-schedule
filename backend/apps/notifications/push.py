@@ -6,7 +6,12 @@ iPhones through Apple's APNs, Android phones through Firebase Cloud Messaging (F
 screen of the shift or period it is about (`services.push_path`).
 
 - A phone is registered after login from the app (`POST /me/push-devices`) and tied to that session: logging out
-  (`forget_session`) or the session ending unpins it, so a phone where nobody is logged in gets nothing.
+  (`forget_session`), the session ending or the account being switched off unpins it, so a phone where nobody is
+  logged in gets nothing.
+- A notification goes out only while its person still has access to its company (a removed employee keeps a
+  membership for the schedule history, but no access); the phone keeps getting the person's other companies.
+- One deadline for the services too: a push that is not on the phone `PUSH_MAX_AGE_S` after the notification was
+  written is dropped by APNs and FCM as well (a phone back online does not get yesterday's offer).
 - A token the service no longer knows (app removed) is deleted. Other failures are logged and not retried: the
   notification is in the app anyway, and a retry would repeat it on the phones that already got it.
 - Credentials come only from files named in the environment (settings `PUSH_*`); without them nothing is sent.
@@ -31,6 +36,8 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare
 
 from apps.notifications.models import Notification, PushDevice
+from apps.tenancy.context import removed_from_company
+from apps.tenancy.models import Membership
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +54,11 @@ class Message:
     body: str
     # Route of the app to open on tap, e.g. "/grafik?dzien=2026-12-04".
     path: str
+    # Unix time after which the push is not worth showing any more (`PUSH_MAX_AGE_S` after the notification).
+    expires_at: int
+
+    def seconds_left(self) -> int:
+        return max(0, self.expires_at - int(time.time()))
 
 
 class Outcome(Enum):
@@ -105,15 +117,24 @@ def deliver(notification_ids: list[str]) -> int:
     )
     sent = 0
     devices_of: dict = {}
+    allowed: dict = {}
     for note in rows:
-        if note.user_id not in devices_of:
-            devices_of[note.user_id] = _signed_in_devices(note.user_id)
+        key = (note.user_id, note.company_id)
+        if key not in allowed:
+            allowed[key] = _has_access(note.user_id, note.company_id)
+        if not allowed[key]:
+            continue
         message = Message(
             notification_id=str(note.pk),
             company_id=str(note.company_id),
             body=push_text(note.kind, note.payload),
             path=push_path(note.kind, note.payload),
+            expires_at=int((note.created_at + timedelta(seconds=settings.PUSH_MAX_AGE_S)).timestamp()),
         )
+        if message.seconds_left() <= 0:
+            continue
+        if note.user_id not in devices_of:
+            devices_of[note.user_id] = _signed_in_devices(note.user_id)
         for device in devices_of[note.user_id]:
             sender = senders.get(device.platform)
             if sender is None:
@@ -128,15 +149,24 @@ def deliver(notification_ids: list[str]) -> int:
     return sent
 
 
+def _has_access(user_id, company_id) -> bool:
+    """The person may still open this company in the app (the same check as `tenant_context`)."""
+    membership = Membership.objects.filter(user_id=user_id, company_id=company_id).first()
+    return membership is not None and not removed_from_company(membership)
+
+
 def _signed_in_devices(user_id) -> list[PushDevice]:
-    """The person's phones whose session still logs them in; the others are unpinned here."""
+    """The person's phones whose session still logs them in; the others are unpinned here. A switched-off account
+    (`is_active=False`) logs nobody in, whatever its sessions hold (`ModelBackend.get_user`)."""
     store_class = import_module(settings.SESSION_ENGINE).SessionStore
     result = []
     for device in PushDevice.objects.filter(user_id=user_id).select_related("user"):
         data = store_class(session_key=device.session_key).load()  # {} once the session ended or expired
         hash_now = device.user.get_session_auth_hash()
-        if data.get(SESSION_KEY) == str(device.user_id) and constant_time_compare(
-            data.get(HASH_SESSION_KEY, ""), hash_now
+        if (
+            device.user.is_active
+            and data.get(SESSION_KEY) == str(device.user_id)
+            and constant_time_compare(data.get(HASH_SESSION_KEY, ""), hash_now)
         ):
             result.append(device)
         else:
@@ -211,8 +241,8 @@ class ApnsSender:
                 "apns-topic": self.topic,
                 "apns-push-type": "alert",
                 "apns-priority": "10",
-                # Not delivered within a day (phone off): the app shows it anyway.
-                "apns-expiration": str(int(time.time()) + 24 * 60 * 60),
+                # Not on the phone by then (phone off): dropped, the app shows it anyway.
+                "apns-expiration": str(message.expires_at),
                 "apns-collapse-id": message.notification_id[:64],
             },
         )
@@ -296,7 +326,8 @@ class FcmSender:
                 },
                 "android": {
                     "priority": "HIGH",
-                    "ttl": "86400s",
+                    # Time left until the same deadline as APNs (FCM wants a duration, not a date).
+                    "ttl": f"{message.seconds_left()}s",
                     "notification": {"channel_id": ANDROID_CHANNEL, "tag": message.notification_id},
                 },
             }

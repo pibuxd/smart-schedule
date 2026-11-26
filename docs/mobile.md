@@ -97,7 +97,8 @@ Bez kluczy aplikacja działa, tylko bez pushy (powiadomienia są w aplikacji jak
 3. Project settings → Service accounts → **Generate new private key**: plik JSON do `./secrets/` na serwerze,
    w `.env` `PUSH_FCM_CREDENTIALS_FILE=/run/secrets/grafikomat/firebase.json`, potem `deploy/update.sh`.
 
-Push wysyła kontener `worker` (kolejka `default`). Log: `docker compose logs worker | grep push`.
+Push wysyła kontener `worker` (kolejka `default`). Log: `docker compose logs worker | grep push`. Powiadomienie,
+które nie dotrze na telefon w ciągu `PUSH_MAX_AGE_S` (6 h) od zapisania, Apple i Google porzucają.
 
 ## Podpisywanie
 
@@ -156,8 +157,11 @@ tylko kluczem przesyłania.
 - Scenariusz: pracownik A oddaje zmianę → pracownik B dostaje push przy zamkniętej aplikacji → dotknięcie otwiera
   „Zmiany do wzięcia” z obrysowaną zmianą → „Weź zmianę” → kierownik dostaje push → dotknięcie otwiera „Oddane
   zmiany” z tą zmianą → „Zatwierdź” → B dostaje push, dotknięcie otwiera tę zmianę w „Mój grafik”.
-- „Wyloguj” → kolejne powiadomienia nie przychodzą na ten telefon.
-- „Pobierz CSV” w „Godzinach” otwiera „Udostępnij”.
+- „Wyloguj” → kolejne powiadomienia nie przychodzą na ten telefon. „Wyloguj” w trybie samolotowym → komunikat
+  „Sesja trwa dalej” i nadal zalogowany po restarcie.
+- iPhone: dotknięcie powiadomienia przy całkiem zamkniętej aplikacji otwiera właściwą zmianę (dotknięcie przekazuje
+  `SceneDelegate`), i tylko raz.
+- „Pobierz CSV” w „Godzinach” otwiera „Udostępnij”; plik otwarty w Excelu ma poprawne polskie litery.
 - Wycięcie ekranu (notch), pasek stanu i dolny pasek nawigacji nie zasłaniają przycisków.
 
 ## Prywatność

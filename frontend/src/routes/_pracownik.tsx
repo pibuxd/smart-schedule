@@ -7,6 +7,7 @@ import { EmployeeChatProvider, EmployeeChatTab } from '../features/availability/
 import { MyDataButton } from '../features/auth/MyData'
 import { ProfileNameForm } from '../features/auth/ProfileNameForm'
 import { useSession } from '../features/auth/session'
+import { SignOutFailed } from '../features/auth/SignOutButton'
 import { useSignOut } from '../features/auth/sign-out'
 import { isManagerRole } from '../features/manager/ManagerContext'
 import { useUnreadNotifications } from '../features/notifications/unread'
@@ -56,11 +57,12 @@ function EmployeeLayout() {
               </span>
               <span className="flex shrink-0 items-center">
                 <MyDataButton me={me} className={`${HEADER_LINK} inline-flex items-center gap-1.5`} />
-                <button type="button" onClick={signOut} className={HEADER_LINK}>
+                <button type="button" onClick={signOut.run} className={HEADER_LINK}>
                   Wyloguj
                 </button>
               </span>
             </div>
+            <SignOutFailed signOut={signOut} />
             {me.companies.length > 1 && (
               <select
                 aria-label="Firma"

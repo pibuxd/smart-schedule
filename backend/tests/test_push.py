@@ -3,6 +3,7 @@
 opens, and the flow from giving a shift away to the manager's approval (docs/mobile.md)."""
 
 import json
+import time
 from datetime import timedelta
 
 import httpx2
@@ -174,6 +175,49 @@ def test_nothing_goes_to_a_phone_whose_session_ended(make_company, senders):
     assert senders["ios"].sent == [] and not PushDevice.objects.exists()
 
 
+def test_nothing_goes_to_a_switched_off_account(make_company, senders):
+    shop = make_company()
+    register(shop["worker"])
+    User.objects.filter(pk=shop["worker"].pk).update(is_active=False)  # the session and its hash stay as they were
+    notify(shop["company"].pk, [shop["worker"].pk], "bank_account_set", {"ending": "1234"})
+
+    assert run_push_jobs() == 0
+    assert senders["ios"].sent == [] and not PushDevice.objects.exists()
+
+
+def test_a_removed_employee_gets_nothing_from_that_company_only(make_company, senders):
+    from apps.staffing.models import EmployeeProfile
+    from apps.tenancy.models import Membership
+
+    first, second = make_company("A"), make_company("B")
+    worker = first["worker"]
+    elsewhere = Membership.objects.create(company=second["company"], user=worker)
+    EmployeeProfile.objects.create(membership=elsewhere, home_location=second["location"])
+    register(worker)
+    # Removed with shifts in saved schedules (`removal.remove_employee`): the membership stays, the access goes.
+    EmployeeProfile.objects.filter(pk=first["employee"].pk).update(is_active=False, removed_at=timezone.now())
+    notify(first["company"].pk, [worker.pk], "bank_account_set", {"ending": "1"})
+    notify(second["company"].pk, [worker.pk], "bank_account_set", {"ending": "2"})
+
+    assert run_push_jobs() == 1
+    [(_, message)] = senders["ios"].sent
+    assert message.company_id == str(second["company"].pk)
+    assert PushDevice.objects.exists()  # the phone still gets the other company
+
+
+def test_the_services_drop_a_push_by_the_same_deadline(make_company, senders, settings):
+    shop = make_company()
+    register(shop["worker"])
+    notify(shop["company"].pk, [shop["worker"].pk], "bank_account_set", {"ending": "1"})
+    written = timezone.now() - timedelta(hours=5)
+    Notification.objects.update(created_at=written)
+
+    assert run_push_jobs() == 1
+    [(_, message)] = senders["ios"].sent
+    assert message.expires_at == int((written + timedelta(seconds=settings.PUSH_MAX_AGE_S)).timestamp())
+    assert 3500 < message.seconds_left() <= 3600  # an hour left of the six
+
+
 def test_seen_or_old_notifications_stay_in_the_app(make_company, senders, settings):
     shop = make_company()
     register(shop["worker"])
@@ -293,12 +337,16 @@ def test_apns_request_and_answers():
         topic="pl.grafikomat.app",
         client=httpx2.Client(transport=httpx2.MockTransport(answer)),
     )
-    message = push.Message(notification_id="n1", company_id="c1", body="Jest nowy grafik.", path="/grafik")
+    expires_at = int(time.time()) + 3600
+    message = push.Message(
+        notification_id="n1", company_id="c1", body="Jest nowy grafik.", path="/grafik", expires_at=expires_at
+    )
     user = User.objects.create_user("+48601900300")
 
     assert sender.send(PushDevice(user=user, platform="ios", token="ok"), message) is push.Outcome.SENT
     request = seen[-1]
     assert request.url.host == "api.push.apple.com" and request.headers["apns-topic"] == "pl.grafikomat.app"
+    assert request.headers["apns-expiration"] == str(expires_at)
     claims = jwt.decode(request.headers["authorization"].split()[1], key.public_key(), algorithms=["ES256"])
     assert claims["iss"] == "TEAM456"
     assert jwt.get_unverified_header(request.headers["authorization"].split()[1])["kid"] == "KEY123"
@@ -337,7 +385,13 @@ def test_fcm_request_and_answers():
         return httpx2.Response(200, json={"name": "projects/grafikomat-test/messages/1"})
 
     sender = push.FcmSender(credentials, client=httpx2.Client(transport=httpx2.MockTransport(answer)))
-    message = push.Message(notification_id="n1", company_id="c1", body="Ola oddaje zmianę.", path="/grafik?oferta=o1")
+    message = push.Message(
+        notification_id="n1",
+        company_id="c1",
+        body="Ola oddaje zmianę.",
+        path="/grafik?oferta=o1",
+        expires_at=int(time.time()) + 1800,
+    )
     user = User.objects.create_user("+48601900301")
 
     assert sender.send(PushDevice(user=user, platform="android", token="t1"), message) is push.Outcome.SENT
@@ -350,6 +404,7 @@ def test_fcm_request_and_answers():
     body = json.loads(sent.content)["message"]
     assert body["data"] == {"path": "/grafik?oferta=o1", "company_id": "c1", "notification_id": "n1"}
     assert body["android"]["notification"]["channel_id"] == "grafik"
+    assert 1790 <= int(body["android"]["ttl"].removesuffix("s")) <= 1800  # what is left until the deadline
 
     assert sender.send(PushDevice(user=user, platform="android", token="gone"), message) is push.Outcome.GONE
     assert len([r for r in seen if r.url.host == "oauth2.googleapis.com"]) == 1  # the access token is reused

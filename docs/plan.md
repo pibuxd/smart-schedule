@@ -1701,18 +1701,29 @@ Spec: „Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)”. Inst
   `auth.logout` wywołuje `push.forget_session`. `services.notify` po `bulk_create` wywołuje `push.queue`, które
   w tej samej transakcji dodaje `notifications.send_push` (kolejka `default`), gdy ktoś z adresatów ma telefon.
   Prośba o dyspozycje i publikacja grafiku też idą przez `notify`. Worker (`push.deliver`) pomija przeczytane i starsze
-  niż `PUSH_MAX_AGE_S`, sprawdza sesję telefonu (klucz + hash hasła sesji jak `get_user`; nieważna = telefon
-  usunięty), tekst bierze z `services.push_text` (`notification_text` bez końcówki numeru konta przy `bank_account_set`), a trasę z `services.push_path`. APNs: HTTP/2 (`httpx2`), token
+  niż `PUSH_MAX_AGE_S` oraz te z firmy, do której adresat nie ma już dostępu (`_has_access`: członkostwo
+  i `removed_from_company`, jak `tenant_context`; telefon zostaje dla innych firm), sprawdza sesję telefonu (klucz +
+  hash hasła sesji jak `get_user`, `User.is_active`; nieważna = telefon usunięty). Termin `created_at +
+  PUSH_MAX_AGE_S` (`Message.expires_at`) dostają też usługi: APNs jako `apns-expiration`, FCM jako pozostałe `ttl`. Tekst bierze z `services.push_text` (`notification_text` bez końcówki numeru konta przy `bank_account_set`), a trasę z `services.push_path`. APNs: HTTP/2 (`httpx2`), token
   ES256 z klucza .p8 (`pyjwt`), przy `BadDeviceToken` druga próba w drugim środowisku. FCM HTTP v1: konto usługi →
   token OAuth. Token nieznany usłudze = telefon usunięty; inne błędy tylko w logu (bez ponawiania, bo dubluje push).
 - Trasy (`push_path`): `/grafik?dzien=<data>` (moja zmiana), `/grafik?oferta=<id>` (zmiana do wzięcia),
   `/kierownik/oddane-zmiany?oferta=<id>`, `/kierownik/lokal/<id>/grafik?okres=<id>`, `/kiedy-moge?miesiac=…`,
   `/kierownik/godziny`, `/kierownik/lokal/<id>/dyspozycje`. Do danych powiadomień o zmianach doszły `location_id`
   i `period_id`. Frontend: `src/native/push.ts` (`pushTarget` przepuszcza tylko ścieżki aplikacji, nasłuch przed
-  pierwszym ekranem, dotknięcie z zamkniętej aplikacji czeka na router), `src/lib/focus.ts` (obrys + przewinięcie),
-  parametry `dzien` / `oferta` / `okres` w trasach.
+  pierwszym ekranem, dotknięcie z zamkniętej aplikacji czeka na router, to samo dotknięcie dwa razy otwiera raz;
+  rejestracja zapamiętana dopiero po odpowiedzi serwera i dla danej sesji, nieudana ponawiana po 30 s, 1 min… do
+  15 min), `src/lib/focus.ts` (obrys + przewinięcie), parametry `dzien` / `oferta` / `okres` w trasach („Mój grafik”:
+  zmiana z tego dnia w „Minione zmiany” wygrywa z następną zmianą, chyba że następna jest tego samego dnia). iOS:
+  dotknięcie, które uruchamia aplikację, przychodzi w `connectionOptions.notificationResponse`; `SceneDelegate` trzyma
+  je do `capacitorViewDidAppear` i przekazuje raz do `bridge.notificationRouter`.
+- „Wyloguj” (`useSignOut`) czyści dane, wyłącza push i otwiera logowanie tylko po odpowiedzi serwera (albo 401);
+  przy błędzie zostaje sesja i `SignOutFailed` z „Wyloguj jeszcze raz”. CSV w aplikacji: bajty odpowiedzi (base64 do
+  `Filesystem`), więc BOM UTF-8 zostaje.
 - Kod SMS: Android `GrafikomatPlugin` (SMS User Consent API, `play-services-auth-api-phone`; ekran zgody tylko
-  z Google Play services), iOS `autocomplete="one-time-code"` (już był). Ręczne wpisanie bez zmian.
+  z Google Play services), iOS `autocomplete="one-time-code"` (już był). Ręczne wpisanie bez zmian. Czekanie na SMS
+  zaczyna się przed `request-code` (`startSmsCodeWait`, także przy „Wyślij kod jeszcze raz”), bo serwer wysyła SMS
+  przed odpowiedzią; krok kodu bierze kod, także taki, który przyszedł wcześniej (`listenForSmsCode`).
 - Natywnie: ikony i ekran startowy z `scripts/app-icons.mjs`, kanał Androida `grafik`, ikona powiadomienia
   `ic_stat_grafikomat`, `POST_NOTIFICATIONS`, bez kopii zapasowej danych aplikacji (`allowBackup=false`), iOS:
   `App.entitlements` (`aps-environment`), `PrivacyInfo.xcprivacy`, `ITSAppUsesNonExemptEncryption=false`, przekazanie

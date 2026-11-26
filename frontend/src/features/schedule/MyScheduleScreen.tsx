@@ -89,10 +89,14 @@ export function MyScheduleScreen({
       : undefined
 
   const todayIso = toIsoDate(today)
-  // Which part shows the day a notification is about: the nearest shift, a later day, or a past shift.
-  const focusNext = Boolean(focusDay && next && todayIso <= focusDay && focusDay <= next.date)
+  // Which part shows the day a notification is about: the nearest shift, a later day, or a past shift. A shift that
+  // ended today is past too (the manager approved its hours after work), so it wins over the next day's shift.
+  const pastOnDay = Boolean(focusDay && focusDay <= todayIso && recent.some((s) => s.date === focusDay))
+  const focusNext = Boolean(
+    focusDay && next && (next.date === focusDay || (!pastOnDay && todayIso <= focusDay && focusDay < next.date)),
+  )
   const focusLater = focusDay && next && focusDay > next.date ? focusDay : undefined
-  const focusPast = focusDay && focusDay < todayIso && recent.some((s) => s.date === focusDay) ? focusDay : undefined
+  const focusPast = pastOnDay && !focusNext ? focusDay : undefined
 
   return (
     <div className="grid gap-5">

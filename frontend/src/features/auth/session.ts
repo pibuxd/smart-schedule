@@ -51,9 +51,10 @@ export function useSession(): Session {
     return () => window.removeEventListener(COMPANY_EVENT, switchTo)
   }, [])
   const userId = me.data?.status === 200 ? (me.data.data as MeOut).id : null
-  // The iOS and Android apps register the phone for push notifications once someone is logged in.
+  // The iOS and Android apps register the phone for push notifications once someone is logged in (again after a
+  // new login; `enablePush` does nothing when this session's phone is registered already).
   useEffect(() => {
-    if (userId) void enablePush(userId)
+    if (userId) void enablePush()
   }, [userId])
 
   if (me.isPending) return { state: 'loading' }
