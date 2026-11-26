@@ -28,13 +28,14 @@ sklepów zostaje decyzją Piotra. Szczegóły techniczne i instrukcja sklepów: 
   Powiadomienie przeczytane w aplikacji albo starsze niż 6 godzin nie idzie już na telefon; telefon, który był
   wyłączony dłużej, też go już nie dostanie (ten sam termin mają Apple i Google). Nie dostaje ich też osoba
   z wyłączonym kontem ani pracownik usunięty z firmy (z tej firmy; z innych firm dalej dostaje).
-- „Wyloguj”, które nie dotarło do serwera (brak internetu), nie wylogowuje: aplikacja mówi, że sesja trwa dalej,
-  i daje „Wyloguj jeszcze raz”.
+- „Wyloguj”, które nie dotarło do serwera (brak internetu, błąd serwera), nie wylogowuje, w aplikacji i na stronie
+  WWW: ekran mówi, że sesja trwa dalej, i daje „Wyloguj jeszcze raz”. Wcześniej strona pokazywała wtedy logowanie,
+  choć ciasteczko sesji dalej działało (na wspólnym komputerze następna osoba weszłaby na to konto).
 - Dotknięcie powiadomienia otwiera to, czego dotyczy (także na iPhonie, gdy aplikacja była zamknięta): swoją zmianę
   w „Mój grafik” (obrysowaną; zmiana zakończona dziś jest w „Minione zmiany”), zmianę do wzięcia
   (rozwinięte „Zmiany do wzięcia”), oddaną zmianę u kierownika w „Oddane zmiany”, okres w grafiku lokalu, miesiąc
   w „Kiedy mogę”. Firma z powiadomienia staje się wybraną firmą.
-- Na stronie WWW nic się nie zmienia (ciasteczko sesji i ochrona CSRF jak dotąd). „Pobierz CSV” w aplikacji otwiera
+- Na stronie WWW nic się nie zmienia (ciasteczko sesji i ochrona CSRF jak dotąd), poza nieudanym „Wyloguj” (wyżej). „Pobierz CSV” w aplikacji otwiera
   systemowe „Udostępnij” (zapis w Plikach, wysłanie mailem); plik ma te same bajty co na stronie, więc Excel czyta
   polskie litery.
 - Sklepy: przygotowane są podpisywanie, numery wersji, ikony, deklaracje prywatności i instrukcja TestFlight,

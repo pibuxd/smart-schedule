@@ -1717,8 +1717,10 @@ Spec: „Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)”. Inst
   zmiana z tego dnia w „Minione zmiany” wygrywa z następną zmianą, chyba że następna jest tego samego dnia). iOS:
   dotknięcie, które uruchamia aplikację, przychodzi w `connectionOptions.notificationResponse`; `SceneDelegate` trzyma
   je do `capacitorViewDidAppear` i przekazuje raz do `bridge.notificationRouter`.
-- „Wyloguj” (`useSignOut`) czyści dane, wyłącza push i otwiera logowanie tylko po odpowiedzi serwera (albo 401);
-  przy błędzie zostaje sesja i `SignOutFailed` z „Wyloguj jeszcze raz”. CSV w aplikacji: bajty odpowiedzi (base64 do
+- „Wyloguj” (`useSignOut`, wspólne dla strony i aplikacji) czyści dane, wyłącza push i otwiera logowanie tylko po
+  odpowiedzi serwera (albo 401); przy błędzie zostaje sesja (klucz w Preferences, na stronie ciasteczko)
+  i `SignOutFailed` z „Wyloguj jeszcze raz”. To jedyna zmiana na stronie WWW w tym etapie: wcześniej strona
+  pokazywała logowanie przy wciąż ważnym ciasteczku. CSV w aplikacji: bajty odpowiedzi (base64 do
   `Filesystem`), więc BOM UTF-8 zostaje.
 - Kod SMS: Android `GrafikomatPlugin` (SMS User Consent API, `play-services-auth-api-phone`; ekran zgody tylko
   z Google Play services), iOS `autocomplete="one-time-code"` (już był). Ręczne wpisanie bez zmian. Czekanie na SMS
