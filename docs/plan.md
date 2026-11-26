@@ -1600,8 +1600,12 @@ Spec: „Poprawki po raporcie z testów (25.11.2026)”.
 - Godziny w `wolne_dni`: w odpowiedzi modelu `Preference.from_time` / `to_time` (HH:MM, godziny, w których osoba
   NIE może; zwykłe pola z wartością domyślną jak `position`); `readings.clean` przyjmuje je tylko dla `wolne_dni`
   (puste, „0:00” na początku i „24:00” / „0:00” na końcu = od początku albo do końca dnia, ten sam początek i koniec
-  odrzuca odczyt). `services._checked_preference` zostawia je tylko przy `cannot` z datami; inaczej („wolę nie od 9
-  do 11”, każdy wtorek na stałe) odczyt nie przechodzi i prośbę czyta kierownik. `readings.calendar_only` = taki
+  odrzuca odczyt). `services._checked_preference` zostawia je tylko przy `cannot` w dni tego okresu: z datami albo
+  z dniami tygodnia, gdy prośba nie jest na stałe (od 26.11.2026: w powtórce testów obok „w piątki wolę salę” model
+  podał wtorki jako dni tygodnia i cała wiadomość szła do kierownika bez odpowiedzi; to samo daje teraz przycisk
+  „nie mogę” przy „w grudniu we wtorki nie mogę”). Daty podane obok tych samych dni tygodnia („w piątki” i 4.12,
+  11.12…) odpadają, bo nic nie dodają. Inaczej („wolę nie od 9 do 11”, każdy wtorek na stałe) odczyt nie przechodzi
+  i prośbę czyta kierownik. `readings.calendar_only` = taki
   odczyt: `problem_builder` go pomija (generator go nie liczy), `readings.complement` daje pozostałe godziny dnia,
   `describe`: „we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)”.
 - Przycisk w czacie: `MyRequestOut.cannot_marks` zastąpiło `unmarked_days` (lista `CannotMarkOut`: dni, `from_time`,
