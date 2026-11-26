@@ -769,7 +769,13 @@ def _checked_preference(
         avoid=preference.avoid_shift_type,
         max_hours=preference.max_hours,
         max_shifts=preference.max_shifts,
-        hours_period=readings.hour_scope(preference.hours_period, text, preference.max_hours),
+        target_hours=preference.target_hours or None,
+        prefer_weekdays=preference.prefer_weekdays,
+        hours_period=readings.hour_scope(
+            preference.hours_period,
+            text,
+            preference.target_hours if preference.type == "cel_godzin" else preference.max_hours,
+        ),
         dates=preference.dates,
         weekdays=preference.weekdays,
         min_days=preference.min_days,
@@ -1580,8 +1586,12 @@ def check_plan(
             positions={name: [str(pk)] for name, pk in held},
             max_hours=new.max_hours,
             max_shifts=new.max_shifts,
+            target_hours=new.target_hours or None,
+            prefer_weekdays=new.prefer_weekdays,
             hours_period=readings.hour_scope(
-                new.hours_period, text if len(answer.new_instructions) == 1 else "", new.max_hours
+                new.hours_period,
+                text if len(answer.new_instructions) == 1 else "",
+                new.target_hours if new.type == "cel_godzin" else new.max_hours,
             ),
             dates=new.dates,
             weekdays=new.weekdays,

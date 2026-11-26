@@ -241,7 +241,7 @@ REQUEST_TEMPLATES = [
     ("Proszę nie dawać mi dwóch nocek pod rząd, potem nie mogę dojść do siebie.", "inne", "wazne"),
     ("{day} mam wesele siostry, najlepiej wolny cały weekend.", "wolne_dni", "bardzo_wazne"),
     ("Wolałabym nie pracować w weekend {day}, mam urodziny mamy.", "wolne_dni", "wazne"),
-    ("Chętnie wezmę więcej godzin, zbieram na wakacje.", "limit_godzin", "mile_widziane"),
+    ("Chętnie wezmę więcej godzin, około 40 w tygodniu, zbieram na wakacje.", "cel_godzin", "mile_widziane"),
     ("Nie mogę zamykać w piątki, odbieram dziecko z przedszkola o 17.", "typ_zmiany", "bardzo_wazne"),
     ("Wolałbym nie pracować z {other} na nocce, nie dogadujemy się co do pieca.", "unikaj_osoby", "wazne"),
     ("Proszę o zmiany popołudniowe, rano zawożę mamę na rehabilitację.", "typ_zmiany", "wazne"),
@@ -605,6 +605,9 @@ def _text_requests(rng: random.Random, employees, period: SchedulePeriod, count:
                 "confidence": round(rng.uniform(0.75, 0.97), 2),
                 "summary": text.split(",")[0].rstrip(".") + ".",
             }
+            if kind == "cel_godzin":
+                weekly = {"target_hours": 40.0, "hours_period": "week"}
+                interpretation.update(weekly, summary="Około 40 godz. w każdym tygodniu.")
         requests.append(
             TextRequest(
                 company_id=author.company_id,

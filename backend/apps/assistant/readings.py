@@ -2,12 +2,13 @@
 
 Used for an employee's text request (`TextRequest.interpretation`) and for a manager's instruction
 (`ManagerInstruction.data`). Keys: type (unikaj_osoby, preferuj_osobe, typ_zmiany, stanowisko, limit_godzin,
-limit_zmian, wolne_dni, chce_pracowac, inne), subject_employee (id), shift_type (id; for unikaj_osoby / preferuj_osobe
-it narrows the pair to that shift: "nie razem na zamknięciu"), positions (stanowisko: the ids of one position name
-among the person's positions, one per location) with position_name, avoid (typ_zmiany, stanowisko: not this one),
-rather (stanowisko: rather this one, the others stay fine),
-max_hours, max_shifts, hours_period (day, week, period:
-the window of limit_godzin and limit_zmian), min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot
+limit_zmian, cel_godzin, wolne_dni, chce_pracowac, inne), subject_employee (id), shift_type (id; for unikaj_osoby /
+preferuj_osobe it narrows the pair to that shift: "nie razem na zamknięciu"), positions (stanowisko: the ids of one
+position name among the person's positions, one per location) with position_name, avoid (typ_zmiany, stanowisko: not
+this one), rather (stanowisko: rather this one, the others stay fine), max_hours, max_shifts, target_hours
+(cel_godzin: about this many hours, "chcę wyrobić 30 godzin"), hours_period (day, week, period: the window of
+limit_godzin, limit_zmian and cel_godzin), prefer_weekdays (cel_godzin: the hours rather on these weekdays,
+0 = Monday; "najlepiej pod koniec tygodnia"), min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot
 (wolne_dni the person cannot work at all), from_time / to_time (wolne_dni with cannot: the hours they cannot work,
 "HH:MM", either may be missing; no hours = the whole day). "Nie mogę" is always a whole day in the calendar (Piotr,
 25.11.2026), so such hours are never scored: they only offer to mark the rest of those days "mogę" (`complement`).
@@ -31,11 +32,15 @@ TYPES = (
     "stanowisko",
     "limit_godzin",
     "limit_zmian",
+    "cel_godzin",
     "wolne_dni",
     "chce_pracowac",
     "inne",
 )
-LIMITS = ("limit_godzin", "limit_zmian")  # the types counted per day, week or period (`hours_period`)
+# The types counted per day, week or period (`hours_period`).
+WINDOWED = ("limit_godzin", "limit_zmian", "cel_godzin")
+# Most hours a target can name in one window (a day, a week, the longest period).
+TARGET_MOST = {"day": 24, "week": 7 * 24, "period": 744}
 # Types where a shift name may narrow the wish (for typ_zmiany it is the wish itself).
 SHIFT_TYPED = ("typ_zmiany", "chce_pracowac", "unikaj_osoby", "preferuj_osobe", "limit_zmian")
 LEVELS = ("bardzo_wazne", "wazne", "mile_widziane")
@@ -109,6 +114,8 @@ def clean(
     avoid: bool = False,
     max_hours: float | None = None,
     max_shifts: int | None = None,
+    target_hours: float | None = None,
+    prefer_weekdays: Iterable[int] = (),
     hours_period: str = "period",
     dates: Iterable[str] = (),
     weekdays: Iterable[int] = (),
@@ -127,7 +134,7 @@ def clean(
 
     `people` and `shift_types` map the labels sent to the assistant back to ids, `positions` the names of the
     person's positions to their ids. `weekdays` come as 1 = Monday … 7 = Sunday (as people count them) and are stored
-    as 0–6.
+    as 0–6, like `prefer_weekdays`.
     """
     if type not in TYPES or type == "inne":
         return None
@@ -139,14 +146,17 @@ def clean(
         or ((position or avoid_position) and type != "stanowisko")
         or (max_hours is not None and type != "limit_godzin")
         or (max_shifts is not None and type != "limit_zmian")
+        or ((target_hours is not None or prefer_weekdays) and type != "cel_godzin")
         or ((min_days is not None or shifts_per_day is not None) and type != "chce_pracowac")
         or ((from_time or to_time) and type != "wolne_dni")
     ):
         return None
-    if type not in LIMITS:
+    if type not in WINDOWED:
         hours_period = "period"  # the window means nothing for other types (the answer schema always fills it)
-    dates, weekdays = list(dates), list(weekdays)
-    if any(_parse_date(v) is None for v in dates) or any(not isinstance(w, int) or not 1 <= w <= 7 for w in weekdays):
+    dates, weekdays, prefer_weekdays = list(dates), list(weekdays), list(prefer_weekdays)
+    if any(_parse_date(v) is None for v in dates) or any(
+        not isinstance(w, int) or not 1 <= w <= 7 for w in [*weekdays, *prefer_weekdays]
+    ):
         return None
     if hours_period not in HOURS_PERIODS:
         return None
@@ -193,6 +203,18 @@ def clean(
             data["shift_type"] = found
         data["max_shifts"] = max_shifts
         data["hours_period"] = hours_period
+    elif type == "cel_godzin":
+        if (
+            not isinstance(target_hours, int | float)
+            or isinstance(target_hours, bool)
+            or not 0 < target_hours <= TARGET_MOST[hours_period]
+        ):
+            return None
+        data["target_hours"] = float(target_hours)
+        data["hours_period"] = hours_period
+        preferred = sorted({int(w) - 1 for w in prefer_weekdays})
+        if 0 < len(preferred) < 7:  # every day of the week is no preference
+            data["prefer_weekdays"] = preferred
     elif type == "wolne_dni":
         if not days and not week:
             return None
@@ -428,6 +450,12 @@ def _when(data: Mapping[str, Any]) -> str:
     return " " + " i ".join(parts) if parts else ""
 
 
+def _one_week(data: Mapping[str, Any]) -> bool:
+    """Concrete days, all in one Monday–Sunday week ("w pierwszym tygodniu lutego")."""
+    days = [d for d in (_parse_date(v) for v in data.get("dates") or []) if d is not None]
+    return bool(days) and not data.get("weekdays") and len({d - timedelta(days=d.weekday()) for d in days}) == 1
+
+
 def _shift_count(count: int) -> str:
     """3 zmiany, 5 zmian, 1 zmiana (Polish plural)."""
     if count == 1:
@@ -480,6 +508,17 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             if data.get("hours_period") == "day":
                 return f"{who}: {limit} dziennie{when}"
             return f"{who}: {limit}{when or ' w okresie grafiku'}"
+        case "cel_godzin":
+            hours = data.get("target_hours") or 0
+            shown = int(hours) if float(hours).is_integer() else hours
+            if data.get("hours_period") == "week":
+                window = " w tygodniu" if _one_week(data) else " w każdym tygodniu"
+            elif data.get("hours_period") == "day":
+                window = " dziennie"
+            else:
+                window = "" if when else " w okresie grafiku"
+            rather = _weekday_words(data.get("prefer_weekdays") or [])
+            return f"{who}: około {shown} godz.{window}{when}" + (f", najlepiej {rather}" if rather else "")
         case "wolne_dni":
             if sorted(data.get("weekdays") or []) == [0, 1, 2, 3, 4] and not data.get("dates"):
                 return f"{who}: tylko weekendy (wolne od poniedziałku do piątku)"

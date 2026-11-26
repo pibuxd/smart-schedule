@@ -75,6 +75,17 @@ def _max_shifts(data: dict) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
+def _target_hours(data: dict) -> float | None:
+    value = data.get("target_hours") if data.get("type") == "cel_godzin" else None
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) and value > 0 else None
+
+
+def _preferred_dates(data: dict, start: date, end: date) -> frozenset[date]:
+    """cel_godzin: the days of the period the hours should rather fall on ("najlepiej pod koniec tygodnia")."""
+    week = data.get("prefer_weekdays") if data.get("type") == "cel_godzin" else None
+    return frozenset(readings.dates_in({"weekdays": week}, start, end)) if isinstance(week, list) else frozenset()
+
+
 def _positions(data: dict) -> frozenset[str]:
     """stanowisko: the position's ids (one per location of the person); other types have none."""
     values = data.get("positions") if data.get("type") == "stanowisko" else None
@@ -88,6 +99,7 @@ REQUEST_TYPES = {
     "stanowisko": RequestType.POSITION,
     "limit_godzin": RequestType.HOURS_LIMIT,
     "limit_zmian": RequestType.SHIFTS_LIMIT,
+    "cel_godzin": RequestType.HOURS_TARGET,
     "wolne_dni": RequestType.DAYS_OFF,
     "chce_pracowac": RequestType.WANT_WORK,
     "inne": RequestType.OTHER,
@@ -127,6 +139,8 @@ def instruction_request(data, employee_id, instruction_id, rank, start, end, nam
         positions=_positions(data),
         max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
         max_shifts=_max_shifts(data),
+        target_hours=_target_hours(data),
+        preferred_dates=_preferred_dates(data, start, end),
         weekly_hours=data.get("hours_period") == "week",
         daily_hours=data.get("hours_period") == "day",
         min_days=_min_days(data),
@@ -570,6 +584,8 @@ class _Reader:
             positions=_positions(data),
             max_hours=float(max_hours) if isinstance(max_hours, int | float) else None,
             max_shifts=_max_shifts(data),
+            target_hours=_target_hours(data),
+            preferred_dates=_preferred_dates(data, self.start, self.end),
             weekly_hours=data.get("hours_period") == "week",
             daily_hours=data.get("hours_period") == "day",
             min_days=_min_days(data),

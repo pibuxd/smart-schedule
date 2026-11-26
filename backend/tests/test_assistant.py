@@ -289,6 +289,49 @@ class TestRequests:
             True,
         )
 
+    def test_hours_to_work_in_each_week_reach_the_generator(self, api, shop, with_key, monkeypatch):
+        """Piotr, 26.11: "w pierwszym tygodniu chce 30 godzin wyrobić a w drugim 10 i najlepiej pod koniec tyg" went
+        to the manager as text, because there were only limits ("najwyżej"), no number of hours to work."""
+        start = shop["period"].start
+        monday = start + timedelta(days=-start.weekday() % 7)
+        weeks = [[monday + timedelta(days=7 * n + d) for d in range(7)] for n in range(2)]
+        first = reading(
+            type="cel_godzin",
+            target_hours=30,
+            hours_period="week",
+            dates=[d.isoformat() for d in weeks[0]],
+            weekdays=[],
+            prefer_weekdays=[4, 5, 6, 7],
+        ).preferences[0]
+        second = first.model_copy(update={"target_hours": 10, "dates": [d.isoformat() for d in weeks[1]]})
+        answer = llm.EmployeeReply(topic="app", answer="", preferences=[first, second], leave_to_manager=False)
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: answer)
+        api.login(shop["worker"])
+        text = "w pierwszym tygodniu chce 30 godzin wyrobić a w drugim 10 i najlepiej pod koniec tyg"
+        request_id = send_request(api, shop, text).json()["id"]
+        assert services.interpret_request(request_id) == "interpreted"
+
+        def span(days):
+            return f"{days[0].day}.{days[0].month:02d}–{days[-1].day}.{days[-1].month:02d}"
+
+        late = "najlepiej od czwartku do niedzieli"
+        row = TextRequest.objects.get(pk=request_id)
+        assert row.interpretation["summary"] == (
+            f"Około 30 godz. w tygodniu {span(weeks[0])}, {late}; około 10 godz. w tygodniu {span(weeks[1])}, {late}."
+        )
+        assert row.lasting is False  # concrete weeks belong to this month
+        requests = {r.id: r for r in build_problem([shop["period"]]).problem.requests}
+        thirty, ten = requests[request_id], requests[f"{request_id}:2"]
+        assert (thirty.type, thirty.target_hours, thirty.weekly_hours, sorted(thirty.dates)) == (
+            "hours_target",
+            30,
+            True,
+            weeks[0],
+        )
+        assert (ten.type, ten.target_hours, sorted(ten.dates)) == ("hours_target", 10, weeks[1])
+        assert {d.weekday() for d in thirty.preferred_dates} == {3, 4, 5, 6}
+        assert all(shop["period"].start <= d <= shop["period"].end for d in thirty.preferred_dates)
+
     def test_manager_sees_why_a_request_was_not_read_and_can_hand_it_over_again(self, api, shop, settings, monkeypatch):
         api.login(shop["worker"])
         request_id = send_request(api, shop).json()["id"]  # no key yet
@@ -665,6 +708,34 @@ class TestCommands:
             True,
             str(morning.pk),
         )
+
+    def test_hours_to_work_each_week_become_an_instruction(self, api, shop, with_key, monkeypatch):
+        api.login(shop["manager"])
+        answer = plan(
+            new_instructions=[
+                instruction(
+                    person="Kasia",
+                    type="cel_godzin",
+                    target_hours=20,
+                    hours_period="period",
+                    prefer_weekdays=[6, 7],
+                    place=None,
+                )
+            ]
+        )
+        body = run(api, shop, monkeypatch, answer, "Kasia ma mieć około 20 godzin w tygodniu, najlepiej w weekendy.")
+        api.post(f"/api/assistant-commands/{body['id']}/apply")
+        items = api.get(f"/api/locations/{shop['location'].pk}/instructions").json()["items"]
+        # The unit the model dropped comes back from the text.
+        assert [i["text"] for i in items] == ["Kasia: około 20 godz. w każdym tygodniu, najlepiej w weekendy"]
+        [target] = build_problem([shop["period"]]).problem.requests
+        assert (target.type, target.target_hours, target.weekly_hours, target.by_manager) == (
+            "hours_target",
+            20,
+            True,
+            True,
+        )
+        assert target.preferred_dates and {d.weekday() for d in target.preferred_dates} == {5, 6}
 
     def test_instructions_have_an_order_and_can_be_removed(self, api, shop, with_key, monkeypatch):
         api.login(shop["manager"])

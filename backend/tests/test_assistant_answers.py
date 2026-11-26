@@ -784,6 +784,46 @@ def test_plain_descriptions():
     assert readings.clean(type="limit_godzin", max_hours=6, max_shifts=3, people={}, shift_types={}) is None
 
 
+def test_an_hours_target_is_about_this_many_hours_rather_on_some_days():
+    """ "W pierwszym tygodniu chcę wyrobić 30 godzin, najlepiej pod koniec tygodnia" (Piotr, 26.11)."""
+
+    def clean(**kwargs):
+        return readings.clean(type="cel_godzin", people={}, shift_types={}, **kwargs)
+
+    week = [f"2027-02-0{d}" for d in range(1, 8)]
+    first = clean(target_hours=30, hours_period="week", dates=week, prefer_weekdays=[4, 5, 6, 7])
+    assert first == {
+        "type": "cel_godzin",
+        "dates": week,
+        "weekdays": [],
+        "target_hours": 30.0,
+        "hours_period": "week",
+        "prefer_weekdays": [3, 4, 5, 6],
+    }
+    assert (
+        readings.describe(first, "Ola", {}, {})
+        == "Ola: około 30 godz. w tygodniu 1.02–7.02, najlepiej od czwartku do niedzieli"
+    )
+    every_week = clean(target_hours=20, hours_period="week", prefer_weekdays=[6, 7])
+    assert readings.describe(every_week, "Ola", {}, {}) == "Ola: około 20 godz. w każdym tygodniu, najlepiej w weekendy"
+    month = clean(target_hours=120)
+    assert (
+        "prefer_weekdays" not in month
+        and readings.describe(month, "Ola", {}, {}) == "Ola: około 120 godz. w okresie grafiku"
+    )
+    assert "prefer_weekdays" not in clean(target_hours=20, prefer_weekdays=list(range(1, 8)))  # every day: no wish
+    assert clean(target_hours=0) is None and clean(target_hours=None) is None
+    assert clean(target_hours=200, hours_period="week") is None and clean(target_hours=25, hours_period="day") is None
+    assert clean(target_hours=20, prefer_weekdays=[8]) is None
+    assert readings.clean(type="limit_godzin", max_hours=20, target_hours=20, people={}, shift_types={}) is None
+    assert readings.clean(type="wolne_dni", weekdays=[1], prefer_weekdays=[2], people={}, shift_types={}) is None
+    assert readings.hour_scope("period", "Chcę wyrobić 30 godzin w tygodniu", 30) == "week"
+    # A model on OpenRouter may write null for the fields of other types.
+    limit = reading(type="limit_godzin", max_hours=8).preferences[0].model_dump()
+    nulls = llm.Preference.model_validate({**limit, "target_hours": None, "prefer_weekdays": None})
+    assert (nulls.target_hours, nulls.prefer_weekdays) == (0, [])
+
+
 def test_days_off_may_name_hours():
     def clean(**kwargs):
         return readings.clean(type="wolne_dni", weekdays=[2], people={}, shift_types={}, **kwargs)
