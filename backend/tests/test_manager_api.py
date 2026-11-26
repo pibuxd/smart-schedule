@@ -573,6 +573,21 @@ class TestAvailabilityOverview:
         shop["period"].save()
         assert api.post(url, {}).status_code == 409
 
+        # The notification opens "Kiedy mogę" on the period's month, and stops asking once the period is arranged.
+        notes = f"/api/me/notifications?company_id={shop['company'].pk}"
+        api.login(ewa)
+        asked = api.get(notes).json()["notifications"][0]  # asked twice: everyone, then only the missing
+        assert asked["link"] == "none" and asked["month"] is None and "jest już układany" in asked["text"]
+        shop["period"].status = SchedulePeriod.Status.PUBLISHED
+        shop["period"].save()
+        asked = api.get(notes).json()["notifications"][0]
+        assert asked["link"] == "schedule" and "jest już opublikowany" in asked["text"]
+        shop["period"].status = SchedulePeriod.Status.COLLECTING
+        shop["period"].save()
+        asked = api.get(notes).json()["notifications"][0]
+        month = max(shop["period"].start, timezone.localdate()).strftime("%Y-%m")
+        assert asked["link"] == "availability" and asked["month"] == month and "Zaznacz, kiedy" in asked["text"]
+
     def test_requests_list_and_decisions(self, api, shop):
         row = TextRequest.objects.create(employee=shop["employee"], period=shop["period"], text="Nie z Markiem")
         as_manager(api, shop)

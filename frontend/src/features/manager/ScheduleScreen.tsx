@@ -30,6 +30,7 @@ import { Link } from '@tanstack/react-router'
 import type {
   CheckOut,
   DropCheckOut,
+  LocationOut,
   PeriodOut,
   ScoresOut,
   ShiftFitOut,
@@ -52,6 +53,7 @@ import {
   useShiftDropChecks,
   useStartCorrecting,
 } from '../../api/generated/scheduling/scheduling'
+import { useLocationDetail } from '../../api/generated/tenancy/tenancy'
 import { Button } from '../../components/ui/button'
 import { ConfirmSheet } from '../../components/ui/confirm'
 import { Disclosure } from '../../components/ui/disclosure'
@@ -64,7 +66,7 @@ import { StateIcon } from '../availability/StateIcon'
 import { dayAndMonth, parseDate, weekdayIndex, weekdayShort } from '../../lib/dates'
 import { ArrangeButton, RunProgress } from './ArrangeSchedule'
 import { useManager } from './ManagerContext'
-import { pickPeriod } from './periods'
+import { pickPeriod, useChosenPeriod } from './periods'
 import { ClashQuestion } from './ClashQuestion'
 import { type DropCheck, dropWords, isDropTarget } from './drop-preview'
 import { buildGrid, type GridColumn, percent, swapChanges } from './schedule-grid'
@@ -81,7 +83,7 @@ const VERSION_STATUS: Record<VersionOut['status'], string> = {
 /** "Grafik" of one location: arrange it, look at the result with its scores, correct it and publish it. */
 export function ScheduleScreen({ locationId, today = new Date() }: { locationId: string; today?: Date }) {
   const periods = useLocationPeriods(locationId)
-  const [chosen, setChosen] = useState<string | null>(null)
+  const [chosen, setChosen] = useChosenPeriod(locationId)
 
   if (periods.isPending) return <Loading>Wczytuję okresy grafiku…</Loading>
   if (periods.isError) {
@@ -131,10 +133,13 @@ function PeriodSchedule({ period, locationId, today }: { period: PeriodOut; loca
   const { readOnly } = useManager()
   const [viewing, setViewing] = useState<string | null>(null)
   const versionId = viewing ?? period.latest_version_id
+  // Read by the location's layout already, so no extra request.
+  const location = useLocationDetail(locationId)
+  const locationName = location.data?.status === 200 ? (location.data.data as LocationOut).name : ''
   const target = {
     periodId: period.id,
     locationId,
-    locationName: 'ten lokal',
+    locationName,
     missing: period.missing_availability,
     deadlinePassed: daysUntil(period.deadline, today) < 0,
     manualChanges: period.manual_changes,

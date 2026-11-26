@@ -258,6 +258,29 @@ def test_a_night_supplement_counts_only_the_hours_inside_it(api, bakery):
     assert csv_lines(api, b, first)[1]["Pracownik"][-5:-2] == ["516,00", "36,00", "0,00"]
 
 
+def test_each_shift_says_which_hours_its_supplement_counts_for(api, bakery):
+    # Asked "how much of the supplement and for which hours", the assistant once saw only the shift's total.
+    b = bakery
+    rate(b["position"], "45")
+    PaySupplement.objects.create(
+        location=b["location"], name="Poranek", start_time="09:00", end_time="10:30", value=Decimal("6")
+    )
+    soon = b["today"] + timedelta(days=2)
+    b["shift"](b["ola"], soon, (8, 0), (12, 0))
+    later = b["today"] + timedelta(days=80)  # a schedule published early, two months ahead
+    b["shift"](b["ola"], later)
+    api.login(user_of(b["ola"]))
+
+    shifts = api.get(f"/api/me/schedule?company_id={b['company'].id}").json()["shifts"]
+
+    first = next(s for s in shifts if s["date"] == soon.isoformat())
+    assert first["pay"] == 4 * 45 + 9
+    assert first["supplements"] == [
+        {"name": "Poranek", "start_time": "09:00", "end_time": "10:30", "hours": 1.5, "amount": 9.0}
+    ]
+    assert any(s["date"] == later.isoformat() for s in shifts)
+
+
 def test_supplements_by_weekday_position_and_percent_add_up(api, bakery):
     b = bakery
     seller = b["position"]

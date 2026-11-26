@@ -6,7 +6,12 @@ import { cellHours, describeMark, NEUTRAL } from './marks'
 describe('availability marks', () => {
   it('describes hours in plain words, including nights', () => {
     expect(describeMark({ state: 'prefer', from: '22:00', to: '06:00' })).toBe('chętnie, tylko 22:00–06:00 (do rana)')
-    expect(describeMark({ state: 'cannot', from: '08:00', to: '12:00' })).toBe('nie mogę w godzinach 08:00–12:00')
+    expect(describeMark({ state: 'cannot', from: null, to: null })).toBe('nie mogę')
+    // "Nie mogę od 9 do 11" is marked as "mogę do 9:00 lub od 11:00" ("nie mogę" is always the whole day).
+    const rest = { state: 'neutral' as const, from: '00:00', to: '09:00', from2: '11:00', to2: '00:00' }
+    expect(describeMark(rest)).toBe('mogę, tylko do 09:00 lub od 11:00')
+    expect(cellHours(rest)).toBe('do 9/od 11')
+    expect(describeMark({ state: 'prefer', from: '14:00', to: '00:00' })).toBe('chętnie, tylko od 14:00')
     expect(cellHours({ state: 'prefer', from: '14:00', to: '22:30' })).toBe('14–22:30')
     expect(cellHours(NEUTRAL)).toBeNull()
     const two = { state: 'neutral' as const, from: '06:00', to: '10:00', from2: '16:00', to2: '22:00' }

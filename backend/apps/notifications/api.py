@@ -1,6 +1,6 @@
 """The person's in-app notifications in one company (also for managers)."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from ninja.responses import Status
 from apps.core.schemas import ErrorOut
 from apps.notifications.models import Notification
 from apps.notifications.services import LINKS, notification_text
+from apps.scheduling.models import SchedulePeriod
 from apps.tenancy.context import context_for, tenant_context
 
 router = Router(tags=["notifications"])
@@ -28,6 +29,9 @@ class NotificationOut(Schema):
     text: str
     # Which screen the notification is about.
     link: Link
+    # The month the screen should open on ("2026-12"), for a request for availability: "Kiedy mogę" shows one
+    # month, and the request may be for a later one than today's.
+    month: str | None = None
     created_at: datetime
     read: bool
 
@@ -48,21 +52,55 @@ def my_notifications(request, company_id: UUID):
     """My newest notifications, newest first, and how many I have not seen. Works in read-only mode."""
     ctx = tenant_context(request, company_id)
     mine = ctx.qs(Notification).filter(user=ctx.user)
-    rows = mine.order_by("-created_at")[:LIMIT]
-    return NotificationsOut(
-        notifications=[
+    rows = list(mine.order_by("-created_at")[:LIMIT])
+    # A request for availability of a period that is already being arranged asks for what cannot be done any more.
+    asked = {str(n.payload.get("period_id")) for n in rows if n.kind == "availability_requested" and n.payload}
+    statuses = {
+        str(pk): status
+        for pk, status in ctx.qs(SchedulePeriod).filter(pk__in=_uuids(asked)).values_list("pk", "status")
+    }
+    result = []
+    for n in rows:
+        payload, link, month = n.payload or {}, LINKS.get(n.kind, "none"), None
+        if n.kind == "availability_requested":
+            status = statuses.get(str(payload.get("period_id")))
+            if status is not None and status != SchedulePeriod.Status.COLLECTING:
+                published = status == SchedulePeriod.Status.PUBLISHED
+                payload = {**payload, "closed": "published" if published else "arranging"}
+                link = "schedule" if published else "none"
+            else:
+                month = _month(payload.get("start"))
+        result.append(
             NotificationOut(
                 id=n.pk,
                 kind=n.kind,
-                text=notification_text(n.kind, n.payload),
-                link=LINKS.get(n.kind, "none"),
+                text=notification_text(n.kind, payload),
+                link=link,
+                month=month,
                 created_at=n.created_at,
                 read=n.read_at is not None,
             )
-            for n in rows
-        ],
-        unread=mine.filter(read_at__isnull=True).count(),
-    )
+        )
+    return NotificationsOut(notifications=result, unread=mine.filter(read_at__isnull=True).count())
+
+
+def _uuids(values: set[str]) -> list[UUID]:
+    result = []
+    for value in values:
+        try:
+            result.append(UUID(value))
+        except ValueError:
+            continue
+    return result
+
+
+def _month(day) -> str | None:
+    """ "2026-12-01" -> "2026-12"; the month "Kiedy mogę" opens on (today's when the period has started)."""
+    try:
+        start = date.fromisoformat(str(day))
+    except ValueError:
+        return None
+    return max(start, timezone.localdate()).strftime("%Y-%m")
 
 
 @router.post("/me/notifications/read", response={204: None, 404: ErrorOut})

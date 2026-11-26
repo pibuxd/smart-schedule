@@ -91,6 +91,23 @@ describe('AvailabilityScreen', () => {
     })
   })
 
+  it('opens on the month a notification links to, but not beyond what the calendar reaches', async () => {
+    api()
+    const { unmount } = renderScreen(
+      <EmployeeChatProvider companyId="c1" readOnly={false}>
+        <AvailabilityScreen companyId="c1" readOnly={false} month="2027-01" today={TODAY} />
+      </EmployeeChatProvider>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Styczeń 2027' })).toBeInTheDocument()
+    unmount()
+    renderScreen(
+      <EmployeeChatProvider companyId="c1" readOnly={false}>
+        <AvailabilityScreen companyId="c1" readOnly={false} month="2026-01" today={TODAY} />
+      </EmployeeChatProvider>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Grudzień 2026' })).toBeInTheDocument() // the asked period
+  })
+
   it('opens on the period the manager asked about and shows the deadline', async () => {
     api()
     show()
@@ -179,6 +196,22 @@ describe('AvailabilityScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Chętnie' }))
     fireEvent.click(screen.getByRole('radio', { name: /Mogę tylko w tych godzinach/ }))
     expect(screen.getByText('Zmiany spoza godzin 14:00–22:00 tego dnia nie dostaniesz.')).toBeInTheDocument()
+  })
+
+  it('keeps "nie mogę" for the whole day and points to "mogę" for part of a day', async () => {
+    const calls = api()
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: /Godziny dnia/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'wtorek 1 grudnia: mogę' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Mogę tylko w tych godzinach/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nie mogę' }))
+    expect(screen.queryByRole('radio', { name: /w tych godzinach/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/Możesz w części dnia\? Wybierz „Mogę” i godziny/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz ten dzień' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
+    expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({
+      days: [{ date: '2026-12-01', state: 'cannot', from_time: null, to_time: null }],
+    })
   })
 
   it('saves two windows in a day with "albo" (only one shift)', async () => {

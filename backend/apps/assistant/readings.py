@@ -5,9 +5,12 @@ Used for an employee's text request (`TextRequest.interpretation`) and for a man
 limit_zmian, wolne_dni, chce_pracowac, inne), subject_employee (id), shift_type (id; for unikaj_osoby / preferuj_osobe
 it narrows the pair to that shift: "nie razem na zamknięciu"), positions (stanowisko: the ids of one position name
 among the person's positions, one per location) with position_name, avoid (typ_zmiany, stanowisko: not this one),
+rather (stanowisko: rather this one, the others stay fine),
 max_hours, max_shifts, hours_period (day, week, period:
 the window of limit_godzin and limit_zmian), min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot
-(wolne_dni the person cannot work at all).
+(wolne_dni the person cannot work at all), from_time / to_time (wolne_dni with cannot: the hours they cannot work,
+"HH:MM", either may be missing; no hours = the whole day). "Nie mogę" is always a whole day in the calendar (Piotr,
+25.11.2026), so such hours are never scored: they only offer to mark the rest of those days "mogę" (`complement`).
 An employee's message with several wishes keeps the others in `more` (a list of readings like this one).
 
 What the assistant returns is never trusted as is: names are matched against the location's own lists and
@@ -113,6 +116,9 @@ def clean(
     shifts_per_day: int | None = None,
     position: str | None = None,
     avoid_position: bool = False,
+    rather: bool = False,
+    from_time: str | None = None,
+    to_time: str | None = None,
     people: Mapping[str, str],
     shift_types: Mapping[str, str],
     positions: Mapping[str, list[str]] | None = None,
@@ -134,6 +140,7 @@ def clean(
         or (max_hours is not None and type != "limit_godzin")
         or (max_shifts is not None and type != "limit_zmian")
         or ((min_days is not None or shifts_per_day is not None) and type != "chce_pracowac")
+        or ((from_time or to_time) and type != "wolne_dni")
     ):
         return None
     if type not in LIMITS:
@@ -169,6 +176,8 @@ def clean(
         data["positions"] = sorted(str(i) for i in ids)
         data["position_name"] = next(label for label in positions or {} if positions[label] == ids)
         data["avoid"] = bool(avoid_position)
+        if rather and not avoid_position:
+            data["rather"] = True  # "wolę salę": the other positions stay fine, unlike "tylko na sali"
     elif type == "limit_godzin":
         if max_hours is None or not 0 <= max_hours <= 744:
             return None
@@ -184,8 +193,20 @@ def clean(
             data["shift_type"] = found
         data["max_shifts"] = max_shifts
         data["hours_period"] = hours_period
-    elif type == "wolne_dni" and not days and not week:
-        return None
+    elif type == "wolne_dni":
+        if not days and not week:
+            return None
+        start, end = _clock(from_time), _clock(to_time)
+        if start is False or end is False or (start is not None and start == end):
+            return None
+        if start == "00:00":
+            start = None  # "od północy"
+        if end == "00:00":
+            end = None  # "do północy"
+        if start:
+            data["from_time"] = start
+        if end:
+            data["to_time"] = end
     elif type == "chce_pracowac":
         if not days and not week:
             return None
@@ -203,6 +224,71 @@ def clean(
         data["min_days"] = min_days
         data["shifts_per_day"] = shifts_per_day or 1
     return data
+
+
+def _clock(value: str | None) -> str | bool | None:
+    """ "9:00" -> "09:00"; empty -> None; anything else -> False (not a time of day)."""
+    text = (value or "").strip()
+    if not text:
+        return None
+    match = re.fullmatch(r"(\d{1,2})[:.](\d{2})", text)
+    if match and match[0] in ("24:00", "24.00"):
+        return "00:00"  # midnight, as an end
+    if not match or int(match[1]) > 23 or int(match[2]) > 59:
+        return False
+    return f"{int(match[1]):02d}:{match[2]}"
+
+
+def calendar_only(data: Mapping[str, Any]) -> bool:
+    """wolne_dni in some hours ("we wtorki nie mogę od 9 do 11"): not a wish for the generator, only an offer to mark
+    those days "mogę" outside the hours (`complement`), since "nie mogę" is always a whole day."""
+    return data.get("type") == "wolne_dni" and bool(data.get("from_time") or data.get("to_time"))
+
+
+def complement(data: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """The windows ("HH:MM", an end "00:00" = midnight) of a day outside the hours someone cannot work: "nie mogę
+    9:00–11:00" -> [("00:00", "09:00"), ("11:00", "00:00")], "od 18:00" -> [("00:00", "18:00")], "do 10:00" ->
+    [("10:00", "00:00")], "22:00–6:00" (overnight) -> [("06:00", "22:00")]."""
+    start, end = data.get("from_time") or None, data.get("to_time") or None
+    if start and end and end < start:
+        return [(end, start)]
+    windows = []
+    if start:
+        windows.append(("00:00", start))
+    if end:
+        windows.append((end, "00:00"))
+    return windows
+
+
+def can_words(windows: list[tuple[str, str]]) -> str:
+    """ "do 9:00 i od 11:00", "do 18:00", "od 10:00", "6:00–22:00"."""
+
+    def short(value: str) -> str:
+        return value[1:] if value.startswith("0") else value
+
+    parts = []
+    for start, end in windows:
+        if start == "00:00":
+            parts.append(f"do {short(end)}")
+        elif end == "00:00":
+            parts.append(f"od {short(start)}")
+        else:
+            parts.append(f"{short(start)}–{short(end)}")
+    return " i ".join(parts)
+
+
+def hours_words(data: Mapping[str, Any]) -> str:
+    """ "9:00–11:00", "od 10:00", "do 11:00"; "" for a whole day."""
+    start, end = data.get("from_time"), data.get("to_time")
+
+    def short(value: str) -> str:
+        return value[1:] if value.startswith("0") else value
+
+    if start and end:
+        return f"{short(start)}–{short(end)}"
+    if start:
+        return f"od {short(start)}"
+    return f"do {short(end)}" if end else ""
 
 
 def _parse_date(value: Any) -> date | None:
@@ -317,6 +403,8 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             name = data.get("position_name") or "?"
             if data.get("avoid"):
                 return f"{who}: bez stanowiska „{name}”{when}"
+            if data.get("rather"):
+                return f"{who}: chętniej stanowisko „{name}”{when} (inne też mogą być)"
             return f"{who}: tylko stanowisko „{name}”{when}"
         case "limit_godzin":
             hours = data.get("max_hours") or 0
@@ -338,6 +426,10 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
         case "wolne_dni":
             if sorted(data.get("weekdays") or []) == [0, 1, 2, 3, 4] and not data.get("dates"):
                 return f"{who}: tylko weekendy (wolne od poniedziałku do piątku)"
+            if calendar_only(data):
+                # "Borys: we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)"
+                hours = hours_words(data)
+                return f"{who}:{when} „Mogę” tylko {can_words(complement(data))} (nie może {hours})"
             if data.get("cannot"):
                 return f"{who}: wolne{when} („nie mogę”)"
             return f"{who}: wolne{when}"

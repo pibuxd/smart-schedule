@@ -103,11 +103,15 @@ def test_respects_cannot_position_and_home_location():
     assert result.schedule == {"m0": "anna", "m1": None}
 
 
-def test_cannot_with_hours_blocks_only_overlapping_shifts():
+def test_can_outside_some_hours_blocks_only_shifts_that_overlap_them():
+    # "Nie mogę od 5 do 13" is marked as "mogę do 5:00 lub od 13:00".
+    entry = Availability(
+        "anna", day(0), "neutral", from_time=time(0), to_time=time(5), from_time_2=time(13), to_time_2=time(0)
+    )
     p = problem(
         [employee("anna")],
         [slot("m0", day(0), "06:00", "14:00", shift_type="m"), slot("a0", day(0), "15:00", "22:00", shift_type="a")],
-        availability=[Availability("anna", day(0), "cannot", from_time=time(5), to_time=time(13))],
+        availability=[entry],
     )
     result, _ = solved(p)
     assert result.schedule == {"m0": None, "a0": "anna"}
@@ -617,6 +621,8 @@ def random_problem(seed: int):
             if rng.random() < 0.35:
                 state = rng.choice(["cannot", "prefer", "neutral"])
                 hours = rng.choice([(None, None), (None, None), (time(12), None), (None, time(15))])
+                if state == "cannot":
+                    hours = (None, None)  # "nie mogę" is always the whole day
                 availability.append(Availability(person.id, MON + timedelta(days=d), state, *hours))
     rules = []
     for location in (LOC, "loc-2"):

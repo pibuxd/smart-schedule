@@ -47,6 +47,27 @@ describe('NotificationsScreen', () => {
     )
   })
 
+  it('opens "Kiedy mogę" on the month the manager asks about', async () => {
+    const asked = {
+      unread: 0,
+      notifications: [
+        {
+          id: 'n3',
+          kind: 'availability_requested',
+          text: 'Kierownik prosi o dyspozycje na okres pt. 01.01 – niedz. 31.01 (Rynek).',
+          link: 'availability',
+          month: '2027-01',
+          created_at: new Date(2026, 11, 1, 9, 30).toISOString(),
+          read: true,
+        },
+      ],
+    }
+    mockApi(() => [200, asked])
+    renderScreen(<NotificationsScreen companyId="c1" now={now} />)
+    const link = await screen.findByRole('link', { name: 'Zaznacz, kiedy możesz' })
+    expect(link.getAttribute('href')).toBe('/kiedy-moge?miesiac=2027-01')
+  })
+
   it('removes one notification with the X and all with one button', async () => {
     const calls = mockApi((method) => (method === 'GET' ? [200, list] : [204, null]))
     renderScreen(<NotificationsScreen companyId="c1" now={now} />)

@@ -115,7 +115,9 @@ function ArrangeSheet({
         different
           ? 'Ułożyć inny grafik?'
           : one
-            ? `Ułożyć grafik dla lokalu ${targets[0].locationName}?`
+            ? targets[0].locationName
+              ? `Ułożyć grafik dla lokalu ${targets[0].locationName}?`
+              : 'Ułożyć grafik?'
             : `Ułożyć grafik dla ${targets.length} lokali?`
       }
       description={one ? 'Trwa do pół minuty.' : 'Każdy lokal trwa do pół minuty.'}

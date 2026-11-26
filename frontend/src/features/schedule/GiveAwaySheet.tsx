@@ -128,13 +128,14 @@ function stillMine(atOnce: boolean): string {
 }
 
 function dative(count: number): string {
-  return count === 1 ? '1 osobie' : `${count} osobom`
+  return count === 1 ? 'jednej osobie' : `${count} osobom`
 }
 
 /** "Daliśmy znać 38 osobom: 2 z Twojego lokalu i 36 z innych lokali firmy." */
 function toldText(all: number, here: number): string {
   const elsewhere = all - here
-  if (elsewhere === 0) return `Daliśmy znać ${dative(all)} z Twojego lokalu, które mogą wziąć tę zmianę.`
+  if (elsewhere === 0)
+    return `Daliśmy znać ${dative(all)} z Twojego lokalu, ${all === 1 ? 'która może' : 'które mogą'} wziąć tę zmianę.`
   if (here === 0) return `Daliśmy znać ${dative(all)} z innych lokali firmy. Z Twojego lokalu nikt nie może teraz jej wziąć.`
   return `Daliśmy znać ${dative(all)}: ${here} z Twojego lokalu i ${elsewhere} z innych lokali firmy.`
 }

@@ -276,7 +276,7 @@ class TestOpenCalendar:
         today = timezone.localdate()
         day = today + timedelta(days=90)
 
-        saved = self.put(api, shop["company"], {"date": str(day), "state": "cannot", "from_time": "08:00"})
+        saved = self.put(api, shop["company"], {"date": str(day), "state": "neutral", "to_time": "08:00"})
 
         assert saved.status_code == 204, saved.content
         body = self.get(api, shop["company"], day - timedelta(days=3), day + timedelta(days=3)).json()
@@ -284,14 +284,23 @@ class TestOpenCalendar:
         assert body["days"] == [
             {
                 "date": str(day),
-                "state": "cannot",
-                "from_time": "08:00:00",
-                "to_time": None,
+                "state": "neutral",
+                "from_time": None,
+                "to_time": "08:00:00",
                 "from_time_2": None,
                 "to_time_2": None,
                 "one_shift": False,
             }
         ]
+
+    def test_cannot_is_always_the_whole_day(self, api, shop):
+        # Piotr, 25.11.2026: no "nie mogę" in some hours; the hours someone can work are marked as "mogę".
+        api.login(shop["worker"])
+        day = timezone.localdate() + timedelta(days=30)
+        refused = self.put(api, shop["company"], {"date": str(day), "state": "cannot", "from_time": "09:00"})
+        assert refused.status_code == 400
+        assert refused.json()["detail"].startswith("„Nie mogę” zaznaczysz tylko na cały dzień.")
+        assert not AvailabilityDay.objects.filter(date=day).exists()
 
     def test_two_windows_with_albo(self, api, shop):
         api.login(shop["worker"])

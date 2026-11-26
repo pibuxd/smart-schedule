@@ -24,7 +24,7 @@ Zastępuje „Ograniczenie zakresu asystenta (18.11.2026)”. Zakres produktu: s
 - `apps/assistant/tools.py`: lista narzędzi do odczytu dla roli (pracownik, kierownik). Każde narzędzie to istniejący endpoint `GET /api/...` (nazwa = operation id), wywołany w workerze przez `django.urls.resolve` z `RequestFactory` jako osoba, która napisała wiadomość (`request.user`). Uprawnienia sprawdza sam endpoint (`tenant_context`, `require_manager_of`), więc asystent widzi dokładnie to, co ta osoba w aplikacji; 403/404 wracają do modelu jako błąd narzędzia. Firma i lokal są wpisywane przez serwer, model wybiera tylko okres, wersję, zmianę, miesiąc i zawężenie (`date_from`, `date_to`, `person`) dla długich list. Z odpowiedzi znikają telefony i pola techniczne, a wynik ponad ok. 40 tys. znaków jest przycinany z jawną notatką.
 - `llm.py` (droga przez Claude; od 21.11.2026 domyślnie OpenRouter z `final_answer` zamiast `output_config.format`, sekcja 30): pętla narzędzi na `messages.create` (najwyżej 6 rund, odpowiedź końcowa w `output_config.format` sprawdzana Pydantic). Narzędzia nie mają `strict`: API dopuszcza najwyżej 16 parametrów typu „albo” (`anyOf`, null) łącznie we wszystkich ścisłych schematach zapytania, a schemat odpowiedzi zużywa większość z nich; ze `strict` w narzędziach każde zapytanie kończyło się błędem 400 „Schema is too complex for compilation” (20.11.2026). Test pilnuje tego limitu. Zamiast `strict` serwer sam sprawdza argumenty każdego wywołania ze schematem narzędzia (`tools.argument_error`): nieznany klucz, brak wymaganego albo zły typ wraca do modelu jako błąd narzędzia i nie dociera do endpointu, bo endpoint pominąłby nieznany klucz i odpowiedział o wszystkich. Stały prompt systemowy i lista narzędzi idą przed zmiennym kontekstem, z `cache_control`. Prompt zawiera krótki przewodnik po ekranach dla roli, żeby asystent mówił, gdzie co zrobić. Myślenie modelu ma poziom `output_config.effort` z `ANTHROPIC_EFFORT`, domyślnie `low`: każda runda narzędzi to osobne wywołanie, a Claude Opus 5.5 zawsze myśli (domyślnie na poziomie `medium`), więc przy dwóch–trzech rundach płaciłoby się za to myślenie kilka razy. Uwaga: pomiar „ok. 40 s” z testu 20.11.2026, od którego zaczęła się ta zmiana, był błędem skryptu testowego (30 s czekania przed wysłaniem); naprawdę odpowiedź przychodziła po ok. 7 s, a po zmianie przychodzi po 3–18 s. `low` zostaje, bo odpowiedzi w teście były trafne. Prompt prosi o wszystkie potrzebne odczyty naraz, w jednej rundzie. Każda odpowiedź zostawia w logu workera jedną linię: czas, liczba wywołań, użyte narzędzia i tokeny wyjścia.
 - Kierownik (`CommandPlan`): `topic=app|unrelated`, `reply` (odpowiedź modelu jest pokazywana; zamiast stałego „Po zatwierdzeniu zapiszę…”), plan zmian jak dotąd. Pod każdym planem z poleceniem o osobie aplikacja pokazuje jako pierwszą uwagę, że to preferencja bez gwarancji przydziału, więc słowa modelu nie czytają się jak obietnica zmiany. Pytanie i zmiana w jednej wiadomości działają razem. `unrelated` daje stałą odmowę aplikacji bez zmian. Zmiana zasady na wartość, która już obowiązuje, daje „To już jest ustawione: …”. Polecenie o dniach poza okresem ustaleń jest blokowane z wyjaśnieniem (nie zmieniłoby żadnego grafiku), a dni częściowo poza okresem są obcinane z notatką. Porównanie ze skutkiem liczy się na grafiku okresu ustaleń; bez niego na ostatnim opublikowanym (`preview_version(..., period)`).
-- Pracownik (`EmployeeReply`): `topic=app|unrelated`, `answer`, `preferences` (0–3), `leave_to_manager`, `replaces_request`. Same pytania kończą się statusem `answered` z odpowiedzią. Preferencje dają `interpreted` (pierwsza w `interpretation`, kolejne w `interpretation["more"]`; generator robi z każdej osobną prośbę z id `<pk>`, `<pk>:2`, …). Część nie do zamiany na ustawienie albo `leave_to_manager` bez żadnej preferencji daje `needs_manager` z jasnym zdaniem dla pracownika; `leave_to_manager` obok zapisanych preferencji daje `interpreted` z `interpretation["partial"]`, uwagą dla pracownika i dopiskiem dla kierownika, że resztę czyta sam. Odpowiedź modelu dla pracownika jest w nowym polu `TextRequest.reply` (`MyRequestOut.reply`); opis wielu części ma też `part_summary` pierwszej części dla generatora. `cannot=true` przy datach daje `MyRequestOut.unmarked_days` (dni bez „nie mogę” w kalendarzu) i przycisk, który zapisuje je istniejącym `PUT /me/calendar`. `notes` mówią o sprzeczności z kalendarzem („Chętnie” w dniu, w którym prośba mówi o wolnym) i o zmianie, której stanowisko osoby nie ma.
+- Pracownik (`EmployeeReply`): `topic=app|unrelated`, `answer`, `preferences` (0–3), `leave_to_manager`, `replaces_request`. Same pytania kończą się statusem `answered` z odpowiedzią. Preferencje dają `interpreted` (pierwsza w `interpretation`, kolejne w `interpretation["more"]`; generator robi z każdej osobną prośbę z id `<pk>`, `<pk>:2`, …). Część nie do zamiany na ustawienie albo `leave_to_manager` bez żadnej preferencji daje `needs_manager` z jasnym zdaniem dla pracownika; `leave_to_manager` obok zapisanych preferencji daje `interpreted` z `interpretation["partial"]`, uwagą dla pracownika i dopiskiem dla kierownika, że resztę czyta sam. Odpowiedź modelu dla pracownika jest w nowym polu `TextRequest.reply` (`MyRequestOut.reply`); opis wielu części ma też `part_summary` pierwszej części dla generatora. `cannot=true` przy datach daje `MyRequestOut.cannot_marks` (dni bez „nie mogę” w kalendarzu; od 25.11.2026 przy prośbie z godzinami „mogę” w pozostałych godzinach, sekcja 44) i przycisk, który zapisuje je istniejącym `PUT /me/calendar`. `notes` mówią o sprzeczności z kalendarzem („Chętnie” w dniu, w którym prośba mówi o wolnym) i o zmianie, której stanowisko osoby nie ma.
 - Limity pisania są od 20.11.2026 domyślnie wyłączone (Piotr): `TEXT_REQUESTS_PER_PERIOD`, `ASSISTANT_MESSAGES_PER_DAY` i `ASSISTANT_COMMANDS_MONTHLY_LIMIT` mają domyślnie 0, a 0 znaczy „bez limitu” (wcześniej 10, 40 i 400). Liczba większa od zera w `.env` włącza limit jak dotąd. `TEXT_REQUESTS_PER_PERIOD` liczy tylko `new`, `interpreted`, `needs_manager`; przy włączonym asystencie sprawdza go worker: nowa prośba ponad limit kończy się odpowiedzią z prośbą o usunięcie lub poprawkę starej, pytania działają dalej. `ASSISTANT_MESSAGES_PER_DAY` liczy wiadomości osoby na dobę (wszystkie statusy). `ASSISTANT_COMMANDS_MONTHLY_LIMIT` liczy polecenia firmy w miesiącu, pytania też.
 - Limit godzin prośby i polecenia może dotyczyć dnia (`hours_period=day`, `Request.daily_hours`): okna w `Request.hour_windows` to pojedyncze dni, więc walidator i solver liczą to samo.
 - Zadanie okresowe `assistant.fail_stale_messages` (co 10 minut): wiadomość pracownika w stanie `new` lub polecenie `queued` starsze niż 15 minut przechodzi w `needs_manager`/`failed` (kierownik może dać prośbę asystentowi ponownie), żeby nic nie stało w „asystent czyta” bez końca.
@@ -179,7 +179,7 @@ Wszystkie tabele firmowe mają `company_id`; pominięte poniżej dla czytelnośc
 
 | Model | Pola | Uwagi |
 |---|---|---|
-| `AvailabilityDay` | employee, date, state (cannot/neutral/prefer; neutral = dzień bez zaznaczenia, potrzebny tylko dla godzin "mogę tylko w tych godzinach"), from_time, to_time (opcjonalne), source (manual/pattern/copy) | unikalne (employee, date); brak wiersza = brak zgłoszenia |
+| `AvailabilityDay` | employee, date, state (cannot/neutral/prefer; neutral = dzień bez zaznaczenia, potrzebny tylko dla godzin "mogę tylko w tych godzinach"; cannot zawsze bez godzin od 25.11.2026), from_time, to_time (opcjonalne), source (manual/pattern/copy) | unikalne (employee, date); brak wiersza = brak zgłoszenia |
 | `AvailabilityPattern` | employee, weekday, state, from/to, repeat_until | "powtarzaj co tydzień do [data]"; rozwijany do `AvailabilityDay` przy zapisie |
 | `AvailabilitySubmission` | employee, period, submitted_at | do listy "kto nie zgłosił" |
 | `TextRequest` | employee, period lub month, text, status (new/interpreted/needs_manager/rejected/answered/superseded), supersedes, interpretation (JSON), employee_corrected, text_edited_at (kiedy pracownik napisał treść od nowa; data wiadomości w pamięci asystenta to ta chwila, a bez poprawki created_at), manager_priority (lower/normal/higher), manager_rejected, lasting („na stałe”), ends_from (pierwszy dzień okresu lub miesiąca, od którego zakończona prośba na stałe już się nie liczy), ended_by | interpretacja: type, subject_employee, shift_type, avoid, max_hours, dates, weekdays, level, confidence, summary; odpowiedzi informacyjne i zastąpione prośby nie trafiają do generatora |
@@ -413,7 +413,7 @@ Założenia:
 2. "Kiedy mogę" pokazuje najbliższy okres lokalu domowego w stanie "zbieranie dyspozycji". Zmieniać można tylko wtedy; po terminie, a przed rozpoczęciem układania, zmiany są nadal przyjmowane (termin jest informacją; zamyka dopiero generowanie). Termin = początek okresu minus `availability_deadline_days` lokalu.
 3. "Powtarzaj co tydzień" zapisuje `AvailabilityPattern` i od razu wpisuje dni od początku okresu do wybranej daty (najwyżej rok), nadpisując wcześniejsze zaznaczenia tych dni tygodnia. "Skopiuj z poprzedniego miesiąca" bierze ten sam dzień tygodnia 4 tygodnie wcześniej (5, gdy 4 tygodnie wcześniej to nadal ten okres).
 4. "Cofnij" zapisuje poprzedni stan dni; dzień bez wcześniejszego zaznaczenia wraca do stanu bez zaznaczenia (wiersz "neutral" zostaje, co dla generatora znaczy to samo co brak wiersza).
-5. "Mój grafik" pokazuje opublikowane zmiany od dziś na 62 dni naprzód; suma godzin dla bieżącego miesiąca i każdego miesiąca z listy liczy wszystkie opublikowane zmiany tego miesiąca (także te, które minęły). "Z Tobą" to osoby z opublikowanego grafiku tego samego lokalu, których zmiana nakłada się na moją; na ekranie trzy imiona i liczba pozostałych.
+5. "Mój grafik" pokazuje opublikowane zmiany od dziś do roku naprzód (do 25.11.2026: 62 dni, sekcja 44); suma godzin dla bieżącego miesiąca i każdego miesiąca z listy liczy wszystkie opublikowane zmiany tego miesiąca (także te, które minęły). "Z Tobą" to osoby z opublikowanego grafiku tego samego lokalu, których zmiana nakłada się na moją; na ekranie trzy imiona i liczba pozostałych.
 6. Godziny dnia (prośba Piotra): zmienia się znaczenie godzin w silniku (`engine.problem.Availability`): "chętnie" i dzień bez zaznaczenia z godzinami = tylko w tych godzinach, poza nimi "nie mogę"; koniec przed początkiem = do rana. Ograniczenie w bazie zmienione z "początek przed końcem" na "początek różny od końca".
 7. Kierownik bez profilu pracownika, który wejdzie na ekrany pracownika, widzi komunikat, że nie jest pracownikiem; jego ekrany powstają w etapie 7.
 
@@ -470,7 +470,7 @@ Decyzja Piotra po przeglądzie zrzutów: "wolę nie" i "obojętnie" znikają z k
 1. Stan `neutral` zostaje w bazie i silniku jako "dzień bez zaznaczenia" ("mogę"): niesie godziny "mogę tylko w tych godzinach" i zostaje po wyczyszczeniu dnia. Dla generatora znaczy to samo co brak wiersza.
 2. Na pędzlu są trzy przyciski: "Nie mogę", "Wyczyść" (gumka, zdejmuje stan i godziny) i "Chętnie". W arkuszu dnia i w "Więcej opcji" ten stan nazywa się "Mogę".
 3. Migracja `availability.0003` zamienia istniejące dni i wzorce "wolę nie" na dni bez zaznaczenia i usuwa ich godziny (godziny przy "wolę nie" znaczyły "nie w tych godzinach", a przy dniu bez zaznaczenia znaczyłyby "tylko w tych godzinach").
-4. Typ prośby `wolne_dni` (`RequestType.DAYS_OFF`): stopień złamania = część podanych dni, w które osoba pracuje; bez dat prośba trafia do kierownika jako "inne". W solverze kara za każdy z tych dni, w który osoba ma zmianę.
+4. Typ prośby `wolne_dni` (`RequestType.DAYS_OFF`): stopień złamania = część podanych dni, w które osoba pracuje; bez dat prośba trafia do kierownika jako "inne". W solverze kara za każdy z tych dni, w który osoba ma zmianę. Od 25.11.2026 (sekcja 44) odczyt „nie mogę” w części dnia generator pomija: zaznacza się go w kalendarzu jako „mogę” w pozostałych godzinach.
 5. Do etapu 10 prośby tekstem nie mają interpretacji, więc życzenia typu "wolę nie" widzi tylko kierownik, a generator ich nie liczy.
 6. Siatka kierownika: dzień bez zaznaczenia to pusta kratka z pełną ramką; przerywana ramka zostaje dla osób, które nic nie wysłały.
 7. Po połączeniu z etapem 8: siatka grafiku, wyjaśnienie zmiany i lista niespełnionych próśb nie znają już "wolę nie" (bez znacznika "woli nie" i bez pozycji `prefer_not`); w wyjaśnieniu dzień bez zaznaczenia to "bez zaznaczenia".
@@ -1583,3 +1583,59 @@ Do obserwacji w pilotażu (przegląd Prelint PR #80): czy kraje na liście pasuj
 numery polskie i zagraniczne bez kierunkowego (wybór kraju dotyczy całej listy, resztę poprawia się z „+”); czy ktoś z
 prawdziwą komórką dostaje „podaj numer komórki” (wtedy superadmin dodaje go w adminie, a kierownik zaprasza). Przed podłączeniem bramki SMS zdecydować o ochronie kosztów: lista krajów w panelu bramki, ewentualnie
 dzienny limit zaproszeń na numery zagraniczne na firmę.
+
+## 44. Poprawki po raporcie z testów (25.11.2026)
+
+Spec: „Poprawki po raporcie z testów (25.11.2026)”.
+
+- „Nie mogę” zawsze na cały dzień (Piotr, 25.11.2026): `engine.problem.Availability` odrzuca „cannot” z godzinami
+  (`ProblemError`), `availability_for` czyta godziny tylko przy „mogę” / „chętnie”. `availability.api._hours_in` daje
+  400 („„Nie mogę” zaznaczysz tylko na cały dzień…”), ograniczenia `availability_day_cannot_whole_day` i
+  `availability_pattern_cannot_whole_day` w bazie. Migracja `availability.0014` zamienia zapisane „nie mogę” z jednym
+  przedziałem na `neutral` w pozostałych godzinach (`rest_of_day`: 9–11 → 0:00–9:00 i 11:00–0:00, „od 18” → do
+  18:00, „do 10” → od 10:00, nocne 22–6 → 6:00–22:00), z dwoma przedziałami na całodniowe „nie mogę”; wzorcom usuwa
+  godziny. Okno dnia (`DayHoursSheet`) przy „Nie mogę” nie pokazuje godzin, tylko zdanie o „Mogę”. W opisach dnia
+  koniec 0:00 to północ, nie „do rana” (`marks.overnight`), a przedział od / do północy to „do 9:00” / „od 11:00”
+  (`marks.windowWords`, też w siatce kierownika).
+- Godziny w `wolne_dni`: w odpowiedzi modelu `Preference.from_time` / `to_time` (HH:MM, godziny, w których osoba
+  NIE może; zwykłe pola z wartością domyślną jak `position`); `readings.clean` przyjmuje je tylko dla `wolne_dni`
+  (puste, „0:00” na początku i „24:00” / „0:00” na końcu = od początku albo do końca dnia, ten sam początek i koniec
+  odrzuca odczyt). `services._checked_preference` zostawia je tylko przy `cannot` z datami; inaczej („wolę nie od 9
+  do 11”, każdy wtorek na stałe) odczyt nie przechodzi i prośbę czyta kierownik. `readings.calendar_only` = taki
+  odczyt: `problem_builder` go pomija (generator go nie liczy), `readings.complement` daje pozostałe godziny dnia,
+  `describe`: „we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)”.
+- Przycisk w czacie: `MyRequestOut.cannot_marks` zastąpiło `unmarked_days` (lista `CannotMarkOut`: dni, `from_time`,
+  `to_time`, `windows` z `readings.complement`, `prefer_days`, `whole_day`). `_Calendar.to_mark`: dzień bez „nie
+  mogę” (i bez własnych godzin, gdy prośba ma godziny) jest do zaznaczenia, dzień z całodniowym „nie mogę” przy
+  prośbie z godzinami jest `whole_day`, dzień z własnymi godzinami zostaje. Ekran zapisuje tym samym
+  `PUT /me/calendar`: bez godzin „nie mogę”, z godzinami „mogę” (dni z `prefer_days` „chętnie”) w `windows`; przycisk
+  „Zaznacz „Mogę” do 9:00 i od 11:00”. Uwaga o „Chętnie” nie pojawia się przy prośbie z godzinami, bo „Chętnie”
+  zostaje.
+- Stanowisko: `Preference.rather` → `readings` `rather` (tylko przy `avoid=false`), opis „chętniej stanowisko …
+  (inne też mogą być)”. Silnik bez zmian: kara jak przy „tylko”, mniejsza przez poziom `mile_widziane`.
+- Plan kierownika ze zmianą zasad ma uwagę aplikacji `services.RULES_GO_TO_AGREEMENTS` (+ `SOFT_RULES_NOTE`, gdy
+  zmieniona zasada jest włączona bez „bez wyjątków”). Prompt kierownika: gdzie trafia plan, że zasada z wyjątkami nie
+  jest obietnicą, kto płaci za oddaną zmianę przed i po zatwierdzeniu. `COMMON_RULES`: zdanie o nadgodzinach już nie
+  mówi „aplikacja liczy tylko różnicę”, dokładne liczenie nakładania się godzin, forma bez płci, braki danych w
+  pierwszej odpowiedzi. `EMPLOYEE_GUIDE`: dwa znaczenia godzin w oknie dnia, strzałki miesięcy (trzy miesiące
+  naprzód), prośba na późniejszy miesiąc od razu w tamtym miesiącu.
+- `MyShiftOut.supplements` (`ShiftSupplementOut`: nazwa, godziny dodatku, `hours`, `amount`) z
+  `PayRules.supplement_parts` (z tych części `supplement` liczy sumę jak dotąd). Ekran tego nie pokazuje.
+- Powiadomienia: `NotificationOut.month` dla `availability_requested` (miesiąc początku okresu, nie wcześniejszy niż
+  dziś); ekran linkuje do `/kiedy-moge?miesiac=…` (`validateSearch`), `AvailabilityScreen` przyjmuje `month` w zasięgu
+  kalendarza. Gdy okres nie zbiera już dyspozycji, `my_notifications` dopisuje do treści `closed` (`arranging` albo
+  `published`): inny tekst, link „none” albo „schedule”. `MY_SCHEDULE_DAYS` = 366. Odmiana „jednej osobie, która
+  może” w `notification_text` i `GiveAwaySheet`.
+- Kierownik: `periods.useChosenPeriod(locationId)` (mapa w pamięci karty) w „Dyspozycjach” i „Grafiku”. `ScheduleScreen`
+  bierze nazwę lokalu z `useLocationDetail` (już w pamięci z układu lokalu).
+- Zapytania: `shouldRetry` w `lib/api-error.ts` (502/503/504 i brak połączenia do 4 razy, inny 5xx raz, 4xx nigdy).
+
+Założenia: przycisk „Zaznacz „Mogę” do 9:00 i od 11:00” pojawia się także przy dniach, które pracownik sam
+zablokował na cały dzień; to tylko propozycja, kalendarz zmienia się dopiero po naciśnięciu, a zdanie przy przycisku
+mówi, że cały dzień wolny może zostać. Nocna zmiana, która zaczyna się przed północą i kończy rano, nie mieści się w
+„od 11:00” (do północy), więc „nie mogę 9–11” (po migracji i po przycisku) blokuje też nocki zaczynające się tego
+dnia; kto je robi, wydłuża przedział w oknie dnia do rana (11:00–6:00). Wybrane świadomie: okno do 9:00 następnego
+dnia byłoby dokładniejsze, ale w kalendarzu czytałoby się jako „11–9”, a prośbę „do 10” i tak dałoby się zapisać
+tylko w przybliżeniu. Odpowiedzi modelu nie da się sprawdzić bez klucza w testach: zachowanie asystenta zmieniły prompt i uwagi
+aplikacji; zapis godzin, przyciski i silnik mają testy. Przyczyny 503 nie ustalono w logach serwera; restart przy
+automatycznym wdrożeniu (co 5 minut z `main`) to najbardziej prawdopodobne wyjaśnienie.

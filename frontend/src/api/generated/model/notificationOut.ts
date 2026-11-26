@@ -11,6 +11,7 @@ export interface NotificationOut {
   kind: string;
   text: string;
   link: NotificationOutLink;
+  month?: string | null;
   created_at: string;
   read: boolean;
 }

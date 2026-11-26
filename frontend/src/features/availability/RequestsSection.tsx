@@ -11,7 +11,12 @@ import {
   useSaveMyCalendar,
   useUpdateMyRequest,
 } from "../../api/generated/availability/availability";
-import type { MyRequestOut } from "../../api/generated/model";
+import type {
+  CannotMarkOut,
+  DayIn,
+  MyRequestOut,
+  WindowOut,
+} from "../../api/generated/model";
 import {
   ChatComposer,
   ChatMessage,
@@ -21,7 +26,7 @@ import { Button } from "../../components/ui/button";
 import { Disclosure } from "../../components/ui/disclosure";
 import { InlineError } from "../../components/ui/status";
 import { errorMessage, NETWORK_PROBLEM } from "../../lib/api-error";
-import { periodWords, sinceWords } from "../../lib/dates";
+import { periodWords, shortTime, sinceWords } from "../../lib/dates";
 import { useEmployeeChat, useScreenChatScope } from "./employee-chat";
 import { HoursProposals } from "./HoursProposals";
 
@@ -38,6 +43,94 @@ const isCarried = (request: MyRequestOut) => Boolean(request.carried_from);
 /** "14.12" for "2026-12-14". */
 const shortDate = (iso: string) =>
   `${Number(iso.slice(8, 10))}.${iso.slice(5, 7)}`;
+
+/** "9:00–11:00", "od 10:00", "do 11:00"; "" for the whole day. */
+function markHours(mark: CannotMarkOut): string {
+  const from = mark.from_time ? shortTime(mark.from_time) : null;
+  const to = mark.to_time ? shortTime(mark.to_time) : null;
+  if (from && to) return `${from}–${to}`;
+  if (from) return `od ${from}`;
+  return to ? `do ${to}` : "";
+}
+
+/** "do 9:00 i od 11:00", "do 18:00", "od 10:00", "6:00–22:00": the hours left to work on those days. */
+function windowsWords(windows: WindowOut[]): string {
+  return windows
+    .map(({ start, end }) =>
+      start === "00:00"
+        ? `do ${shortTime(end)}`
+        : end === "00:00"
+          ? `od ${shortTime(start)}`
+          : `${shortTime(start)}–${shortTime(end)}`,
+    )
+    .join(" i ");
+}
+
+/** The calendar days the button writes: "nie mogę" for a whole day, otherwise "mogę" (or "chętnie") in `windows`. */
+function markedDays(mark: CannotMarkOut): DayIn[] {
+  const [first, second] = mark.windows ?? [];
+  return mark.days.map((date) =>
+    first
+      ? {
+          date,
+          state: (mark.prefer_days ?? []).includes(date) ? "prefer" : "neutral",
+          from_time: first.start,
+          to_time: first.end,
+          ...(second ? { from_time_2: second.start, to_time_2: second.end } : {}),
+        }
+      : { date, state: "cannot", from_time: null, to_time: null },
+  );
+}
+
+/**
+ * Days the request says the person cannot work that the calendar does not show so. "Nie mogę" is always a whole day
+ * (Piotr, 25.11.2026), so with hours ("we wtorki nie mogę od 9 do 11") the button marks those days "mogę" only in the
+ * rest of the day ("do 9:00 i od 11:00"; "chętnie" stays); days the calendar blocks for the whole day can be opened
+ * like that too.
+ */
+function CannotMark({
+  mark,
+  disabled,
+  marking,
+  onMark,
+}: {
+  mark: CannotMarkOut;
+  disabled: boolean;
+  marking: boolean;
+  onMark: () => void;
+}) {
+  const hours = markHours(mark);
+  const rest = windowsWords(mark.windows ?? []);
+  const days = mark.days.map(shortDate).join(", ");
+  const text = mark.whole_day
+    ? `W kalendarzu te dni mają „Nie mogę” przez cały dzień, a prośba mówi tylko o godzinach ${hours}: ${days}.`
+    : rest
+      ? `W kalendarzu te dni są nadal do pracy także w godzinach ${hours}: ${days}.`
+      : `W kalendarzu te dni są nadal do pracy: ${days}.`;
+  const label = rest ? `Zaznacz „Mogę” ${rest}` : "Zaznacz „nie mogę”";
+  return (
+    <div className="grid gap-2 rounded-md border border-line p-3">
+      <p className="m-0 text-sm">{text}</p>
+      {rest && (
+        <p className="m-0 text-sm text-ink-muted">
+          {mark.whole_day
+            ? `Nie dostaniesz wtedy zmiany, która zahacza o godziny ${hours}. Nie możesz przez cały dzień? Zostaw tak, jak jest.`
+            : `Tego jeszcze nie ma w kalendarzu. Naciśnij przycisk, a nie dostaniesz zmiany, która zahacza o godziny ${hours}.`}
+        </p>
+      )}
+      <div>
+        <Button
+          variant="secondary"
+          size="normal"
+          disabled={disabled || marking}
+          onClick={onMark}
+        >
+          {marking ? "Zapisuję…" : label}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 /** The assistant's own words to the person: an answer, or a word about the request. */
 function Reply({ request }: { request: MyRequestOut }) {
@@ -228,7 +321,7 @@ function RequestStatus({
   only: string;
   onRewrite: (text: string) => void;
   onToManager: () => void;
-  onMarkCannot: (days: string[]) => void;
+  onMarkCannot: (mark: CannotMarkOut) => void;
   onLasting: (lasting: boolean) => void;
 }) {
   if (request.status === "rejected")
@@ -289,7 +382,7 @@ function RequestStatus({
     );
   }
   if (request.status === "interpreted" && request.summary) {
-    const days = request.unmarked_days;
+    const marks = request.cannot_marks ?? [];
     return (
       <div className="grid gap-2">
         <Reply request={request} />
@@ -311,24 +404,16 @@ function RequestStatus({
           />
         )}
         <Notes notes={request.notes} />
-        {editable && days.length > 0 && (
-          <div className="grid gap-2 rounded-md border border-line p-3">
-            <p className="m-0 text-sm">
-              W kalendarzu te dni są nadal do pracy:{" "}
-              {days.map(shortDate).join(", ")}.
-            </p>
-            <div>
-              <Button
-                variant="secondary"
-                size="normal"
-                disabled={busy || marking}
-                onClick={() => onMarkCannot(days)}
-              >
-                {marking ? "Zapisuję…" : "Zaznacz „nie mogę”"}
-              </Button>
-            </div>
-          </div>
-        )}
+        {editable &&
+          marks.map((mark) => (
+            <CannotMark
+              key={`${mark.from_time}-${mark.to_time}-${mark.whole_day}`}
+              mark={mark}
+              disabled={busy}
+              marking={marking}
+              onMark={() => onMarkCannot(mark)}
+            />
+          ))}
         {editable && (
           <WrongChoice
             request={request}
@@ -1070,14 +1155,11 @@ export function RequestsChat({
                       data: { understood: false },
                     })
                   }
-                  onMarkCannot={(days) =>
+                  onMarkCannot={(mark) =>
                     markCannot.mutate({
                       data: {
                         company_id: companyId,
-                        days: days.map((date) => ({
-                          date,
-                          state: "cannot",
-                        })),
+                        days: markedDays(mark),
                       },
                     })
                   }

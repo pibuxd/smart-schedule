@@ -22,6 +22,8 @@ class AvailabilityState(models.TextChoices):
 
 # An end at or before the start means the next morning (night shifts); only an empty window is refused.
 HOURS_NOT_EMPTY = Q(from_time__isnull=True) | Q(to_time__isnull=True) | ~Q(from_time=models.F("to_time"))
+# "Nie mogę" is always the whole day (Piotr, 25.11.2026): the hours someone can work are marked as "mogę" instead.
+CANNOT_WHOLE_DAY = ~Q(state=AvailabilityState.CANNOT) | Q(from_time__isnull=True, to_time__isnull=True)
 
 
 class AvailabilityDay(CompanyOwnedModel):
@@ -56,6 +58,7 @@ class AvailabilityDay(CompanyOwnedModel):
         constraints = [
             models.UniqueConstraint(fields=["employee", "date"], name="availability_day_unique"),
             models.CheckConstraint(condition=HOURS_NOT_EMPTY, name="availability_day_hours_not_empty"),
+            models.CheckConstraint(condition=CANNOT_WHOLE_DAY, name="availability_day_cannot_whole_day"),
             models.CheckConstraint(
                 condition=Q(from_time_2__isnull=True, to_time_2__isnull=True)
                 | (
@@ -90,6 +93,7 @@ class AvailabilityPattern(CompanyOwnedModel):
         constraints = [
             models.CheckConstraint(condition=WEEKDAY_RANGE, name="availability_pattern_weekday_range"),
             models.CheckConstraint(condition=HOURS_NOT_EMPTY, name="availability_pattern_hours_not_empty"),
+            models.CheckConstraint(condition=CANNOT_WHOLE_DAY, name="availability_pattern_cannot_whole_day"),
         ]
 
 

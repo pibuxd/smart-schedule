@@ -67,10 +67,13 @@ function addMonths(month: string, count: number): string {
 export function AvailabilityScreen({
   companyId,
   readOnly,
+  month: wanted,
   today = new Date(),
 }: {
   companyId: string
   readOnly: boolean
+  /** "2026-12": open on this month (from a notification) instead of the requested period's or today's. */
+  month?: string
   today?: Date
 }) {
   // gcTime 0: the editor keeps its own copy while open, so a visit later always starts from the server.
@@ -91,7 +94,8 @@ export function AvailabilityScreen({
   const thisMonth = monthOf(toIsoDate(today))
   const requested = period ? monthOf(period.start < toIsoDate(today) ? toIsoDate(today) : period.start) : null
   const lastMonth = [addMonths(thisMonth, MONTHS_AHEAD), period ? monthOf(period.end) : thisMonth].sort().pop()!
-  const month = chosen ?? requested ?? thisMonth
+  const linked = wanted && wanted >= thisMonth && wanted <= lastMonth ? wanted : null
+  const month = chosen ?? linked ?? requested ?? thisMonth
 
   return (
     <div className="grid gap-4">

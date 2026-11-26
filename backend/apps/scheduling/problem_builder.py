@@ -544,6 +544,8 @@ class _Reader:
         return result + self.instructions(employee_ids)
 
     def _text_request(self, row: TextRequest, data: dict, interpreted: bool, employee_ids: set[str]) -> Request | None:
+        if interpreted and readings.calendar_only(data):
+            return None  # "nie mogę od 9 do 11": only marked in the calendar ("mogę" outside those hours)
         employee_id = str(row.employee_id)
         kind = REQUEST_TYPES.get(str(data.get("type")), RequestType.OTHER) if interpreted else RequestType.OTHER
         subject = data.get("subject_employee")

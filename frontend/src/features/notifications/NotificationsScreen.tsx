@@ -165,7 +165,12 @@ function NotificationItem({
         </button>
       </div>
       {link && (
-        <Link to={link.to} className="min-h-(--touch) content-center font-semibold text-accent underline underline-offset-4">
+        <Link
+          to={link.to}
+          // A request for availability opens "Kiedy mogę" on its month, not on today's.
+          search={notification.link === 'availability' && notification.month ? { miesiac: notification.month } : {}}
+          className="min-h-(--touch) content-center font-semibold text-accent underline underline-offset-4"
+        >
           {link.label}
         </Link>
       )}

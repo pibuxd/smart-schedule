@@ -208,17 +208,15 @@ class ExternalShift:
 class Availability:
     """An employee's mark for one day. Without hours it covers every shift that starts that day.
 
-    With hours (`from_time`/`to_time`, either may be open) it covers a window on that day's wall clock; an end
-    at or before the start means the next morning (e.g. 22:00-06:00 for a night shift):
-    - "cannot" and "prefer not" apply to shifts that overlap the window ("nie mogę od 8 do 12");
-    - "prefer" and "neutral" mean "I can only in these hours": a shift that fits inside the window gets that
-      state, any other shift of that day counts as "cannot" (people mark the hours they can
-      work).
-    No entry for a day means "neutral" (nothing submitted).
+    "cannot" is always the whole day (Piotr, 25.11.2026: no "nie mogę" in some hours; people mark the hours they
+    can instead). "prefer" and "neutral" may have hours (`from_time`/`to_time`, either may be open) on that day's
+    wall clock, meaning "I can only in these hours"; an end at or before the start means the next morning (e.g.
+    22:00-06:00 for a night shift). A shift that fits inside the window gets that state, any other shift of that
+    day counts as "cannot". No entry for a day means "neutral" (nothing submitted).
 
     A second window (`from_time_2`/`to_time_2`, both set) works the same way: "I can 6-10 or 16-22" fits a shift
-    inside either window; "cannot" covers both. `one_shift` ("albo") means at most one shift that day, in one of
-    the windows; without it ("lub") the person may get a shift in each.
+    inside either window. `one_shift` ("albo") means at most one shift that day, in one of the windows; without it
+    ("lub") the person may get a shift in each.
     """
 
     employee: str
@@ -232,6 +230,8 @@ class Availability:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "state", AvailabilityState(self.state))
+        if self.state == AvailabilityState.CANNOT and (self.has_hours or self.from_time_2 is not None):
+            raise ProblemError("Cannot is marked for the whole day, without hours")
         if self.from_time is not None and self.from_time == self.to_time:
             raise ProblemError("Availability hours must not start and end at the same time")
         if (self.from_time_2 is None) != (self.to_time_2 is None) or (
@@ -574,12 +574,9 @@ class Problem:
             return AvailabilityState.NEUTRAL
         if not entry.has_hours:
             return entry.state
-        windows = self.availability_windows(entry)
-        if entry.state in (AvailabilityState.PREFER, AvailabilityState.NEUTRAL):
-            fits = any(start <= slot.start_utc and slot.end_utc <= end for start, end in windows)
-            return entry.state if fits else AvailabilityState.CANNOT
-        overlaps = any(slot.start_utc < end and start < slot.end_utc for start, end in windows)
-        return entry.state if overlaps else AvailabilityState.NEUTRAL
+        windows = self.availability_windows(entry)  # "prefer" / "neutral": cannot has no hours
+        fits = any(start <= slot.start_utc and slot.end_utc <= end for start, end in windows)
+        return entry.state if fits else AvailabilityState.CANNOT
 
 
 Schedule = Mapping[str, str | None]

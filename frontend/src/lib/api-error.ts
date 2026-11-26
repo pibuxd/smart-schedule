@@ -24,6 +24,17 @@ export function errorStatus(error: unknown): number | undefined {
   return error instanceof ApiError ? error.status : undefined
 }
 
+/**
+ * Whether a failed read is worth asking again. A new version going live restarts the API for a few seconds, and the
+ * proxy answers 502/503/504 meanwhile (testers saw a passing 503): those and lost connections are asked again up to
+ * four times (about 15 s with the growing pauses), other server errors once. An answer such as 404 or 409 is final.
+ */
+export function shouldRetry(failures: number, error: unknown): boolean {
+  const status = errorStatus(error)
+  if (status === undefined || status === 502 || status === 503 || status === 504) return failures < 4
+  return status >= 500 && failures < 1
+}
+
 export const NETWORK_PROBLEM = 'Nie udało się połączyć z serwerem. Sprawdź internet i spróbuj jeszcze raz.'
 
 export const SERVER_PROBLEM = 'To błąd po naszej stronie, nie Twojego internetu. Spróbuj za chwilę jeszcze raz.'

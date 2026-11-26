@@ -1,7 +1,8 @@
+import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { LocationOut, PeriodOut } from '../../api/generated/model'
-import { nextPeriodDates, pickPeriod } from './periods'
+import { nextPeriodDates, pickPeriod, useChosenPeriod } from './periods'
 
 const location = { schedule_period: 'month', availability_deadline_days: 7 } as LocationOut
 const period = (start: string, end: string) => ({ id: start, start, end }) as PeriodOut
@@ -29,5 +30,18 @@ describe('periods', () => {
     const list = [period('2026-10-01', '2026-10-31'), period('2026-12-01', '2026-12-31'), period('2026-11-01', '2026-11-30')]
     expect(pickPeriod(list, new Date(2026, 10, 12))?.start).toBe('2026-11-01')
     expect(pickPeriod(list, new Date(2027, 1, 1))?.start).toBe('2026-12-01')
+  })
+})
+
+describe('useChosenPeriod', () => {
+  it('keeps the period picked in one tab of a location for its other tabs', () => {
+    // "Dyspozycje" picks December; "Grafik", opened next, must not fall back to the published November.
+    const availability = renderHook(() => useChosenPeriod('loc-a'))
+    expect(availability.result.current[0]).toBeNull()
+    act(() => availability.result.current[1]('december'))
+    expect(availability.result.current[0]).toBe('december')
+    availability.unmount()
+    expect(renderHook(() => useChosenPeriod('loc-a')).result.current[0]).toBe('december')
+    expect(renderHook(() => useChosenPeriod('loc-b')).result.current[0]).toBeNull()
   })
 })
