@@ -1,11 +1,15 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { onlineManager } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mockApi, renderScreen } from '../../test/render'
 import { SignOutButton } from './SignOutButton'
 
 describe('SignOutButton', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    onlineManager.setOnline(true)
+  })
 
   it('says the session goes on when logging out failed, and logs out on the next try', async () => {
     let answer: [number, unknown] = [503, { detail: 'Bad Gateway' }]
@@ -21,5 +25,15 @@ describe('SignOutButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Wyloguj jeszcze raz' }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Wyloguj' })).not.toBeInTheDocument())
     expect(calls.filter((c) => c.url === '/api/auth/logout')).toHaveLength(2)
+  })
+
+  it('says so at once when the phone is offline, instead of waiting quietly for the network', async () => {
+    onlineManager.setOnline(false) // what the browser reports without a connection
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))))
+    renderScreen(<SignOutButton />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Wyloguj' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się wylogować. Sesja trwa dalej.')
+    expect(screen.getByRole('button', { name: 'Wyloguj jeszcze raz' })).toBeEnabled()
   })
 })

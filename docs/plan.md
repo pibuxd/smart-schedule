@@ -1704,7 +1704,9 @@ Spec: „Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)”. Inst
   niż `PUSH_MAX_AGE_S` oraz te z firmy, do której adresat nie ma już dostępu (`_has_access`: członkostwo
   i `removed_from_company`, jak `tenant_context`; telefon zostaje dla innych firm), sprawdza sesję telefonu (klucz +
   hash hasła sesji jak `get_user`, `User.is_active`; nieważna = telefon usunięty). Termin `created_at +
-  PUSH_MAX_AGE_S` (`Message.expires_at`) dostają też usługi: APNs jako `apns-expiration`, FCM jako pozostałe `ttl`. Tekst bierze z `services.push_text` (`notification_text` bez końcówki numeru konta przy `bank_account_set`), a trasę z `services.push_path`. APNs: HTTP/2 (`httpx2`), token
+  PUSH_MAX_AGE_S` (`Message.expires_at`) dostają też usługi: APNs jako `apns-expiration`, FCM jako pozostałe `ttl`;
+  sprawdzany tuż przed każdym żądaniem (także po odświeżeniu tokenu FCM i przy drugim środowisku APNs), bo FCM czyta
+  `ttl: 0s` jako „dostarcz teraz”; po terminie `Outcome.EXPIRED`, nic nie idzie. Tekst bierze z `services.push_text` (`notification_text` bez końcówki numeru konta przy `bank_account_set`), a trasę z `services.push_path`. APNs: HTTP/2 (`httpx2`), token
   ES256 z klucza .p8 (`pyjwt`), przy `BadDeviceToken` druga próba w drugim środowisku. FCM HTTP v1: konto usługi →
   token OAuth. Token nieznany usłudze = telefon usunięty; inne błędy tylko w logu (bez ponawiania, bo dubluje push).
 - Trasy (`push_path`): `/grafik?dzien=<data>` (moja zmiana), `/grafik?oferta=<id>` (zmiana do wzięcia),
@@ -1712,13 +1714,14 @@ Spec: „Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)”. Inst
   `/kierownik/godziny`, `/kierownik/lokal/<id>/dyspozycje`. Do danych powiadomień o zmianach doszły `location_id`
   i `period_id`. Frontend: `src/native/push.ts` (`pushTarget` przepuszcza tylko ścieżki aplikacji, nasłuch przed
   pierwszym ekranem, dotknięcie z zamkniętej aplikacji czeka na router, to samo dotknięcie dwa razy otwiera raz;
-  rejestracja zapamiętana dopiero po odpowiedzi serwera i dla danej sesji, nieudana ponawiana po 30 s, 1 min… do
-  15 min), `src/lib/focus.ts` (obrys + przewinięcie), parametry `dzien` / `oferta` / `okres` w trasach („Mój grafik”:
+  rejestracja zapamiętana dopiero po odpowiedzi serwera i dla pary sesja + token (odpowiedź o parze, która w międzyczasie
+  się zmieniła, niczego nie potwierdza), nieudana ponawiana po 30 s, 1 min… do 15 min), `src/lib/focus.ts` (obrys + przewinięcie), parametry `dzien` / `oferta` / `okres` w trasach („Mój grafik”:
   zmiana z tego dnia w „Minione zmiany” wygrywa z następną zmianą, chyba że następna jest tego samego dnia). iOS:
   dotknięcie, które uruchamia aplikację, przychodzi w `connectionOptions.notificationResponse`; `SceneDelegate` trzyma
   je do `capacitorViewDidAppear` i przekazuje raz do `bridge.notificationRouter`.
 - „Wyloguj” (`useSignOut`, wspólne dla strony i aplikacji) czyści dane, wyłącza push i otwiera logowanie tylko po
-  odpowiedzi serwera (albo 401); przy błędzie zostaje sesja (klucz w Preferences, na stronie ciasteczko)
+  odpowiedzi serwera (albo 401); żądanie idzie też bez sieci (`networkMode: 'always'`), więc offline od razu widać
+  błąd zamiast cichego czekania; przy błędzie zostaje sesja (klucz w Preferences, na stronie ciasteczko)
   i `SignOutFailed` z „Wyloguj jeszcze raz”. To jedyna zmiana na stronie WWW w tym etapie: wcześniej strona
   pokazywała logowanie przy wciąż ważnym ciasteczku. CSV w aplikacji: bajty odpowiedzi (base64 do
   `Filesystem`), więc BOM UTF-8 zostaje.

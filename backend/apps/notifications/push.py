@@ -11,7 +11,8 @@ screen of the shift or period it is about (`services.push_path`).
 - A notification goes out only while its person still has access to its company (a removed employee keeps a
   membership for the schedule history, but no access); the phone keeps getting the person's other companies.
 - One deadline for the services too: a push that is not on the phone `PUSH_MAX_AGE_S` after the notification was
-  written is dropped by APNs and FCM as well (a phone back online does not get yesterday's offer).
+  written is dropped by APNs and FCM as well (a phone back online does not get yesterday's offer). It is checked
+  right before every request, because FCM reads `ttl: 0s` as "deliver now or never", not "already too late".
 - A token the service no longer knows (app removed) is deleted. Other failures are logged and not retried: the
   notification is in the app anyway, and a retry would repeat it on the phones that already got it.
 - Credentials come only from files named in the environment (settings `PUSH_*`); without them nothing is sent.
@@ -65,6 +66,8 @@ class Outcome(Enum):
     SENT = "sent"
     GONE = "gone"  # the service does not know the token any more: forget the phone
     FAILED = "failed"
+    # The deadline passed before this phone's turn (an earlier phone or a token refresh took the time): not sent.
+    EXPIRED = "expired"
 
 
 # ----------------------------------------------------------------------------------------------- registering
@@ -232,6 +235,9 @@ class ApnsSender:
         }
 
     def _post(self, sandbox: bool, device: PushDevice, message: Message):
+        """The request, or None when the deadline has passed (nothing is sent)."""
+        if message.seconds_left() <= 0:
+            return None
         host = self.SANDBOX if sandbox else self.PRODUCTION
         return self.client.post(
             f"{host}/3/device/{device.token}",
@@ -251,10 +257,14 @@ class ApnsSender:
         sandbox = device.sandbox or self.sandbox
         try:
             response = self._post(sandbox, device, message)
+            if response is None:
+                return Outcome.EXPIRED
             reason = _apns_reason(response)
             if response.status_code == 400 and reason == "BadDeviceToken":
                 # A token of the other environment (an Xcode build against the production service, or the reverse).
                 response = self._post(not sandbox, device, message)
+                if response is None:
+                    return Outcome.EXPIRED
                 reason = _apns_reason(response)
                 if response.status_code == 200 and device.sandbox != (not sandbox):
                     device.sandbox = not sandbox
@@ -333,21 +343,29 @@ class FcmSender:
             }
         }
 
+    def _post(self, device: PushDevice, message: Message, access_token: str):
+        """The request, or None when the deadline has passed. The access token comes first (getting one takes a
+        request of its own), then the deadline is checked and `ttl` worked out from it."""
+        if message.seconds_left() <= 0:
+            return None
+        return self.client.post(
+            f"https://fcm.googleapis.com/v1/projects/{self.project_id}/messages:send",
+            json=self.payload(device, message),
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
     def send(self, device: PushDevice, message: Message) -> Outcome:
-        url = f"https://fcm.googleapis.com/v1/projects/{self.project_id}/messages:send"
+        if message.seconds_left() <= 0:
+            return Outcome.EXPIRED
         try:
-            response = self.client.post(
-                url, json=self.payload(device, message), headers={"Authorization": f"Bearer {self._access_token()}"}
-            )
-            if response.status_code == 401:
-                response = self.client.post(
-                    url,
-                    json=self.payload(device, message),
-                    headers={"Authorization": f"Bearer {self._access_token(fresh=True)}"},
-                )
+            response = self._post(device, message, self._access_token())
+            if response is not None and response.status_code == 401:
+                response = self._post(device, message, self._access_token(fresh=True))
         except httpx2.HTTPError as exc:
             logger.warning("push: FCM request failed: %s", exc)
             return Outcome.FAILED
+        if response is None:
+            return Outcome.EXPIRED
         if response.status_code == 200:
             return Outcome.SENT
         code, text = _fcm_error(response)

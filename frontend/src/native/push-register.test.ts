@@ -69,6 +69,28 @@ describe('registering the phone for push', () => {
     expect(plugin.requestPermissions).not.toHaveBeenCalled()
   })
 
+  it('confirms a token only for the token that was sent, so a new token is still sent after a failure', async () => {
+    const push = await freshModule()
+    vi.useFakeTimers()
+    let confirmOld: (value: unknown) => void = () => undefined
+    registerPushDevice
+      .mockImplementationOnce(() => new Promise((resolve) => (confirmOld = resolve))) // the first token, slow
+      .mockRejectedValueOnce(new Error('offline')) // the system's new token fails to reach the server
+      .mockResolvedValue({ status: 204 })
+
+    await push.enablePush()
+    await vi.advanceTimersByTimeAsync(0)
+    const registration = listeners.registration as (event: { value: string }) => void
+    registration({ value: 'apns-token-2' }) // the system replaced the token while the first request was on its way
+    await vi.advanceTimersByTimeAsync(0)
+    confirmOld({ status: 204 }) // the server confirms the old token only now
+    await vi.advanceTimersByTimeAsync(0)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(registerPushDevice).toHaveBeenCalledTimes(3)
+    expect(registerPushDevice).toHaveBeenLastCalledWith({ platform: 'ios', token: 'apns-token-2' })
+  })
+
   it('opens a tap handed over twice only once', async () => {
     const push = await freshModule()
     const open = vi.fn()

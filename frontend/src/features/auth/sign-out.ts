@@ -18,10 +18,12 @@ export type SignOut = {
  * Ends the session, forgets everything cached for this person and opens the login screen. In the apps the phone
  * also stops getting push notifications (the server unpins it with the session). Only a confirmed logout does
  * that: when the request fails, the session key stays in the app (and the cookie in a browser), so the person
- * stays logged in, sees it (`SignOutFailed`) and can try again.
+ * stays logged in, sees it (`SignOutFailed`) and can try again; offline too, at once.
  */
 export function useSignOut(): SignOut {
-  const logout = useLogout()
+  // Try at once even when the system says there is no network: TanStack Query would otherwise pause the logout
+  // without a word (pending, no error) and finish it whenever the connection comes back.
+  const logout = useLogout({ mutation: { networkMode: 'always' } })
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const finish = async () => {

@@ -12,8 +12,8 @@ import { sessionToken } from './session-token'
  * opens that screen, also when the app was closed (the plugin keeps the tap until the listener below is added).
  *
  * The server ties a phone to the session it registered from, so the app remembers a registration only once the
- * server confirmed it, and for that session: a new login (also of the same person after the session ended)
- * registers again, and a failed try is tried again later.
+ * server confirmed it, and for that session and that token: a new login (also of the same person after the session
+ * ended) or a new token from the system registers again, and a failed try is tried again later.
  */
 export type PushTarget = { path: string; companyId?: string }
 
@@ -37,8 +37,8 @@ let enabled = false
 let enabling: Promise<void> | null = null
 /** The phone's token from Apple or Google, once the system gave it. */
 let deviceToken: string | null = null
-/** The session the server confirmed this phone for. */
-let registeredSession: string | null = null
+/** The session and token the server confirmed for this phone. */
+let registered: { session: string; token: string } | null = null
 const RETRY_FIRST_MS = 30_000
 const RETRY_MAX_MS = 15 * 60_000
 let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -50,7 +50,6 @@ export async function setUpPush(onReceived: () => void): Promise<void> {
   if (!platform) return
   await PushNotifications.addListener('registration', ({ value }) => {
     deviceToken = value
-    registeredSession = null
     void sendToken()
   })
   await PushNotifications.addListener('registrationError', (error) => {
@@ -72,20 +71,24 @@ export async function setUpPush(onReceived: () => void): Promise<void> {
   })
 }
 
-/** Tell the server this phone's token for the current session, unless it already confirmed it. */
+/** Tell the server this phone's token for the current session, unless it already confirmed this pair. */
 async function sendToken(): Promise<void> {
   const platform = nativePlatform()
   const session = sessionToken()
-  if (!platform || !deviceToken || !session || registeredSession === session) return
+  const token = deviceToken
+  if (!platform || !token || !session || (registered?.session === session && registered.token === token)) return
   if (retryTimer) clearTimeout(retryTimer)
   retryTimer = null
   try {
-    await registerPushDevice({ platform, token: deviceToken })
-    if (sessionToken() === session) registeredSession = session
-    retryDelay = RETRY_FIRST_MS
+    await registerPushDevice({ platform, token })
+    // An answer about a pair that changed meanwhile confirms nothing now: the newer pair is sent on its own.
+    if (sessionToken() === session && deviceToken === token) {
+      registered = { session, token }
+      retryDelay = RETRY_FIRST_MS
+    }
   } catch {
-    // No network for a moment, or the server failed: try again later while this session lasts.
-    if (sessionToken() !== session) return
+    // No network for a moment, or the server failed: try again later while this session and token last.
+    if (sessionToken() !== session || deviceToken !== token) return
     retryTimer = setTimeout(() => void sendToken(), retryDelay)
     retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS)
   }
@@ -137,7 +140,7 @@ export async function disablePush(): Promise<void> {
   if (retryTimer) clearTimeout(retryTimer)
   retryTimer = null
   retryDelay = RETRY_FIRST_MS
-  registeredSession = null
+  registered = null
   if (!nativePlatform() || !enabled) return
   enabled = false
   deviceToken = null

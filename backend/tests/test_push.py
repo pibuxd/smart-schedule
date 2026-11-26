@@ -408,3 +408,41 @@ def test_fcm_request_and_answers():
 
     assert sender.send(PushDevice(user=user, platform="android", token="gone"), message) is push.Outcome.GONE
     assert len([r for r in seen if r.url.host == "oauth2.googleapis.com"]) == 1  # the access token is reused
+
+
+def test_a_push_past_its_deadline_is_not_sent_to_any_service(monkeypatch):
+    """The deadline is checked right before each request: FCM reads `ttl: 0s` as "deliver now", not "drop", and
+    a token refresh or an earlier phone can take long enough for the deadline to pass."""
+    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ec_key = ec.generate_private_key(ec.SECP256R1())
+    pkcs8 = (serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    clock = [1_000_000.0]
+    monkeypatch.setattr(push.time, "time", lambda: clock[0])
+    sends = []
+
+    def answer(request):
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx2.Response(200, json={"access_token": "ya29.test", "expires_in": 3600})
+        sends.append(request)
+        if request.url.host == "fcm.googleapis.com" and len(sends) == 1:
+            clock[0] += 120  # the access token expired; getting a new one takes until after the deadline
+            return httpx2.Response(401, json={"error": {"code": 401, "message": "Unauthenticated"}})
+        return httpx2.Response(200, json={})
+
+    client = httpx2.Client(transport=httpx2.MockTransport(answer))
+    credentials = {
+        "project_id": "p",
+        "client_email": "push@p.iam.gserviceaccount.com",
+        "private_key": rsa_key.private_bytes(*pkcs8).decode(),
+    }
+    fcm = push.FcmSender(credentials, client=client)
+    apns = push.ApnsSender(
+        key=ec_key.private_bytes(*pkcs8).decode(), key_id="K", team_id="T", topic="pl.grafikomat.app", client=client
+    )
+    user = User.objects.create_user("+48601900302")
+    message = push.Message(notification_id="n1", company_id="c1", body="x", path="/", expires_at=int(clock[0]) + 60)
+
+    assert fcm.send(PushDevice(user=user, platform="android", token="t1"), message) is push.Outcome.EXPIRED
+    assert len(sends) == 1  # the try after the new token never went out with "ttl: 0s"
+    assert apns.send(PushDevice(user=user, platform="ios", token="t2"), message) is push.Outcome.EXPIRED
+    assert len(sends) == 1
