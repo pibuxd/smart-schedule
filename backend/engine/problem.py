@@ -49,6 +49,10 @@ class RequestType(StrEnum):
     WANT_WORK = "want_work"
     # "najwyżej trzy nocki w tygodniu": at most `max_shifts` shifts (of `shift_type`, if set) in each window.
     SHIFTS_LIMIT = "shifts_limit"
+    # "w pierwszym tygodniu chcę wyrobić 30 godzin, najlepiej pod koniec tygodnia": about `target_hours` in each
+    # window (same windows as hours_limit; fewer and more both count, or only fewer with `at_least`), preferably
+    # on `preferred_dates`.
+    HOURS_TARGET = "hours_target"
     # "w trzecim tygodniu stycznia nie chcę być sprzedawcą": for someone with several positions, not on (`avoid`) or
     # only on one of `positions` (ids; a person with the same position in several locations has one id per location).
     POSITION = "position"
@@ -264,6 +268,10 @@ class Request:
     positions: frozenset[str] = frozenset()  # position: the position (its ids in every location of the person)
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
     max_shifts: int | None = None  # shifts_limit, in each window (same windows as hours_limit)
+    target_hours: float | None = None  # hours_target, in each window (same windows as hours_limit)
+    at_least: bool = False  # hours_target: "co najmniej 30 godzin", more hours are fine
+    # hours_target: the days the hours should rather fall on ("najlepiej pod koniec tygodnia"); empty = any day.
+    preferred_dates: frozenset[date] = frozenset()
     min_days: int | None = None  # want_work: how many of `dates` (None = all of them)
     shifts_per_day: int = 1  # want_work: shifts wanted on each of those days
     summary: str = ""
@@ -271,8 +279,8 @@ class Request:
     # rules, not with employee requests; `rank` is its place on the manager's list (1 = most important).
     by_manager: bool = False
     rank: int = 1
-    weekly_hours: bool = False  # hours_limit / shifts_limit counted in each week (Monday–Sunday)
-    daily_hours: bool = False  # hours_limit / shifts_limit counted on each day (wins over weekly_hours)
+    weekly_hours: bool = False  # hours_limit / shifts_limit / hours_target counted in each week (Monday–Sunday)
+    daily_hours: bool = False  # hours_limit / shifts_limit / hours_target counted on each day (wins over weekly)
     # The location the request belongs to (its period's, or the instruction's). None: a request for a month or a
     # lasting one, about the person wherever they work; it counts in their main location in this problem.
     location: str | None = None
@@ -324,6 +332,27 @@ class Request:
             for first, last in self.windows(problem)
         ]
 
+    def target_windows(self, problem: Problem) -> list[tuple[date, date, int, int]]:
+        """hours_target: (first day, last day, target minutes, minutes already worked elsewhere) of each window.
+
+        Only the window's days inside the period count: a week cut by the start or the end of the period gets the
+        part of the target its days there carry (3 of 7 days: 3/7 of it), and shifts elsewhere count on those days
+        only. Each period then keeps its own part of the week, also when the period next to it has no schedule."""
+        result = []
+        for first, last in self.windows(problem):
+            days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
+            covered = [day for day in days if self.covers(day)]
+            inside = [day for day in covered if problem.period_start <= day <= problem.period_end]
+            if not inside or not self.target_hours or self.target_hours <= 0:
+                continue
+            target = round(self.target_hours * 60 * len(inside) / len(covered))
+            start, end = inside[0], inside[-1]
+            elsewhere = sum(
+                round((s.end_utc - s.start_utc).total_seconds() / 60) for s in self._external(problem, start, end)
+            )
+            result.append((start, end, target, elsewhere))
+        return result
+
     def counts_slot(self, slot: Slot) -> bool:
         """A shift this request is about: on its days and, when it names a shift type, of that type."""
         return self.covers(slot.date) and (self.shift_type is None or slot.shift_type == self.shift_type)
@@ -334,6 +363,7 @@ class Request:
         object.__setattr__(self, "manager_priority", ManagerPriority(self.manager_priority))
         object.__setattr__(self, "dates", frozenset(self.dates))
         object.__setattr__(self, "positions", frozenset(self.positions))
+        object.__setattr__(self, "preferred_dates", frozenset(self.preferred_dates))
 
     def covers(self, day: date) -> bool:
         return not self.dates or day in self.dates

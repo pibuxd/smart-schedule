@@ -53,6 +53,7 @@ from engine.problem import (
 )
 from engine.rules_catalog import RULES_BY_CODE
 from engine.validator import (
+    PREFERRED_DAYS_SHARE,
     TARGET_HOURS_HARD_TOLERANCE,
     Code,
     RequestKind,
@@ -753,6 +754,35 @@ class _Builder:
                     capped = self.m.new_int_var(0, limit, f"shifts_capped[{request.id},{start}]")
                     self.m.add_min_equality(capped, [over, limit])
                     self.add_penalty(cost / limit, capped)
+            case RequestType.HOURS_TARGET:
+                windows = request.target_windows(self.p)
+                for start, end, target, fixed in windows:
+                    slots = [(s, v) for s, v in own if start <= s.date <= end]
+                    if not slots:
+                        continue  # nothing here can move the hours: a constant for the solver
+                    cost = weight / len(windows)
+                    share = PREFERRED_DAYS_SHARE if request.preferred_dates else 0.0
+                    # As the validator: |hours − target| / target (only the hours missing with `at_least`), capped
+                    # at 1, for each window.
+                    worked = fixed + sum(_minutes(s) * v for s, v in slots)
+                    most = fixed + sum(_minutes(s) for s, _ in slots)
+                    off = self.m.new_int_var(0, max(most, target), f"target_off[{request.id},{start}]")
+                    if not request.at_least:
+                        self.m.add(off >= worked - target)
+                    self.m.add(off >= target - worked)
+                    capped = self.m.new_int_var(0, target, f"target_capped[{request.id},{start}]")
+                    self.m.add_min_equality(capped, [off, target])
+                    self.add_penalty(cost * (1 - share) / target, capped)
+                    elsewhere = [(s, v) for s, v in slots if s.date not in request.preferred_dates]
+                    if share and elsewhere:
+                        # "najlepiej pod koniec tygodnia": minutes on other days, capped at the target.
+                        misplaced = self.m.new_int_var(
+                            0, sum(_minutes(s) for s, _ in elsewhere), f"target_days[{request.id},{start}]"
+                        )
+                        self.m.add(misplaced == sum(_minutes(s) * v for s, v in elsewhere))
+                        kept = self.m.new_int_var(0, target, f"target_days_capped[{request.id},{start}]")
+                        self.m.add_min_equality(kept, [misplaced, target])
+                        self.add_penalty(cost * share / target, kept)
             case RequestType.DAYS_OFF:
                 if not request.dates:  # no dates: left to the manager, as in the validator
                     return

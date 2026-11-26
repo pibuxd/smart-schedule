@@ -34,8 +34,16 @@ from engine.problem import (
 
 # A "no exceptions" target_hours rule allows this relative deviation from the target.
 TARGET_HOURS_HARD_TOLERANCE = 0.10
+# hours_target with preferred days ("najlepiej pod koniec tygodnia"): the share of the request's degree that hours
+# on other days take; the rest is how far the hours are from the target. Getting the hours matters more.
+PREFERRED_DAYS_SHARE = 0.2
 
 _EPS = 1e-9
+
+
+def _slot_minutes(slot: Slot) -> int:
+    """Whole minutes of a shift, as the solver counts hours (so both score an hours target the same)."""
+    return round((slot.end_utc - slot.start_utc).total_seconds() / 60)
 
 
 class Code(StrEnum):
@@ -811,6 +819,20 @@ class _Checker:
                     else:
                         degrees.append(min(1.0, max(0.0, shifts / request.max_shifts - 1)))
                 return sum(degrees) / len(degrees) if degrees else None
+            case RequestType.HOURS_TARGET:
+                degrees = []
+                for start, end, target, elsewhere in request.target_windows(self.p):
+                    worked = [s for s in own if start <= s.date <= end]
+                    minutes = elsewhere + sum(_slot_minutes(s) for s in worked)
+                    off = target - minutes if request.at_least else abs(minutes - target)
+                    degree = min(1.0, max(0, off) / target)
+                    if request.preferred_dates:
+                        misplaced = sum(_slot_minutes(s) for s in worked if s.date not in request.preferred_dates)
+                        degree = (1 - PREFERRED_DAYS_SHARE) * degree + PREFERRED_DAYS_SHARE * min(
+                            1.0, misplaced / target
+                        )
+                    degrees.append(degree)
+                return sum(degrees) / len(degrees) if degrees else None
             case RequestType.DAYS_OFF:
                 if not request.dates:
                     return None
@@ -867,6 +889,7 @@ def is_valid(problem: Problem, schedule: Schedule) -> bool:
 
 
 __all__ = [
+    "PREFERRED_DAYS_SHARE",
     "TARGET_HOURS_HARD_TOLERANCE",
     "Code",
     "RequestKind",

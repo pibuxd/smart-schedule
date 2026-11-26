@@ -1741,3 +1741,51 @@ Założenia: sesja aplikacji przedłuża się raz dziennie przy używaniu (inacz
 dni); strona zachowuje dotychczasowe 60 dni od logowania. Push nie jest ponawiany, bo powiadomienie i tak jest
 w aplikacji. Powiadomienie dotknięte przy wylogowanej aplikacji otwiera po prostu logowanie (telefon po wylogowaniu
 nie dostaje już pushy, więc zdarza się to tylko po wygaśnięciu sesji).
+
+## 47. Prośba o liczbę godzin do wyrobienia (26.11.2026)
+
+Po teście Piotra z 26.11: „w pierwszym tygodniu chce 30 godzin wyrobić a w drugim 10 i najlepiej pod koniec tyg”
+asystent zrozumiał, ale nie miał typu na liczbę godzin, którą ktoś chce wyrobić (były tylko limity „najwyżej”),
+więc prośba poszła do kierownika jako tekst i generator jej nie użył. Piotr: „kontynuuj” (zbudować taki typ).
+
+- Nowy typ odczytu `cel_godzin` (prośby i polecenia kierownika; `RequestType.HOURS_TARGET`): `target_hours`
+  (więcej niż 0; najwyżej 24 dziennie, 168 w tygodniu, 744 w okresie), `hours_period` (`day` / `week` / `period`,
+  te same okna co `limit_godzin`), daty lub dni tygodnia (które dni się liczą) i opcjonalne `prefer_weekdays`
+  (0 = poniedziałek; „najlepiej pod koniec tygodnia” = czwartek–niedziela). Inna liczba godzin w innym tygodniu to
+  osobne części jednej wiadomości (`more`). Opis: „Około 30 godz. w tygodniu 1.02–7.02, najlepiej od czwartku do
+  niedzieli”; „w każdym tygodniu”, gdy dni nie mieszczą się w jednym tygodniu albo ich nie ma.
+- Cel, nie limit: liczy się odstępstwo w obie strony, jak przy zasadzie „Cel godzin” (`target_hours`). Stopień
+  złamania w oknie: `min(1, |minuty − cel| / cel)`; z dniami „najlepiej” 80% tego plus 20% minut na innych dniach
+  (`min(1, minuty poza tymi dniami / cel)`, `validator.PREFERRED_DAYS_SHARE`); wynik to średnia okien. Najpierw
+  godzin ma być tyle, ile trzeba, potem w te dni, które osoba woli. Solver liczy w minutach tę samą miarę.
+- Tydzień przecięty przez początek albo koniec okresu (`Request.target_windows`): liczą się tylko dni okresu,
+  a cel jest proporcjonalnie mniejszy (5 z 7 dni = 5/7 celu). Zmiany w innych lokalach liczą się w te dni.
+  Każdy okres pilnuje swojej części tygodnia, także gdy sąsiedni okres nie ma grafiku.
+- Kierownik może dać takie polecenie o osobie („Kasia ma mieć około 20 godzin w tygodniu, najlepiej w weekendy”);
+  stały „Cel godzin w miesiącu” osoby zostaje w „Pracownicy”.
+- „Co najmniej” (po uwadze z przeglądu PR, 26.11): gdy osoba wyraźnie pisze „co najmniej”, „minimum”,
+  „przynajmniej”, „nie mniej niż”, odczyt ma `at_least: true` i liczą się tylko brakujące godziny
+  (`min(1, max(0, cel − minuty) / cel)`), więcej godzin nie łamie prośby. Opis: „co najmniej 30 godz.”.
+- Samo „chcę wyrobić 30 godzin” (bez „około” i bez „co najmniej”): asystent pracownika pyta „Chodzi o około 30
+  godz., czy o co najmniej tyle (więcej godzin Ci nie przeszkadza)?” (decyzja Piotra z 26.11.2026). Model ma
+  `hours_meaning` (`about` / `at_least` / `unsaid`); przy `unsaid` pyta sama aplikacja, gdy model nie zapytał
+  (`services._hours_meaning_question`, jak przy stanowisku), a po trzecim pytaniu zapisuje „około”. Polecenie
+  kierownika bez „co najmniej” to „około”, bo kierownik widzi opis przed „Zatwierdź zmiany”. „Chcę więcej godzin”
+  bez liczby daje pytanie, ile.
+- Schemat odpowiedzi: `target_hours` (liczba, 0 = brak), `prefer_weekdays` (lista), `hours_meaning` (pracownik)
+  i `at_least` (kierownik) bez null, jak `position`, żeby liczba parametrów typu „albo” została w limicie API (test
+  z #48); null od modelu na OpenRouterze zamienia się na 0, [], `unsaid` i false.
+- Dane testowe (`seed_test_data`): Celina w Rynku ma „około 30 godz.” w pierwszym pełnym tygodniu okresu i „około
+  10 godz.” w następnym, najlepiej od czwartku do niedzieli. Demo: „Chętnie wezmę więcej godzin, około 40
+  w tygodniu” jest teraz `cel_godzin` (wcześniej błędnie `limit_godzin` bez liczby).
+
+Założenia: „około 30” to też odstępstwo przy większej liczbie godzin; kto chce najwyżej, ma `limit_godzin`, a obie
+prośby mogą być naraz. Dni „najlepiej” to dni tygodnia, nie konkretne daty.
+
+Sprawdzone na danych testowych (Rynek, okres z prośbą Celiny, 26.11.2026): pierwszy tydzień 32 h (cel 30), drugi
+40 h (cel 10). Sama prośba z zasadami lokalu daje 32 h i 8 h. W całym Rynku prośba jest jedną z wielu miękkich
+rzeczy: ocena aplikacji (`scoring.penalty`) grafiku z 40 h w drugim tygodniu to 14,03, a grafiku, w którym Celina
+ma wtedy tylko czwartek, 14,10, więc wygrywają ustawienia kierownika (80% wagi), m.in. polecenie „Celinę stawiaj
+z Anną” i zamknięcia z kierownikiem zmiany. Solver nagradza każdą wspólną zmianę przy `preferuj_osobe` (walidator
+liczy udział wspólnych zmian), ale kara za każdą zmianę bez tej osoby zamiast nagrody dała gorszy grafik (14,03 →
+15,73: zamknięcia bez kierownika zmiany), więc zostaje jak jest.

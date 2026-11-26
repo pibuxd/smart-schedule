@@ -457,6 +457,21 @@ def _position_question(reply: llm.EmployeeReply, positions: dict[str, list[str]]
     return ""
 
 
+def _hours_meaning_question(reply: llm.EmployeeReply) -> str:
+    """A question the app asks by itself when someone wants to work some hours and said neither "około" nor "co
+    najmniej" (Piotr, 26.11.2026: ask instead of guessing; only fewer hours count with "co najmniej")."""
+    unsaid = [
+        p.target_hours
+        for p in reply.preferences[:MAX_PREFERENCES]
+        if p.type == "cel_godzin" and p.target_hours > 0 and p.hours_meaning == "unsaid"
+    ]
+    if not unsaid:
+        return ""
+    numbers = list(dict.fromkeys(f"{h:g}".replace(".", ",") for h in unsaid))
+    shown = numbers[0] if len(numbers) == 1 else f"{', '.join(numbers[:-1])} i {numbers[-1]}"
+    return f"Chodzi o około {shown} godz., czy o co najmniej tyle (więcej godzin Ci nie przeszkadza)?"
+
+
 def _one_position_note(positions: dict[str, list[str]]) -> str:
     return f"Masz tylko jedno stanowisko: „{next(iter(positions))}”, więc i tak pracujesz tylko na nim."
 
@@ -500,6 +515,9 @@ def _checked_reply(
         if not question:
             question = _position_question(reply, positions)
             why = "stanowisko" if question else ""
+        if not question:
+            question = _hours_meaning_question(reply)
+            why = "około czy co najmniej" if question else ""
     if question and can_ask:
         # Nothing of this message is saved until the person answers (not even the parts the model was sure of).
         outcome = _asking(question, answer, raw, why)
@@ -769,7 +787,14 @@ def _checked_preference(
         avoid=preference.avoid_shift_type,
         max_hours=preference.max_hours,
         max_shifts=preference.max_shifts,
-        hours_period=readings.hour_scope(preference.hours_period, text, preference.max_hours),
+        target_hours=preference.target_hours or None,
+        at_least=preference.hours_meaning == "at_least",
+        prefer_weekdays=preference.prefer_weekdays,
+        hours_period=readings.hour_scope(
+            preference.hours_period,
+            text,
+            preference.target_hours if preference.type == "cel_godzin" else preference.max_hours,
+        ),
         dates=preference.dates,
         weekdays=preference.weekdays,
         min_days=preference.min_days,
@@ -1580,8 +1605,13 @@ def check_plan(
             positions={name: [str(pk)] for name, pk in held},
             max_hours=new.max_hours,
             max_shifts=new.max_shifts,
+            target_hours=new.target_hours or None,
+            at_least=new.at_least,
+            prefer_weekdays=new.prefer_weekdays,
             hours_period=readings.hour_scope(
-                new.hours_period, text if len(answer.new_instructions) == 1 else "", new.max_hours
+                new.hours_period,
+                text if len(answer.new_instructions) == 1 else "",
+                new.target_hours if new.type == "cel_godzin" else new.max_hours,
             ),
             dates=new.dates,
             weekdays=new.weekdays,

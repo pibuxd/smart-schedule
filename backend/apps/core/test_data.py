@@ -483,6 +483,12 @@ def _simple_location(company, name, address, *, positions, shifts, staffing, per
     return location, pos, types
 
 
+def _short(days: list[str]) -> str:
+    """ "2.11–8.11" for the first and the last of ISO days, as summaries show a run of days."""
+    first, last = date.fromisoformat(days[0]), date.fromisoformat(days[-1])
+    return f"{first.day}.{first.month:02d}–{last.day}.{last.month:02d}"
+
+
 def _interpretation(kind: str, summary: str, *, level="wazne", confidence=0.9, **data) -> dict:
     return {
         "type": kind,
@@ -737,6 +743,14 @@ def _requests_a(built: Built, r1: SchedulePeriod, d1: SchedulePeriod, w2: Schedu
     dworcowa_shift = {s.name: s for s in ShiftType.objects.filter(location=d1.location)}
     day12, day13 = r1.start + timedelta(days=11), r1.start + timedelta(days=12)
     st, rs = TextRequest.Status, TextRequest.UnreadReason
+    # Piotr, 26.11: "w pierwszym tygodniu chcę wyrobić 30 godzin, a w drugim 10, najlepiej pod koniec tygodnia".
+    monday = r1.start + timedelta(days=-r1.start.weekday() % 7)
+    week = [[(monday + timedelta(days=7 * n + d)).isoformat() for d in range(7)] for n in range(2)]
+    late = {"hours_period": "week", "prefer_weekdays": [3, 4, 5, 6], "lasting": False}
+    second_week = {
+        **_interpretation("cel_godzin", "", dates=week[1], target_hours=10.0, **late),
+        "summary": f"Około 10 godz. w tygodniu {_short(week[1])}, najlepiej od czwartku do niedzieli.",
+    }
     rows = [
         (
             pr["filip"],
@@ -842,6 +856,25 @@ def _requests_a(built: Built, r1: SchedulePeriod, d1: SchedulePeriod, w2: Schedu
             st.NEEDS_MANAGER,
             None,
             {"unread_reason": rs.OFF},
+        ),
+        (
+            pr["celina"],
+            r1,
+            None,
+            f"W tygodniu od {monday:%d.%m} chcę wyrobić około 30 godzin, w następnym około 10, najlepiej pod koniec "
+            "tygodnia.",
+            st.INTERPRETED,
+            _interpretation(
+                "cel_godzin",
+                f"Około 30 godz. w tygodniu {_short(week[0])}, najlepiej od czwartku do niedzieli; "
+                f"około 10 godz. w tygodniu {_short(week[1])}, najlepiej od czwartku do niedzieli.",
+                dates=week[0],
+                target_hours=30.0,
+                **late,
+                part_summary=f"Około 30 godz. w tygodniu {_short(week[0])}, najlepiej od czwartku do niedzieli.",
+                more=[second_week],
+            ),
+            {},
         ),
         (
             pr["natalia"],

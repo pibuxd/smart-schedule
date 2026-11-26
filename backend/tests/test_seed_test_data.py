@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from django.core.management import call_command
@@ -47,6 +47,13 @@ def test_seed_reset_and_delete_keep_other_data():
     assert closing.type == RequestType.AVOID_PERSON and closing.shift_type is not None
     nights = requests[str(roman.pk)]
     assert nights.type == RequestType.SHIFTS_LIMIT and nights.max_shifts == 3 and nights.weekly_hours
+    # Celina (Piotr's test, 26.11): 30 hours in one week and 10 in the next, rather at the end of the week.
+    celina = TextRequest.objects.get(company_id=td.COMPANY_A, text__contains="chcę wyrobić około 30 godzin")
+    requests = {r.id: r for r in build_problem([celina.period]).problem.requests}
+    first, second = requests[str(celina.pk)], requests[f"{celina.pk}:2"]
+    assert (first.type, first.target_hours, second.target_hours) == (RequestType.HOURS_TARGET, 30, 10)
+    assert first.weekly_hours and len(first.dates) == 7 and min(second.dates) == max(first.dates) + timedelta(days=1)
+    assert {d.weekday() for d in first.preferred_dates} == {3, 4, 5, 6}
 
     # A company the tester registered from a test number goes away with --reset; the demo stays.
     tester = User.objects.create_user(td.REGISTER_PHONES[0])

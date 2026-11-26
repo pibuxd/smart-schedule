@@ -349,3 +349,30 @@ def test_an_unknown_name_in_an_answer_is_asked_about_again(api, shop, with_key, 
     write(api, shop, "Nie chcę pracować z kimś.")
     second = write(api, shop, "Z Zenonem.")
     assert second.status == "answered" and second.question.startswith("Nie ma w lokalu osoby „Zenon”")
+
+
+def test_hours_to_work_without_about_or_at_least_are_asked_about(api, shop, with_key, monkeypatch):
+    """Piotr, 26.11.2026: "chcę wyrobić 30 godzin" may mean about 30 or at least 30, so the assistant asks."""
+    wish = {"type": "cel_godzin", "target_hours": 30, "hours_period": "week", "weekdays": []}
+    Model(
+        monkeypatch,
+        reading(**wish),  # the model did not ask
+        answering(reading(**wish, hours_meaning="at_least")),
+        reading(**wish, hours_meaning="about"),
+    )
+    api.login(shop["worker"])
+    first = write(api, shop, "Chcę wyrobić 30 godzin w tygodniu.")
+    assert first.status == "answered" and first.interpretation is None
+    assert first.question == "Chodzi o około 30 godz., czy o co najmniej tyle (więcej godzin Ci nie przeszkadza)?"
+    assert build_problem([shop["period"]]).problem.requests == ()
+
+    second = write(api, shop, "Co najmniej, więcej mogę.")
+    assert second.status == "interpreted" and second.answer_to_id == first.pk
+    assert second.interpretation["summary"] == "Co najmniej 30 godz. w każdym tygodniu."
+    [request] = build_problem([shop["period"]]).problem.requests
+    assert request.type == "hours_target" and request.at_least and request.target_hours == 30
+
+    # "Około" said at once: nothing to ask.
+    third = write(api, shop, "Chcę wyrobić około 30 godzin w tygodniu.")
+    assert third.status == "interpreted" and not third.question
+    assert third.interpretation["summary"] == "Około 30 godz. w każdym tygodniu."
