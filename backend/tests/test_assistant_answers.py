@@ -478,6 +478,35 @@ class TestEmployee:
         status, _, _ = read(api, shop, monkeypatch, answer, "Wolę nie pracować od 9 do 11.")
         assert status == "needs_manager"
 
+    def test_weekdays_of_the_period_someone_cannot_work_in_some_hours_count_as_days(
+        self, api, shop, with_key, monkeypatch
+    ):
+        # Retest 26.11.2026: next to "w piątki wolę salę" the model gave the Tuesdays as weekdays, not dates, and the
+        # whole message went to the manager without an answer.
+        shop["employee"].positions.add(Position.objects.create(location=shop["location"], name="Bar"))
+        period = shop["period"]
+        days = [period.start + timedelta(days=n) for n in range((period.end - period.start).days + 1)]
+        fridays = [d.isoformat() for d in days if d.weekday() == 4]
+        tuesdays = [d.isoformat() for d in days if d.weekday() == 1]
+        answer = reading(
+            weekdays=[5], dates=fridays, type="stanowisko", position="Bar", rather=True, level="mile_widziane"
+        )
+        answer.preferences.append(reading(weekdays=[2], cannot=True, from_time="9:00", to_time="11:00").preferences[0])
+        text = "W piątki wolę bar, a we wtorki nie mogę od 9:00 do 11:00."
+        status, row, _ = read(api, shop, monkeypatch, answer, text)
+        assert status == "interpreted"
+        # The Fridays listed next to "w piątki" say nothing more.
+        assert row.interpretation["summary"] == (
+            "Chętniej stanowisko „Bar” w piątki (inne też mogą być); "
+            "we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)."
+        )
+        [mark] = my_requests(api, shop)[0]["cannot_marks"]
+        assert mark["days"] == tuesdays and not mark["whole_day"]
+        # Every Tuesday for good has no days to mark: the manager reads it.
+        for_good = reading(weekdays=[2], cannot=True, from_time="9:00", to_time="11:00", lasting=True)
+        status, _, _ = read(api, shop, monkeypatch, for_good, "Na stałe we wtorki nie mogę od 9 do 11.")
+        assert status == "needs_manager"
+
     def test_rather_a_position_is_not_only_that_position(self, api, shop, with_key, monkeypatch):
         second = Position.objects.create(location=shop["location"], name="Bar")
         shop["employee"].positions.add(second)

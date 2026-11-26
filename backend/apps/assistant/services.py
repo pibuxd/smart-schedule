@@ -788,14 +788,19 @@ def _checked_preference(
             return None, OTHER_POSITION
         return None, "osoba, zmiana, godziny lub dni nie pasują do lokalu"
     doubt = f"pewność {confidence:.2f}" if confidence < settings.ASSISTANT_MIN_CONFIDENCE else ""
-    if preference.cannot and data["type"] == "wolne_dni" and data["dates"]:
+    # Concrete days belong to their month: only a wish without them carries over to later periods.
+    lasting = bool(preference.lasting) and not data["dates"]
+    if data["weekdays"] and data["dates"]:
+        # "w piątki" with those Fridays listed too: the weekdays already say it ("w piątki", not "w piątki i 4.12…").
+        data["dates"] = [d for d in data["dates"] if date.fromisoformat(d).weekday() not in data["weekdays"]]
+    if preference.cannot and data["type"] == "wolne_dni" and not lasting:
+        # Dates, or weekdays of this period ("w grudniu we wtorki"): concrete days the calendar can mark.
         data["cannot"] = True
     if readings.calendar_only(data) and not data.get("cannot"):
-        # Hours are kept only for "nie mogę" on concrete days, marked in the calendar as "mogę" outside them; a
-        # softer "wolę nie od 9 do 11", or every Tuesday for good, has no place to keep them.
-        return None, "godziny bez „nie mogę” w konkretne dni"
-    # Concrete days belong to their month: only a wish without them carries over to later periods.
-    data["lasting"] = bool(preference.lasting) and not data["dates"]
+        # Hours are kept only for "nie mogę" on days of this period, marked in the calendar as "mogę" outside them;
+        # a softer "wolę nie od 9 do 11", or every Tuesday for good, has no place to keep them.
+        return None, "godziny bez „nie mogę” w dni tego okresu"
+    data["lasting"] = lasting
     summary = readings.describe(
         data,
         "Ty" if data["type"] in ("unikaj_osoby", "preferuj_osobe") else "",
