@@ -50,7 +50,7 @@ export function renderScreen(ui: ReactNode) {
 export type Call = { url: string; method: string; body: unknown }
 
 /** Replace fetch with a table of answers: `route(method, path) -> [status, body]`. Records every call. */
-export function mockApi(answer: (method: string, path: string, body: unknown) => [number, unknown]) {
+export function mockApi(answer: (method: string, path: string, body: unknown, url?: string) => [number, unknown]) {
   const calls: Call[] = []
   vi.stubGlobal(
     'fetch',
@@ -64,7 +64,7 @@ export function mockApi(answer: (method: string, path: string, body: unknown) =>
             ? JSON.parse(String(init.body))
             : undefined
       calls.push({ url, method, body })
-      const [status, data] = answer(method, url.split('?')[0], body)
+      const [status, data] = answer(method, url.split('?')[0], body, url)
       return new Response(status === 204 ? null : JSON.stringify(data), { status })
     }),
   )

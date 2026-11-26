@@ -33,6 +33,18 @@ describe('Mój grafik list', () => {
     expect(buildRows(shift('2026-12-30'), [], '2026-12-31').map((r) => r.kind)).toEqual(['off'])
   })
 
+  it('calls a day off only a day of a published schedule', () => {
+    // Tests of PR #82 (26.11.2026): with November and February published, December and January looked free.
+    const published = [
+      { start: '2026-11-26', end: '2026-11-30' },
+      { start: '2027-02-01', end: '2027-02-28' },
+    ]
+    const rows = buildRows(shift('2026-11-30'), [shift('2027-02-01')], '2027-02-02', published)
+    expect(rows.map((r) => r.kind)).toEqual(['unpublished', 'week', 'shift', 'off'])
+    expect(rows[0]).toMatchObject({ from: new Date(2026, 11, 1), to: new Date(2027, 0, 31) })
+    expect(rows[1]).toMatchObject({ label: 'Tydzień 1–7 lutego' })
+  })
+
   it('names a few coworkers and counts the rest with the right Polish form', () => {
     expect(coworkersText(['Anna', 'Marek'])).toBe('Anna, Marek')
     expect(coworkersText(['A', 'B', 'C', 'D', 'E'])).toBe('A, B, C i 2 inne osoby')

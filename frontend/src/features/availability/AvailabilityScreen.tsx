@@ -47,6 +47,8 @@ type SaveStatus = 'saved' | 'saving' | 'failed'
 
 /** How many months ahead of the current one the calendar reaches. */
 const MONTHS_AHEAD = 3
+/** How far a notification may open the calendar (the server takes marks up to a year ahead). */
+const LINK_MONTHS_AHEAD = 12
 
 const monthOf = (iso: string) => iso.slice(0, 7)
 
@@ -80,8 +82,20 @@ export function AvailabilityScreen({
   const query = useMyAvailability({ company_id: companyId }, { query: { gcTime: 0 } })
   const saving = useIsMutating({ predicate: (mutation) => mutation.options.scope?.id === `availability:${companyId}` }) > 0
   const [chosen, setChosen] = useState<string | null>(null)
+  const thisMonth = monthOf(toIsoDate(today))
+  // A notification about a later period (March while December is still open) links past the usual reach:
+  // the month opens when the employee has an open period there, else the screen falls back as usual.
+  const far =
+    wanted && wanted > addMonths(thisMonth, MONTHS_AHEAD) && wanted <= addMonths(thisMonth, LINK_MONTHS_AHEAD)
+      ? wanted
+      : null
+  const farBounds = monthBounds(far ?? thisMonth)
+  const farCalendar = useMyCalendar(
+    { company_id: companyId, ...farBounds },
+    { query: { enabled: Boolean(far), gcTime: 0 } },
+  )
 
-  if (query.isPending) return <Loading>Wczytuję kalendarz…</Loading>
+  if (query.isPending || (far && farCalendar.isPending)) return <Loading>Wczytuję kalendarz…</Loading>
   if (query.isError) {
     return (
       <ErrorState onRetry={() => void query.refetch()}>
@@ -91,9 +105,15 @@ export function AvailabilityScreen({
   }
   const data = query.data.data as MyAvailabilityOut
   const period = data.period ?? null
-  const thisMonth = monthOf(toIsoDate(today))
+  const farPeriod = far && farCalendar.isSuccess ? ((farCalendar.data.data as MyCalendarOut).period ?? null) : null
   const requested = period ? monthOf(period.start < toIsoDate(today) ? toIsoDate(today) : period.start) : null
-  const lastMonth = [addMonths(thisMonth, MONTHS_AHEAD), period ? monthOf(period.end) : thisMonth].sort().pop()!
+  const lastMonth = [
+    addMonths(thisMonth, MONTHS_AHEAD),
+    period ? monthOf(period.end) : thisMonth,
+    farPeriod ? monthOf(farPeriod.end) : thisMonth,
+  ]
+    .sort()
+    .pop()!
   const linked = wanted && wanted >= thisMonth && wanted <= lastMonth ? wanted : null
   const month = chosen ?? linked ?? requested ?? thisMonth
 

@@ -8,7 +8,6 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
-from django.db.models import Max
 from django.utils import timezone
 from ninja import Field, Router, Schema
 from ninja.errors import HttpError
@@ -437,6 +436,11 @@ class PreparingOut(Schema):
     end: date
 
 
+class DaysOut(Schema):
+    start: date
+    end: date
+
+
 class MyScheduleOut(Schema):
     home_location_name: str
     # From now on: shifts that have not ended (with the hours that count).
@@ -445,6 +449,9 @@ class MyScheduleOut(Schema):
     recent: list[MyShiftOut] = Field(default_factory=list)
     # Last day covered by a published schedule of my location (days off up to it are shown too); None = none.
     published_until: date | None = None
+    # The days published schedules of my locations cover, joined (from today on): only there is a day without a
+    # shift a day off; between them the schedule is not out yet (tests of PR #82, 26.11.2026).
+    published: list["DaysOut"] = Field(default_factory=list)
     # Hours of published shifts in each month that the list touches (and the current month).
     months: list[MonthHoursOut]
     # Schedules still being arranged (a draft, not published): their shifts appear here only after publishing.
@@ -567,18 +574,25 @@ def my_schedule(request, company_id: UUID):
         if key in totals:
             totals[key] += counted[assignment.pk].seconds
             rules.add(pay[key], assignment, counted[assignment.pk])
-    published_until = (
+    horizon = today + timedelta(days=MY_SCHEDULE_DAYS)
+    spans: list[list[date]] = []
+    for start, end in (
         ctx.qs(SchedulePeriod)
         .filter(
             location_id__in=profile.location_ids(),
             versions__status=ScheduleVersion.Status.PUBLISHED,
             end__gte=today,
-            start__lte=today + timedelta(days=MY_SCHEDULE_DAYS),
+            start__lte=horizon,
         )
-        .aggregate(until=Max("end"))["until"]
-    )
-    if published_until:
-        published_until = min(published_until, today + timedelta(days=MY_SCHEDULE_DAYS))
+        .values_list("start", "end")
+        .distinct()
+        .order_by("start")
+    ):
+        if spans and start <= spans[-1][1] + timedelta(days=1):
+            spans[-1][1] = max(spans[-1][1], end)
+        else:
+            spans.append([start, end])
+    published_until = min(spans[-1][1], horizon) if spans else None
     preparing = (
         ctx.qs(SchedulePeriod)
         .filter(
@@ -595,6 +609,7 @@ def my_schedule(request, company_id: UUID):
         shifts=shifts,
         recent=past,
         published_until=published_until,
+        published=[DaysOut(start=start, end=min(end, horizon)) for start, end in spans],
         months=[
             MonthHoursOut(
                 month=m,

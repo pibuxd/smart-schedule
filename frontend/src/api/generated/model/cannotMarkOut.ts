@@ -10,13 +10,18 @@ import type { WindowOut } from './windowOut';
  * Days a request says the person cannot work that the calendar does not show so (and that can still change):
  * the screen offers to mark them through `PUT /me/calendar`. Without hours: "nie mogę". With hours ("we wtorki nie
  * mogę od 9 do 11"): "nie mogę" is always a whole day, so the days get "mogę" (or keep "chętnie", `prefer_days`)
- * only in `windows`, the rest of the day ("do 9:00 i od 11:00").
+ * only in `windows`, what is left of the day ("do 9:00 i od 11:00"). Every request about a day counts together
+ * (9–11 and 14–16 the same day are one offer).
  */
 export interface CannotMarkOut {
   days: string[];
   from_time?: string | null;
   to_time?: string | null;
+  hours?: WindowOut[];
   windows?: WindowOut[];
   prefer_days?: string[];
+  one_shift_days?: string[];
+  dropped?: WindowOut[];
   whole_day?: boolean;
+  own?: WindowOut[];
 }

@@ -4,6 +4,7 @@
  * Grafikomat API
  * OpenAPI spec version: 0.1.0
  */
+import type { DaysOut } from './daysOut';
 import type { MonthHoursOut } from './monthHoursOut';
 import type { MyShiftOut } from './myShiftOut';
 import type { PreparingOut } from './preparingOut';
@@ -13,6 +14,7 @@ export interface MyScheduleOut {
   shifts: MyShiftOut[];
   recent?: MyShiftOut[];
   published_until?: string | null;
+  published?: DaysOut[];
   months: MonthHoursOut[];
   preparing?: PreparingOut[];
 }

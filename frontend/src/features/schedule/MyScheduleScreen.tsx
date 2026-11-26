@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
-import type { MonthHoursOut, MyScheduleOut, MyShiftOut, PreparingOut } from '../../api/generated/model'
+import type { DaysOut, MonthHoursOut, MyScheduleOut, MyShiftOut, PreparingOut } from '../../api/generated/model'
 import { useMySchedule } from '../../api/generated/scheduling/scheduling'
 import { Button } from '../../components/ui/button'
 import { Section } from '../../components/ui/field'
@@ -100,7 +100,13 @@ export function MyScheduleScreen({
         </EmptyState>
       )}
       {next && (rest.length > 0 || (data.published_until ?? next.date) > next.date) && (
-        <UpcomingList first={next} shifts={rest} publishedUntil={data.published_until} onGive={give} />
+        <UpcomingList
+          first={next}
+          shifts={rest}
+          publishedUntil={data.published_until}
+          published={data.published}
+          onGive={give}
+        />
       )}
       {data.published_until && (
         <p className="m-0 text-ink-muted">
@@ -294,14 +300,16 @@ function UpcomingList({
   first,
   shifts,
   publishedUntil,
+  published,
   onGive,
 }: {
   first: MyShiftOut
   shifts: MyShiftOut[]
   publishedUntil?: string | null
+  published?: DaysOut[]
   onGive?: (shift: MyShiftOut) => void
 }) {
-  const rows = buildRows(first, shifts, publishedUntil)
+  const rows = buildRows(first, shifts, publishedUntil, published)
   return (
     <section aria-labelledby="upcoming" className="grid gap-3">
       <h2 id="upcoming" className="m-0 text-lg font-extrabold">
@@ -312,6 +320,12 @@ function UpcomingList({
           row.kind === 'week' ? (
             <li key={row.key} className="border-t border-grid bg-paper px-4 py-1.5 text-xs font-semibold text-ink-muted">
               {row.label}
+            </li>
+          ) : row.kind === 'unpublished' ? (
+            <li key={row.key} className="border-t border-grid px-4 py-2 text-ink-muted first:border-t-0">
+              {row.from.getTime() === row.to.getTime()
+                ? `${dayAndMonth(row.from)}: grafiku jeszcze nie ma.`
+                : `${dayAndMonth(row.from)} – ${dayAndMonth(row.to)}: grafiku jeszcze nie ma.`}
             </li>
           ) : row.kind === 'off' ? (
             <li key={row.key} className="grid grid-cols-[52px_1fr] items-center gap-3 border-t border-grid px-4 py-2 first:border-t-0">
