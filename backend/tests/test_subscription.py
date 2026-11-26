@@ -190,13 +190,14 @@ def test_only_a_manager_of_the_company_enters_codes(api, make_company):
     ("days", "expected"),
     [
         (30, {"is_active": True, "read_only": False, "days_left": 30, "expiring_soon": False}),
-        (7.5, {"is_active": True, "read_only": False, "days_left": 8, "expiring_soon": False}),
-        (6.5, {"is_active": True, "read_only": False, "days_left": 7, "expiring_soon": True}),
+        (6.5, {"is_active": True, "read_only": False, "days_left": 7, "expiring_soon": False}),
+        (2.5, {"is_active": True, "read_only": False, "days_left": 3, "expiring_soon": False}),
+        (1.5, {"is_active": True, "read_only": False, "days_left": 2, "expiring_soon": True}),
         (0.01, {"is_active": True, "read_only": False, "days_left": 1, "expiring_soon": True}),
         (-0.01, {"is_active": False, "read_only": True, "days_left": 0, "expiring_soon": False}),
     ],
 )
-def test_subscription_state_and_banner_seven_days_before_the_end(api, make_company, subscribe, days, expected):
+def test_subscription_state_and_banner_two_days_before_the_end(api, make_company, subscribe, days, expected):
     a = make_company()
     subscribe(a["company"], days=days)
     api.login(a["manager"])
@@ -285,6 +286,7 @@ def test_company_registered_without_a_code_gets_a_trial(api):
     assert close_to(subscription.ends_at, timezone.now() + 30 * DAY)
     state = api.get(f"/api/companies/{body['id']}/subscription").json()
     assert state["trial"] is True and state["days_left"] == 30
+    assert state["expiring_soon"] is False  # no strip in the panel during the trial, only on "Dostęp"
 
 
 def test_only_the_first_company_of_a_person_gets_a_trial(api):

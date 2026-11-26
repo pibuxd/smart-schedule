@@ -81,8 +81,12 @@ export function statusWords(data: Pick<SubscriptionOut, 'read_only' | 'trial' | 
   return `Dostęp aktywny: ${daysWords(data.days_left)}`
 }
 
+/** "został 1 dzień", "zostały 2 dni", "zostało 5 dni" */
 function daysWords(days: number): string {
-  return days === 1 ? 'został 1 dzień' : `zostało ${days} dni`
+  if (days === 1) return 'został 1 dzień'
+  const last = days % 10
+  const teen = days % 100 >= 12 && days % 100 <= 14
+  return `${last >= 2 && last <= 4 && !teen ? 'zostały' : 'zostało'} ${days} dni`
 }
 
 /** "Zaproś 1 osobę / 3 osoby / 5 osób" (the object of a sentence; `people` is the subject). */

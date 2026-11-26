@@ -4,12 +4,15 @@ import { useSubscription } from '../../api/generated/billing/billing'
 import type { SubscriptionOut } from '../../api/generated/model'
 import { statusWords } from './words'
 
-/** A strip at the top of the manager's panel: read-only mode, the trial, or access ending within 7 days. */
+/**
+ * A strip at the top of the manager's panel, only for read-only mode or access (the trial too) ending within
+ * 2 days. Until then the state is only on "Dostęp" (Piotr, 26.11.2026).
+ */
 export function AccessBanner({ companyId }: { companyId: string }) {
   const subscription = useSubscription(companyId, { query: { staleTime: 60_000 } })
   if (!subscription.isSuccess) return null
   const data = subscription.data.data as SubscriptionOut
-  if (!data.read_only && !data.trial && !data.expiring_soon) return null
+  if (!data.read_only && !data.expiring_soon) return null
   const tone = data.read_only ? 'border-cannot bg-cannot-soft text-cannot' : 'border-accent bg-accent-soft text-ink'
   const words = data.read_only
     ? data.trial

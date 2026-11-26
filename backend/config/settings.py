@@ -134,7 +134,8 @@ ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR = int(env("ADMIN_LOGIN_FAILURES_PER_IP_PER_
 # Free-access codes: failed attempts allowed per hour before further tries are refused.
 ACCESS_CODE_FAILURES_PER_USER_PER_HOUR = int(env("ACCESS_CODE_FAILURES_PER_USER_PER_HOUR", "5"))
 ACCESS_CODE_FAILURES_PER_IP_PER_HOUR = int(env("ACCESS_CODE_FAILURES_PER_IP_PER_HOUR", "20"))
-SUBSCRIPTION_BANNER_DAYS = 7
+# The manager's panel shows the access strip only this many days before access ends (and when read-only).
+SUBSCRIPTION_BANNER_DAYS = 2
 # A company registered without a code gets this many days of full access (once per person who registers).
 TRIAL_DAYS = int(env("TRIAL_DAYS", "30"))
 
