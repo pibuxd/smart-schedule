@@ -500,6 +500,28 @@ class TestMySchedule:
         assert body["home_location_name"] == shop["location"].name
         assert body["published_until"] is None
 
+    def test_only_days_of_published_schedules_are_days_off(self, api, shop):
+        """Tests of PR #82 (26.11.2026): with only the last day of the published schedules, every day before it looked
+        free, also in months with nothing published."""
+        first = timezone.localdate() + timedelta(days=120)
+
+        def published(start, end):
+            period = SchedulePeriod.objects.create(
+                location=shop["location"], start=start, end=end, status=SchedulePeriod.Status.PUBLISHED
+            )
+            ScheduleVersion.objects.create(period=period, number=1, status=ScheduleVersion.Status.PUBLISHED)
+
+        published(first, first + timedelta(days=4))
+        published(first + timedelta(days=5), first + timedelta(days=9))  # right after it: one span
+        published(first + timedelta(days=40), first + timedelta(days=45))
+        api.login(shop["worker"])
+        body = api.get(path("/api/me/schedule", shop["company"])).json()
+        assert body["published"] == [
+            {"start": str(first), "end": str(first + timedelta(days=9))},
+            {"start": str(first + timedelta(days=40)), "end": str(first + timedelta(days=45))},
+        ]
+        assert body["published_until"] == str(first + timedelta(days=45))
+
 
 def test_publish_helper_supersedes_the_previous_version(shop):
     from apps.scheduling.editing import publish

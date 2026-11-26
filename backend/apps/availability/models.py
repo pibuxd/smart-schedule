@@ -236,23 +236,31 @@ class TextRequest(CompanyOwnedModel):
         """The first day of the period or month the request was written for."""
         return self.period.start if self.period_id else self.month
 
+    @staticmethod
+    def part_can_last(part: dict) -> bool:
+        """Whether one wish can count in later months: not about concrete days, and not hours someone cannot work,
+        which only the calendar keeps on days of this period (Piotr, 26.11.2026)."""
+        from apps.assistant.readings import calendar_only
+
+        return not part.get("dates") and not calendar_only(part)
+
     @property
     def can_last(self) -> bool:
-        """Whether "na stałe" means anything: a saved request that is not only about concrete days."""
+        """Whether "na stałe" means anything: a saved request with a wish that can count in later months."""
         if self.status == self.Status.NEEDS_MANAGER:
             return True
         data = self.interpretation or {}
         parts = [data, *(data.get("more") or [])]
-        return self.status == self.Status.INTERPRETED and any(not part.get("dates") for part in parts)
+        return self.status == self.Status.INTERPRETED and any(self.part_can_last(part) for part in parts)
 
     def set_lasting(self, lasting: bool) -> None:
-        """The person's choice "Tylko ten okres" / "Na stałe" for the whole request (every wish in it that is not
-        about concrete days). It starts over: an end set before is gone. The caller saves."""
+        """The person's choice "Tylko ten okres" / "Na stałe" for the whole request (every wish in it that can
+        count later, `part_can_last`). It starts over: an end set before is gone. The caller saves."""
         self.lasting, self.ends_from, self.ended_by = lasting, None, None
         if self.interpretation:
-            data = {**self.interpretation, "lasting": lasting and not self.interpretation.get("dates")}
+            data = {**self.interpretation, "lasting": lasting and self.part_can_last(self.interpretation)}
             if data.get("more"):
-                data["more"] = [{**part, "lasting": lasting and not part.get("dates")} for part in data["more"]]
+                data["more"] = [{**part, "lasting": lasting and self.part_can_last(part)} for part in data["more"]]
             self.interpretation = data
 
     @property

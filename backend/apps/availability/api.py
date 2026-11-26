@@ -191,17 +191,39 @@ class CannotMarkOut(Schema):
     """Days a request says the person cannot work that the calendar does not show so (and that can still change):
     the screen offers to mark them through `PUT /me/calendar`. Without hours: "nie mogę". With hours ("we wtorki nie
     mogę od 9 do 11"): "nie mogę" is always a whole day, so the days get "mogę" (or keep "chętnie", `prefer_days`)
-    only in `windows`, the rest of the day ("do 9:00 i od 11:00")."""
+    only in `windows`, what is left of the day ("do 9:00 i od 11:00"). Every request about a day counts together
+    (9–11 and 14–16 the same day are one offer)."""
 
     days: list[date]
-    # The hours the person cannot work ("09:00"; either may be None); both None = the whole day.
+    # The first hours the person cannot work ("09:00"; either may be None); both None = the whole day. `hours`: all
+    # of them on those days, in order.
     from_time: str | None = None
     to_time: str | None = None
+    hours: list[WindowOut] = Field(default_factory=list)
+    # Empty: mark "nie mogę". Otherwise "mogę" ("chętnie" on `prefer_days`) only in these windows.
     windows: list[WindowOut] = Field(default_factory=list)
     prefer_days: list[date] = Field(default_factory=list)
+    # Days with "albo" (only one of the two windows) that keep it.
+    one_shift_days: list[date] = Field(default_factory=list)
+    # Windows left to work that the calendar cannot keep (it has two a day): the shortest ones, given up so that no
+    # work falls in the hours the person cannot. The screen says so before the button is pressed.
+    dropped: list[WindowOut] = Field(default_factory=list)
     # The calendar has "nie mogę" for the whole day there, the request only some hours: the screen offers to open
-    # the rest of the day (after "nie mogę od 9 do 11" was first read as whole days).
+    # what is left of the day (after "nie mogę od 9 do 11" was first read as whole days).
     whole_day: bool = False
+    # The days have the person's own hours ("mogę 8:00–18:00") that run into the hours of the request: the offer
+    # keeps only their part outside them. They stay as they are until the person presses the button.
+    own: list[WindowOut] = Field(default_factory=list)
+
+
+class RequestPartOut(Schema):
+    """One wish of an understood request, as the screen tells them apart."""
+
+    summary: str
+    # Only marked in the calendar ("nie mogę od 9 do 11": the button), never read by the generator.
+    calendar_only: bool = False
+    # Can count in later months ("Na stałe"); concrete days and calendar-only hours count only here.
+    can_last: bool = False
 
 
 class MyRequestOut(Schema):
@@ -214,6 +236,11 @@ class MyRequestOut(Schema):
     reply: str | None
     # Days the request says the person cannot work that the calendar does not show so yet, by hours.
     cannot_marks: list[CannotMarkOut] = Field(default_factory=list)
+    # Until 2027: what a screen loaded before 26.11.2026 still reads (it marks these days "nie mogę"): only the
+    # whole-day offers of `cannot_marks`, the ones it can save correctly.
+    unmarked_days: list[date] = Field(default_factory=list)
+    # The wishes of an understood request, one by one (the generator reads only the ones not `calendar_only`).
+    parts: list[RequestPartOut] = Field(default_factory=list)
     # Things to know: the calendar says the opposite of the request, or the request is about a shift the person's
     # position never has.
     notes: list[str]
@@ -580,31 +607,39 @@ class _Calendar:
     def __init__(self, ctx: TenantContext, profile: EmployeeProfile, start: date, end: date) -> None:
         rows = ctx.qs(AvailabilityDay).filter(employee=profile, date__gte=start, date__lte=end)
         self.states: dict[date, str] = {}
-        # (from, to) of a day marked "mogę"/"chętnie" only in these hours ("nie mogę" has no hours).
-        self.hours: dict[date, tuple[str | None, str | None]] = {}
-        for day, state, start_at, end_at, second in rows.values_list(
-            "date", "state", "from_time", "to_time", "from_time_2"
+        # The windows ("HH:MM", "00:00" at the end = midnight) of a day marked "mogę"/"chętnie" only in these hours
+        # ("nie mogę" has no hours), and the days with "albo" (only one of two windows).
+        self.windows: dict[date, list[tuple[str, str]]] = {}
+        self.one_shift: set[date] = set()
+        for day, state, start_at, end_at, start_2, end_2, one_shift in rows.values_list(
+            "date", "state", "from_time", "to_time", "from_time_2", "to_time_2", "one_shift"
         ):
             self.states[day] = state
             if start_at is not None or end_at is not None:
-                # A second window never matches one request's hours.
-                self.hours[day] = (_clock(start_at), _clock(end_at)) if second is None else (None, "*")
+                self.windows[day] = [(_clock(start_at) or "00:00", _clock(end_at) or "00:00")]
+                if start_2 is not None or end_2 is not None:
+                    self.windows[day].append((_clock(start_2) or "00:00", _clock(end_2) or "00:00"))
+            if one_shift:
+                self.one_shift.add(day)
         self.locked = _locked_days(ctx, profile, start, end)
 
-    def to_mark(self, days: list[date], hours: tuple[str | None, str | None]) -> tuple[list[date], list[date]]:
-        """Of `days` the request says the person cannot work (only in `hours`, when given): (days the calendar still
-        leaves open to work then, days it blocks for the whole day although the request names hours). Days with
-        hours of their own are the person's own setting and stay as they are."""
-        free, whole = [], []
-        for day in days:
-            if day in self.locked:
-                continue
-            if self.states.get(day) == AvailabilityState.CANNOT:
-                if hours != (None, None):
-                    whole.append(day)
-            elif self.hours.get(day) is None or hours == (None, None):
-                free.append(day)
-        return free, whole
+    def offer(self, day: date, hours: list[tuple[str | None, str | None]] | None) -> tuple | None:
+        """What to offer for a day the request says the person cannot work (`hours`; None = the whole day), as
+        (windows, dropped, whole_day, own); None when the calendar already says so or the day cannot change."""
+        from apps.assistant.readings import windows_left
+
+        state = self.states.get(day)
+        if day in self.locked or (state == AvailabilityState.CANNOT and hours is None):
+            return None
+        if hours is None:
+            return (), (), False, ()
+        own = self.windows.get(day) if state != AvailabilityState.CANNOT else None
+        windows, dropped = windows_left(hours, own)
+        if own is not None and windows == own:
+            return None  # the person's own hours already keep clear of them
+        if state == AvailabilityState.CANNOT and not windows:
+            return None
+        return tuple(windows), tuple(dropped), state == AvailabilityState.CANNOT, tuple(own or ())
 
 
 def _clock(value: time | None) -> str | None:
@@ -631,6 +666,8 @@ def _request_out(
         summary=_summary(text_request),
         reply=text_request.reply or None,
         cannot_marks=unmarked,
+        unmarked_days=sorted(d for mark in unmarked if not mark.windows for d in mark.days),
+        parts=_parts(text_request),
         notes=[*((text_request.interpretation or {}).get("notes") or [] if interpreted else []), *notes],
         created_at=text_request.created_at,
         hours_reports=_hours_proposals(text_request),
@@ -700,25 +737,25 @@ def _hours_proposals(row: TextRequest) -> list[HoursProposalOut]:
 
 
 def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotMarkOut], list[str]]:
-    from apps.assistant.readings import calendar_only, complement, dates_in
+    from apps.assistant.readings import calendar_only, dates_in
     from apps.assistant.services import request_span
 
     if row.status != TextRequest.Status.INTERPRETED or not row.interpretation:
         return [], []
     start, end = request_span(row)
-    marks: dict[tuple[str | None, str | None, bool], set[date]] = {}
-    taken: set[date] = set()  # one offer per day: the first part that names it
+    # Every part about a day counts together: a whole day (None), or all the hours the person cannot work then.
+    cannot: dict[date, list[tuple[str | None, str | None]] | None] = {}
     notes = []
     for part in [row.interpretation, *(row.interpretation.get("more") or [])]:
         days = sorted(dates_in(part, start, end))
         if part.get("type") == "wolne_dni":
             if part.get("cannot"):
                 hours = (part.get("from_time") or None, part.get("to_time") or None)
-                free, whole = calendar.to_mark([d for d in days if d not in taken], hours)
-                for group, whole_day in ((free, False), (whole, True)):
-                    if group:
-                        marks.setdefault((*hours, whole_day), set()).update(group)
-                        taken.update(group)
+                for day in days:
+                    if hours == (None, None) or (day in cannot and cannot[day] is None):
+                        cannot[day] = None
+                    else:
+                        cannot.setdefault(day, []).append(hours)
             if calendar_only(part):
                 continue  # "chętnie" stays, only in the hours the person can
             eager = [d for d in days if calendar.states.get(d) == AvailabilityState.PREFER]
@@ -734,20 +771,62 @@ def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotM
                     f"W kalendarzu masz „Nie mogę” w dni, w które prośba mówi o pracy: {_dates_words(blocked)}. "
                     "Tych dni generator Ci nie da."
                 )
+    marks: dict[tuple, list[date]] = {}
+    for day in sorted(cannot):
+        hours = cannot[day]
+        offer = calendar.offer(day, sorted(set(hours), key=lambda h: h[0] or "") if hours is not None else None)
+        if offer is not None:
+            key = (tuple(sorted(set(hours or ()), key=lambda h: h[0] or "")), *offer)
+            marks.setdefault(key, []).append(day)
+
+    def out(windows) -> list[WindowOut]:
+        return [WindowOut(start=a or "00:00", end=b or "00:00") for a, b in windows]
+
     unmarked = []
-    for (start_at, end_at, whole_day), days in marks.items():
-        windows = complement({"from_time": start_at, "to_time": end_at})
+    for (hours, windows, dropped, whole_day, own), days in marks.items():
+        first = hours[0] if hours else (None, None)
         unmarked.append(
             CannotMarkOut(
-                days=sorted(days),
-                from_time=start_at,
-                to_time=end_at,
-                windows=[WindowOut(start=a, end=b) for a, b in windows],
-                prefer_days=sorted(d for d in days if windows and calendar.states.get(d) == AvailabilityState.PREFER),
+                days=days,
+                from_time=first[0],
+                to_time=first[1],
+                hours=out(hours),
+                windows=out(windows),
+                prefer_days=[d for d in days if windows and calendar.states.get(d) == AvailabilityState.PREFER],
+                one_shift_days=[d for d in days if len(windows) == 2 and d in calendar.one_shift],
+                dropped=out(dropped),
                 whole_day=whole_day,
+                own=out(own),
             )
         )
     return sorted(unmarked, key=lambda mark: mark.days[0]), notes
+
+
+def _parts(row: TextRequest) -> list[RequestPartOut]:
+    from apps.assistant.readings import calendar_only
+
+    if row.status != TextRequest.Status.INTERPRETED or not row.interpretation:
+        return []
+    return [
+        RequestPartOut(
+            summary=part.get("part_summary") or part.get("summary") or "",
+            calendar_only=calendar_only(part),
+            can_last=TextRequest.part_can_last(part),
+        )
+        for part in [row.interpretation, *(row.interpretation.get("more") or [])]
+    ]
+
+
+def _cannot_last(row: TextRequest) -> str:
+    from apps.assistant.readings import calendar_only
+
+    data = row.interpretation or {}
+    if any(calendar_only(part) for part in [data, *(data.get("more") or [])]):
+        return (
+            "Godziny, w których nie możesz, zaznaczasz w kalendarzu na dni tego okresu, więc ta prośba nie może być "
+            "na stałe."
+        )
+    return "Ta prośba dotyczy tylko konkretnych dni, więc nie może być na stałe."
 
 
 def _dates_words(days: list[date]) -> str:
@@ -957,7 +1036,7 @@ def update_my_request(request, request_id: UUID, payload: RequestChangeIn):
             _tell_managers(ctx, text_request)
         elif payload.lasting is not None and payload.lasting != text_request.lasting:
             if text_request.status not in TextRequest.SAVED or not text_request.can_last:
-                raise HttpError(409, "Ta prośba dotyczy tylko konkretnych dni, więc nie może być na stałe.")
+                raise HttpError(409, _cannot_last(text_request))
             text_request.set_lasting(payload.lasting)
             text_request.save(update_fields=["lasting", "ends_from", "ended_by", "interpretation", "updated_at"])
     return _request_out(text_request)

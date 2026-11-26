@@ -1609,12 +1609,13 @@ Spec: „Poprawki po raporcie z testów (25.11.2026)”.
   odczyt: `problem_builder` go pomija (generator go nie liczy), `readings.complement` daje pozostałe godziny dnia,
   `describe`: „we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)”.
 - Przycisk w czacie: `MyRequestOut.cannot_marks` zastąpiło `unmarked_days` (lista `CannotMarkOut`: dni, `from_time`,
-  `to_time`, `windows` z `readings.complement`, `prefer_days`, `whole_day`). `_Calendar.to_mark`: dzień bez „nie
-  mogę” (i bez własnych godzin, gdy prośba ma godziny) jest do zaznaczenia, dzień z całodniowym „nie mogę” przy
-  prośbie z godzinami jest `whole_day`, dzień z własnymi godzinami zostaje. Ekran zapisuje tym samym
-  `PUT /me/calendar`: bez godzin „nie mogę”, z godzinami „mogę” (dni z `prefer_days` „chętnie”) w `windows`; przycisk
-  „Zaznacz „Mogę” do 9:00 i od 11:00”. Uwaga o „Chętnie” nie pojawia się przy prośbie z godzinami, bo „Chętnie”
-  zostaje.
+  `to_time`, `windows` z `readings.complement`, `prefer_days`, `whole_day`). `_Calendar.to_mark`: dzień bez „nie mogę”
+  (i bez własnych godzin, gdy prośba ma godziny) jest do zaznaczenia, dzień z całodniowym „nie mogę” przy prośbie z
+  godzinami jest `whole_day`, dzień z własnymi godzinami zostaje (od 26.11.2026 nieaktualne: zamiast `to_mark` jest
+  `_Calendar.offer`, które przycina własne godziny, a `unmarked_days` wróciło przejściowo; sekcja 45). Ekran zapisuje
+  tym samym `PUT /me/calendar`: bez godzin „nie mogę”, z godzinami „mogę” (dni z `prefer_days` „chętnie”) w `windows`;
+  przycisk „Zaznacz „Mogę” do 9:00 i od 11:00”. Uwaga o „Chętnie” nie pojawia się przy prośbie z godzinami, bo
+  „Chętnie” zostaje.
 - Stanowisko: `Preference.rather` → `readings` `rather` (tylko przy `avoid=false`), opis „chętniej stanowisko …
   (inne też mogą być)”. Silnik bez zmian: kara jak przy „tylko”, mniejsza przez poziom `mile_widziane`.
 - Plan kierownika ze zmianą zasad ma uwagę aplikacji `services.RULES_GO_TO_AGREEMENTS` (+ `SOFT_RULES_NOTE`, gdy
@@ -1643,3 +1644,37 @@ dnia byłoby dokładniejsze, ale w kalendarzu czytałoby się jako „11–9”,
 tylko w przybliżeniu. Odpowiedzi modelu nie da się sprawdzić bez klucza w testach: zachowanie asystenta zmieniły prompt i uwagi
 aplikacji; zapis godzin, przyciski i silnik mają testy. Przyczyny 503 nie ustalono w logach serwera; restart przy
 automatycznym wdrożeniu (co 5 minut z `main`) to najbardziej prawdopodobne wyjaśnienie.
+
+## 45. Poprawki po raporcie testów PR #82 (26.11.2026)
+
+Spec: „Poprawki po raporcie testów PR #82 (26.11.2026)”.
+
+- Jedna propozycja na dzień: `availability.api._calendar_facts` zbiera godziny „nie mogę” wszystkich części prośby
+  dla każdej daty (całodniowe „nie mogę” wygrywa) i dopiero potem pyta `_Calendar.offer(day, hours)`. To liczy
+  `readings.windows_left(cannot, own)`: od dnia (albo od własnych godzin dnia) odejmuje zablokowane przedziały
+  (nocne 22–6 jako dwa kawałki), zostawia `MAX_WINDOWS` (2) najdłuższe w kolejności i oddaje też odcięte. Dni
+  z tym samym wynikiem łączą się w jeden `CannotMarkOut`. Nowe pola: `hours` (wszystkie godziny „nie mogę”;
+  `from_time` / `to_time` to pierwszy przedział, dla starszych ekranów), `dropped` (odcięte przedziały), `own`
+  (własne godziny dnia przed zmianą), `one_shift_days` (dni z „albo”, które zostają „albo”). `offer` daje `None`
+  dla dnia zablokowanego, dnia z całodniowym „nie mogę” przy prośbie na cały dzień, dnia, w którym nic się nie
+  zmienia, i dnia z całodniowym „nie mogę”, w którym nic nie zostaje.
+- Na stałe: `TextRequest.part_can_last(part)` = bez dat i nie `readings.calendar_only`. Z niego `can_last`
+  i `set_lasting` (część z godzinami nigdy nie dostaje `lasting`). `PATCH /me/requests/{id}` z `lasting: true` daje
+  409 z `_cannot_last` (osobne zdanie, gdy prośba ma godziny „nie mogę”). `MyRequestOut.parts` (`RequestPartOut`:
+  `summary`, `calendar_only`, `can_last`) mówi ekranowi, co dostaje generator i co jest tylko w tym okresie.
+- `MyRequestOut.unmarked_days` wraca przejściowo (do 2027): tylko dni propozycji na cały dzień, które starszy ekran
+  umie zapisać; ekran go nie czyta.
+- Ekran: `RequestsSection.generatorWords` (zdanie o generatorze z `parts`), linijka „Tylko w …:” przy prośbie mieszanej,
+  zdanie o konflikcie z własnymi godzinami i o odciętych przedziałach przy przycisku; zapis „albo” dla dni
+  z `one_shift_days`. `DayHoursSheet.timesWith` dopisuje zapisaną godzinę do listy.
+- „Mój grafik”: `MyScheduleOut.published` (`DaysOut`: połączone zakresy opublikowanych okresów do horyzontu;
+  `published_until` = koniec ostatniego). `rows.buildRows(…, published)` daje wiersz `unpublished` (od–do) dla dni
+  poza tymi zakresami, a „Wolne” tylko w nich.
+- Powiadomienie: `AvailabilityScreen` przy `month` dalej niż trzy miesiące (do `LINK_MONTHS_AHEAD` = 12) najpierw pyta
+  `GET /me/calendar` o ten miesiąc. Gdy jest tam otwarty okres pracownika, zasięg strzałek sięga końca tego okresu
+  i ekran otwiera ten miesiąc; bez okresu wybiera miesiąc jak dotąd.
+
+Założenia: z trzech przedziałów zostają dwa najdłuższe (przy równych wcześniejszy), bo to zostawia najwięcej godzin
+pracy; pracownik może to zmienić w oknie dnia. Dzień z własnymi godzinami, które prośba w ogóle nie zmienia (np.
+„mogę 14–22” i „nie mogę 9–11”), nie dostaje propozycji. Dzień „albo” zostaje „albo” tylko, gdy po zmianie nadal ma
+dwa przedziały.

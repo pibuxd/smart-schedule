@@ -44,13 +44,37 @@ const isCarried = (request: MyRequestOut) => Boolean(request.carried_from);
 const shortDate = (iso: string) =>
   `${Number(iso.slice(8, 10))}.${iso.slice(5, 7)}`;
 
-/** "9:00–11:00", "od 10:00", "do 11:00"; "" for the whole day. */
+/** "9:00–11:00", "od 10:00", "do 11:00", "9:00–11:00 i 14:00–16:00"; "" for the whole day. */
 function markHours(mark: CannotMarkOut): string {
+  if (mark.hours?.length) return windowsWords(mark.hours);
   const from = mark.from_time ? shortTime(mark.from_time) : null;
   const to = mark.to_time ? shortTime(mark.to_time) : null;
   if (from && to) return `${from}–${to}`;
   if (from) return `od ${from}`;
   return to ? `do ${to}` : "";
+}
+
+/** A summary inside a sentence: no full stop, lower case (unless it starts with "Ty"). */
+function clause(summary: string): string {
+  const text = summary.trim().replace(/\.$/, "");
+  return text.startsWith("Ty ") ? text : text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/**
+ * What the generator gets from an understood request. Hours someone cannot work ("nie mogę od 9 do 11") are only
+ * marked in the calendar, so they count only after the button (tests of PR #82, 26.11.2026).
+ */
+function generatorWords(request: MyRequestOut, marked: boolean): string {
+  const parts = request.parts ?? [];
+  const generator = parts.filter((part) => !part.calendar_only);
+  const later = request.lasting ? ", także w kolejnych miesiącach" : "";
+  if (generator.length === parts.length)
+    return `Generator grafiku spróbuje to spełnić${later}. Kalendarz się nie zmienia.`;
+  const hours = marked
+    ? "Godziny, w których nie możesz, zaczną obowiązywać dopiero po zaznaczeniu w kalendarzu przyciskiem niżej."
+    : "Godziny, w których nie możesz, obowiązują tak, jak są zaznaczone w kalendarzu.";
+  if (!generator.length) return `Generator nie dostaje tej prośby. ${hours}`;
+  return `Generator grafiku spróbuje spełnić${later}: ${generator.map((part) => clause(part.summary)).join("; ")}. ${hours}`;
 }
 
 /** "do 9:00 i od 11:00", "do 18:00", "od 10:00", "6:00–22:00": the hours left to work on those days. */
@@ -76,7 +100,13 @@ function markedDays(mark: CannotMarkOut): DayIn[] {
           state: (mark.prefer_days ?? []).includes(date) ? "prefer" : "neutral",
           from_time: first.start,
           to_time: first.end,
-          ...(second ? { from_time_2: second.start, to_time_2: second.end } : {}),
+          ...(second
+            ? {
+                from_time_2: second.start,
+                to_time_2: second.end,
+                one_shift: (mark.one_shift_days ?? []).includes(date),
+              }
+            : {}),
         }
       : { date, state: "cannot", from_time: null, to_time: null },
   );
@@ -101,21 +131,32 @@ function CannotMark({
 }) {
   const hours = markHours(mark);
   const rest = windowsWords(mark.windows ?? []);
+  const own = windowsWords(mark.own ?? []);
+  const dropped = windowsWords(mark.dropped ?? []);
   const days = mark.days.map(shortDate).join(", ");
   const text = mark.whole_day
     ? `W kalendarzu te dni mają „Nie mogę” przez cały dzień, a prośba mówi tylko o godzinach ${hours}: ${days}.`
-    : rest
-      ? `W kalendarzu te dni są nadal do pracy także w godzinach ${hours}: ${days}.`
-      : `W kalendarzu te dni są nadal do pracy: ${days}.`;
+    : own
+      ? `W kalendarzu masz w te dni godziny ${own}, a prośba mówi, że nie możesz ${hours}: ${days}.`
+      : rest
+        ? `W kalendarzu te dni są nadal do pracy także w godzinach ${hours}: ${days}.`
+        : `W kalendarzu te dni są nadal do pracy: ${days}.`;
   const label = rest ? `Zaznacz „Mogę” ${rest}` : "Zaznacz „nie mogę”";
+  const muted = mark.whole_day
+    ? `Nie dostaniesz wtedy zmiany, która zahacza o godziny ${hours}. Nie możesz przez cały dzień? Zostaw tak, jak jest.`
+    : own && !rest
+      ? "Tego jeszcze nie ma w kalendarzu. Poza tymi godzinami nie zostaje nic do pracy, więc przycisk zaznaczy „nie mogę” na cały dzień."
+      : hours
+        ? `Tego jeszcze nie ma w kalendarzu. Naciśnij przycisk, a nie dostaniesz zmiany, która zahacza o godziny ${hours}.`
+        : "";
   return (
     <div className="grid gap-2 rounded-md border border-line p-3">
       <p className="m-0 text-sm">{text}</p>
-      {rest && (
+      {muted && (
         <p className="m-0 text-sm text-ink-muted">
-          {mark.whole_day
-            ? `Nie dostaniesz wtedy zmiany, która zahacza o godziny ${hours}. Nie możesz przez cały dzień? Zostaw tak, jak jest.`
-            : `Tego jeszcze nie ma w kalendarzu. Naciśnij przycisk, a nie dostaniesz zmiany, która zahacza o godziny ${hours}.`}
+          {muted}
+          {dropped &&
+            ` Kalendarz mieści dwa przedziały godzin dziennie, więc ${dropped} też będzie bez pracy.`}
         </p>
       )}
       <div>
@@ -383,6 +424,8 @@ function RequestStatus({
   }
   if (request.status === "interpreted" && request.summary) {
     const marks = request.cannot_marks ?? [];
+    // In a request that may last, the wishes that count only here ("we wtorki nie mogę od 9 do 11").
+    const periodOnly = (request.parts ?? []).filter((part) => !part.can_last);
     return (
       <div className="grid gap-2">
         <Reply request={request} />
@@ -391,9 +434,7 @@ function RequestStatus({
           {request.summary}
         </p>
         <p className="m-0 text-sm text-ink-muted">
-          {request.lasting
-            ? "Generator grafiku spróbuje to spełnić, także w kolejnych miesiącach. Kalendarz się nie zmienia."
-            : "Generator grafiku spróbuje to spełnić. Kalendarz się nie zmienia."}
+          {generatorWords(request, marks.length > 0)}
         </p>
         {editable && request.can_last && (
           <LastingChoice
@@ -403,11 +444,16 @@ function RequestStatus({
             onChange={onLasting}
           />
         )}
+        {editable && request.can_last && periodOnly.length > 0 && (
+          <p className="m-0 text-sm text-ink-muted">
+            {`Tylko ${only}: ${periodOnly.map((part) => clause(part.summary)).join("; ")}.`}
+          </p>
+        )}
         <Notes notes={request.notes} />
         {editable &&
           marks.map((mark) => (
             <CannotMark
-              key={`${mark.from_time}-${mark.to_time}-${mark.whole_day}`}
+              key={mark.days.join()}
               mark={mark}
               disabled={busy}
               marking={marking}

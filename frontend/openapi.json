@@ -11593,6 +11593,26 @@
         "title": "GenerateIn",
         "type": "object"
       },
+      "DaysOut": {
+        "properties": {
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "DaysOut",
+        "type": "object"
+      },
       "MonthHoursOut": {
         "properties": {
           "month": {
@@ -11669,6 +11689,13 @@
               }
             ],
             "title": "Published Until"
+          },
+          "published": {
+            "items": {
+              "$ref": "#/components/schemas/DaysOut"
+            },
+            "title": "Published",
+            "type": "array"
           },
           "months": {
             "items": {
@@ -13572,7 +13599,7 @@
         "type": "object"
       },
       "CannotMarkOut": {
-        "description": "Days a request says the person cannot work that the calendar does not show so (and that can still change):\nthe screen offers to mark them through `PUT /me/calendar`. Without hours: \"nie mogę\". With hours (\"we wtorki nie\nmogę od 9 do 11\"): \"nie mogę\" is always a whole day, so the days get \"mogę\" (or keep \"chętnie\", `prefer_days`)\nonly in `windows`, the rest of the day (\"do 9:00 i od 11:00\").",
+        "description": "Days a request says the person cannot work that the calendar does not show so (and that can still change):\nthe screen offers to mark them through `PUT /me/calendar`. Without hours: \"nie mogę\". With hours (\"we wtorki nie\nmogę od 9 do 11\"): \"nie mogę\" is always a whole day, so the days get \"mogę\" (or keep \"chętnie\", `prefer_days`)\nonly in `windows`, what is left of the day (\"do 9:00 i od 11:00\"). Every request about a day counts together\n(9–11 and 14–16 the same day are one offer).",
         "properties": {
           "days": {
             "items": {
@@ -13604,6 +13631,13 @@
             ],
             "title": "To Time"
           },
+          "hours": {
+            "items": {
+              "$ref": "#/components/schemas/WindowOut"
+            },
+            "title": "Hours",
+            "type": "array"
+          },
           "windows": {
             "items": {
               "$ref": "#/components/schemas/WindowOut"
@@ -13619,10 +13653,32 @@
             "title": "Prefer Days",
             "type": "array"
           },
+          "one_shift_days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "One Shift Days",
+            "type": "array"
+          },
+          "dropped": {
+            "items": {
+              "$ref": "#/components/schemas/WindowOut"
+            },
+            "title": "Dropped",
+            "type": "array"
+          },
           "whole_day": {
             "default": false,
             "title": "Whole Day",
             "type": "boolean"
+          },
+          "own": {
+            "items": {
+              "$ref": "#/components/schemas/WindowOut"
+            },
+            "title": "Own",
+            "type": "array"
           }
         },
         "required": [
@@ -13771,6 +13827,21 @@
             "title": "Cannot Marks",
             "type": "array"
           },
+          "unmarked_days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Unmarked Days",
+            "type": "array"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/RequestPartOut"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "notes": {
             "items": {
               "type": "string"
@@ -13878,6 +13949,30 @@
           "created_at"
         ],
         "title": "MyRequestOut",
+        "type": "object"
+      },
+      "RequestPartOut": {
+        "description": "One wish of an understood request, as the screen tells them apart.",
+        "properties": {
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "calendar_only": {
+            "default": false,
+            "title": "Calendar Only",
+            "type": "boolean"
+          },
+          "can_last": {
+            "default": false,
+            "title": "Can Last",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "title": "RequestPartOut",
         "type": "object"
       },
       "WindowOut": {

@@ -260,6 +260,63 @@ def complement(data: Mapping[str, Any]) -> list[tuple[str, str]]:
     return windows
 
 
+DAY_MINUTES = 24 * 60
+MAX_WINDOWS = 2  # the calendar keeps at most two windows a day ("lub" / "albo")
+
+
+def _minutes(value: str) -> int:
+    hours, minutes = value.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
+def _clock_at(minutes: int) -> str:
+    """ "HH:MM" of a point of the day; the end of the day (and past it, the next morning) as the clock shows it."""
+    minutes %= DAY_MINUTES
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def windows_left(
+    cannot: Iterable[tuple[str | None, str | None]],
+    own: Iterable[tuple[str, str]] | None = None,
+    limit: int = MAX_WINDOWS,
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """The windows ("HH:MM", an end "00:00" = midnight, an end before the start = the next morning) of a day that
+    stay to work after all the hours someone cannot work that day: (windows, the shortest ones that do not fit in
+    `limit`). `cannot`: (from, to) like a reading's hours (None = from the start / to the end of the day; an end
+    before the start = "22–6": both the morning and the evening). `own`: the day's windows already in the calendar,
+    None = the whole day. Dropping a window only takes hours away, so what is left never gives work in those hours.
+
+    9–11 and 14–16 -> [0:00–9:00, 11:00–14:00, 16:00–0:00], of which 11:00–14:00 does not fit in two;
+    own 8:00–18:00 and 9–11 -> [8:00–9:00, 11:00–18:00]."""
+    blocked = []
+    for start, end in cannot:
+        a, b = _minutes(start) if start else 0, _minutes(end) if end else DAY_MINUTES
+        blocked.extend([(0, b), (a, DAY_MINUTES)] if b < a else [(a, b)])
+    spans = []
+    for start, end in [("00:00", "00:00")] if own is None else own:
+        a, b = _minutes(start), _minutes(end)
+        spans.append((a, b + DAY_MINUTES if b <= a else b))
+    for a, b in sorted(blocked):
+        cut = []
+        for x, y in spans:
+            if b <= x or y <= a:
+                cut.append((x, y))
+                continue
+            if x < a:
+                cut.append((x, a))
+            if b < y:
+                cut.append((b, y))
+        spans = cut
+    # A piece that starts after midnight is the next morning: not a window of this day (dropping it is safe).
+    spans = sorted(span for span in spans if span[0] < span[1] and span[0] < DAY_MINUTES)
+    longest = set(sorted(spans, key=lambda span: span[0] - span[1])[:limit])
+    words = [(_clock_at(x), _clock_at(y)) for x, y in spans]
+    return (
+        [w for w, span in zip(words, spans, strict=True) if span in longest],
+        [w for w, span in zip(words, spans, strict=True) if span not in longest],
+    )
+
+
 def can_words(windows: list[tuple[str, str]]) -> str:
     """ "do 9:00 i od 11:00", "do 18:00", "od 10:00", "6:00–22:00"."""
 

@@ -228,6 +228,7 @@ describe("RequestsSection", () => {
             to_time: "09:00",
             from_time_2: "11:00",
             to_time_2: "00:00",
+            one_shift: false,
           },
         ],
       }),
@@ -242,6 +243,114 @@ describe("RequestsSection", () => {
         ],
       }),
     );
+  });
+
+  it("cuts the person's own hours and says which hours the calendar cannot keep", async () => {
+    // Tests of PR #82 (26.11.2026): own hours 8–18 and "nie mogę od 9 do 11" gave no offer; 9–11 and 14–16 the
+    // same day gave only the first.
+    const calls = mockApi((method) =>
+      method === "PUT"
+        ? [204, null]
+        : [
+            200,
+            [
+              request({
+                summary: "7.12 „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00).",
+                parts: [{ summary: "7.12 „Mogę” tylko do 9:00 i od 11:00.", calendar_only: true, can_last: false }],
+                cannot_marks: [
+                  {
+                    days: ["2026-12-07"],
+                    from_time: "09:00",
+                    to_time: "11:00",
+                    hours: [{ start: "09:00", end: "11:00" }],
+                    windows: [
+                      { start: "08:00", end: "09:00" },
+                      { start: "11:00", end: "18:00" },
+                    ],
+                    own: [{ start: "08:00", end: "18:00" }],
+                  },
+                  {
+                    days: ["2026-12-08"],
+                    from_time: "09:00",
+                    to_time: "11:00",
+                    hours: [
+                      { start: "09:00", end: "11:00" },
+                      { start: "14:00", end: "16:00" },
+                    ],
+                    windows: [
+                      { start: "00:00", end: "09:00" },
+                      { start: "16:00", end: "00:00" },
+                    ],
+                    dropped: [{ start: "11:00", end: "14:00" }],
+                  },
+                ],
+              }),
+            ],
+          ],
+    );
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    await openChat();
+    expect(
+      await screen.findByText(
+        "W kalendarzu masz w te dni godziny 8:00–18:00, a prośba mówi, że nie możesz 9:00–11:00: 7.12.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/godzinach 9:00–11:00 i 14:00–16:00: 8.12/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Kalendarz mieści dwa przedziały godzin dziennie, więc 11:00–14:00 też będzie bez pracy/),
+    ).toBeInTheDocument();
+    // Nothing reaches the generator until the button: the card says so instead of "Generator spróbuje".
+    expect(
+      screen.getByText(/Generator nie dostaje tej prośby. Godziny, w których nie możesz, zaczną obowiązywać/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Na stałe" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Zaznacz „Mogę” 8:00–9:00 i 11:00–18:00" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PUT")!.body).toEqual({
+        company_id: "c1",
+        days: [
+          {
+            date: "2026-12-07",
+            state: "neutral",
+            from_time: "08:00",
+            to_time: "09:00",
+            from_time_2: "11:00",
+            to_time_2: "18:00",
+            one_shift: false,
+          },
+        ],
+      }),
+    );
+  });
+
+  it("in a mixed request says what the generator gets and what counts only here", async () => {
+    // Piotr, 26.11.2026: "w piątki wolę salę, a we wtorki nie mogę od 9 do 11" may last only in its position wish.
+    mockApi(() => [
+      200,
+      [
+        request({
+          summary: "Chętniej stanowisko „Sala” w piątki (inne też mogą być); we wtorki „Mogę” tylko do 9:00 i od 11:00.",
+          can_last: true,
+          parts: [
+            { summary: "Chętniej stanowisko „Sala” w piątki (inne też mogą być).", calendar_only: false, can_last: true },
+            { summary: "We wtorki „Mogę” tylko do 9:00 i od 11:00.", calendar_only: true, can_last: false },
+          ],
+        }),
+      ],
+    ]);
+    renderSection(
+      <RequestsSection companyId="c1" periodId="p1" editable assistantReads />,
+    );
+    await openChat();
+    expect(
+      await screen.findAllByText(
+        /^Generator grafiku spróbuje spełnić: chętniej stanowisko „Sala” w piątki \(inne też mogą być\)\. Godziny, w których nie możesz, obowiązują tak, jak są zaznaczone w kalendarzu\.$/,
+      ),
+    ).not.toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Na stałe" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Tylko .+: we wtorki „Mogę” tylko do 9:00 i od 11:00\.$/).length).toBeGreaterThan(0);
   });
 
   it("a request nobody interpreted simply goes to the manager", async () => {

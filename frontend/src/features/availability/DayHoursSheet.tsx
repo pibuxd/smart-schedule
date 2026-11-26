@@ -10,6 +10,11 @@ import { StatePicker } from './StatePicker'
 // Every half hour; "00:00" as an end means midnight.
 const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
 
+/** The half hours, plus a saved time between them ("09:15" from "nie mogę 9:15–11:45"), so the list shows it. */
+function timesWith(value: string) {
+  return TIMES.includes(value) ? TIMES : [...TIMES, value].sort()
+}
+
 function timeLabel(value: string, asEnd: boolean) {
   return asEnd && value === '00:00' ? '0:00 (północ)' : shortTime(value)
 }
@@ -210,7 +215,7 @@ function TimeSelect({
         onChange={(event) => onChange(event.target.value)}
         className="min-h-(--touch-main) w-full min-w-0 rounded-md border-2 border-ink bg-surface px-3 text-lg tabular-nums"
       >
-        {TIMES.map((time) => (
+        {timesWith(value).map((time) => (
           <option key={time} value={time}>
             {timeLabel(time, asEnd)}
           </option>

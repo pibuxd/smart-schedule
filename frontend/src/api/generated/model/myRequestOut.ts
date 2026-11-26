@@ -9,6 +9,7 @@ import type { CannotMarkOut } from './cannotMarkOut';
 import type { HoursProposalOut } from './hoursProposalOut';
 import type { MyRequestOutEndedBy } from './myRequestOutEndedBy';
 import type { MyRequestOutStatus } from './myRequestOutStatus';
+import type { RequestPartOut } from './requestPartOut';
 
 export interface MyRequestOut {
   id: string;
@@ -17,6 +18,8 @@ export interface MyRequestOut {
   summary: string | null;
   reply: string | null;
   cannot_marks?: CannotMarkOut[];
+  unmarked_days?: string[];
+  parts?: RequestPartOut[];
   notes: string[];
   created_at: string;
   hours_reports?: HoursProposalOut[];

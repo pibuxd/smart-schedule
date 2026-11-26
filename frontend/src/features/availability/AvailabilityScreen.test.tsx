@@ -108,6 +108,36 @@ describe('AvailabilityScreen', () => {
     expect(await screen.findByRole('heading', { name: 'Grudzień 2026' })).toBeInTheDocument() // the asked period
   })
 
+  it('opens a later month from a notification when its period is open, even past the usual reach', async () => {
+    // Tests of PR #82 (26.11.2026): with December still open, a link about March opened December.
+    const march = { ...period, id: 'p3', start: '2027-03-01', end: '2027-03-31' }
+    const calls = mockApi((method, path, _body, url) => {
+      if (path === '/api/me/requests') return [200, []]
+      if (path === '/api/me/calendar' && method === 'GET') {
+        const inMarch = url?.includes('start=2027-03-01')
+        const [start, end] = inMarch ? ['2027-03-01', '2027-03-31'] : ['2026-12-01', '2026-12-31']
+        const asked = inMarch ? march : url?.includes('start=2027-04-01') ? null : period
+        return [200, { start, end, days: [], locked: [], unpublished: [], period: asked, submitted_at: null, location_names: ['Rynek'] }]
+      }
+      return [200, { period, days: [], submitted_at: null }]
+    })
+    const open = (month: string) =>
+      renderScreen(
+        <EmployeeChatProvider companyId="c1" readOnly={false}>
+          <AvailabilityScreen companyId="c1" readOnly={false} month={month} today={TODAY} />
+        </EmployeeChatProvider>,
+      )
+    const { unmount } = open('2027-03')
+    expect(await screen.findByRole('heading', { name: 'Marzec 2027' })).toBeInTheDocument()
+    expect(await screen.findByText(/Zaznacz, kiedy możesz pracować w marcu/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Następny miesiąc' })).toBeDisabled()
+    expect(calls.some((c) => c.url.includes('start=2027-03-01&end=2027-03-31'))).toBe(true)
+    unmount()
+    // April has no open period, so its link falls back to the period the manager asked about.
+    open('2027-04')
+    expect(await screen.findByRole('heading', { name: 'Grudzień 2026' })).toBeInTheDocument()
+  })
+
   it('opens on the period the manager asked about and shows the deadline', async () => {
     api()
     show()
