@@ -51,16 +51,17 @@ sprawdzone z kalendarzem, przejęciami i raportem godzin). Piotr przysłał go b
   nocka, która zaczyna się tego dnia (np. 22–6), już się w nim nie mieści. Kto pracuje na nocki, wydłuża w oknie
   dnia przedział do rana (np. 11:00–6:00). Z dwoma przedziałami zostaje „nie mogę” na cały dzień.
 - Niedostępność w części dnia w prośbie: „we wtorki nie mogę od 9:00 do 11:00” nie zamienia się już w całe dni wolne
-  (wcześniej pięć wtorków zrobiło się całymi dniami „nie mogę”). Piotr wybrał 25.11.2026: przycisk pod prośbą
-  „Zaznacz „Mogę” do 9:00 i od 11:00” zaznacza te dni jako „Mogę” tylko w tych godzinach (dzień z „Chętnie” zostaje
-  „Chętnie” z tymi godzinami), więc generator nie da zmiany, która nachodzi na 9–11 (ani, tak jak wyżej, nocki
-  zaczynającej się tego dnia, dopóki pracownik nie wydłuży przedziału do rana). Dni, które kalendarz ma jako
-  „Nie mogę” na cały dzień, ten sam przycisk otwiera na resztę dnia (tak naprawia się wcześniejszy zły odczyt; tekst
-  mówi, że cały dzień wolny może zostać). Dni z własnymi godzinami („mogę tylko 14–22”) zostają, jak są. Sama prośba
-  nie jest liczona przez generator (to nie życzenie, tylko propozycja dla kalendarza); „wolę nie pracować od 9 do
-  11” (bez „nie mogę”) czyta kierownik. Przycisk działa też, gdy prośba mówi o dniach tygodnia tego okresu („w
-  grudniu we wtorki”), także obok innej prośby w tej samej wiadomości (powtórka testów 26.11.2026); „na stałe
-  we wtorki nie mogę od 9 do 11” czyta kierownik, bo w kolejnych miesiącach nie ma dni do zaznaczenia.
+  (wcześniej pięć wtorków zrobiło się całymi dniami „nie mogę”). Piotr wybrał 25.11.2026: przycisk pod prośbą „Zaznacz
+  „Mogę” do 9:00 i od 11:00” zaznacza te dni jako „Mogę” tylko w tych godzinach (dzień z „Chętnie” zostaje „Chętnie” z
+  tymi godzinami), więc generator nie da zmiany, która nachodzi na 9–11 (ani, tak jak wyżej, nocki zaczynającej się
+  tego dnia, dopóki pracownik nie wydłuży przedziału do rana). Dni, które kalendarz ma jako „Nie mogę” na cały dzień,
+  ten sam przycisk otwiera na resztę dnia (tak naprawia się wcześniejszy zły odczyt; tekst mówi, że cały dzień wolny
+  może zostać). Dni z własnymi godzinami („mogę tylko 14–22”) zostają, jak są (od 26.11.2026 już nie: gdy godziny
+  prośby na nie nachodzą, przycisk je przycina, patrz „Poprawki po raporcie testów PR #82”). Sama prośba nie jest
+  liczona przez generator (to nie życzenie, tylko propozycja dla kalendarza); „wolę nie pracować od 9 do 11” (bez „nie
+  mogę”) czyta kierownik. Przycisk działa też, gdy prośba mówi o dniach tygodnia tego okresu („w grudniu we wtorki”),
+  także obok innej prośby w tej samej wiadomości (powtórka testów 26.11.2026); „na stałe we wtorki nie mogę od 9 do
+  11” czyta kierownik, bo w kolejnych miesiącach nie ma dni do zaznaczenia.
 - Asystent nie każe ustawiać niedostępności w godzinach przez „Mogę” z tymi godzinami (to dałoby pracę właśnie
   wtedy), tylko przez godziny, w których można, i liczy dokładnie, ile zmiany nachodzi na te godziny (8–12 i 9–11 to
   dwie godziny, nie cała zmiana). Nie zgaduje płci (bez „sama”, „sam”).

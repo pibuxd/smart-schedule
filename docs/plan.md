@@ -1609,12 +1609,13 @@ Spec: „Poprawki po raporcie z testów (25.11.2026)”.
   odczyt: `problem_builder` go pomija (generator go nie liczy), `readings.complement` daje pozostałe godziny dnia,
   `describe`: „we wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00)”.
 - Przycisk w czacie: `MyRequestOut.cannot_marks` zastąpiło `unmarked_days` (lista `CannotMarkOut`: dni, `from_time`,
-  `to_time`, `windows` z `readings.complement`, `prefer_days`, `whole_day`). `_Calendar.to_mark`: dzień bez „nie
-  mogę” (i bez własnych godzin, gdy prośba ma godziny) jest do zaznaczenia, dzień z całodniowym „nie mogę” przy
-  prośbie z godzinami jest `whole_day`, dzień z własnymi godzinami zostaje. Ekran zapisuje tym samym
-  `PUT /me/calendar`: bez godzin „nie mogę”, z godzinami „mogę” (dni z `prefer_days` „chętnie”) w `windows`; przycisk
-  „Zaznacz „Mogę” do 9:00 i od 11:00”. Uwaga o „Chętnie” nie pojawia się przy prośbie z godzinami, bo „Chętnie”
-  zostaje.
+  `to_time`, `windows` z `readings.complement`, `prefer_days`, `whole_day`). `_Calendar.to_mark`: dzień bez „nie mogę”
+  (i bez własnych godzin, gdy prośba ma godziny) jest do zaznaczenia, dzień z całodniowym „nie mogę” przy prośbie z
+  godzinami jest `whole_day`, dzień z własnymi godzinami zostaje (od 26.11.2026 nieaktualne: zamiast `to_mark` jest
+  `_Calendar.offer`, które przycina własne godziny, a `unmarked_days` wróciło przejściowo; sekcja 45). Ekran zapisuje
+  tym samym `PUT /me/calendar`: bez godzin „nie mogę”, z godzinami „mogę” (dni z `prefer_days` „chętnie”) w `windows`;
+  przycisk „Zaznacz „Mogę” do 9:00 i od 11:00”. Uwaga o „Chętnie” nie pojawia się przy prośbie z godzinami, bo
+  „Chętnie” zostaje.
 - Stanowisko: `Preference.rather` → `readings` `rather` (tylko przy `avoid=false`), opis „chętniej stanowisko …
   (inne też mogą być)”. Silnik bez zmian: kara jak przy „tylko”, mniejsza przez poziom `mile_widziane`.
 - Plan kierownika ze zmianą zasad ma uwagę aplikacji `services.RULES_GO_TO_AGREEMENTS` (+ `SOFT_RULES_NOTE`, gdy
