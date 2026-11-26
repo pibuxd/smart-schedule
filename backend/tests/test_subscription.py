@@ -190,14 +190,13 @@ def test_only_a_manager_of_the_company_enters_codes(api, make_company):
     ("days", "expected"),
     [
         (30, {"is_active": True, "read_only": False, "days_left": 30, "expiring_soon": False}),
-        (6.5, {"is_active": True, "read_only": False, "days_left": 7, "expiring_soon": False}),
-        (2.5, {"is_active": True, "read_only": False, "days_left": 3, "expiring_soon": False}),
-        (1.5, {"is_active": True, "read_only": False, "days_left": 2, "expiring_soon": True}),
+        (7.5, {"is_active": True, "read_only": False, "days_left": 8, "expiring_soon": False}),
+        (6.5, {"is_active": True, "read_only": False, "days_left": 7, "expiring_soon": True}),
         (0.01, {"is_active": True, "read_only": False, "days_left": 1, "expiring_soon": True}),
         (-0.01, {"is_active": False, "read_only": True, "days_left": 0, "expiring_soon": False}),
     ],
 )
-def test_subscription_state_and_banner_two_days_before_the_end(api, make_company, subscribe, days, expected):
+def test_subscription_state_and_banner_seven_days_before_the_end(api, make_company, subscribe, days, expected):
     a = make_company()
     subscribe(a["company"], days=days)
     api.login(a["manager"])
@@ -206,6 +205,20 @@ def test_subscription_state_and_banner_two_days_before_the_end(api, make_company
 
     assert {key: body[key] for key in expected} == expected
     assert body["ends_at"] is not None
+
+
+@pytest.mark.parametrize(("days", "days_left", "expiring_soon"), [(6.5, 7, False), (2.5, 3, False), (1.5, 2, True)])
+def test_the_trial_shows_the_banner_only_two_days_before_the_end(
+    api, make_company, subscribe, days, days_left, expiring_soon
+):
+    a = make_company()
+    subscribe(a["company"], days=days)
+    Subscription.objects.filter(company=a["company"]).update(source=Subscription.Source.TRIAL)
+    api.login(a["manager"])
+
+    body = api.get(f"/api/companies/{a['company'].id}/subscription").json()
+
+    assert (body["trial"], body["days_left"], body["expiring_soon"]) == (True, days_left, expiring_soon)
 
 
 def test_company_without_a_code_is_read_only_and_keeps_its_data(api, make_company):

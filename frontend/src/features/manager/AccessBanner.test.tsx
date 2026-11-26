@@ -52,6 +52,11 @@ describe('AccessBanner', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
+  it('shows a code ending within a week', async () => {
+    show({ ...trial, source: 'code', trial: false, days_left: 7, expiring_soon: true })
+    expect(await screen.findByText('Dostęp aktywny: zostało 7 dni.')).toBeInTheDocument()
+  })
+
   it('shows read-only mode after the trial', async () => {
     show({ ...trial, is_active: false, days_left: 0, read_only: true })
     expect(await screen.findByText('Okres próbny minął. Grafiki możesz oglądać, ale nie zmieniać.')).toBeInTheDocument()

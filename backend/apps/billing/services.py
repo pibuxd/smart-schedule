@@ -56,7 +56,9 @@ def subscription_state(company_id, now: datetime | None = None) -> SubscriptionS
     if ends_at is None or ends_at <= now:
         return SubscriptionState(ends_at=ends_at, is_active=False, days_left=0, expiring_soon=False, trial=trial)
     days_left = ceil((ends_at - now) / timedelta(days=1))
-    return SubscriptionState(ends_at, True, days_left, days_left <= settings.SUBSCRIPTION_BANNER_DAYS, trial)
+    # A code takes a person to make and send, so it warns earlier than the trial (Piotr, 26.11.2026).
+    banner_days = settings.TRIAL_BANNER_DAYS if trial else settings.SUBSCRIPTION_BANNER_DAYS
+    return SubscriptionState(ends_at, True, days_left, days_left <= banner_days, trial)
 
 
 def start_trial(company: Company, user, now: datetime | None = None) -> Subscription | None:

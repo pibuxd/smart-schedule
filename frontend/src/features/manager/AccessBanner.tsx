@@ -5,8 +5,8 @@ import type { SubscriptionOut } from '../../api/generated/model'
 import { statusWords } from './words'
 
 /**
- * A strip at the top of the manager's panel, only for read-only mode or access (the trial too) ending within
- * 2 days. Until then the state is only on "Dostęp" (Piotr, 26.11.2026).
+ * A strip at the top of the manager's panel, only for read-only mode or access ending soon (`expiring_soon`:
+ * 7 days before a code ends, 2 before the trial does). Until then the state is only on "Dostęp" (Piotr, 26.11.2026).
  */
 export function AccessBanner({ companyId }: { companyId: string }) {
   const subscription = useSubscription(companyId, { query: { staleTime: 60_000 } })
