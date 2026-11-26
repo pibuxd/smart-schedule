@@ -824,8 +824,10 @@ def test_an_hours_target_is_about_this_many_hours_rather_on_some_days():
     assert readings.hour_scope("period", "Chcę wyrobić 30 godzin w tygodniu", 30) == "week"
     # A model on OpenRouter may write null for the fields of other types.
     limit = reading(type="limit_godzin", max_hours=8).preferences[0].model_dump()
-    nulls = llm.Preference.model_validate({**limit, "target_hours": None, "prefer_weekdays": None, "at_least": None})
-    assert (nulls.target_hours, nulls.prefer_weekdays, nulls.at_least) == (0, [], False)
+    nulls = llm.Preference.model_validate(
+        {**limit, "target_hours": None, "prefer_weekdays": None, "hours_meaning": None}
+    )
+    assert (nulls.target_hours, nulls.prefer_weekdays, nulls.hours_meaning) == (0, [], "unsaid")
 
 
 def test_days_off_may_name_hours():

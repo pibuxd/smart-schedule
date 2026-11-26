@@ -861,7 +861,8 @@ def _requests_a(built: Built, r1: SchedulePeriod, d1: SchedulePeriod, w2: Schedu
             pr["celina"],
             r1,
             None,
-            f"W tygodniu od {monday:%d.%m} chcę wyrobić 30 godzin, w następnym 10, najlepiej pod koniec tygodnia.",
+            f"W tygodniu od {monday:%d.%m} chcę wyrobić około 30 godzin, w następnym około 10, najlepiej pod koniec "
+            "tygodnia.",
             st.INTERPRETED,
             _interpretation(
                 "cel_godzin",

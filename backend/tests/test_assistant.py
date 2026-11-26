@@ -304,11 +304,19 @@ class TestRequests:
             prefer_weekdays=[4, 5, 6, 7],
         ).preferences[0]
         second = first.model_copy(update={"target_hours": 10, "dates": [d.isoformat() for d in weeks[1]]})
-        answer = llm.EmployeeReply(topic="app", answer="", preferences=[first, second], leave_to_manager=False)
-        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: answer)
+        unsaid = llm.EmployeeReply(topic="app", answer="", preferences=[first, second], leave_to_manager=False)
+        about = [p.model_copy(update={"hours_meaning": "about"}) for p in (first, second)]
+        answers = [unsaid, unsaid.model_copy(update={"preferences": about, "answers_question": 1})]
+        monkeypatch.setattr(llm, "read_request", lambda text, context, toolbox=None: answers.pop(0))
         api.login(shop["worker"])
         text = "w pierwszym tygodniu chce 30 godzin wyrobić a w drugim 10 i najlepiej pod koniec tyg"
-        request_id = send_request(api, shop, text).json()["id"]
+        asked_id = send_request(api, shop, text).json()["id"]
+        # Neither "około" nor "co najmniej": the app asks (Piotr, 26.11.2026), and nothing is saved yet.
+        assert services.interpret_request(asked_id) == "answered"
+        asked = TextRequest.objects.get(pk=asked_id)
+        assert asked.question.startswith("Chodzi o około 30 i 10 godz., czy o co najmniej tyle")
+        assert build_problem([shop["period"]]).problem.requests == ()
+        request_id = send_request(api, shop, "około").json()["id"]
         assert services.interpret_request(request_id) == "interpreted"
 
         def span(days):

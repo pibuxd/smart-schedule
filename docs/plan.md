@@ -1765,17 +1765,22 @@ więc prośba poszła do kierownika jako tekst i generator jej nie użył. Piotr
   stały „Cel godzin w miesiącu” osoby zostaje w „Pracownicy”.
 - „Co najmniej” (po uwadze z przeglądu PR, 26.11): gdy osoba wyraźnie pisze „co najmniej”, „minimum”,
   „przynajmniej”, „nie mniej niż”, odczyt ma `at_least: true` i liczą się tylko brakujące godziny
-  (`min(1, max(0, cel − minuty) / cel)`), więcej godzin nie łamie prośby. Opis: „co najmniej 30 godz.”. Samo
-  „chcę wyrobić 30 godzin” zostaje „około”, a „chcę więcej godzin” bez liczby daje pytanie, ile.
-- Schemat odpowiedzi: `target_hours` (liczba, 0 = brak), `prefer_weekdays` (lista) i `at_least` (tak/nie) bez
-  null, jak `position`, żeby liczba parametrów typu „albo” została w limicie API (test z #48); null od modelu na
-  OpenRouterze zamienia się na 0, [] i false.
+  (`min(1, max(0, cel − minuty) / cel)`), więcej godzin nie łamie prośby. Opis: „co najmniej 30 godz.”.
+- Samo „chcę wyrobić 30 godzin” (bez „około” i bez „co najmniej”): asystent pracownika pyta „Chodzi o około 30
+  godz., czy o co najmniej tyle (więcej godzin Ci nie przeszkadza)?” (decyzja Piotra z 26.11.2026). Model ma
+  `hours_meaning` (`about` / `at_least` / `unsaid`); przy `unsaid` pyta sama aplikacja, gdy model nie zapytał
+  (`services._hours_meaning_question`, jak przy stanowisku), a po trzecim pytaniu zapisuje „około”. Polecenie
+  kierownika bez „co najmniej” to „około”, bo kierownik widzi opis przed „Zatwierdź zmiany”. „Chcę więcej godzin”
+  bez liczby daje pytanie, ile.
+- Schemat odpowiedzi: `target_hours` (liczba, 0 = brak), `prefer_weekdays` (lista), `hours_meaning` (pracownik)
+  i `at_least` (kierownik) bez null, jak `position`, żeby liczba parametrów typu „albo” została w limicie API (test
+  z #48); null od modelu na OpenRouterze zamienia się na 0, [], `unsaid` i false.
 - Dane testowe (`seed_test_data`): Celina w Rynku ma „około 30 godz.” w pierwszym pełnym tygodniu okresu i „około
   10 godz.” w następnym, najlepiej od czwartku do niedzieli. Demo: „Chętnie wezmę więcej godzin, około 40
   w tygodniu” jest teraz `cel_godzin` (wcześniej błędnie `limit_godzin` bez liczby).
 
-Założenia: „wyrobić 30 godzin” bez „co najmniej” to „około 30” (więcej godzin też jest odstępstwem; kto chce
-najwyżej, ma `limit_godzin`, a obie prośby mogą być naraz). Do potwierdzenia przez Piotra. Dni „najlepiej” to dni tygodnia, nie konkretne daty.
+Założenia: „około 30” to też odstępstwo przy większej liczbie godzin; kto chce najwyżej, ma `limit_godzin`, a obie
+prośby mogą być naraz. Dni „najlepiej” to dni tygodnia, nie konkretne daty.
 
 Sprawdzone na danych testowych (Rynek, okres z prośbą Celiny, 26.11.2026): pierwszy tydzień 32 h (cel 30), drugi
 40 h (cel 10). Sama prośba z zasadami lokalu daje 32 h i 8 h. W całym Rynku prośba jest jedną z wielu miękkich
