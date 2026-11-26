@@ -6,7 +6,9 @@ import type { ClaimOut, ManagerOfferOut, ManagerOffersOut } from '../../api/gene
 import { Button } from '../../components/ui/button'
 import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { cn } from '../../lib/cn'
 import { shortTime } from '../../lib/dates'
+import { FOCUSED, useScrollIntoViewOnce } from '../../lib/focus'
 import { ChangeStaffing, ShiftChangeSheet } from './ChangeStaffing'
 import { useManager } from './ManagerContext'
 import { OFFERS_REFRESH_MS } from './waiting-claims'
@@ -35,7 +37,7 @@ const CLAIM_STATUS: Record<ClaimOut['status'], string> = {
  * The manager can also decide alone: pick any person for an offered shift, end the offer, or (below the list)
  * change who works any published shift ("Zmień obsadę sam").
  */
-export function OffersScreen() {
+export function OffersScreen({ focusOffer }: { focusOffer?: string }) {
   const { companyId, readOnly } = useManager()
   const offers = useManagerOffers({ company_id: companyId }, { query: { refetchInterval: OFFERS_REFRESH_MS } })
 
@@ -60,14 +62,14 @@ export function OffersScreen() {
           </p>
         </EmptyState>
       ) : (
-        <OfferList offers={(offers.data.data as ManagerOffersOut).offers} readOnly={readOnly} />
+        <OfferList offers={(offers.data.data as ManagerOffersOut).offers} readOnly={readOnly} focus={focusOffer} />
       )}
       <ChangeStaffing />
     </div>
   )
 }
 
-function OfferList({ offers, readOnly }: { offers: ManagerOfferOut[]; readOnly: boolean }) {
+function OfferList({ offers, readOnly, focus }: { offers: ManagerOfferOut[]; readOnly: boolean; focus?: string }) {
   const active = offers.filter((o) => o.status === 'open' || o.status === 'claimed')
   const done = offers.filter((o) => o.status !== 'open' && o.status !== 'claimed')
   return (
@@ -75,7 +77,7 @@ function OfferList({ offers, readOnly }: { offers: ManagerOfferOut[]; readOnly: 
       {active.length > 0 ? (
         <ul className="m-0 grid list-none gap-4 p-0">
           {active.map((offer) => (
-            <OfferCard key={offer.id} offer={offer} readOnly={readOnly} />
+            <OfferCard key={offer.id} offer={offer} readOnly={readOnly} focused={offer.id === focus} />
           ))}
         </ul>
       ) : (
@@ -88,7 +90,7 @@ function OfferList({ offers, readOnly }: { offers: ManagerOfferOut[]; readOnly: 
           </h2>
           <ul className="m-0 grid list-none gap-3 p-0">
             {done.map((offer) => (
-              <OfferCard key={offer.id} offer={offer} readOnly />
+              <OfferCard key={offer.id} offer={offer} readOnly focused={offer.id === focus} />
             ))}
           </ul>
         </section>
@@ -97,7 +99,8 @@ function OfferList({ offers, readOnly }: { offers: ManagerOfferOut[]; readOnly: 
   )
 }
 
-function OfferCard({ offer, readOnly }: { offer: ManagerOfferOut; readOnly: boolean }) {
+function OfferCard({ offer, readOnly, focused = false }: { offer: ManagerOfferOut; readOnly: boolean; focused?: boolean }) {
+  const scrollTo = useScrollIntoViewOnce()
   const { shift } = offer
   const pending = offer.claims.filter((c) => c.status === 'pending')
   const decided = offer.claims.filter((c) => c.status !== 'pending')
@@ -107,7 +110,11 @@ function OfferCard({ offer, readOnly }: { offer: ManagerOfferOut; readOnly: bool
   const close = useCloseOffer()
   const queryClient = useQueryClient()
   return (
-    <li className={`grid gap-3 rounded-lg border bg-surface p-4 ${waiting ? 'border-2 border-accent' : 'border-line'}`}>
+    <li
+      ref={focused ? scrollTo : undefined}
+      aria-current={focused || undefined}
+      className={cn('grid gap-3 rounded-lg border bg-surface p-4', waiting ? 'border-2 border-accent' : 'border-line', focused && FOCUSED)}
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="grid gap-0.5">
           <b className="text-lg">

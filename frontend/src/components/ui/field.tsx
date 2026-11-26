@@ -102,6 +102,7 @@ export function Section({
   children,
   description,
   collapsible = false,
+  defaultOpen = false,
   alwaysExplain = false,
   status,
 }: {
@@ -109,6 +110,8 @@ export function Section({
   action?: ReactNode
   description?: ReactNode
   collapsible?: boolean
+  /** Only for `collapsible`: open at first (what a tapped notification is about is inside). */
+  defaultOpen?: boolean
   alwaysExplain?: boolean
   status?: ReactNode
   children: ReactNode
@@ -119,6 +122,7 @@ export function Section({
     return (
       <Disclosure
         boxed
+        open={defaultOpen || undefined}
         contentClassName="grid gap-2"
         summary={
           <span className="flex flex-1 flex-wrap items-baseline justify-between gap-x-3 py-1">

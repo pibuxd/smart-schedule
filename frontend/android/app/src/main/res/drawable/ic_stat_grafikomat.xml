@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status bar icon of push notifications: the app's mark (a squared sheet with a header line), white on transparent. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+    <path
+        android:pathData="M7,2h14a5,5 0,0 1,5 5v14a5,5 0,0 1,-5 5h-14a5,5 0,0 1,-5 -5v-14a5,5 0,0 1,5 -5z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7,2h14a5,5 0,0 1,5 5v2h-24v-2a5,5 0,0 1,5 -5z" />
+    <path
+        android:pathData="M10,9v17M19,9v17M2,18h24"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5" />
+</vector>

@@ -28,7 +28,8 @@ import type {
   ErrorOut,
   MarkReadIn,
   MyNotificationsParams,
-  NotificationsOut
+  NotificationsOut,
+  PushDeviceIn
 } from '../model';
 
 import { apiFetch } from '../../http';
@@ -494,4 +495,114 @@ export const useDismissNotification = <TError = ErrorOut,
         TContext
       > => {
       return useMutation(getDismissNotificationMutationOptions(options), queryClient);
+    }
+    export type registerPushDeviceResponse204 = {
+  data: void
+  status: 204
+}
+
+export type registerPushDeviceResponse400 = {
+  data: ErrorOut
+  status: 400
+}
+
+export type registerPushDeviceResponseSuccess = (registerPushDeviceResponse204) & {
+  headers: Headers;
+};
+export type registerPushDeviceResponseError = (registerPushDeviceResponse400) & {
+  headers: Headers;
+};
+
+export type registerPushDeviceResponse = (registerPushDeviceResponseSuccess | registerPushDeviceResponseError)
+
+export const getRegisterPushDeviceUrl = () => {
+
+
+
+
+  return `/api/me/push-devices`
+}
+
+/**
+ * This phone (the iOS or Android app, after login) gets my notifications as push notifications, from all my
+ * companies, until I log out there. Not company data, so allowed in read-only mode too.
+ * @summary Register Push Device
+ */
+export const registerPushDevice = async (pushDeviceIn: PushDeviceIn, options?: Parameters<typeof apiFetch>[1]): Promise<registerPushDeviceResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<registerPushDeviceResponse>(getRegisterPushDeviceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(pushDeviceIn)
+  }
+);}
+
+
+
+
+
+export const getRegisterPushDeviceMutationKey = () => ['registerPushDevice'] as const;
+
+export const getRegisterPushDeviceMutationOptions = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPushDevice>>, TError,RegisterPushDeviceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerPushDevice>>, TError,RegisterPushDeviceMutationVariables, TContext> => {
+
+const mutationKey = getRegisterPushDeviceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerPushDevice>>, RegisterPushDeviceMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerPushDevice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterPushDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof registerPushDevice>>>
+    export type RegisterPushDeviceMutationBody = PushDeviceIn
+    export type RegisterPushDeviceMutationError = ErrorOut
+    export type RegisterPushDeviceMutationVariables = {data: PushDeviceIn}
+
+    /**
+ * This phone (the iOS or Android app, after login) gets my notifications as push notifications, from all my
+ * companies, until I log out there. Not company data, so allowed in read-only mode too.
+ * @summary Register Push Device
+ */
+export const useRegisterPushDevice = <TError = ErrorOut,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPushDevice>>, TError,RegisterPushDeviceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof registerPushDevice>>,
+        TError,
+        RegisterPushDeviceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRegisterPushDeviceMutationOptions(options), queryClient);
     }

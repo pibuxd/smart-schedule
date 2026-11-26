@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button'
 import { Section } from '../../components/ui/field'
 import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
 import { errorMessage } from '../../lib/api-error'
+import { cn } from '../../lib/cn'
 import {
   dayAndMonth,
   weekdayGenitive,
@@ -20,6 +21,7 @@ import {
   weekdayLong,
   weekdayShort,
 } from '../../lib/dates'
+import { FOCUSED, useScrollIntoViewOnce } from '../../lib/focus'
 import { moneyText } from '../../lib/money'
 import { GiveAwaySheet } from './GiveAwaySheet'
 import { differenceText } from './hours'
@@ -27,14 +29,23 @@ import { HoursSheet } from './HoursSheet'
 import { OffersToTake } from './OffersToTake'
 import { buildRows, coworkersText } from './rows'
 
+/**
+ * "Mój grafik". A tapped push notification opens it on what it is about: `focusDay` (a shift's day, or the first
+ * day of a new schedule) outlines that day's shift, or the first day after it; `focusOffer` opens "Zmiany do
+ * wzięcia" on a shift someone gives away.
+ */
 export function MyScheduleScreen({
   companyId,
   readOnly = false,
   today: fixedTime,
+  focusDay,
+  focusOffer,
 }: {
   companyId: string
   readOnly?: boolean
   today?: Date
+  focusDay?: string
+  focusOffer?: string
 }) {
   const schedule = useMySchedule({ company_id: companyId })
   const [clock, setClock] = useState(() => new Date())
@@ -77,13 +88,24 @@ export function MyScheduleScreen({
       ? report
       : undefined
 
+  const todayIso = toIsoDate(today)
+  // Which part shows the day a notification is about: the nearest shift, a later day, or a past shift. A shift that
+  // ended today is past too (the manager approved its hours after work), so it wins over the next day's shift.
+  const pastOnDay = Boolean(focusDay && focusDay <= todayIso && recent.some((s) => s.date === focusDay))
+  const focusNext = Boolean(
+    focusDay && next && (next.date === focusDay || (!pastOnDay && todayIso <= focusDay && focusDay < next.date)),
+  )
+  const focusLater = focusDay && next && focusDay > next.date ? focusDay : undefined
+  const focusPast = pastOnDay && !focusNext ? focusDay : undefined
+
   return (
     <div className="grid gap-5">
-      <OffersToTake companyId={companyId} readOnly={readOnly} />
+      <OffersToTake companyId={companyId} readOnly={readOnly} focus={focusOffer} />
       {next ? (
         <NextShift
           shift={next}
           today={today}
+          focused={focusNext}
           onGive={Date.parse(next.start_at) > today.getTime() ? give : undefined}
           onReport={reportNext}
         />
@@ -105,6 +127,7 @@ export function MyScheduleScreen({
           shifts={rest}
           publishedUntil={data.published_until}
           published={data.published}
+          focusDay={focusLater}
           onGive={give}
         />
       )}
@@ -121,7 +144,7 @@ export function MyScheduleScreen({
           <MonthTotal key={month.month} month={month} />
         ))}
       </div>
-      {recent.length > 0 && <PastShifts shifts={recent} onReport={report} />}
+      {recent.length > 0 && <PastShifts shifts={recent} onReport={report} focusDay={focusPast} />}
       <GiveAwaySheet shift={data.shifts.find((s) => s.id === giving) ?? null} onClose={() => setGiving(null)} />
       <HoursSheet
         shift={[...data.shifts, ...recent].find((s) => s.id === reporting) ?? null}
@@ -236,17 +259,25 @@ function GiveButton({ shift, onGive, wide }: { shift: MyShiftOut; onGive?: (shif
 function NextShift({
   shift,
   today,
+  focused = false,
   onGive,
   onReport,
 }: {
   shift: MyShiftOut
   today: Date
+  focused?: boolean
   onGive?: (shift: MyShiftOut) => void
   onReport?: (shift: MyShiftOut) => void
 }) {
   const day = parseDate(shift.date)
+  const scrollTo = useScrollIntoViewOnce()
   return (
-    <article aria-label="Najbliższa zmiana" className="overflow-hidden rounded-lg border border-line bg-surface">
+    <article
+      ref={focused ? scrollTo : undefined}
+      aria-label="Najbliższa zmiana"
+      aria-current={focused || undefined}
+      className={cn('overflow-hidden rounded-lg border border-line bg-surface', focused && FOCUSED)}
+    >
       <div className="flex justify-between border-b-2 border-dashed border-accent-ink/55 bg-accent px-4 py-2 font-semibold text-accent-ink">
         <span>{Date.parse(shift.start_at) <= today.getTime() ? 'Trwa Twoja zmiana' : 'Najbliższa zmiana'}</span>
         <span>{relativeDay(day, today)}</span>
@@ -301,15 +332,28 @@ function UpcomingList({
   shifts,
   publishedUntil,
   published,
+  focusDay,
   onGive,
 }: {
   first: MyShiftOut
   shifts: MyShiftOut[]
   publishedUntil?: string | null
   published?: DaysOut[]
+  focusDay?: string
   onGive?: (shift: MyShiftOut) => void
 }) {
   const rows = buildRows(first, shifts, publishedUntil, published)
+  const scrollTo = useScrollIntoViewOnce()
+  // The first day on or after the one a notification is about (its shift, or a day off).
+  const focusKey = focusDay
+    ? rows.find((row) => {
+        if (row.kind === 'week') return false
+        const last = row.kind === 'shift' ? row.shift.date : toIsoDate(row.kind === 'off' ? row.date : row.to)
+        return last >= focusDay
+      })?.key
+    : undefined
+  const mark = (key: string) =>
+    key === focusKey ? { ref: scrollTo, 'aria-current': true as const, 'data-focused': true } : {}
   return (
     <section aria-labelledby="upcoming" className="grid gap-3">
       <h2 id="upcoming" className="m-0 text-lg font-extrabold">
@@ -322,23 +366,36 @@ function UpcomingList({
               {row.label}
             </li>
           ) : row.kind === 'unpublished' ? (
-            <li key={row.key} className="border-t border-grid px-4 py-2 text-ink-muted first:border-t-0">
+            <li
+              key={row.key}
+              {...mark(row.key)}
+              className={cn('border-t border-grid px-4 py-2 text-ink-muted first:border-t-0', row.key === focusKey && FOCUSED)}
+            >
               {row.from.getTime() === row.to.getTime()
                 ? `${dayAndMonth(row.from)}: grafiku jeszcze nie ma.`
                 : `${dayAndMonth(row.from)} – ${dayAndMonth(row.to)}: grafiku jeszcze nie ma.`}
             </li>
           ) : row.kind === 'off' ? (
-            <li key={row.key} className="grid grid-cols-[52px_1fr] items-center gap-3 border-t border-grid px-4 py-2 first:border-t-0">
+            <li
+              key={row.key}
+              {...mark(row.key)}
+              className={cn(
+                'grid grid-cols-[52px_1fr] items-center gap-3 border-t border-grid px-4 py-2 first:border-t-0',
+                row.key === focusKey && FOCUSED,
+              )}
+            >
               <DateCell date={row.date} />
               <span className="text-ink-muted">Wolne</span>
             </li>
           ) : (
             <li
               key={row.key}
-              className={
-                'grid items-center gap-x-3 gap-y-2 border-t border-grid px-4 py-3 first:border-t-0 ' +
-                (row.shift.offer_status ? 'grid-cols-[52px_1fr]' : 'grid-cols-[52px_1fr_auto]')
-              }
+              {...mark(row.key)}
+              className={cn(
+                'grid items-center gap-x-3 gap-y-2 border-t border-grid px-4 py-3 first:border-t-0',
+                row.shift.offer_status ? 'grid-cols-[52px_1fr]' : 'grid-cols-[52px_1fr_auto]',
+                row.key === focusKey && FOCUSED,
+              )}
             >
               {row.showDate ? <DateCell date={parseDate(row.shift.date)} /> : <span />}
               <div className="min-w-0">
@@ -366,11 +423,22 @@ function UpcomingList({
 }
 
 /** The last two weeks: the hours that counted, and "Inne godziny" while I may still report them. */
-function PastShifts({ shifts, onReport }: { shifts: MyShiftOut[]; onReport?: (shift: MyShiftOut) => void }) {
+function PastShifts({
+  shifts,
+  onReport,
+  focusDay,
+}: {
+  shifts: MyShiftOut[]
+  onReport?: (shift: MyShiftOut) => void
+  focusDay?: string
+}) {
   const waiting = shifts.filter((s) => s.report).length
+  const scrollTo = useScrollIntoViewOnce()
+  const focusId = shifts.find((s) => s.date === focusDay)?.id
   return (
     <Section
       collapsible
+      defaultOpen={focusId !== undefined}
       title="Minione zmiany"
       status={waiting > 0 ? <span className="font-semibold text-prefer-not">czeka: {waiting}</span> : undefined}
       description="Ostatnie dwa tygodnie. Gdy praca trwała dłużej albo krócej niż w grafiku, zgłoś to kierownikowi."
@@ -379,7 +447,12 @@ function PastShifts({ shifts, onReport }: { shifts: MyShiftOut[]; onReport?: (sh
         {shifts.map((shift) => (
           <li
             key={shift.id}
-            className="grid grid-cols-[52px_1fr_auto] items-center gap-x-3 border-t border-grid px-4 py-3 first:border-t-0"
+            ref={shift.id === focusId ? scrollTo : undefined}
+            aria-current={shift.id === focusId || undefined}
+            className={cn(
+              'grid grid-cols-[52px_1fr_auto] items-center gap-x-3 border-t border-grid px-4 py-3 first:border-t-0',
+              shift.id === focusId && FOCUSED,
+            )}
           >
             <DateCell date={parseDate(shift.date)} />
             <div className="min-w-0">

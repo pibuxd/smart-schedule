@@ -56,6 +56,9 @@ def shift_payload(shift: Shift) -> dict:
         "end_time": f"{shift.end_at.astimezone(tz):%H:%M}",
         "position_name": shift.position.name,
         "location_name": shift.location.name,
+        # Where a tap on the push notification opens the schedule (`notifications.services.push_path`).
+        "location_id": str(shift.location_id),
+        "period_id": str(shift.version.period_id),
     }
 
 

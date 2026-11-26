@@ -165,6 +165,7 @@
             "description": "No Content"
           }
         },
+        "description": "End the session. A phone with the app logged in with it stops getting push notifications.",
         "tags": [
           "auth"
         ],
@@ -7548,6 +7549,47 @@
         "tags": [
           "notifications"
         ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/me/push-devices": {
+      "post": {
+        "operationId": "register_push_device",
+        "summary": "Register Push Device",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "This phone (the iOS or Android app, after login) gets my notifications as push notifications, from all my\ncompanies, until I log out there. Not company data, so allowed in read-only mode too.",
+        "tags": [
+          "notifications"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushDeviceIn"
+              }
+            }
+          },
+          "required": true
+        },
         "security": [
           {
             "SessionAuth": []
@@ -16530,6 +16572,31 @@
           "company_id"
         ],
         "title": "MarkReadIn",
+        "type": "object"
+      },
+      "PushDeviceIn": {
+        "properties": {
+          "platform": {
+            "enum": [
+              "ios",
+              "android"
+            ],
+            "title": "Platform",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 512,
+            "minLength": 16,
+            "pattern": "^[A-Za-z0-9_:\\-]+$",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platform",
+          "token"
+        ],
+        "title": "PushDeviceIn",
         "type": "object"
       },
       "AssistantCommandOut": {

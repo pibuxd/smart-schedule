@@ -32,7 +32,6 @@ from django.db.models import Max
 from django.utils import timezone
 from ninja.errors import HttpError
 
-from apps.notifications.models import Notification
 from apps.scheduling.models import Assignment, AssignmentEvent, GenerationRun, SchedulePeriod, ScheduleVersion, Shift
 from apps.scheduling.problem_builder import BuiltProblem, build_problem_for_version, slot_key
 from apps.staffing import day_staffing
@@ -551,6 +550,8 @@ def take_off_published(clash: Clash, user, *, moved_to) -> None:
         "location_name": shift.location.name,
         "moved_to": moved_to.name,
         "employee_name": employee.membership.user.full_name or "Pracownik bez imienia",
+        "location_id": str(shift.location_id),
+        "period_id": str(shift.version.period_id),
     }
     notify(company_id, [employee.membership.user_id], "shift_removed", payload)
     others = set(location_manager_ids(shift.location)) - {getattr(user, "pk", None)}
@@ -961,10 +962,9 @@ def _notify_published(version: ScheduleVersion, *, first: bool) -> None:
         "end": period.end.isoformat(),
         "changed": not first,
     }
-    Notification.objects.for_company(version.company_id).bulk_create(
-        Notification(company_id=version.company_id, user_id=user_id, kind="schedule_published", payload=payload)
-        for user_id in sorted(user_ids, key=str)
-    )
+    from apps.notifications.services import notify
+
+    notify(version.company_id, user_ids, "schedule_published", payload)
 
 
 def manual_changes(version: ScheduleVersion | None) -> int:

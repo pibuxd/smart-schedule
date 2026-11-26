@@ -1,2 +1,24 @@
 @import 'tailwindcss';
 @import './styles/tokens.css';
+
+/*
+ * The iOS and Android apps (src/native/boot.ts): the page reaches under the status bar, so it pads itself with the
+ * safe areas, and a strip of paper stays under the status bar while the page scrolls. Browsers never get
+ * `data-native`, and there the safe areas are 0 anyway.
+ */
+html[data-native] body {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-left: env(safe-area-inset-left);
+}
+html[data-native] body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: env(safe-area-inset-top);
+  background: var(--color-paper);
+  z-index: 35;
+}
+html[data-native] .min-h-dvh {
+  min-height: calc(100dvh - env(safe-area-inset-top));
+}

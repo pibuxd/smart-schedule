@@ -16,6 +16,7 @@ from apps.accounts.models import normalize_bank_account
 from apps.billing.services import subscription_state
 from apps.core.http import client_ip, require_csrf
 from apps.core.schemas import ErrorOut
+from apps.notifications import push
 from apps.tenancy.models import Invitation, InvitationStatus, Membership, Role
 
 router = Router(tags=["auth"])
@@ -129,6 +130,8 @@ def verify_code(request, payload: VerifyCodeIn):
 
 @router.post("/auth/logout", response={204: None})
 def logout(request):
+    """End the session. A phone with the app logged in with it stops getting push notifications."""
+    push.forget_session(request.user, request.session.session_key)
     django_logout(request)
     return Status(204, None)
 

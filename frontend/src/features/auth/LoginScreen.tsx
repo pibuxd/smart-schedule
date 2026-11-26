@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -15,6 +15,7 @@ import { POLAND, phoneProblem, phoneToSend, prettyPhone } from './phone'
 import { PhoneInput } from './PhoneInput'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { takeSessionEnded } from '../../lib/session-ended'
+import { listenForSmsCode, startSmsCodeWait, stopSmsCodeWait } from '../../native/sms-code'
 
 const phoneSchema = z
   .object({ region: z.string(), phone: z.string() })
@@ -90,9 +91,11 @@ function PhoneStep({ purpose, onSent }: { purpose: Purpose; onSent: (sent: Reque
   const region = form.watch('region')
 
   const submit = form.handleSubmit(({ phone }) => {
+    // Android app: the SMS may come before the server answers, so catch it from now on.
+    startSmsCodeWait()
     requestCode.mutate(
       { data: { phone, purpose } },
-      { onSuccess: (response) => onSent(response.data as RequestCodeOut) },
+      { onSuccess: (response) => onSent(response.data as RequestCodeOut), onError: stopSmsCodeWait },
     )
   })
 
@@ -196,6 +199,12 @@ function CodeStep({
     }
   }
 
+  // Android app: the system offers the code from the SMS (one tap to allow), caught since the code was requested.
+  // Typing it works all the time.
+  const latestCheck = useRef(check)
+  latestCheck.current = check
+  useEffect(() => listenForSmsCode((value) => latestCheck.current(value)), [])
+
   const minutes = Math.floor(left / 60)
   const seconds = String(left % 60).padStart(2, '0')
 
@@ -228,7 +237,8 @@ function CodeStep({
           variant="secondary"
           wide
           disabled={resend.isPending}
-          onClick={() =>
+          onClick={() => {
+            startSmsCodeWait()
             resend.mutate(
               { data: { phone: sent.phone, purpose } },
               {
@@ -239,7 +249,7 @@ function CodeStep({
                 },
               },
             )
-          }
+          }}
         >
           Wyślij kod jeszcze raz
         </Button>

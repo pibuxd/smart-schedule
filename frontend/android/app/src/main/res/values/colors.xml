@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- frontend/src/styles/tokens.css: the accent and paper colours -->
+    <color name="grafikomat_accent">#1E44B8</color>
+    <color name="grafikomat_paper">#F3F5F1</color>
+</resources>

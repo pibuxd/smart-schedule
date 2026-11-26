@@ -24,7 +24,7 @@ export function Drawer({
       <Dialog.Portal>
         <Dialog.Content
           onInteractOutside={(event) => event.preventDefault()}
-          className="drawer-panel fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-surface shadow-drawer sm:w-[420px]"
+          className="drawer-panel fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-surface pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-drawer sm:w-[420px]"
         >
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-grid py-1 pr-1 pl-4">
             <div className="min-w-0">

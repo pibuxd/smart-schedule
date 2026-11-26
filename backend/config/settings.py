@@ -57,6 +57,9 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # The iOS and Android apps: their origin may call the API, and their session key comes in a header (before
+    # SessionMiddleware, which reads it). Browsers are not affected.
+    "apps.core.native.NativeAppMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -111,6 +114,11 @@ SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = not DEBUG
 
+# The iOS and Android apps (Capacitor, docs/mobile.md) load their screens from these origins and call the API
+# across origins, with the session key in a header instead of a cookie. Their sessions last SESSION_COOKIE_AGE from
+# the last day the app was used.
+NATIVE_APP_ORIGINS = env_list("NATIVE_APP_ORIGINS", "capacitor://localhost,https://localhost")
+
 # Behind Caddy.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # How many reverse proxies we trust to set X-Forwarded-For (1 behind Caddy, 0 when the API is reached directly).
@@ -140,6 +148,21 @@ SUBSCRIPTION_BANNER_DAYS = 7
 TRIAL_BANNER_DAYS = 2
 # A company registered without a code gets this many days of full access (once per person who registers).
 TRIAL_DAYS = int(env("TRIAL_DAYS", "30"))
+
+# Push notifications to the iOS and Android apps (docs/mobile.md), sent by the worker. Nothing is configured by
+# default: without these the notifications stay in the app only. Keys are files outside the repository.
+# iPhone (APNs): the .p8 key from developer.apple.com (Keys), its id, the team id and the app's bundle id.
+PUSH_APNS_KEY_FILE = env("PUSH_APNS_KEY_FILE", "").strip()
+PUSH_APNS_KEY_ID = env("PUSH_APNS_KEY_ID", "").strip()
+PUSH_APNS_TEAM_ID = env("PUSH_APNS_TEAM_ID", "").strip()
+PUSH_APNS_TOPIC = env("PUSH_APNS_TOPIC", "pl.grafikomat.app").strip()
+# Builds from Xcode use Apple's sandbox; TestFlight and App Store builds the production service. A token the first
+# one refuses is tried at the other and remembered per phone.
+PUSH_APNS_SANDBOX = env_bool("PUSH_APNS_SANDBOX", False)
+# Android (Firebase Cloud Messaging): the service account JSON of the Firebase project.
+PUSH_FCM_CREDENTIALS_FILE = env("PUSH_FCM_CREDENTIALS_FILE", "").strip()
+# A notification the worker reaches later than this (worker stopped for a while) stays in the app only.
+PUSH_MAX_AGE_S = int(env("PUSH_MAX_AGE_S", str(6 * 60 * 60)))
 
 # Background jobs (Procrastinate on Postgres).
 PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "tasks"

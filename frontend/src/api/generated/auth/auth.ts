@@ -306,6 +306,7 @@ export const getLogoutUrl = () => {
 }
 
 /**
+ * End the session. A phone with the app logged in with it stops getting push notifications.
  * @summary Logout
  */
 export const logout = async ( options?: Parameters<typeof apiFetch>[1]): Promise<logoutResponse> => {
@@ -357,7 +358,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type LogoutMutationError = unknown
 
 
-    /** @summary Logout */
+    /**
+ * End the session. A phone with the app logged in with it stops getting push notifications.
+ * @summary Logout
+ */
 export const useLogout = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<

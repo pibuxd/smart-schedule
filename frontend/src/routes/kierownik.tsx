@@ -5,6 +5,7 @@ import { Wordmark } from '../components/Wordmark'
 import { cn } from '../lib/cn'
 import { ProfileNameForm } from '../features/auth/ProfileNameForm'
 import { useSession } from '../features/auth/session'
+import { SignOutFailed } from '../features/auth/SignOutButton'
 import { useSignOut } from '../features/auth/sign-out'
 import { AccessBanner } from '../features/manager/AccessBanner'
 import { AssistantDrawerProvider } from '../features/manager/AssistantDrawer'
@@ -91,12 +92,13 @@ function ManagerLayout() {
                   Mój grafik
                 </Link>
               )}
-              <button type="button" onClick={signOut} className={cn(MENU_LINK, 'cursor-pointer')}>
+              <button type="button" onClick={signOut.run} className={cn(MENU_LINK, 'cursor-pointer')}>
                 Wyloguj
               </button>
             </nav>
           </div>
         </header>
+        <SignOutFailed signOut={signOut} />
         <AccessBanner companyId={company.id} />
         {/* Room at the bottom, so the end of every screen can scroll clear of the assistant's button. */}
         <main key={company.id} className="mx-auto grid max-w-(--wide) grid-cols-1 gap-6 px-4 pt-5 pb-24">

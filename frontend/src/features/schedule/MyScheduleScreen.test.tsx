@@ -62,6 +62,33 @@ describe('MyScheduleScreen', () => {
     expect(screen.queryByText(/Wypłata to godziny razy stawka/)).not.toBeInTheDocument()
   })
 
+  it('outlines the shift of a tapped notification and opens the shift to take it is about', async () => {
+    schedule([shift, { ...shift, id: 'a2', date: '2026-11-16', start_at: '2026-11-16T06:00:00+01:00' }], [offer])
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date(2026, 10, 12)} focusDay="2026-11-13" focusOffer="o1" />)
+    const next = await screen.findByRole('article', { name: 'Najbliższa zmiana' })
+    expect(next).toHaveAttribute('aria-current', 'true')
+    // "Zmiany do wzięcia" is open by itself, with the offer outlined.
+    const heading = await screen.findByRole('heading', { name: 'Zmiany do wzięcia' })
+    expect(heading.closest('details')).toHaveAttribute('open')
+    const take = within(heading.closest('details')!).getByRole('button', { name: 'Weź zmianę' })
+    expect(take.closest('li')).toHaveAttribute('aria-current', 'true')
+  })
+
+  it("opens today's shift that has ended, not tomorrow's, when its hours were approved", async () => {
+    const ended = { ...shift, id: 'p1', can_report: true }
+    const tomorrow = { ...shift, id: 'a2', date: '2026-11-14', start_at: '2026-11-14T06:00:00+01:00', end_at: '2026-11-14T14:00:00+01:00' }
+    mockApi((_method, path) => {
+      if (path === '/api/me/offers') return [200, []]
+      return [200, { home_location_name: 'Wieliczka – Rynek', shifts: [tomorrow], recent: [ended], months: [] }]
+    })
+    renderScreen(<MyScheduleScreen companyId="c1" today={new Date('2026-11-13T15:00:00+01:00')} focusDay="2026-11-13" />)
+    const next = await screen.findByRole('article', { name: 'Najbliższa zmiana' })
+    expect(next).not.toHaveAttribute('aria-current')
+    const past = await screen.findByRole('heading', { name: 'Minione zmiany' })
+    expect(past.closest('details')).toHaveAttribute('open')
+    expect(within(past.closest('details')!).getByRole('listitem')).toHaveAttribute('aria-current', 'true')
+  })
+
   it('shows the pay under the hours only when the manager set rates', async () => {
     mockApi((_method, path) => {
       if (path === '/api/me/offers') return [200, []]

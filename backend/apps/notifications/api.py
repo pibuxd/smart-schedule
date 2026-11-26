@@ -1,6 +1,6 @@
 """The person's in-app notifications in one company (also for managers)."""
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -10,8 +10,9 @@ from ninja.errors import HttpError
 from ninja.responses import Status
 
 from apps.core.schemas import ErrorOut
+from apps.notifications import push
 from apps.notifications.models import Notification
-from apps.notifications.services import LINKS, notification_text
+from apps.notifications.services import LINKS, month_to_open, notification_text
 from apps.scheduling.models import SchedulePeriod
 from apps.tenancy.context import context_for, tenant_context
 
@@ -39,6 +40,12 @@ class NotificationOut(Schema):
 class NotificationsOut(Schema):
     notifications: list[NotificationOut]
     unread: int
+
+
+class PushDeviceIn(Schema):
+    platform: Literal["ios", "android"]
+    # APNs device token (iOS) or Firebase registration token (Android), as the app got it.
+    token: str = Field(min_length=16, max_length=512, pattern=r"^[A-Za-z0-9_:\-]+$")
 
 
 class MarkReadIn(Schema):
@@ -69,7 +76,7 @@ def my_notifications(request, company_id: UUID):
                 payload = {**payload, "closed": "published" if published else "arranging"}
                 link = "schedule" if published else "none"
             else:
-                month = _month(payload.get("start"))
+                month = month_to_open(payload.get("start"))
         result.append(
             NotificationOut(
                 id=n.pk,
@@ -92,15 +99,6 @@ def _uuids(values: set[str]) -> list[UUID]:
         except ValueError:
             continue
     return result
-
-
-def _month(day) -> str | None:
-    """ "2026-12-01" -> "2026-12"; the month "Kiedy mogę" opens on (today's when the period has started)."""
-    try:
-        start = date.fromisoformat(str(day))
-    except ValueError:
-        return None
-    return max(start, timezone.localdate()).strftime("%Y-%m")
 
 
 @router.post("/me/notifications/read", response={204: None, 404: ErrorOut})
@@ -129,4 +127,15 @@ def dismiss_all_notifications(request, company_id: UUID):
     """Remove all of my notifications in this company."""
     ctx = tenant_context(request, company_id)
     ctx.qs(Notification).filter(user=ctx.user).delete()
+    return Status(204, None)
+
+
+@router.post("/me/push-devices", response={204: None, 400: ErrorOut})
+def register_push_device(request, payload: PushDeviceIn):
+    """This phone (the iOS or Android app, after login) gets my notifications as push notifications, from all my
+    companies, until I log out there. Not company data, so allowed in read-only mode too."""
+    session_key = request.session.session_key
+    if not session_key:
+        raise HttpError(400, "Zaloguj się jeszcze raz w aplikacji.")
+    push.register_device(request.user, session_key, payload.platform, payload.token)
     return Status(204, None)
