@@ -1678,3 +1678,50 @@ Założenia: z trzech przedziałów zostają dwa najdłuższe (przy równych wcz
 pracy; pracownik może to zmienić w oknie dnia. Dzień z własnymi godzinami, które prośba w ogóle nie zmienia (np.
 „mogę 14–22” i „nie mogę 9–11”), nie dostaje propozycji. Dzień „albo” zostaje „albo” tylko, gdy po zmianie nadal ma
 dwa przedziały.
+
+## 46. Aplikacje iOS i Android (26.11.2026)
+
+Spec: „Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)”. Instrukcja budowania, podpisywania i sklepów:
+[mobile.md](mobile.md).
+
+- Capacitor 8 (`frontend/capacitor.config.ts`, `frontend/ios`, `frontend/android`): `appId` `pl.grafikomat.app`,
+  `webDir` `dist`. `npm run build:native` = `vite build --mode native` + `cap sync`; tryb `native` wymaga
+  `VITE_API_ORIGIN` z HTTPS (`frontend/.env.native.local`, poza repozytorium). Aplikacja działa z własnego originu:
+  `capacitor://localhost` (iOS), `https://localhost` (Android).
+- Sesja w aplikacji (`apps/core/native.py`, `NativeAppMiddleware`): WKWebView nie wysyła ciasteczek do innej domeny,
+  więc aplikacja (nagłówek `X-Grafikomat-Client: ios|android`) wysyła klucz sesji Django w `X-Grafikomat-Session`.
+  Middleware zdejmuje z takiego żądania ciasteczka sesji i CSRF, wkłada klucz z nagłówka jako ciasteczko sesji
+  i wyłącza sprawdzanie CSRF (bez ciasteczek nie ma czego podrobić). Nowy klucz (logowanie) albo pusty (wylogowanie,
+  koniec sesji) wraca w nagłówku odpowiedzi. CORS tylko dla `NATIVE_APP_ORIGINS`, bez `Allow-Credentials`.
+  Uwierzytelnione żądanie aplikacji pierwszego dnia użycia zapisuje dzień w sesji (`grafikomat_app_used_on`), co
+  przesuwa jej koniec o `SESSION_COOKIE_AGE`. Frontend: `src/api/http.ts` (`send`), klucz w Preferences
+  (`src/native/session-token.ts`).
+- Push (`apps/notifications/push.py`, model `PushDevice`: użytkownik, platforma, token (unikalny), klucz sesji,
+  sandbox): `POST /me/push-devices` (`register_push_device`) rejestruje telefon dla bieżącej sesji;
+  `auth.logout` wywołuje `push.forget_session`. `services.notify` po `bulk_create` wywołuje `push.queue`, które
+  w tej samej transakcji dodaje `notifications.send_push` (kolejka `default`), gdy ktoś z adresatów ma telefon.
+  Prośba o dyspozycje i publikacja grafiku też idą przez `notify`. Worker (`push.deliver`) pomija przeczytane i starsze
+  niż `PUSH_MAX_AGE_S`, sprawdza sesję telefonu (klucz + hash hasła sesji jak `get_user`; nieważna = telefon
+  usunięty), tekst bierze z `notification_text`, a trasę z `services.push_path`. APNs: HTTP/2 (`httpx2`), token
+  ES256 z klucza .p8 (`pyjwt`), przy `BadDeviceToken` druga próba w drugim środowisku. FCM HTTP v1: konto usługi →
+  token OAuth. Token nieznany usłudze = telefon usunięty; inne błędy tylko w logu (bez ponawiania, bo dubluje push).
+- Trasy (`push_path`): `/grafik?dzien=<data>` (moja zmiana), `/grafik?oferta=<id>` (zmiana do wzięcia),
+  `/kierownik/oddane-zmiany?oferta=<id>`, `/kierownik/lokal/<id>/grafik?okres=<id>`, `/kiedy-moge?miesiac=…`,
+  `/kierownik/godziny`, `/kierownik/lokal/<id>/dyspozycje`. Do danych powiadomień o zmianach doszły `location_id`
+  i `period_id`. Frontend: `src/native/push.ts` (`pushTarget` przepuszcza tylko ścieżki aplikacji, nasłuch przed
+  pierwszym ekranem, dotknięcie z zamkniętej aplikacji czeka na router), `src/lib/focus.ts` (obrys + przewinięcie),
+  parametry `dzien` / `oferta` / `okres` w trasach.
+- Kod SMS: Android `GrafikomatPlugin` (SMS User Consent API, `play-services-auth-api-phone`; ekran zgody tylko
+  z Google Play services), iOS `autocomplete="one-time-code"` (już był). Ręczne wpisanie bez zmian.
+- Natywnie: ikony i ekran startowy z `scripts/app-icons.mjs`, kanał Androida `grafik`, ikona powiadomienia
+  `ic_stat_grafikomat`, `POST_NOTIFICATIONS`, bez kopii zapasowej danych aplikacji (`allowBackup=false`), iOS:
+  `App.entitlements` (`aps-environment`), `PrivacyInfo.xcprivacy`, `ITSAppUsesNonExemptEncryption=false`, przekazanie
+  tokenu APNs w `AppDelegate`. Wersje: `npm run app:version -- 1.0.1 2`.
+- Konfiguracja serwera: `NATIVE_APP_ORIGINS`, `PUSH_APNS_KEY_FILE` / `_KEY_ID` / `_TEAM_ID` / `_TOPIC` /
+  `_SANDBOX`, `PUSH_FCM_CREDENTIALS_FILE`; pliki kluczy w `./secrets` (git-ignored), worker widzi je w
+  `/run/secrets/grafikomat`.
+
+Założenia: sesja aplikacji przedłuża się raz dziennie przy używaniu (inaczej pracownik musiałby logować się co 60
+dni); strona zachowuje dotychczasowe 60 dni od logowania. Push nie jest ponawiany, bo powiadomienie i tak jest
+w aplikacji. Powiadomienie dotknięte przy wylogowanej aplikacji otwiera po prostu logowanie (telefon po wylogowaniu
+nie dostaje już pushy, więc zdarza się to tylko po wygaśnięciu sesji).

@@ -12,3 +12,6 @@ frontend/dist/
 .deploy-failed-commit
 deploy/local/*
 !deploy/local/README.md
+
+# Push keys and other server secrets (docs/mobile.md)
+secrets/

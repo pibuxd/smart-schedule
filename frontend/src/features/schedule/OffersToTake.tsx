@@ -7,7 +7,9 @@ import { Button } from '../../components/ui/button'
 import { Section } from '../../components/ui/field'
 import { InlineError } from '../../components/ui/status'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
+import { cn } from '../../lib/cn'
 import { dayTitle, parseDate, shortTime } from '../../lib/dates'
+import { FOCUSED, useScrollIntoViewOnce } from '../../lib/focus'
 import { shifts as shiftsWord } from '../manager/words'
 
 /**
@@ -15,9 +17,10 @@ import { shifts as shiftsWord } from '../manager/words'
  * my other shifts and the position). "Weź zmianę" asks the manager; the shift is mine only after they approve.
  * When the shift's location hands shifts over without approval (`at_once`), it is mine right away.
  * Folded at first, with the count in the heading, so a long list does not push my own schedule down the screen
- * (Piotr, 22.11.2026). Hidden when there is nothing to take.
+ * (Piotr, 22.11.2026). Hidden when there is nothing to take. A tapped notification about one of them (`focus`)
+ * opens the list with that shift outlined.
  */
-export function OffersToTake({ companyId, readOnly }: { companyId: string; readOnly: boolean }) {
+export function OffersToTake({ companyId, readOnly, focus }: { companyId: string; readOnly: boolean; focus?: string }) {
   const offers = useAvailableOffers({ company_id: companyId })
   const [taken, setTaken] = useState(false)
   const note = taken ? <TakenNote onClose={() => setTaken(false)} /> : null
@@ -33,6 +36,7 @@ export function OffersToTake({ companyId, readOnly }: { companyId: string; readO
       {note}
       <Section
         collapsible
+        defaultOpen={list.some((offer) => offer.id === focus)}
         title="Zmiany do wzięcia"
         status={
           <>
@@ -48,7 +52,13 @@ export function OffersToTake({ companyId, readOnly }: { companyId: string; readO
       >
         <ul className="m-0 grid list-none gap-3 p-0">
           {list.map((offer) => (
-            <OfferCard key={offer.id} offer={offer} readOnly={readOnly} onTaken={() => setTaken(true)} />
+            <OfferCard
+              key={offer.id}
+              offer={offer}
+              readOnly={readOnly}
+              focused={offer.id === focus}
+              onTaken={() => setTaken(true)}
+            />
           ))}
         </ul>
       </Section>
@@ -72,12 +82,15 @@ function TakenNote({ onClose }: { onClose: () => void }) {
 function OfferCard({
   offer,
   readOnly,
+  focused,
   onTaken,
 }: {
   offer: AvailableOfferOut
   readOnly: boolean
+  focused: boolean
   onTaken: () => void
 }) {
+  const scrollTo = useScrollIntoViewOnce()
   const claim = useClaimOffer()
   const withdraw = useWithdrawMyClaim()
   const queryClient = useQueryClient()
@@ -89,7 +102,11 @@ function OfferCard({
   const [asking, setAsking] = useState(false)
 
   return (
-    <li className="grid gap-3 rounded-lg border-2 border-accent bg-surface p-4">
+    <li
+      ref={focused ? scrollTo : undefined}
+      aria-current={focused || undefined}
+      className={cn('grid gap-3 rounded-lg border-2 border-accent bg-surface p-4', focused && FOCUSED)}
+    >
       <div className="grid gap-0.5">
         <b className="text-lg">{dayTitle(parseDate(shift.date))}</b>
         <span className="text-xl font-extrabold tabular-nums">

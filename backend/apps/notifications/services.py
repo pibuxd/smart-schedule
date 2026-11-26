@@ -1,14 +1,20 @@
 """Writing in-app notifications and turning them into Polish sentences for the screen.
 
-Notifications are rows only: nothing goes out by SMS or e-mail (only login codes do). The text is built when the
-notification is read, from its kind and payload, so a wording fix also changes old notifications.
+Notifications are rows: nothing goes out by SMS or e-mail (only login codes do). A person with the iOS or Android
+app also gets each one as a push notification on their phone (`push.py`), which opens the screen it is about
+(`push_path`). The text is built when the notification is read or sent, from its kind and payload, so a wording
+fix also changes old notifications.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date
+from urllib.parse import quote
 
+from django.utils import timezone
+
+from apps.notifications import push
 from apps.notifications.models import Notification
 from apps.tenancy.models import Location, Membership, Role
 
@@ -42,12 +48,90 @@ LINKS = {
 
 
 def notify(company_id, user_ids: Iterable, kind: str, payload: dict) -> int:
-    """One notification per person (duplicates dropped). Returns how many were written."""
+    """One notification per person (duplicates dropped). Returns how many were written. People with the app get
+    a push notification too, queued in the caller's transaction."""
     unique = sorted({str(u) for u in user_ids if u})
-    Notification.objects.for_company(company_id).bulk_create(
+    rows = Notification.objects.for_company(company_id).bulk_create(
         Notification(company_id=company_id, user_id=user_id, kind=kind, payload=payload) for user_id in unique
     )
+    push.queue(rows)
     return len(unique)
+
+
+# Notifications about one shift of the person's own schedule: tapping opens it in "Mój grafik".
+MY_SHIFT_KINDS = {
+    "claim_approved",
+    "claim_rejected",
+    "offer_taken",
+    "offer_claimed",
+    "claim_taken",
+    "offer_taken_auto",
+    "offer_cancelled",
+    "offer_expired",
+    "offer_opened_for_you",
+    "offer_closed",
+    "shift_assigned",
+    "shift_unassigned",
+    "shift_swapped",
+    "shift_removed",
+    "hours_approved",
+    "hours_rejected",
+    "hours_set",
+    "hours_lost",
+}
+# About a shift someone gave away, for the managers who decide.
+OFFER_KINDS = {"offer_made", "shift_claimed", "handover_done"}
+
+
+def month_to_open(day) -> str | None:
+    """ "2026-12-01" -> "2026-12"; the month "Kiedy mogę" opens on (today's when the period has started)."""
+    try:
+        start = date.fromisoformat(str(day))
+    except ValueError:
+        return None
+    return max(start, timezone.localdate()).strftime("%Y-%m")
+
+
+def push_path(kind: str, payload: dict) -> str:
+    """The app's screen a push notification opens: the shift or period it is about, else the closest screen.
+
+    Routes and their search parameters are the SPA's (`frontend/src/routes`); unknown ids only open the screen.
+    """
+    p = payload or {}
+
+    def q(value) -> str:
+        return quote(str(value), safe="")
+
+    match kind:
+        case "availability_requested":
+            month = month_to_open(p.get("start"))
+            return f"/kiedy-moge?miesiac={month}" if month else "/kiedy-moge"
+        case "schedule_published":
+            start = p.get("start")
+            return f"/grafik?dzien={q(max(str(start), timezone.localdate().isoformat()))}" if start else "/grafik"
+        case "shift_offered":
+            return f"/grafik?oferta={q(p['offer_id'])}" if p.get("offer_id") else "/grafik"
+        case "request_ended" | "request_to_assistant":
+            return "/kiedy-moge"
+        case "hours_reported":
+            return "/kierownik/godziny"
+        case "request_for_manager":
+            if p.get("location_id"):
+                return f"/kierownik/lokal/{q(p['location_id'])}/dyspozycje"
+            return "/kierownik"
+        case "shift_emptied":
+            if p.get("location_id") and p.get("period_id"):
+                return f"/kierownik/lokal/{q(p['location_id'])}/grafik?okres={q(p['period_id'])}"
+            return "/kierownik"
+        case "borrowed":
+            return "/kierownik/oddane-zmiany"
+    if kind in OFFER_KINDS:
+        return (
+            f"/kierownik/oddane-zmiany?oferta={q(p['offer_id'])}" if p.get("offer_id") else "/kierownik/oddane-zmiany"
+        )
+    if kind in MY_SHIFT_KINDS and p.get("date"):
+        return f"/grafik?dzien={q(p['date'])}"
+    return "/grafik" if kind in MY_SHIFT_KINDS or kind == "bank_account_set" else "/"
 
 
 def location_manager_ids(location: Location) -> list:

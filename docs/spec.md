@@ -4,6 +4,34 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)
+
+Piotr (26.11.2026): aplikacje iOS i Android przez Capacitor, z frontendem spakowanym w aplikacji, korzystające
+z tego samego API Django przez HTTPS; wersja WWW działa dalej bez zmian. Logowanie ma przetrwać restart aplikacji,
+kod SMS ma się podpowiadać systemowo z możliwością wpisania ręcznie, a powiadomienia push mają działać na obu
+platformach i otwierać właściwą zmianę albo okres grafiku, także gdy aplikacja była zamknięta. Wysłanie wersji do
+sklepów zostaje decyzją Piotra. Szczegóły techniczne i instrukcja sklepów: [mobile.md](mobile.md).
+
+- Aplikacje to ta sama aplikacja React co strona, spakowana w aplikacji (Capacitor 8), z tymi samymi ekranami. Adres
+  serwera jest wpisany przy budowaniu aplikacji i zawsze ma HTTPS.
+- Logowanie jak na stronie: numer i kod SMS. Na Androidzie system pokazuje SMS z kodem i pyta, czy Grafikomat może
+  go odczytać; jedno „Zezwól” wpisuje kod. Na iPhonie kod pojawia się nad klawiaturą. Wpisanie kodu ręcznie działa
+  zawsze. Aplikacja nie dostaje uprawnienia do czytania SMS-ów.
+- Zalogowanie zostaje po zamknięciu i ponownym uruchomieniu aplikacji. Sesja trwa 60 dni od ostatniego dnia
+  używania aplikacji (na stronie jak dotąd 60 dni od logowania), więc kto otwiera aplikację choć raz na dwa miesiące,
+  nie loguje się ponownie. Zmiana numeru przez superadmina i „Wyloguj” kończą ją jak na stronie.
+- Powiadomienia push to wyjątek od zasady „powiadomienia tylko w aplikacji”: telefon z zainstalowaną aplikacją
+  dostaje ten sam tekst co lista powiadomień (nowy grafik, oddana zmiana, zgłoszenie, decyzja kierownika i inne).
+  Zgoda na powiadomienia jest pytana raz, po zalogowaniu. Po wylogowaniu telefon przestaje je dostawać.
+  Powiadomienie przeczytane w aplikacji albo starsze niż 6 godzin nie idzie już na telefon.
+- Dotknięcie powiadomienia otwiera to, czego dotyczy: swoją zmianę w „Mój grafik” (obrysowaną), zmianę do wzięcia
+  (rozwinięte „Zmiany do wzięcia”), oddaną zmianę u kierownika w „Oddane zmiany”, okres w grafiku lokalu, miesiąc
+  w „Kiedy mogę”. Firma z powiadomienia staje się wybraną firmą.
+- Na stronie WWW nic się nie zmienia (ciasteczko sesji i ochrona CSRF jak dotąd). „Pobierz CSV” w aplikacji otwiera
+  systemowe „Udostępnij” (zapis w Plikach, wysłanie mailem).
+- Sklepy: przygotowane są podpisywanie, numery wersji, ikony, deklaracje prywatności i instrukcja TestFlight,
+  Google Play i publikacji. Klucze, hasła i pliki Firebase/Apple są tylko poza repozytorium.
+
 ## Poprawki po raporcie testów PR #82 (26.11.2026)
 
 Raport z 26.11.2026 (przegląd kodu PR #82 i testy na wdrożeniu) ma siedem błędów; naprawiamy wszystkie. Piotr
@@ -570,7 +598,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Zapraszając, menedżer może od razu wpisać imię i nazwisko; trafiają na konto przy akceptacji, jeśli konto nie ma jeszcze imienia. Wiele osób naraz zaprasza z wklejonej listy albo pliku (sekcja „Zapraszanie wielu osób naraz” na początku); takie zaproszenie może mieć stanowiska, które osoba dostaje po akceptacji. Pracownika zaprasza menedżer lokalu, menedżera zaprasza tylko właściciel firmy. Akceptacja zaproszenia pracownika tworzy członkostwo w firmie i profil pracownika z tym lokalem jako głównym. Osoba, która już pracuje w firmie, po akceptacji zaproszenia do kolejnego lokalu dostaje go jako lokal dodatkowy (lokal główny się nie zmienia). Kierownik lokalu dodatkowego ustawia jej stanowiska w swoim lokalu; stopień, godziny i wyłączenie z grafiku są wspólne i ustawia je kierownik lokalu głównego.
 - Kierownik, który sam pracuje na zmianach, dodaje siebie do grafiku lokalu jednym przyciskiem w zakładce "Pracownicy" (bez zaproszenia); dostaje wszystkie stanowiska lokalu i może je potem zawęzić (prośba Piotra z 13.11.2026).
 - Zmiana numeru telefonu: robi ją superadmin w panelu. Konto, członkostwa i historia zostają; wszystkie sesje tego konta wygasają i trzeba zalogować się nowym numerem. Zaproszenia oczekujące na stary numer menedżer wysyła ponownie. Numer z innego kraju superadmin wpisuje z kierunkowym (punkt wyżej).
-- Poza kodami logowania nic nie wysyłamy SMS-em ani e-mailem. Powiadomienia tylko w aplikacji.
+- Poza kodami logowania nic nie wysyłamy SMS-em ani e-mailem. Powiadomienia tylko w aplikacji; od 26.11.2026 ten sam tekst trafia też jako push na telefon z aplikacją iOS albo Android (sekcja „Aplikacje na iPhone'a i Androida”).
 
 ## Dostęp i subskrypcja (bez płatności online, bez Stripe)
 
@@ -589,6 +617,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Backend w całości w Pythonie: Django + Django Ninja (OpenAPI), PostgreSQL, migracje Django, sesje Django + własny moduł logowania kodem SMS.
 - Kolejka: Procrastinate na Postgresie (bez Redisa i RabbitMQ), osobny proces worker z tego samego kodu. Zapis danych i dodanie zadania do kolejki w jednej transakcji.
 - Frontend w TypeScripcie, bez Next.js: React + Vite (SPA), TanStack Router + TanStack Query, Tailwind + shadcn/ui, React Hook Form + Zod, dnd-kit. Klient API generowany z OpenAPI (orval).
+- Aplikacje iOS i Android (od 26.11.2026): Capacitor z tym samym frontendem spakowanym w aplikacji; push przez APNs i Firebase Cloud Messaging wysyła worker.
 - Docker Compose: Django, worker, Postgres, Caddy. Caddy serwuje frontend i przekazuje /api do Django pod jedną domeną. Na razie uruchamiane lokalnie; wdrożenie na jeden serwer VPS ma być później jednym krokiem.
 
 ## UX i wygląd

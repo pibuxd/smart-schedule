@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useMe } from '../../api/generated/auth/auth'
 import type { MeOut, MyCompanyOut } from '../../api/generated/model'
 import { errorMessage, errorStatus, NETWORK_PROBLEM } from '../../lib/api-error'
+import { enablePush } from '../../native/push'
 
 const COMPANY_KEY = 'grafikomat.company'
+const COMPANY_EVENT = 'grafikomat:company'
 
 function readStoredCompany(): string | null {
   try {
@@ -22,6 +24,12 @@ function storeCompany(id: string) {
   }
 }
 
+/** Show this company from now on (a tapped push notification is about it), also on screens already open. */
+export function openCompany(id: string) {
+  storeCompany(id)
+  window.dispatchEvent(new CustomEvent<string>(COMPANY_EVENT, { detail: id }))
+}
+
 export type Session =
   | { state: 'loading' }
   | { state: 'logged-out' }
@@ -37,6 +45,16 @@ export type Session =
 export function useSession(): Session {
   const me = useMe({ query: { retry: false, staleTime: 60_000 } })
   const [companyId, setCompanyId] = useState<string | null>(readStoredCompany)
+  useEffect(() => {
+    const switchTo = (event: Event) => setCompanyId((event as CustomEvent<string>).detail)
+    window.addEventListener(COMPANY_EVENT, switchTo)
+    return () => window.removeEventListener(COMPANY_EVENT, switchTo)
+  }, [])
+  const userId = me.data?.status === 200 ? (me.data.data as MeOut).id : null
+  // The iOS and Android apps register the phone for push notifications once someone is logged in.
+  useEffect(() => {
+    if (userId) void enablePush(userId)
+  }, [userId])
 
   if (me.isPending) return { state: 'loading' }
   if (me.isError) {

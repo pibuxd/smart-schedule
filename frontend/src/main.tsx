@@ -8,6 +8,9 @@ import './index.css'
 import { errorStatus, shouldRetry } from './lib/api-error'
 import { noteUnauthorized, rememberSession } from './lib/session-ended'
 import { getLogoutMutationKey, getMeQueryKey } from './api/generated/auth/auth'
+import { openCompany } from './features/auth/session'
+import { bootNativeApp } from './native/boot'
+import { onPushOpen } from './native/push'
 import { routeTree } from './routeTree.gen'
 
 /** The session ended (logged out elsewhere, expired): go to the login screen instead of showing errors. */
@@ -49,10 +52,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  </StrictMode>,
-)
+async function start() {
+  // The iOS and Android apps: stored login and push listeners first (nothing in a browser).
+  await bootNativeApp(() => void queryClient.invalidateQueries())
+  // A tapped push notification opens its shift or period, in the company it is about.
+  onPushOpen(({ path, companyId }) => {
+    if (companyId) openCompany(companyId)
+    void router.history.push(path)
+  })
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </StrictMode>,
+  )
+}
+
+void start()

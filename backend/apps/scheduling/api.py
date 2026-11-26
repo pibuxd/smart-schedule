@@ -290,7 +290,7 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
     location (or only those who have not finished). Nothing is arranged automatically: the manager arranges the
     schedule when the deadline has passed or everyone has answered."""
     from apps.availability.models import AvailabilitySubmission
-    from apps.notifications.models import Notification
+    from apps.notifications.services import notify
 
     ctx, period = context_for(request, SchedulePeriod, period_id)
     ctx.require_manager_of(period.location)
@@ -317,10 +317,7 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
         if period.status != SchedulePeriod.Status.COLLECTING:
             raise HttpError(409, "Grafik na ten okres jest już ułożony.")
         agreements.bind_pending(period)
-        Notification.objects.for_company(ctx.company).bulk_create(
-            Notification(company=ctx.company, user_id=user_id, kind="availability_requested", payload=note)
-            for user_id in user_ids
-        )
+        notify(ctx.company.pk, user_ids, "availability_requested", note)
         period.availability_requested_at = timezone.now()
         period.save(update_fields=["availability_requested_at"])
     return AskAvailabilityOut(period=_period_out(period), notified=len(user_ids))

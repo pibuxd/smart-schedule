@@ -169,6 +169,8 @@ export * from './preparingOut';
 export * from './previewOut';
 export * from './previousAgreementsOut';
 export * from './previousAgreementsParams';
+export * from './pushDeviceIn';
+export * from './pushDeviceInPlatform';
 export * from './rateIn';
 export * from './rateStepOut';
 export * from './readPeopleListBody';

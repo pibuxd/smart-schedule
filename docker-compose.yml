@@ -29,6 +29,15 @@ x-backend-env: &backend-env
   ASSISTANT_MESSAGES_PER_DAY: ${ASSISTANT_MESSAGES_PER_DAY:-0}
   SOLVER_TIME_LIMIT_S: ${SOLVER_TIME_LIMIT_S:-30}
   SOLVER_WORKERS: ${SOLVER_WORKERS:-8}
+  # The iOS and Android apps (docs/mobile.md): their origins, and push keys as files in ./secrets (never committed),
+  # seen by the containers under /run/secrets/grafikomat. Empty = no push notifications, the app works without them.
+  NATIVE_APP_ORIGINS: ${NATIVE_APP_ORIGINS:-capacitor://localhost,https://localhost}
+  PUSH_APNS_KEY_FILE: ${PUSH_APNS_KEY_FILE:-}
+  PUSH_APNS_KEY_ID: ${PUSH_APNS_KEY_ID:-}
+  PUSH_APNS_TEAM_ID: ${PUSH_APNS_TEAM_ID:-}
+  PUSH_APNS_TOPIC: ${PUSH_APNS_TOPIC:-pl.grafikomat.app}
+  PUSH_APNS_SANDBOX: ${PUSH_APNS_SANDBOX:-0}
+  PUSH_FCM_CREDENTIALS_FILE: ${PUSH_FCM_CREDENTIALS_FILE:-}
 
 services:
   db:
@@ -74,6 +83,9 @@ services:
     environment: *backend-env
     # Light jobs (housekeeping, later: reading text requests).
     command: python manage.py procrastinate worker --queues default --concurrency ${WORKER_CONCURRENCY:-2}
+    volumes:
+      # Push keys (APNs .p8, Firebase service account JSON), read only by this worker (docs/mobile.md).
+      - ./secrets:/run/secrets/grafikomat:ro
     depends_on:
       api:
         condition: service_healthy

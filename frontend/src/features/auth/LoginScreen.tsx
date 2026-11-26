@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -15,6 +15,7 @@ import { POLAND, phoneProblem, phoneToSend, prettyPhone } from './phone'
 import { PhoneInput } from './PhoneInput'
 import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { takeSessionEnded } from '../../lib/session-ended'
+import { listenForSmsCode } from '../../native/sms-code'
 
 const phoneSchema = z
   .object({ region: z.string(), phone: z.string() })
@@ -195,6 +196,11 @@ function CodeStep({
       )
     }
   }
+
+  // Android app: the system offers the code from the SMS (one tap to allow). Typing it works all the time.
+  const latestCheck = useRef(check)
+  latestCheck.current = check
+  useEffect(() => listenForSmsCode((value) => latestCheck.current(value)), [sent])
 
   const minutes = Math.floor(left / 60)
   const seconds = String(left % 60).padStart(2, '0')

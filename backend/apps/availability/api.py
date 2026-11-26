@@ -924,6 +924,7 @@ def _tell_managers(ctx: TenantContext, text_request: TextRequest) -> None:
             "employee_name": text_request.employee.membership.user.full_name or "Pracownik",
             "text": text_request.text[:80],
             "location_name": location.name,
+            "location_id": str(location.pk),
         },
     )
 

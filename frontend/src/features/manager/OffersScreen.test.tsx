@@ -90,6 +90,18 @@ function api(method: string, path: string): [number, unknown] {
 describe('OffersScreen', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  it('outlines the shift a tapped notification is about', async () => {
+    mockApi(api)
+    renderScreen(
+      <AsManager>
+        <OffersScreen focusOffer="o1" />
+      </AsManager>,
+    )
+    const card = (await screen.findByRole('button', { name: 'Wybierz osobę sam' })).closest('li')!
+    expect(card).toHaveAttribute('aria-current', 'true')
+    expect(card.className).toContain('ring-accent')
+  })
+
   it('lets the manager pick any person for an offered shift, also against the rules', async () => {
     const calls = mockApi(api)
     show()

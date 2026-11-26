@@ -119,6 +119,9 @@ serwerem i wdrażanie poza godzinami pracy lokali i terminami dyspozycji.
 
 ## 4. Kopie zapasowe
 
+- Klucze powiadomień push dla aplikacji iOS i Android (`docs/mobile.md`) leżą w `secrets/` w katalogu aplikacji na
+  serwerze (poza repozytorium, nie ma ich w zrzucie bazy). Trzymaj ich kopię w menedżerze haseł.
+
 - `deploy/backup.sh` zapisuje zrzut bazy do `/var/backups/grafikomat` i usuwa starsze niż 14 dni. Uruchamia go cron
   (`/etc/cron.d/grafikomat-backup`), wynik jest w `/var/log/grafikomat-backup.log`.
 - Kopie leżą na tym samym serwerze. Co jakiś czas pobierz najnowszą na swój komputer:

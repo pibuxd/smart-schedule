@@ -4,10 +4,12 @@ import { useState } from 'react'
 import type { HoursReportOut } from '../../api/generated/model'
 import { getHoursReportCsvUrl, useHoursReport } from '../../api/generated/reports/reports'
 import { Button } from '../../components/ui/button'
-import { EmptyState, ErrorState, Loading } from '../../components/ui/status'
-import { errorMessage } from '../../lib/api-error'
+import { EmptyState, ErrorState, InlineError, Loading } from '../../components/ui/status'
+import { errorMessage, NETWORK_PROBLEM } from '../../lib/api-error'
 import { monthName, shiftMonth } from '../../lib/dates'
 import { moneyText } from '../../lib/money'
+import { shareFile } from '../../native/download'
+import { isNativeApp } from '../../native/platform'
 import { useManager } from './ManagerContext'
 import { ChangeHours, HoursReports } from './WorkedHours'
 
@@ -30,14 +32,7 @@ export function HoursScreen({ today = new Date() }: { today?: Date }) {
             Zmiany z opublikowanych grafików, z zatwierdzonymi nadgodzinami i krótszymi zmianami.
           </p>
         </div>
-        <a
-          href={getHoursReportCsvUrl({ company_id: companyId, month })}
-          download
-          className="inline-flex min-h-(--touch) items-center gap-2 rounded-md border-2 border-accent bg-surface px-5 font-semibold text-accent hover:bg-accent-soft"
-        >
-          <Download aria-hidden="true" size={20} />
-          Pobierz plik CSV
-        </a>
+        <CsvButton url={getHoursReportCsvUrl({ company_id: companyId, month })} fileName={`godziny-${month}.csv`} />
       </div>
       <div className="flex items-center gap-2">
         <Button variant="quiet" size="normal" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Poprzedni miesiąc">
@@ -57,6 +52,41 @@ export function HoursScreen({ today = new Date() }: { today?: Date }) {
       ) : (
         <HoursTable data={report.data.data as HoursReportOut} onShowMonth={setMonth} today={today} />
       )}
+    </div>
+  )
+}
+
+/** The file for payroll: a download link in a browser, the share sheet in the phone apps (`native/download.ts`). */
+function CsvButton({ url, fileName }: { url: string; fileName: string }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
+  const look =
+    'inline-flex min-h-(--touch) items-center gap-2 rounded-md border-2 border-accent bg-surface px-5 font-semibold text-accent hover:bg-accent-soft'
+  if (!isNativeApp()) {
+    return (
+      <a href={url} download className={look}>
+        <Download aria-hidden="true" size={20} />
+        Pobierz plik CSV
+      </a>
+    )
+  }
+  return (
+    <div className="grid gap-1">
+      <button
+        type="button"
+        className={`${look} cursor-pointer`}
+        disabled={state === 'busy'}
+        onClick={() => {
+          setState('busy')
+          shareFile(url, fileName).then(
+            () => setState('idle'),
+            () => setState('failed'),
+          )
+        }}
+      >
+        <Download aria-hidden="true" size={20} />
+        {state === 'busy' ? 'Przygotowuję plik…' : 'Zapisz plik CSV'}
+      </button>
+      {state === 'failed' && <InlineError>{NETWORK_PROBLEM}</InlineError>}
     </div>
   )
 }

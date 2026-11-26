@@ -81,9 +81,19 @@ const VERSION_STATUS: Record<VersionOut['status'], string> = {
 }
 
 /** "Grafik" of one location: arrange it, look at the result with its scores, correct it and publish it. */
-export function ScheduleScreen({ locationId, today = new Date() }: { locationId: string; today?: Date }) {
+export function ScheduleScreen({
+  locationId,
+  periodId,
+  today = new Date(),
+}: {
+  locationId: string
+  /** The period a link is about (a push notification), until the manager picks another one. */
+  periodId?: string
+  today?: Date
+}) {
   const periods = useLocationPeriods(locationId)
   const [chosen, setChosen] = useChosenPeriod(locationId)
+  const [linked, setLinked] = useState(periodId)
 
   if (periods.isPending) return <Loading>Wczytuję okresy grafiku…</Loading>
   if (periods.isError) {
@@ -94,7 +104,7 @@ export function ScheduleScreen({ locationId, today = new Date() }: { locationId:
     )
   }
   const list = periods.data.data as PeriodOut[]
-  const period = list.find((p) => p.id === chosen) ?? pickPeriod(list, today)
+  const period = list.find((p) => p.id === linked) ?? list.find((p) => p.id === chosen) ?? pickPeriod(list, today)
   if (!period) {
     return (
       <EmptyState title="Nie ma jeszcze okresu grafiku">
@@ -114,7 +124,15 @@ export function ScheduleScreen({ locationId, today = new Date() }: { locationId:
   return (
     <div className="grid gap-6">
       {list.length > 1 && (
-        <SelectField label="Okres grafiku" value={period.id} onChange={(e) => setChosen(e.target.value)} className="max-w-sm">
+        <SelectField
+          label="Okres grafiku"
+          value={period.id}
+          onChange={(e) => {
+            setLinked(undefined)
+            setChosen(e.target.value)
+          }}
+          className="max-w-sm"
+        >
           {[...list]
             .sort((a, b) => b.start.localeCompare(a.start))
             .map((p) => (
@@ -746,7 +764,7 @@ function ScheduleGrid({ data }: { data: VersionOut }) {
       >
         <div className="rounded-md border border-line bg-surface">
           <div
-            className="sticky top-0 z-10 hidden border-b-2 border-ink bg-surface lg:grid lg:grid-cols-(--grid-cols)"
+            className="sticky top-[env(safe-area-inset-top)] z-10 hidden border-b-2 border-ink bg-surface lg:grid lg:grid-cols-(--grid-cols)"
             style={{ '--grid-cols': template } as React.CSSProperties}
           >
             <span className="px-3 py-2 text-sm font-semibold text-ink-muted">Dzień</span>
