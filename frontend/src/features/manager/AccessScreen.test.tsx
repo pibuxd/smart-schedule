@@ -36,7 +36,7 @@ describe('AccessScreen', () => {
       url: '/api/companies/c1/subscription/redeem',
       body: { code: 'ABCD-EFGH-JKMN' },
     })
-    expect(await screen.findByText('Kod przyjęty. Dostęp aktywny: zostało 44 dni.')).toBeInTheDocument()
+    expect(await screen.findByText('Kod przyjęty. Dostęp aktywny: zostały 44 dni.')).toBeInTheDocument()
   })
 
   it('has an error state', async () => {

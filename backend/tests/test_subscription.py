@@ -207,6 +207,20 @@ def test_subscription_state_and_banner_seven_days_before_the_end(api, make_compa
     assert body["ends_at"] is not None
 
 
+@pytest.mark.parametrize(("days", "days_left", "expiring_soon"), [(6.5, 7, False), (2.5, 3, False), (1.5, 2, True)])
+def test_the_trial_shows_the_banner_only_two_days_before_the_end(
+    api, make_company, subscribe, days, days_left, expiring_soon
+):
+    a = make_company()
+    subscribe(a["company"], days=days)
+    Subscription.objects.filter(company=a["company"]).update(source=Subscription.Source.TRIAL)
+    api.login(a["manager"])
+
+    body = api.get(f"/api/companies/{a['company'].id}/subscription").json()
+
+    assert (body["trial"], body["days_left"], body["expiring_soon"]) == (True, days_left, expiring_soon)
+
+
 def test_company_without_a_code_is_read_only_and_keeps_its_data(api, make_company):
     a = make_company()
     api.login(a["manager"])
@@ -285,6 +299,7 @@ def test_company_registered_without_a_code_gets_a_trial(api):
     assert close_to(subscription.ends_at, timezone.now() + 30 * DAY)
     state = api.get(f"/api/companies/{body['id']}/subscription").json()
     assert state["trial"] is True and state["days_left"] == 30
+    assert state["expiring_soon"] is False  # no strip in the panel during the trial, only on "Dostęp"
 
 
 def test_only_the_first_company_of_a_person_gets_a_trial(api):
