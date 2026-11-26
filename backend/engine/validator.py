@@ -824,7 +824,8 @@ class _Checker:
                 for start, end, target, elsewhere in request.target_windows(self.p):
                     worked = [s for s in own if start <= s.date <= end]
                     minutes = elsewhere + sum(_slot_minutes(s) for s in worked)
-                    degree = min(1.0, abs(minutes - target) / target)
+                    off = target - minutes if request.at_least else abs(minutes - target)
+                    degree = min(1.0, max(0, off) / target)
                     if request.preferred_dates:
                         misplaced = sum(_slot_minutes(s) for s in worked if s.date not in request.preferred_dates)
                         degree = (1 - PREFERRED_DAYS_SHARE) * degree + PREFERRED_DAYS_SHARE * min(

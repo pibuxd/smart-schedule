@@ -172,6 +172,10 @@ class Preference(BaseModel):
         default_factory=list,
         description="cel_godzin: weekdays the hours should rather fall on, 1 = Monday … 7 = Sunday; else [].",
     )
+    at_least: bool = Field(
+        default=False,
+        description="cel_godzin: true = at least target_hours, more is fine ('co najmniej', 'minimum'); false = about.",
+    )
     hours_period: HoursPeriodName = Field(
         description="Window of limit_godzin / limit_zmian / cel_godzin: day = each day, week = each Monday–Sunday "
         "week, period = the whole period. Other types: period.",
@@ -210,11 +214,11 @@ class Preference(BaseModel):
     def _null_is_empty(cls, value):
         return "" if value is None else value
 
-    @field_validator("target_hours", "prefer_weekdays", mode="before")
+    @field_validator("target_hours", "prefer_weekdays", "at_least", mode="before")
     @classmethod
     def _null_is_none(cls, value, info):
         if value is None:  # a model on OpenRouter may write null for "not this type"
-            return 0 if info.field_name == "target_hours" else []
+            return {"target_hours": 0, "prefer_weekdays": [], "at_least": False}[info.field_name]
         return value
 
 
@@ -295,6 +299,10 @@ class NewInstruction(BaseModel):
         default_factory=list,
         description="cel_godzin: weekdays the hours should rather fall on, 1 = Monday … 7 = Sunday; else [].",
     )
+    at_least: bool = Field(
+        default=False,
+        description="cel_godzin: true = at least target_hours, more is fine ('co najmniej', 'minimum'); false = about.",
+    )
     hours_period: HoursPeriodName = Field(
         description="Window of limit_godzin / limit_zmian / cel_godzin: day = each day, week = each Monday–Sunday "
         "week, period = the whole period. Other types: period.",
@@ -312,11 +320,11 @@ class NewInstruction(BaseModel):
     def _null_is_empty(cls, value):
         return "" if value is None else value
 
-    @field_validator("target_hours", "prefer_weekdays", mode="before")
+    @field_validator("target_hours", "prefer_weekdays", "at_least", mode="before")
     @classmethod
     def _null_is_none(cls, value, info):
         if value is None:  # a model on OpenRouter may write null for "not this type"
-            return 0 if info.field_name == "target_hours" else []
+            return {"target_hours": 0, "prefer_weekdays": [], "at_least": False}[info.field_name]
         return value
 
 
@@ -545,13 +553,15 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
 - limit_zmian: najwyżej tyle zmian (max_shifts), opcjonalnie tylko danej zmiany (shift_type); hours_period jak
   wyżej. „Mogę brać nocki, ale nie więcej niż trzy w tygodniu” = limit_zmian, max_shifts=3, shift_type=nocna
   zmiana, hours_period=week. „Najwyżej 3 dni w tygodniu” = limit_zmian bez shift_type.
-- cel_godzin: chce wyrobić około tylu godzin (target_hours; mniej i więcej to dla generatora tak samo odstępstwo,
-  więc to nie limit). hours_period=week dla tygodnia, period dla całego okresu; daty lub dni tygodnia mówią, które
-  dni się liczą. Inna liczba godzin w innym tygodniu to osobne preferencje: „w pierwszym tygodniu chcę wyrobić 30
-  godzin, w drugim 10” = dwie cel_godzin z datami tych tygodni (od poniedziałku do niedzieli). Gdy mówi, kiedy
-  najchętniej, podaj prefer_weekdays: „najlepiej pod koniec tygodnia” = 4–7, „na początku tygodnia” = 1–3,
-  „w weekend” = 6–7; to dotyczy każdej z tych preferencji, której tak dotyczy zdanie. „Chcę więcej godzin”,
-  „mało mam godzin” bez liczby: zapytaj w question, ile godzin w tygodniu albo w miesiącu chce wyrobić.
+- cel_godzin: chce wyrobić około tylu godzin (target_hours; mniej i więcej to dla generatora tak samo odstępstwo, więc
+  to nie limit). Gdy wyraźnie mówi „co najmniej”, „minimum”, „przynajmniej”, „nie mniej niż” (więcej godzin mu nie
+  przeszkadza), ustaw at_least=true; samo „chcę wyrobić 30 godzin” to at_least=false. hours_period=week dla tygodnia,
+  period dla całego okresu; daty lub dni tygodnia mówią, które dni się liczą. Inna liczba godzin w innym tygodniu to
+  osobne preferencje: „w pierwszym tygodniu chcę wyrobić 30 godzin, w drugim 10” = dwie cel_godzin z datami tych
+  tygodni (od poniedziałku do niedzieli). Gdy mówi, kiedy najchętniej, podaj prefer_weekdays: „najlepiej pod koniec
+  tygodnia” = 4–7, „na początku tygodnia” = 1–3, „w weekend” = 6–7; to dotyczy każdej z tych preferencji, której tak
+  dotyczy zdanie. „Chcę więcej godzin”, „mało mam godzin” bez liczby: zapytaj w question, ile godzin w tygodniu albo w
+  miesiącu chce wyrobić.
 - wolne_dni: woli nie pracować w podane dni lub dni tygodnia. Gdy pisze, że NIE MOŻE (egzamin, sesja, lekarz,
   wyjazd), ustaw cannot=true: aplikacja zaproponuje zaznaczenie „nie mogę” w kalendarzu. Gdy chodzi tylko o część
   dnia („we wtorki nie mogę od 9:00 do 11:00”, „po 18 nie mogę”), z cannot=true i konkretnymi dniami w dates, podaj
@@ -672,7 +682,8 @@ Plan ma dwa rodzaje zmian ustawień (oraz godziny pracy z punktu 3 i ułożenie 
    limit_godzin (hours_period: day = każdego dnia, week = w każdym tygodniu, period = w całym okresie),
    limit_zmian (max_shifts zmian, opcjonalnie tylko danej zmiany; hours_period jak wyżej; „najwyżej 3 nocki
    w tygodniu” = max_shifts=3, shift_type nocnej zmiany, week),
-   cel_godzin (około target_hours godzin, mniej i więcej to odstępstwo; hours_period jak wyżej; prefer_weekdays =
+   cel_godzin (około target_hours godzin, mniej i więcej to odstępstwo; at_least=true przy „co najmniej”, wtedy
+   liczą się tylko brakujące godziny; hours_period jak wyżej; prefer_weekdays =
    dni tygodnia, w które najlepiej, np. „Kasia ma mieć ok. 20 godzin w tygodniu, najlepiej w weekendy” = 20, week,
    prefer_weekdays 6–7; to ustalenie na ten okres, a stały „Cel godzin w miesiącu” osoby kierownik zmienia sam
    w „Pracownicy”),

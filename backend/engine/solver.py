@@ -762,11 +762,13 @@ class _Builder:
                         continue  # nothing here can move the hours: a constant for the solver
                     cost = weight / len(windows)
                     share = PREFERRED_DAYS_SHARE if request.preferred_dates else 0.0
-                    # As the validator: |hours − target| / target, capped at 1, for each window.
+                    # As the validator: |hours − target| / target (only the hours missing with `at_least`), capped
+                    # at 1, for each window.
                     worked = fixed + sum(_minutes(s) * v for s, v in slots)
                     most = fixed + sum(_minutes(s) for s, _ in slots)
                     off = self.m.new_int_var(0, max(most, target), f"target_off[{request.id},{start}]")
-                    self.m.add(off >= worked - target)
+                    if not request.at_least:
+                        self.m.add(off >= worked - target)
                     self.m.add(off >= target - worked)
                     capped = self.m.new_int_var(0, target, f"target_capped[{request.id},{start}]")
                     self.m.add_min_equality(capped, [off, target])

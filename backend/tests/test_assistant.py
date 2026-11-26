@@ -329,6 +329,7 @@ class TestRequests:
             weeks[0],
         )
         assert (ten.type, ten.target_hours, sorted(ten.dates)) == ("hours_target", 10, weeks[1])
+        assert not thirty.at_least and not ten.at_least  # "wyrobić 30" is about 30
         assert {d.weekday() for d in thirty.preferred_dates} == {3, 4, 5, 6}
         assert all(shop["period"].start <= d <= shop["period"].end for d in thirty.preferred_dates)
 
@@ -719,19 +720,22 @@ class TestCommands:
                     target_hours=20,
                     hours_period="period",
                     prefer_weekdays=[6, 7],
+                    at_least=True,
                     place=None,
                 )
             ]
         )
-        body = run(api, shop, monkeypatch, answer, "Kasia ma mieć około 20 godzin w tygodniu, najlepiej w weekendy.")
+        text = "Kasia ma mieć co najmniej 20 godzin w tygodniu, najlepiej w weekendy."
+        body = run(api, shop, monkeypatch, answer, text)
         api.post(f"/api/assistant-commands/{body['id']}/apply")
         items = api.get(f"/api/locations/{shop['location'].pk}/instructions").json()["items"]
         # The unit the model dropped comes back from the text.
-        assert [i["text"] for i in items] == ["Kasia: około 20 godz. w każdym tygodniu, najlepiej w weekendy"]
+        assert [i["text"] for i in items] == ["Kasia: co najmniej 20 godz. w każdym tygodniu, najlepiej w weekendy"]
         [target] = build_problem([shop["period"]]).problem.requests
-        assert (target.type, target.target_hours, target.weekly_hours, target.by_manager) == (
+        assert (target.type, target.target_hours, target.weekly_hours, target.by_manager, target.at_least) == (
             "hours_target",
             20,
+            True,
             True,
             True,
         )

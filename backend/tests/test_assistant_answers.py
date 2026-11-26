@@ -812,6 +812,10 @@ def test_an_hours_target_is_about_this_many_hours_rather_on_some_days():
         and readings.describe(month, "Ola", {}, {}) == "Ola: około 120 godz. w okresie grafiku"
     )
     assert "prefer_weekdays" not in clean(target_hours=20, prefer_weekdays=list(range(1, 8)))  # every day: no wish
+    at_least = clean(target_hours=16, hours_period="week", at_least=True)
+    assert at_least["at_least"] is True and "at_least" not in clean(target_hours=16, at_least=False)
+    assert readings.describe(at_least, "Ola", {}, {}) == "Ola: co najmniej 16 godz. w każdym tygodniu"
+    assert readings.clean(type="limit_godzin", max_hours=20, at_least=True, people={}, shift_types={}) is None
     assert clean(target_hours=0) is None and clean(target_hours=None) is None
     assert clean(target_hours=200, hours_period="week") is None and clean(target_hours=25, hours_period="day") is None
     assert clean(target_hours=20, prefer_weekdays=[8]) is None
@@ -820,8 +824,8 @@ def test_an_hours_target_is_about_this_many_hours_rather_on_some_days():
     assert readings.hour_scope("period", "Chcę wyrobić 30 godzin w tygodniu", 30) == "week"
     # A model on OpenRouter may write null for the fields of other types.
     limit = reading(type="limit_godzin", max_hours=8).preferences[0].model_dump()
-    nulls = llm.Preference.model_validate({**limit, "target_hours": None, "prefer_weekdays": None})
-    assert (nulls.target_hours, nulls.prefer_weekdays) == (0, [])
+    nulls = llm.Preference.model_validate({**limit, "target_hours": None, "prefer_weekdays": None, "at_least": None})
+    assert (nulls.target_hours, nulls.prefer_weekdays, nulls.at_least) == (0, [], False)
 
 
 def test_days_off_may_name_hours():

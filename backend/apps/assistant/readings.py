@@ -6,7 +6,8 @@ limit_zmian, cel_godzin, wolne_dni, chce_pracowac, inne), subject_employee (id),
 preferuj_osobe it narrows the pair to that shift: "nie razem na zamknięciu"), positions (stanowisko: the ids of one
 position name among the person's positions, one per location) with position_name, avoid (typ_zmiany, stanowisko: not
 this one), rather (stanowisko: rather this one, the others stay fine), max_hours, max_shifts, target_hours
-(cel_godzin: about this many hours, "chcę wyrobić 30 godzin"), hours_period (day, week, period: the window of
+(cel_godzin: about this many hours, "chcę wyrobić 30 godzin"; with at_least: true at least this many, "co najmniej
+30 godzin"), hours_period (day, week, period: the window of
 limit_godzin, limit_zmian and cel_godzin), prefer_weekdays (cel_godzin: the hours rather on these weekdays,
 0 = Monday; "najlepiej pod koniec tygodnia"), min_days, shifts_per_day, dates (ISO), weekdays (0 = Monday), cannot
 (wolne_dni the person cannot work at all), from_time / to_time (wolne_dni with cannot: the hours they cannot work,
@@ -115,6 +116,7 @@ def clean(
     max_hours: float | None = None,
     max_shifts: int | None = None,
     target_hours: float | None = None,
+    at_least: bool = False,
     prefer_weekdays: Iterable[int] = (),
     hours_period: str = "period",
     dates: Iterable[str] = (),
@@ -146,7 +148,7 @@ def clean(
         or ((position or avoid_position) and type != "stanowisko")
         or (max_hours is not None and type != "limit_godzin")
         or (max_shifts is not None and type != "limit_zmian")
-        or ((target_hours is not None or prefer_weekdays) and type != "cel_godzin")
+        or ((target_hours is not None or prefer_weekdays or at_least) and type != "cel_godzin")
         or ((min_days is not None or shifts_per_day is not None) and type != "chce_pracowac")
         or ((from_time or to_time) and type != "wolne_dni")
     ):
@@ -212,6 +214,8 @@ def clean(
             return None
         data["target_hours"] = float(target_hours)
         data["hours_period"] = hours_period
+        if at_least:
+            data["at_least"] = True  # "co najmniej 30 godzin": more hours are fine
         preferred = sorted({int(w) - 1 for w in prefer_weekdays})
         if 0 < len(preferred) < 7:  # every day of the week is no preference
             data["prefer_weekdays"] = preferred
@@ -518,7 +522,8 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             else:
                 window = "" if when else " w okresie grafiku"
             rather = _weekday_words(data.get("prefer_weekdays") or [])
-            return f"{who}: około {shown} godz.{window}{when}" + (f", najlepiej {rather}" if rather else "")
+            how = "co najmniej" if data.get("at_least") else "około"
+            return f"{who}: {how} {shown} godz.{window}{when}" + (f", najlepiej {rather}" if rather else "")
         case "wolne_dni":
             if sorted(data.get("weekdays") or []) == [0, 1, 2, 3, 4] and not data.get("dates"):
                 return f"{who}: tylko weekendy (wolne od poniedziałku do piątku)"

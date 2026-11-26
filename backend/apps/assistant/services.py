@@ -770,6 +770,7 @@ def _checked_preference(
         max_hours=preference.max_hours,
         max_shifts=preference.max_shifts,
         target_hours=preference.target_hours or None,
+        at_least=preference.at_least,
         prefer_weekdays=preference.prefer_weekdays,
         hours_period=readings.hour_scope(
             preference.hours_period,
@@ -1587,6 +1588,7 @@ def check_plan(
             max_hours=new.max_hours,
             max_shifts=new.max_shifts,
             target_hours=new.target_hours or None,
+            at_least=new.at_least,
             prefer_weekdays=new.prefer_weekdays,
             hours_period=readings.hour_scope(
                 new.hours_period,

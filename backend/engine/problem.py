@@ -50,7 +50,8 @@ class RequestType(StrEnum):
     # "najwyżej trzy nocki w tygodniu": at most `max_shifts` shifts (of `shift_type`, if set) in each window.
     SHIFTS_LIMIT = "shifts_limit"
     # "w pierwszym tygodniu chcę wyrobić 30 godzin, najlepiej pod koniec tygodnia": about `target_hours` in each
-    # window (same windows as hours_limit; fewer and more both count), preferably on `preferred_dates`.
+    # window (same windows as hours_limit; fewer and more both count, or only fewer with `at_least`), preferably
+    # on `preferred_dates`.
     HOURS_TARGET = "hours_target"
     # "w trzecim tygodniu stycznia nie chcę być sprzedawcą": for someone with several positions, not on (`avoid`) or
     # only on one of `positions` (ids; a person with the same position in several locations has one id per location).
@@ -268,6 +269,7 @@ class Request:
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
     max_shifts: int | None = None  # shifts_limit, in each window (same windows as hours_limit)
     target_hours: float | None = None  # hours_target, in each window (same windows as hours_limit)
+    at_least: bool = False  # hours_target: "co najmniej 30 godzin", more hours are fine
     # hours_target: the days the hours should rather fall on ("najlepiej pod koniec tygodnia"); empty = any day.
     preferred_dates: frozenset[date] = frozenset()
     min_days: int | None = None  # want_work: how many of `dates` (None = all of them)

@@ -1035,3 +1035,19 @@ def test_hours_target_in_a_week_cut_by_the_period_counts_its_days_there_and_shif
     result, report = solved(p, workers=1)
     assert sum(result.schedule[f"s{n}"] == "ola" for n in (2, 4, 5, 6)) == 2 and result.schedule["s3"] == "ewa"
     assert report.requests[0].degree == pytest.approx(1 / 25)  # 24 h of 25: as near as 8-hour shifts get
+
+
+def test_hours_target_at_least_counts_only_the_missing_hours():
+    """ "Co najmniej 16 godzin w tygodniu": more hours are fine, fewer are not."""
+    slots = [slot(f"s{n}", day(n)) for n in range(7)]
+    wish = Request("wish", "ola", "hours_target", target_hours=16, weekly_hours=True, at_least=True)
+    about = replace(wish, at_least=False)
+    p = problem([employee("ola"), employee("ewa")], slots, requests=[wish, about])
+    five = {f"s{n}": "ola" if n < 5 else "ewa" for n in range(7)}
+    assert [r.degree for r in validate(p, five).requests] == [0, 1]
+    one = {f"s{n}": "ola" if n == 0 else "ewa" for n in range(7)}
+    assert [r.degree for r in validate(p, one).requests] == [0.5, 0.5]
+    # Ewa cannot work five of the days: Ola takes them, and only the "about" wish is broken.
+    cannot = [Availability("ewa", day(n), AvailabilityState.CANNOT) for n in range(5)]
+    _result, report = solved(replace(p, availability=tuple(cannot), requests=(wish,)), workers=1)
+    assert report.hours["ola"] >= 40 and report.requests[0].degree == 0
