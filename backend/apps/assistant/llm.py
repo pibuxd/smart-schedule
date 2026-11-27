@@ -47,7 +47,7 @@ PreferenceTypeName = Literal[
     "cel_godzin",
     "wolne_dni",
     "chce_pracowac",
-    # 27.11.2026 (docs/plan.md section 48)
+    # 27.11.2026 (docs/plan.md section 49)
     "pora_dnia",
     "dni_z_rzedu",
     "wolne_z_rzedu",

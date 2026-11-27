@@ -1,4 +1,4 @@
-"""Request types added on 27.11.2026 (docs/plan.md section 48): the validator's degree and what the generator does.
+"""Request types added on 27.11.2026 (docs/plan.md section 49): the validator's degree and what the generator does.
 No database needed."""
 
 from dataclasses import replace

@@ -54,7 +54,7 @@ export function useSession(): Session {
   // The iOS and Android apps register the phone for push notifications once someone is logged in (again after a
   // new login; `enablePush` does nothing when this session's phone is registered already).
   useEffect(() => {
-    if (userId) void enablePush()
+    if (userId) void enablePush(userId)
   }, [userId])
 
   if (me.isPending) return { state: 'loading' }

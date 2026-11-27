@@ -79,6 +79,15 @@ sklepów zostaje decyzją Piotra. Szczegóły techniczne i instrukcja sklepów: 
   Powiadomienie przeczytane w aplikacji albo starsze niż 6 godzin nie idzie już na telefon; telefon, który był
   wyłączony dłużej, też go już nie dostanie (ten sam termin mają Apple i Google). Nie dostaje ich też osoba
   z wyłączonym kontem ani pracownik usunięty z firmy (z tej firmy; z innych firm dalej dostaje).
+- Wyłączanie powiadomień na telefonie (prośba Piotra z 27.11.2026): w aplikacji na ekranie „Powiadomienia”, pod
+  nagłówkiem, jest przełącznik „Na tym telefonie”, u pracownika i u kierownika. Wyłączony: serwer przestaje wysyłać
+  push na ten telefon (nie tylko go ukrywa), a lista powiadomień w aplikacji działa jak dotąd. Włączony z powrotem:
+  telefon znowu dostaje push. Wybór dotyczy tego telefonu i tej osoby: zostaje po wylogowaniu i ponownym zalogowaniu
+  tej osoby na tym telefonie, inne telefony tej osoby dalej dostają push, a ktoś inny zalogowany na tym telefonie
+  ma swój wybór (domyślnie włączone). Gdy telefon nie pozwala Grafikomatowi na powiadomienia, przełącznik jest
+  wyłączony i nieaktywny, a pod nim jest „Zezwól na powiadomienia w ustawieniach telefonu.”; po powrocie z ustawień
+  telefon rejestruje się sam. Wyłączenie bez internetu się nie udaje: przełącznik zostaje włączony z komunikatem.
+  Na stronie WWW przełącznika nie ma.
 - „Wyloguj”, które nie dotarło do serwera (brak internetu, błąd serwera), nie wylogowuje, w aplikacji i na stronie
   WWW: ekran mówi, że sesja trwa dalej, i daje „Wyloguj jeszcze raz”. Wcześniej strona pokazywała wtedy logowanie,
   choć ciasteczko sesji dalej działało (na wspólnym komputerze następna osoba weszłaby na to konto).

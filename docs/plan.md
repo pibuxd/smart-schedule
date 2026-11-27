@@ -1659,7 +1659,7 @@ Spec: „Poprawki po raporcie testów PR #82 (26.11.2026)”.
   dla dnia zablokowanego, dnia z całodniowym „nie mogę” przy prośbie na cały dzień, dnia, w którym nic się nie
   zmienia, i dnia z całodniowym „nie mogę”, w którym nic nie zostaje.
 - Na stałe: `TextRequest.part_can_last(part)` = bez dat (do 27.11.2026 także nie `readings.calendar_only`; od
-  sekcji 48 godziny „nie mogę” w dni tygodnia mogą być na stałe). Z niego `can_last` i `set_lasting`.
+  sekcji 49 godziny „nie mogę” w dni tygodnia mogą być na stałe). Z niego `can_last` i `set_lasting`.
   `PATCH /me/requests/{id}` z `lasting: true` daje 409 z `_cannot_last`. `MyRequestOut.parts` (`RequestPartOut`:
   `summary`, `calendar_only`, `can_last`) mówi ekranowi, co dostaje generator i co jest tylko w tym okresie.
 - `MyRequestOut.unmarked_days` wraca przejściowo (do 2027): tylko dni propozycji na cały dzień, które starszy ekran
@@ -1790,7 +1790,33 @@ z Anną” i zamknięcia z kierownikiem zmiany. Solver nagradza każdą wspóln�
 liczy udział wspólnych zmian), ale kara za każdą zmianę bez tej osoby zamiast nagrody dała gorszy grafik (14,03 →
 15,73: zamknięcia bez kierownika zmiany), więc zostaje jak jest.
 
-## 48. Więcej rodzajów próśb pracownika (27.11.2026)
+## 48. Wyłączanie powiadomień na telefonie (27.11.2026)
+
+Spec: „Aplikacje na iPhone'a i Androida”, punkt o wyłączaniu powiadomień. Piotr: „dodaj do aplikacji na telefon
+opcje wyłączenia powiadomień w telefonie”.
+
+- Serwer: `DELETE /me/push-devices` (`unregister_push_device`) wywołuje `push.forget_session` dla bieżącej sesji,
+  czyli odpina ten telefon (jak „Wyloguj”, ale sesja trwa). Bez telefonu `push.queue` nie kolejkuje nawet zadania.
+  Bez nowych pól i migracji: włączenie z powrotem to zwykłe `POST /me/push-devices`.
+- Na telefon, nie na konto: przełącznik jest tylko w aplikacji i mówi o tym telefonie (inne telefony tej osoby
+  dalej dostają push), tak jak zgoda systemu. Wybór jest w Preferences pod kluczem osoby
+  (`grafikomat.push-off.<id>`), więc nowe logowanie tej osoby na tym telefonie nie rejestruje go znowu, a inna osoba
+  na wspólnym telefonie ma swój wybór. Przeinstalowanie aplikacji zaczyna od włączonych (jak zgoda systemu).
+- Frontend: `src/native/push.ts` (`pushSwitch`, `setPush`; `enablePush(person)` czyta wybór osoby i przy
+  wyłączonych nic nie robi; `sendToken` nie wysyła przy wyłączonych). Wyłączenie: najpierw serwer (czeka na
+  rejestrację w drodze, żeby nie doszła po odpięciu), potem zapis wyboru; błąd sieci zostawia włączone i pokazuje
+  „Nie udało się wyłączyć.”; 401 też liczy się jako wyłączone (sesja i tak się skończyła). Włączenie pyta system
+  o zgodę tylko wtedy, gdy jeszcze nie pytał. Zgoda odebrana w systemie (`denied`): `blocked`, przełącznik
+  nieaktywny z jednym zdaniem; po powrocie do aplikacji (`resume`, `visibilitychange`) telefon z nową zgodą
+  rejestruje się sam, bez pytania systemu (okno zgody samo wstrzymuje i wznawia aplikację).
+- Ekran: `features/notifications/PhonePushSwitch.tsx` pod nagłówkiem „Powiadomienia” (pracownik i kierownik),
+  `components/ui/switch.tsx` (`role="switch"`; włączony: wypełniony kolorem akcentu, gałka po prawej). Ukryty na
+  stronie WWW i w buildzie Androida bez `google-services.json`.
+
+Założenia: jedno słowo „Na tym telefonie” zamiast opisu (nagłówek ekranu mówi, o czym); powiadomienia już leżące
+w systemie zostają przy wyłączaniu.
+
+## 49. Więcej rodzajów próśb pracownika (27.11.2026)
 
 Piotr (27.11.2026): lista 20 próśb, których asystent nie umiał zamienić na nic, co generator liczy, i „obsłuż te
 typy” (spec.md, „Więcej rodzajów próśb pracownika”). Te same typy mają polecenia kierownika o osobie.

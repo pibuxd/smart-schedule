@@ -7595,6 +7595,25 @@
             "SessionAuth": []
           }
         ]
+      },
+      "delete": {
+        "operationId": "unregister_push_device",
+        "summary": "Unregister Push Device",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        },
+        "description": "This phone (the app's switch on \"Powiadomienia\") stops getting my push notifications, while I stay logged in.\nThe notifications stay in the app. The app registers the phone again when the switch is turned back on.",
+        "tags": [
+          "notifications"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
       }
     },
     "/api/locations/{location_id}/assistant-commands": {

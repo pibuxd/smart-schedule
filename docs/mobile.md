@@ -72,6 +72,9 @@ Skrypt zmienia `android/gradle.properties` (`versionName`, `versionCode`) i proj
 
 Bez kluczy aplikacja działa, tylko bez pushy (powiadomienia są w aplikacji jak dotąd).
 
+Każdy może wyłączyć push na swoim telefonie przełącznikiem „Na tym telefonie” w „Powiadomieniach” (serwer odpina
+wtedy ten telefon, `DELETE /api/me/push-devices`; wybór zostaje w aplikacji dla tej osoby).
+
 ### Apple (APNs)
 
 1. developer.apple.com → Certificates, Identifiers & Profiles → Identifiers: identyfikator `pl.grafikomat.app`

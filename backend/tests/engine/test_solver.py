@@ -641,7 +641,7 @@ def random_problem(seed: int):
         Request("r4", people[3].id, "shift_type", shift_type="m", avoid=True),
         Request("r5", people[0].id, "other"),
         Request("r6", people[-1].id, "position", positions=frozenset({BAKER}), avoid=True),
-        # Types added on 27.11.2026 (docs/plan.md section 48).
+        # Types added on 27.11.2026 (docs/plan.md section 49).
         Request("r7", people[1].id, "time_of_day", from_time=time(10), to_time=time(22)),
         Request("r8", people[2].id, "days_in_row", max_in_row=2, shift_type="n"),
         Request("r9", people[3].id, "days_off_in_row", free_in_row=2, weekly_hours=True),

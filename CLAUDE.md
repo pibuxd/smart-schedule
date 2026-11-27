@@ -113,9 +113,11 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   `NATIVE_APP_ORIGINS`, and a day of use moves the session's end. `src/api/http.ts` (`send`) is the only place that
   knows; the web keeps cookies + CSRF. Push: `services.notify` queues `notifications.send_push` (`push.queue`) when a
   recipient has a `PushDevice`; phones register after login (`POST /me/push-devices`, tied to the session) and
-  logout unpins them (`push.forget_session`). Write notifications only through `notify`, give each kind a route in
-  `services.push_path` (what a tap opens: `?dzien=`, `?oferta=`, `?okres=`, read by the route files) and put the ids
-  it needs in the payload. Native code: `GrafikomatPlugin.java` (SMS User Consent, Firebase check), `AppDelegate.swift`.
+  logout unpins them (`push.forget_session`); the "Na tym telefonie" switch on "Powiadomienia" unpins one phone
+  (`DELETE /me/push-devices`) and the app keeps that choice per person (`push.ts` `setPush`). Write notifications
+  only through `notify`, give each kind a route in `services.push_path` (what a tap opens: `?dzien=`, `?oferta=`,
+  `?okres=`, read by the route files) and put the ids it needs in the payload. Native code: `GrafikomatPlugin.java`
+  (SMS User Consent, Firebase check), `AppDelegate.swift`.
 - Login codes: `apps/accounts/login.py`; SMS goes through `settings.SMS_BACKEND` (console by default; tests use
   the `sms_outbox` fixture). Rate limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`.
 - Inviting many people (`apps/tenancy/people_list.py` reads a pasted list or a CSV/XLSX/PDF file without a model;
@@ -147,7 +149,7 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   in its other parts, shown through `MyRequestOut.parts`); on weekdays it may (27.11.2026), and `GET /me/requests`
   then offers the button for the days of each later month (`_calendar_facts(span=…, lasting_only=True)`).
   `MyRequestOut.unmarked_days` stays until 2027 for tabs opened earlier.
-- Reading types (`readings.TYPES`, the same for employee requests and manager instructions; docs/plan.md section 48):
+- Reading types (`readings.TYPES`, the same for employee requests and manager instructions; docs/plan.md section 49):
   besides the people, shift, position, hours and day types there are `pora_dnia`, `dni_z_rzedu`, `wolne_z_rzedu`,
   `po_zmianie`, `lokal` (only the person's own locations, `services.own_locations`), `wolne_weekendy`, `stala_pora`,
   `nie_wiecej_niz_inni`, `dlugosc_zmiany`, `nie_sam`; `closing` narrows to shifts that close the location and

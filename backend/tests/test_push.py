@@ -116,6 +116,32 @@ def test_logout_unpins_only_the_phone_of_that_session(make_company):
     assert list(PushDevice.objects.values_list("platform", flat=True)) == ["android"]
 
 
+def test_the_switch_stops_pushes_to_this_phone_only(make_company, senders):
+    shop = make_company()
+    worker = shop["worker"]
+    key = register(worker, IOS_TOKEN, "ios")
+    register(worker, ANDROID_TOKEN, "android")
+    register(shop["manager"], "b2" * 32, "ios")
+
+    assert app_client(key).delete("/api/me/push-devices").status_code == 204
+    assert app_client(key).delete("/api/me/push-devices").status_code == 204  # already off: nothing to do
+
+    assert set(PushDevice.objects.values_list("token", flat=True)) == {ANDROID_TOKEN, "b2" * 32}
+    notify(shop["company"].pk, [worker.pk], "bank_account_set", {"ending": "1234"})
+    run_push_jobs()
+    assert [token for token, _ in senders["ios"].sent + senders["android"].sent] == [ANDROID_TOKEN]
+    # Still logged in: the switch turned back on registers the phone again.
+    register_again = app_client(key).post(
+        "/api/me/push-devices", {"platform": "ios", "token": IOS_TOKEN}, content_type="application/json"
+    )
+    assert register_again.status_code == 204
+    assert PushDevice.objects.filter(token=IOS_TOKEN, session_key=key).exists()
+
+
+def test_turning_pushes_off_needs_a_login():
+    assert Client().delete("/api/me/push-devices").status_code in (401, 403)
+
+
 # ----------------------------------------------------------------------------------------------- queueing
 
 

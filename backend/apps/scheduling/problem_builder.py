@@ -104,7 +104,7 @@ def _clock(value) -> time | None:
 
 
 def _new_fields(data: dict) -> dict:
-    """The fields of the request types added on 27.11.2026 (docs/plan.md section 48), as `Request` arguments."""
+    """The fields of the request types added on 27.11.2026 (docs/plan.md section 49), as `Request` arguments."""
     kind, fields = data.get("type"), {"closing": data.get("closing") is True}
     if kind in ("unikaj_osoby", "preferuj_osobe"):
         fields["same_day"] = data.get("same_day") is True
