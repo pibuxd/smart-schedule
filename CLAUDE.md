@@ -281,9 +281,10 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   "Koszty asystenta" → "Zestawienie miesiąca", `assistant_costs`); never put them in an endpoint or an assistant tool.
   Schedule arranging calls no API: the summary counts it as runs and solver minutes from `GenerationRun`.
 - Tests: `backend/tests/` (pytest + pytest-django, real Postgres), frontend tests next to components (`*.test.tsx`, Vitest),
-  app tests in `mobile/test/` (`flutter test`; `FakeServer` and `pumpApp` from `test/helpers.dart` answer the app's requests).
+  app tests in `mobile/test/` (`flutter test`; `FakeServer` and `pumpApp` from `test/helpers.dart` answer the app's requests;
+  screens read the time from `clockProvider`, set with `pumpApp(clock:)`).
 - Native app layout (`mobile/lib`): `api/` (client, session header interceptor, errors; `client.dart` is the only place
   that knows the session header), `session/` (who is logged in, chosen company), `router.dart` (`sessionRedirect`),
-  `ui/` (theme with the web's tokens, status views), `shared/` (logic ported from the web with the same test cases),
-  `features/<area>/` screens. Same Polish copy and plain-language rules as the web; every screen has empty, loading
+  `ui/` (theme with the web's tokens, status views, `Fold` = `<Section collapsible>`, `showAppSheet`), `shared/`
+  (logic ported from the web with the same test cases), `features/<area>/` screens. Same Polish copy and plain-language rules as the web; every screen has empty, loading
   and error states. Manager screens beyond the quick tasks send the person to the website.

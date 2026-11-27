@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grafikomat/api/client.dart';
 import 'package:grafikomat/app.dart';
+import 'package:grafikomat/features/schedule/schedule_data.dart';
 import 'package:grafikomat/session/prefs.dart';
 
 /// One answer of the fake server.
@@ -34,6 +35,9 @@ class FakeServer implements HttpClientAdapter {
   final List<Sent> requests = [];
 
   void on(String route, Reply Function(Sent sent) reply) => _routes[route] = reply;
+
+  /// An answer used only when the test gave none for [route].
+  void byDefault(String route, Reply Function(Sent sent) reply) => _routes.putIfAbsent(route, () => reply);
 
   Iterable<Sent> sent(String route) => requests.where((r) => '${r.method} ${r.path}' == route);
 
@@ -85,14 +89,44 @@ Map<String, Object?> meJson({
   'pending_invitations': pendingInvitations,
 };
 
-/// The whole app with its router, talking to [server]; [stored] is what secure storage holds at start.
-Future<ProviderContainer> pumpApp(WidgetTester tester, FakeServer server, {Map<String, String>? stored}) async {
+/// "Mój grafik" with nothing in it, for tests about other screens.
+Map<String, Object?> scheduleJson({
+  List<Object?> shifts = const [],
+  List<Object?>? recent,
+  List<Object?>? months,
+  String? publishedUntil,
+  List<Object?>? preparing,
+}) => {
+  'home_location_name': 'Wieliczka – Rynek',
+  'shifts': shifts,
+  'recent': ?recent,
+  'published_until': ?publishedUntil,
+  'months':
+      months ??
+      [
+        {'month': '2026-11', 'hours': 112, 'unpriced_hours': 0},
+      ],
+  'preparing': ?preparing,
+};
+
+/// The whole app with its router, talking to [server]; [stored] is what secure storage holds at start, [clock] the
+/// time the screens go by.
+Future<ProviderContainer> pumpApp(
+  WidgetTester tester,
+  FakeServer server, {
+  Map<String, String>? stored,
+  DateTime Function()? clock,
+}) async {
+  server
+    ..byDefault('GET /api/me/schedule', (_) => Reply(200, scheduleJson()))
+    ..byDefault('GET /api/me/offers', (_) => const Reply(200, []));
   final prefs = await Prefs.load(MemoryStore(stored));
   final container = ProviderContainer(
     overrides: [
       prefsProvider.overrideWithValue(prefs),
       apiOriginProvider.overrideWithValue('https://grafikomat.test'),
       httpAdapterProvider.overrideWithValue(server),
+      if (clock != null) clockProvider.overrideWithValue(clock),
     ],
     retry: (_, _) => null,
   );

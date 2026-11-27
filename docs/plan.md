@@ -1863,3 +1863,20 @@ Założenia etapu 1: zakładanie firmy tylko na stronie (bez linku w aplikacji, 
 App Store; osoba bez firmy i bez zaproszeń czyta „Prowadzisz lokal? Firmę założysz na stronie Grafikomatu.”); osoba, która już pracuje w firmie i ma zaproszenie, może wrócić do grafiku bez decyzji („Wróć do
 grafiku”, w aplikacji nie ma paska adresu); zakładki 2–4 pokazują „Ten ekran jest jeszcze w budowie” do swoich
 etapów; podpisywanie wersji do sklepu, ikony i iPad w etapie 7.
+
+Założenia etapu 2 („Mój grafik”, `lib/features/schedule/`):
+
+- Ekran i słowa jak `MyScheduleScreen` na stronie. Logika z `rows.ts`, `hours.ts`, dat i złotówek przeniesiona do
+  Darta z tymi samymi przypadkami (`test/schedule/schedule_logic_test.dart`), testy ekranu przeniesione z
+  `MyScheduleScreen.test.tsx`.
+- Godziny w „Zgłoś inne godziny” wpisuje się na klawiaturze z cyframi, a dwukropek dopisuje się sam („1530” →
+  „15:30”, „600” → „6:00”); ikona zegara obok otwiera systemowy wybór godziny (24 h). „Wychodzę teraz” bierze
+  godzinę z zegara lokalu (z `start_time` i `start_at` zmiany), w jakiejkolwiek strefie jest telefon.
+- Ekran odświeża się przeciągnięciem w dół, po powrocie do aplikacji i sam o początku i końcu najbliższej zmiany
+  („Trwa Twoja zmiana”, przejście do „Minionych zmian”). Czas w testach daje `clockProvider` (`pumpApp(clock:)`).
+- `/grafik?dzien=` i `?oferta=` (dotknięte powiadomienie, etap 5) obrysowują dzień albo zmianę do wzięcia i
+  przewijają do niej; zwinięte „Zmiany do wzięcia” same się wtedy rozwijają.
+- Bez zmian dzień ma przycisk „Zaznacz, kiedy możesz pracować” zamiast linku w zdaniu (większe pole do dotknięcia).
+  Arkusze („Oddać tę zmianę?”, „Zgłoś inne godziny”) wysuwają się od dołu nad paskiem zakładek.
+- Zwijana sekcja to `lib/ui/fold.dart` (jak `<Section collapsible>`: obracana strzałka, kilka słów stanu w
+  nagłówku), arkusz to `lib/ui/sheet.dart`.
