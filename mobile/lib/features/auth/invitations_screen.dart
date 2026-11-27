@@ -53,7 +53,10 @@ class InvitationsScreen extends ConsumerWidget {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton(onPressed: () => context.go('/grafik'), child: const Text('Wróć do grafiku')),
-                    ),
+                    )
+                  else
+                    // Companies are set up only on the website (no link: nothing in the app leads to paying elsewhere).
+                    const Text('Prowadzisz lokal? Firmę założysz na stronie Grafikomatu.'),
                 ],
               ),
               AsyncValue(:final value?) => Column(

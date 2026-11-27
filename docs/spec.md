@@ -21,7 +21,8 @@ za „stronę w ramce”, wytyczna 4.2). Wybrał Flutter i zakres pierwszej wers
   „Powiadomienia”, zaproszenia, „Twoje dane”) oraz szybkie sprawy kierownika z telefonu: powiadomienia, „Oddane
   zmiany”, „Godziny” i asystent. Układanie i edycja grafiku, ustawienia lokalu, zasady, ludzie, stawki, zapraszanie
   i „Dostęp” zostają na stronie; aplikacja mówi kierownikowi, że zrobi to na stronie.
-- Zakładanie firmy też zostaje na stronie (aplikacja nie ma przycisku „Załóż firmę”).
+- Zakładanie firmy też zostaje na stronie (aplikacja nie ma przycisku „Załóż firmę”); osoba bez firmy i bez
+  zaproszeń czyta w aplikacji, że firmę założy na stronie Grafikomatu (bez linku).
 - Wygląd jak na stronie (te same kolory, rozmiary i słowa), ale z natywnymi elementami telefonu; tekst systemowym
   krojem telefonu.
 - Do czasu, aż nowa aplikacja będzie gotowa do sklepów, w repozytorium zostaje aplikacja z Capacitora; potem znika,

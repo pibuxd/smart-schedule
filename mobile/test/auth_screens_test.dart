@@ -107,6 +107,16 @@ void main() {
     expect(find.text('Mój grafik'), findsWidgets);
   });
 
+  testWidgets('a person with no company and no invitation learns where companies are set up', (tester) async {
+    final server = FakeServer()
+      ..on('GET /api/me', (_) => Reply(200, meJson(companies: [])))
+      ..on('GET /api/me/invitations', (_) => const Reply(200, []));
+    await pumpApp(tester, server, stored: {Prefs.sessionKey: 'k'});
+    expect(find.text('Nie masz żadnych zaproszeń'), findsOneWidget);
+    expect(find.text('Prowadzisz lokal? Firmę założysz na stronie Grafikomatu.'), findsOneWidget);
+    expect(find.text('Wróć do grafiku'), findsNothing);
+  });
+
   testWidgets('a person who already works somewhere can leave an invitation for later', (tester) async {
     final server = FakeServer()
       ..on('GET /api/me', (_) => Reply(200, meJson(pendingInvitations: 1)))

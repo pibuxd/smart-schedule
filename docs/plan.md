@@ -1860,6 +1860,6 @@ Technika:
   co aplikacja wysłała. `web/` służy tylko do podglądu ekranów w przeglądarce (zrzuty bez telefonu).
 
 Założenia etapu 1: zakładanie firmy tylko na stronie (bez linku w aplikacji, żeby nie wyglądało jak zakup poza
-App Store); osoba, która już pracuje w firmie i ma zaproszenie, może wrócić do grafiku bez decyzji („Wróć do
+App Store; osoba bez firmy i bez zaproszeń czyta „Prowadzisz lokal? Firmę założysz na stronie Grafikomatu.”); osoba, która już pracuje w firmie i ma zaproszenie, może wrócić do grafiku bez decyzji („Wróć do
 grafiku”, w aplikacji nie ma paska adresu); zakładki 2–4 pokazują „Ten ekran jest jeszcze w budowie” do swoich
 etapów; podpisywanie wersji do sklepu, ikony i iPad w etapie 7.
