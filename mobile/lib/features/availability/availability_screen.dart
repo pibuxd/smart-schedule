@@ -12,6 +12,8 @@ import '../../ui/sheet.dart';
 import '../../ui/status.dart';
 import '../../ui/theme.dart';
 import '../employee/employee_shell.dart';
+import '../requests/requests_data.dart';
+import '../requests/requests_window.dart';
 import '../schedule/schedule_data.dart';
 import 'availability_calendar.dart';
 import 'availability_data.dart';
@@ -97,6 +99,7 @@ class _AvailabilityTabState extends ConsumerState<AvailabilityTab> {
       month: month,
       readOnly: company.readOnly,
       today: today,
+      assistantReads: data.assistantReads,
       pager: ({required bool busy, Future<bool> Function()? leave}) => _MonthPager(
         month: month,
         onChange: (month) async {
@@ -163,6 +166,7 @@ class _MonthEditor extends ConsumerWidget {
     required this.month,
     required this.readOnly,
     required this.today,
+    required this.assistantReads,
     required this.pager,
   });
 
@@ -170,6 +174,7 @@ class _MonthEditor extends ConsumerWidget {
   final String month;
   final bool readOnly;
   final DateTime today;
+  final bool assistantReads;
   final _PagerBuilder pager;
 
   @override
@@ -197,6 +202,7 @@ class _MonthEditor extends ConsumerWidget {
       month: month,
       readOnly: readOnly,
       today: today,
+      assistantReads: assistantReads,
       initial: initial,
       pager: pager,
     );
@@ -212,6 +218,7 @@ class _Editor extends ConsumerStatefulWidget {
     required this.month,
     required this.readOnly,
     required this.today,
+    required this.assistantReads,
     required this.initial,
     required this.pager,
   });
@@ -220,6 +227,7 @@ class _Editor extends ConsumerStatefulWidget {
   final String month;
   final bool readOnly;
   final DateTime today;
+  final bool assistantReads;
   final MyCalendarOut initial;
   final _PagerBuilder pager;
 
@@ -529,7 +537,27 @@ class _EditorState extends ConsumerState<_Editor> {
             ],
           ],
         ],
+        const SizedBox(height: 24),
+        _requests(period, todayIso),
       ],
+    );
+  }
+
+  /// "Twoje prośby": of the period the manager asked for when it covers this month, else of the month itself.
+  Widget _requests(AvailabilityPeriodOut? period, String todayIso) {
+    final initial = widget.initial;
+    final readOnly = widget.readOnly;
+    final ofPeriod =
+        period != null && period.start.compareTo(initial.end) <= 0 && period.end.compareTo(initial.start) >= 0;
+    return RequestsWindow(
+      key: ValueKey('${widget.companyId}:${ofPeriod ? period.id : initial.start}'),
+      companyId: widget.companyId,
+      scope: ofPeriod
+          ? ChatScope(periodId: period.id, editable: !readOnly && period.editable)
+          : ChatScope(month: initial.start, editable: !readOnly && initial.end.compareTo(todayIso) >= 0),
+      start: ofPeriod ? period.start : initial.start,
+      end: ofPeriod ? period.end : initial.end,
+      assistantReads: widget.assistantReads,
     );
   }
 }

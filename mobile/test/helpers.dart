@@ -123,7 +123,12 @@ Future<ProviderContainer> pumpApp(
 }) async {
   server
     ..byDefault('GET /api/me/schedule', (_) => Reply(200, scheduleJson()))
-    ..byDefault('GET /api/me/offers', (_) => const Reply(200, []));
+    ..byDefault('GET /api/me/offers', (_) => const Reply(200, []))
+    ..byDefault(
+      'GET /api/me/availability',
+      (_) => const Reply(200, {'period': null, 'days': [], 'submitted_at': null, 'assistant_reads': true}),
+    )
+    ..byDefault('GET /api/me/requests', (_) => const Reply(200, []));
   final prefs = await Prefs.load(MemoryStore(stored));
   final container = ProviderContainer(
     overrides: [

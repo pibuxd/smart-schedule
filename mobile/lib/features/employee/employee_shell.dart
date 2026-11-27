@@ -6,10 +6,13 @@ import '../../session/session.dart';
 import '../../ui/status.dart';
 import '../../ui/theme.dart';
 import '../auth/profile_name_form.dart';
+import '../availability/availability_data.dart';
+import '../requests/employee_chat.dart';
 
-/// The employee's tabs at the bottom (thumb reach): "Mój grafik", "Kiedy mogę", "Powiadomienia". Each tab keeps its
-/// own place when the person switches between them. The assistant becomes the fourth tab in a later stage.
-class EmployeeShell extends StatelessWidget {
+/// The employee's tabs at the bottom (thumb reach): "Mój grafik", "Kiedy mogę", "Powiadomienia", and the assistant's
+/// chat as the last one. Each tab keeps its own place when the person switches between them; the chat opens over them
+/// as a page of its own. While the company's access has expired there is no chat.
+class EmployeeShell extends ConsumerWidget {
   const EmployeeShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
@@ -20,17 +23,36 @@ class EmployeeShell extends StatelessWidget {
     (label: 'Powiadomienia', icon: Icons.notifications_outlined, selected: Icons.notifications),
   ];
 
+  /// "Kiedy mogę": while it is open, the chat talks about the month on screen.
+  static const availabilityTab = 1;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionProvider);
+    final company = session is SessionReady ? session.company : null;
+    final chat = company != null && !company.readOnly;
+    final assistantReads = !chat || assistantReadsOf(ref.watch(myAvailabilityProvider(company.id)));
     return Scaffold(
       body: shell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: shell.currentIndex,
-        // Tapping the open tab again goes back to its first screen.
-        onDestinationSelected: (index) => shell.goBranch(index, initialLocation: index == shell.currentIndex),
+        onDestinationSelected: (index) {
+          if (index == tabs.length) {
+            final screen = ref.read(employeeChatMemoryProvider).screen;
+            openEmployeeChat(context, ref, screen: shell.currentIndex == availabilityTab ? screen : null);
+            return;
+          }
+          // Tapping the open tab again goes back to its first screen.
+          shell.goBranch(index, initialLocation: index == shell.currentIndex);
+        },
         destinations: [
           for (final tab in tabs)
             NavigationDestination(icon: Icon(tab.icon), selectedIcon: Icon(tab.selected), label: tab.label),
+          if (chat)
+            NavigationDestination(
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: assistantReads ? 'Asystent' : 'Prośby',
+            ),
         ],
       ),
     );

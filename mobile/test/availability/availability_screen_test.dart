@@ -11,7 +11,7 @@ import 'package:grafikomat/features/availability/availability_screen.dart';
 import '../helpers.dart';
 
 // The website's `AvailabilityScreen.test.tsx`, `AvailabilityCalendar.test.tsx` and `DayHoursSheet.test.tsx`, case by
-// case. "Twoje prośby" comes in the next stage, so its cases come with it.
+// case. "Twoje prośby" under the calendar is tested with the chat in `test/requests/requests_test.dart`.
 
 const period = <String, Object?>{
   'id': 'p1',

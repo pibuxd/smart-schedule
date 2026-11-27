@@ -1902,6 +1902,23 @@ Założenia etapu 3 („Kiedy mogę”, `lib/features/availability/`):
 - W zdaniach o szarych dniach nie ma linku do „Mojego grafiku”, bo ta zakładka jest zawsze na dole ekranu.
 - „Twoje prośby” i asystent pod kalendarzem przychodzą w etapie 4.
 
+Założenia etapu 4 („Twoje prośby” i asystent, `lib/features/requests/`):
+
+- Słowa, stany i zasady jak `RequestsSection` i `EmployeeChat` na stronie; testy przeniesione z
+  `RequestsSection.test.tsx` i `EmployeeChat.test.tsx` (`test/requests/requests_test.dart`).
+- Rozmowa to osobny ekran nad zakładkami (przejście telefonu: na iPhonie wsuwa się z prawej i cofa przesunięciem od
+  krawędzi), a nie wysuwany panel jak na stronie. Otwiera ją czwarta zakładka „Asystent” (albo „Prośby”, gdy
+  asystent jest wyłączony; bez niej, gdy firma nie ma dostępu) i przyciski „Twoich próśb”. Na „Kiedy mogę” rozmowa
+  dotyczy miesiąca na ekranie, gdzie indziej okresu, o który prosi kierownik, albo tego miesiąca.
+- Najnowsza wiadomość jest na dole i rozmowa otwiera się przy niej. Drobny druk („O prośbach i Twoich danych”) jest
+  pod przyciskiem „i” u góry rozmowy, a nie w zwijanej sekcji pod polem: rozwinięty pod polem zabierałby rozmowę przy
+  otwartej klawiaturze.
+- Niewysłana wiadomość zostaje po wyjściu z rozmowy (osobno dla każdego miesiąca, do wylogowania). Enter robi nową
+  linię, wysyła przycisk.
+- „Zaznacz „Mogę”…” zapisuje kalendarz jak stuknięcie; „Kiedy mogę” wczytuje go od nowa po wyjściu z rozmowy.
+- Lista próśb pyta serwer co 2 sekundy, dopóki asystent czyta świeżą wiadomość (najdłużej minutę), jak strona.
+- Zakładki mają podpisy 12 px, żeby cztery mieściły się w jednej linii na telefonie 390 px („Powiadomienia”).
+
 ## 50. Więcej rodzajów próśb pracownika (27.11.2026)
 
 Piotr (27.11.2026): lista 20 próśb, których asystent nie umiał zamienić na nic, co generator liczy, i „obsłuż te
