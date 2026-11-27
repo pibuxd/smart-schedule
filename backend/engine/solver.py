@@ -59,7 +59,6 @@ from engine.validator import (
     RequestKind,
     experience_shifts,
     max_hours_tolerance,
-    not_more_than_others_peers,
     validate,
 )
 
@@ -955,8 +954,6 @@ class _Builder:
                     mixed = self.m.new_bool_var(f"pora_mixed[{request.id},{monday}]")
                     self.m.add((len(used) - 1) * mixed >= sum(used) - 1)
                     self.add_penalty(weight / len(weeks), mixed)
-            case RequestType.NOT_MORE_THAN_OTHERS:
-                self._not_more_than_others(request, weight)
             case RequestType.NOT_ALONE:
                 for slot, var in own:
                     if not request.counts_slot(slot):
@@ -994,31 +991,6 @@ class _Builder:
             broken = self.m.new_bool_var(f"in_row_broken[{request.id},{day}]")
             self.m.add(broken >= window + worked[day] - limit)
             self.add_penalty(unit, broken)
-
-    def _not_more_than_others(self, request, weight: float) -> None:
-        """n · mine − Σ others above zero, in days with a counted shift (n = how many others)."""
-        counted = [s for s in self.p.slots if request.counts_slot(s)]
-        others = not_more_than_others_peers(self.p, request, counted)
-        if not others:
-            return
-        ids = {s.id for s in counted}
-
-        def load(employee_id: str) -> cp_model.LinearExprT:
-            per_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
-            for slot, var in self.x_of_emp.get(employee_id, ()):
-                if slot.id in ids:
-                    per_day[slot.date].append(var)
-            return sum(self._or(v, f"others_load[{request.id},{employee_id},{d}]") for d, v in per_day.items())
-
-        mine = load(request.employee)
-        if isinstance(mine, int):
-            return
-        n = len(others)
-        days = len({s.date for s in counted})
-        excess = self.m.new_int_var(0, n * days, f"more_than_others[{request.id}]")
-        self.m.add(excess >= n * mine - sum(load(e) for e in others))
-        estimate = max(1.0, len(counted) / (n + 1))
-        self.add_penalty(weight / estimate / n, excess)
 
     # ----------------------------------------------------------------- stability and variants
 

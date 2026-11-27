@@ -817,6 +817,28 @@ def _calendar_facts(
     return sorted(unmarked, key=lambda mark: mark.days[0]), notes
 
 
+def lasting_cannot_left(ctx: TenantContext, period, profile_ids) -> set:
+    """The people (profile ids) with a lasting "nie mogę" written for an earlier month whose days in `period` the
+    calendar does not show yet. "Poproś o dyspozycje" reminds them to mark it with the button in "Twoje prośby":
+    the generator reads only the calendar, never the request."""
+    rows = ctx.qs(TextRequest).filter(
+        TextRequest.lasting_from(period.start),
+        employee_id__in=list(profile_ids),
+        status=TextRequest.Status.INTERPRETED,
+    )
+    carried: dict = {}
+    for row in rows.select_related("employee"):
+        if not row.is_own([period]):
+            carried.setdefault(row.employee_id, (row.employee, []))[1].append(row)
+    span = (period.start, period.end)
+    left = set()
+    for employee_id, (employee, requests) in carried.items():
+        calendar = _Calendar(ctx, employee, *span)
+        if any(_calendar_facts(row, calendar, span=span, lasting_only=True)[0] for row in requests):
+            left.add(employee_id)
+    return left
+
+
 def _parts(row: TextRequest) -> list[RequestPartOut]:
     from apps.assistant.readings import calendar_only
 

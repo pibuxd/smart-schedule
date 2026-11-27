@@ -76,8 +76,6 @@ class RequestType(StrEnum):
     FREE_WEEKENDS = "free_weekends"
     # "obojętnie ranki czy popołudnia, byle cały tydzień tak samo": one shift type in each week.
     SAME_SHIFT_TYPE = "same_shift_type"
-    # "nie więcej zamknięć niż inni": no more days with such a shift than the average of the others who can take them.
-    NOT_MORE_THAN_OTHERS = "not_more_than_others"
     # "nie chcę zmian krótszych niż 6 godzin": shifts of at least `min_shift_hours`.
     SHIFT_LENGTH = "shift_length"
     # "nie chcę być sam na zamknięciu": someone else in the location at the same time.

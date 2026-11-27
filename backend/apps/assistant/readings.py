@@ -19,8 +19,9 @@ Types added on 27.11.2026 (docs/plan.md section 49): pora_dnia (from_time / to_t
 with avoid: the hours to keep free), dni_z_rzedu (max_in_row, optionally of shift_type / closing), wolne_z_rzedu
 (free_in_row, hours_period week or period), po_zmianie (after shift_type / closing: days_after free days, or only
 without next_shift_type), lokal (locations: ids of one location name, location_name, avoid, rather), wolne_weekendy
-(free_weekends, of_weekends: in every so many weekends, 0 = in the period), stala_pora, nie_wiecej_niz_inni
-(optionally shift_type / closing), dlugosc_zmiany (min_shift_hours), nie_sam (optionally shift_type / closing).
+(free_weekends, of_weekends: in every so many weekends, 0 = in the period), stala_pora, dlugosc_zmiany
+(min_shift_hours), nie_sam (optionally shift_type / closing). "Not more than the others" is no type (Piotr,
+27.11.2026): the catalog's fair_closings / fair_weekends rules are the manager's, so such a wish goes to the manager.
 closing: only shifts that close the location count ("zamknięcia"). same_day (unikaj_osoby / preferuj_osobe): whole
 days, not shared shifts. chce_pracowac and wolne_dni count min_days in each week with hours_period week; wolne_dni
 with min_days: that many of the days off are enough ("albo 24, albo 31").
@@ -53,7 +54,6 @@ TYPES = (
     "lokal",
     "wolne_weekendy",
     "stala_pora",
-    "nie_wiecej_niz_inni",
     "dlugosc_zmiany",
     "nie_sam",
     "inne",
@@ -73,7 +73,6 @@ SHIFT_TYPED = (
     "limit_zmian",
     "dni_z_rzedu",
     "po_zmianie",
-    "nie_wiecej_niz_inni",
     "nie_sam",
 )
 # Types where only the shifts that close the location may count ("zamknięcia", `closing`).
@@ -83,7 +82,6 @@ CLOSING = (
     "limit_zmian",
     "dni_z_rzedu",
     "po_zmianie",
-    "nie_wiecej_niz_inni",
     "nie_sam",
 )
 # What `count` means in each type, and its bounds.
@@ -379,7 +377,7 @@ def clean(
         if not isinstance(shift_hours, int | float) or isinstance(shift_hours, bool) or not 0.5 <= shift_hours <= 24:
             return None
         data["min_shift_hours"] = float(shift_hours)
-    if type in ("dni_z_rzedu", "po_zmianie", "nie_wiecej_niz_inni", "nie_sam") and shift_type:
+    if type in ("dni_z_rzedu", "po_zmianie", "nie_sam") and shift_type:
         found = _lookup(shift_type, shift_types)
         if found is None:
             return None
@@ -774,14 +772,6 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             return f"{who}: co najmniej {weekends}{when or ' w okresie grafiku'}"
         case "stala_pora":
             return f"{who}: cały tydzień ta sama pora zmian{when}"
-        case "nie_wiecej_niz_inni":
-            if data.get("closing"):
-                what = "zamknięć"
-            elif data.get("shift_type"):
-                what = f"zmian „{shift_types.get(str(data['shift_type']), '?')}”"
-            else:
-                what = "dni pracy"
-            return f"{who}: nie więcej {what} niż średnio inni{when}"
         case "dlugosc_zmiany":
             hours = data.get("min_shift_hours") or 0
             shown = int(hours) if float(hours).is_integer() else hours

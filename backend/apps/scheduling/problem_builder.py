@@ -145,7 +145,6 @@ REQUEST_TYPES = {
     "lokal": RequestType.LOCATION,
     "wolne_weekendy": RequestType.FREE_WEEKENDS,
     "stala_pora": RequestType.SAME_SHIFT_TYPE,
-    "nie_wiecej_niz_inni": RequestType.NOT_MORE_THAN_OTHERS,
     "dlugosc_zmiany": RequestType.SHIFT_LENGTH,
     "nie_sam": RequestType.NOT_ALONE,
     "inne": RequestType.OTHER,

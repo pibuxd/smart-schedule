@@ -147,12 +147,14 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   `CannotMarkOut.windows` / `dropped` / `own`). It is never a request the generator scores (`readings.calendar_only`).
   On concrete dates it never lasts (`TextRequest.part_can_last`; `lasting: true` gets 409; a mixed request lasts only
   in its other parts, shown through `MyRequestOut.parts`); on weekdays it may (27.11.2026), and `GET /me/requests`
-  then offers the button for the days of each later month (`_calendar_facts(span=…, lasting_only=True)`).
+  then offers the button for the days of each later month (`_calendar_facts(span=…, lasting_only=True)`), and
+  "Poproś o dyspozycje" reminds the people whose days are not marked yet (`lasting_cannot_left`, `lasting_cannot`).
   `MyRequestOut.unmarked_days` stays until 2027 for tabs opened earlier.
 - Reading types (`readings.TYPES`, the same for employee requests and manager instructions; docs/plan.md section 49):
   besides the people, shift, position, hours and day types there are `pora_dnia`, `dni_z_rzedu`, `wolne_z_rzedu`,
   `po_zmianie`, `lokal` (only the person's own locations, `services.own_locations`), `wolne_weekendy`, `stala_pora`,
-  `nie_wiecej_niz_inni`, `dlugosc_zmiany`, `nie_sam`; `closing` narrows to shifts that close the location and
+  `dlugosc_zmiany`, `nie_sam` ("nie więcej niż inni" goes to the manager: fair shares are the manager's
+  `fair_closings` / `fair_weekends` rules, Piotr 27.11.2026); `closing` narrows to shifts that close the location and
   `same_day` makes `unikaj_osoby` / `preferuj_osobe` about whole days. New answer-schema fields have defaults, not
   null: the API allows at most 24 optional and 16 union fields
   (`test_each_request_stays_within_the_structured_output_limits`).

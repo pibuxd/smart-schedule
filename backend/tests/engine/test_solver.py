@@ -649,7 +649,6 @@ def random_problem(seed: int):
         Request("r11", people[1].id, "location", locations=frozenset({"loc-2"}), avoid=True),
         Request("r12", people[2].id, "free_weekends", free_weekends=1, of_weekends=2),
         Request("r13", people[3].id, "same_shift_type", level="mile_widziane"),
-        Request("r14", people[0].id, "not_more_than_others", closing=True),
         Request("r15", people[1].id, "shift_length", min_shift_hours=8.5),
         Request("r16", people[2].id, "not_alone", closing=True),
         Request("r17", people[3].id, "avoid_person", subject_employee=people[0].id, same_day=True),

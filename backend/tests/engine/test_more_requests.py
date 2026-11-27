@@ -323,21 +323,6 @@ def test_same_shift_type_in_each_week():
     assert report.requests[0].degree == 0
 
 
-def test_not_more_closings_than_the_others():
-    slots = two_shifts_a_day(6, closing=True)
-    wish = Request("r", "ola", "not_more_than_others", closing=True)
-    people = [employee("ola"), employee("ewa"), employee("iza")]
-    p = problem(people, slots, requests=[wish])
-    closings = {f"a{n}": "ola" if n < 4 else "ewa" for n in range(6)} | {f"m{n}": "iza" for n in range(6)}
-    # Ola 4, the others 2 and 0: average 1, so 3 of her 4 are above it.
-    assert degrees(p, closings) == [0.75]
-    fair = {f"a{n}": ["ola", "ewa", "iza"][n % 3] for n in range(6)} | {f"m{n}": "iza" for n in range(6)}
-    assert degrees(p, fair) == [0]
-    likes = Request("likes", "ola", "shift_type", shift_type="afternoon", level="mile_widziane")
-    _schedule, report = solved(replace(p, requests=(replace(wish, level="bardzo_wazne"), likes)))
-    assert report.requests[0].degree == 0
-
-
 def test_shift_length_and_not_alone():
     slots = [
         slot("short", day(0), "06:00", "10:00", shift_type="short"),

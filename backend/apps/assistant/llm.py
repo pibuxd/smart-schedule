@@ -55,7 +55,6 @@ PreferenceTypeName = Literal[
     "lokal",
     "wolne_weekendy",
     "stala_pora",
-    "nie_wiecej_niz_inni",
     "dlugosc_zmiany",
     "nie_sam",
 ]
@@ -175,8 +174,8 @@ class Preference(BaseModel):
     person: str | None = Field(description="Co-worker it is about, exactly as on the list of co-workers; else null.")
     shift_type: str | None = Field(
         description="Shift name: the shift of typ_zmiany and po_zmianie (after which shift); optional in "
-        "chce_pracowac, limit_zmian, dni_z_rzedu, nie_wiecej_niz_inni, nie_sam, and in unikaj_osoby / "
-        "preferuj_osobe when only that shift counts; else null."
+        "chce_pracowac, limit_zmian, dni_z_rzedu, nie_sam, and in unikaj_osoby / preferuj_osobe when only that "
+        "shift counts; else null."
     )
     avoid_shift_type: bool = Field(description="typ_zmiany: true = does NOT want this shift, false = wants only it.")
     # Plain strings with defaults, not nullable: the answer schema may have at most 16 union-typed fields.
@@ -265,7 +264,7 @@ class Preference(BaseModel):
     closing: bool = Field(
         default=False,
         description="Only shifts marked 'zamyka lokal' count ('zamknięcia'), instead of one shift_type: in "
-        "unikaj_osoby, preferuj_osobe, limit_zmian, dni_z_rzedu, po_zmianie, nie_wiecej_niz_inni, nie_sam. Else false.",
+        "unikaj_osoby, preferuj_osobe, limit_zmian, dni_z_rzedu, po_zmianie, nie_sam. Else false.",
     )
     shift_hours: float = Field(
         default=0, description="dlugosc_zmiany: the shortest shift (hours) the person wants; else 0."
@@ -365,8 +364,8 @@ class NewInstruction(BaseModel):
     other_person: str | None = Field(description="unikaj_osoby / preferuj_osobe: the second person.")
     shift_type: str | None = Field(
         description="Shift name: the shift of typ_zmiany and po_zmianie (after which shift); optional in "
-        "chce_pracowac, limit_zmian, dni_z_rzedu, nie_wiecej_niz_inni, nie_sam, and in unikaj_osoby / "
-        "preferuj_osobe when only that shift counts."
+        "chce_pracowac, limit_zmian, dni_z_rzedu, nie_sam, and in unikaj_osoby / preferuj_osobe when only that "
+        "shift counts."
     )
     avoid_shift_type: bool
     position: str = Field(default="", description="stanowisko: the position, exactly as on the list; else ''.")
@@ -700,8 +699,8 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
   prośbą; generator nie da wtedy zmiany, która nachodzi na 9:00–11:00. „Nie mogę” w dni tygodnia może być na
   stałe („w piątki nigdy nie mogę”, „na stałe we wtorki nie mogę od 9 do 11”): wtedy przycisk będzie przy prośbie
   w „Twoich prośbach” każdego kolejnego miesiąca. W answer powiedz wprost, że w każdym miesiącu trzeba go nacisnąć,
-  bo dopiero zaznaczenie w kalendarzu chroni te godziny. Gdy tylko woli nie pracować w jakichś godzinach (nie „nie
-  mogę”), to pora_dnia.
+  bo dopiero zaznaczenie w kalendarzu chroni te godziny (aplikacja przypomni o tym, gdy kierownik poprosi
+  o dyspozycje). Gdy tylko woli nie pracować w jakichś godzinach (nie „nie mogę”), to pora_dnia.
   Gdy wystarczy część z podanych dni („albo 24, albo 31 wolne”, „sobota albo niedziela wolna”), podaj w min_days,
   ile z nich ma być wolnych (cannot=false); z hours_period=week w każdym tygodniu („w każdym tygodniu sobota albo
   niedziela wolna” = weekdays 6–7, min_days=1, week).
@@ -730,9 +729,9 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
   count 1). Wolny weekend to brak zmiany, która zaczyna się w sobotę albo w niedzielę (nocka z piątku na sobotę go
   nie zajmuje); gdy pracownik pyta, powiedz to.
 - stala_pora: w każdym tygodniu ta sama zmiana, bez skakania z rana na popołudnie („cały tydzień na jedną zmianę”).
-- nie_wiecej_niz_inni: nie więcej takich zmian niż średnio inni na tych samych stanowiskach: shift_type albo
-  closing=true („nie więcej zamknięć niż inni”), dni tygodnia („nie więcej weekendów niż inni” = weekdays 6–7); bez
-  nich dni pracy w ogóle.
+- Porównanie z innymi („nie więcej zamknięć niż inni”, „żeby było sprawiedliwie”) nie jest preferencją: równy
+  podział zmian ustawia kierownik w zasadach lokalu. Nie zapisuj go, ustaw leave_to_manager=true i powiedz w answer,
+  że przekazujesz to kierownikowi, bo to on ustala, jak dzielić zmiany.
 - dlugosc_zmiany: zmiany nie krótsze niż shift_hours godzin („na mniej niż 6 godzin nie opłaca mi się dojeżdżać” =
   6). Najwyżej tyle godzin dziennie to limit_godzin z hours_period=day.
 - nie_sam: nie chce być sam na zmianie; z shift_type albo closing=true tylko na niej („nie chcę sama zamykać”).
@@ -862,9 +861,9 @@ Plan ma dwa rodzaje zmian ustawień (oraz godziny pracy z punktu 3 i ułożenie 
    rząd; opcjonalnie shift_type), wolne_z_rzedu (count wolnych dni pod rząd; week albo period), po_zmianie (po
    zmianie shift_type count dni wolnego; next_shift_type = tylko bez tej zmiany potem), lokal (osoba pracująca
    w kilku lokalach: location = tylko ten lokal, z avoid=true bez niego), wolne_weekendy (count wolnych weekendów
-   w każdych out_of kolejnych; out_of 0 = w okresie), stala_pora (cały tydzień ta sama zmiana),
-   nie_wiecej_niz_inni (nie więcej niż średnio inni: shift_type, zamknięć albo dni tygodnia), dlugosc_zmiany
-   (shift_hours = najkrótsza zmiana), nie_sam (nie sama na zmianie; opcjonalnie shift_type).
+   w każdych out_of kolejnych; out_of 0 = w okresie), stala_pora (cały tydzień ta sama zmiana), dlugosc_zmiany
+   (shift_hours = najkrótsza zmiana), nie_sam (nie sama na zmianie; opcjonalnie shift_type). „Nie więcej zamknięć
+   (weekendów) niż inni” to nie polecenie o osobie, tylko zasada równego podziału z katalogu.
    closing=true zamiast shift_type, gdy chodzi o każde zamknięcie (jest kilka zmian „zamyka lokal”); same_day=true
    w unikaj_osoby / preferuj_osobe, gdy chodzi o te same dni, a nie o wspólne zmiany.
 Polecenia o osobach są preferencjami, nie twardymi zakazami ani gwarancją przydziału. Zatwierdzenie planu zapisuje

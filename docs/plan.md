@@ -1833,7 +1833,6 @@ Nowe typy odczytu (`readings.TYPES`) i ich `RequestType` (solver: miękka kara, 
 | `lokal` | `LOCATION` | `locations` (id), `location_name`, `avoid`, `rather` | część `own` w lokalu (`avoid`) albo poza nim |
 | `wolne_weekendy` | `FREE_WEEKENDS` | `free_weekends` (≥1), `of_weekends` (0 = w okresie, 2–5 = w każdych tylu kolejnych) | okres: brakujące wolne weekendy / potrzebne; co K: część okien K kolejnych weekendów z za małą liczbą wolnych; weekend = sobota i niedziela (data początku zmiany), weekend sprzed okresu liczy się ze zmianami spoza problemu |
 | `stala_pora` | `SAME_SHIFT_TYPE` | dni | część tygodni z `own`, w których są różne pory (`shift_type`) |
-| `nie_wiecej_niz_inni` | `NOT_MORE_THAN_OTHERS` | opcjonalnie `shift_type`, `closing`, dni | `min(1, max(0, moje − średnia innych) / moje)`, liczone w dniach z taką zmianą; inni = pozostałe osoby z dostępnych, które mają stanowisko którejś z tych zmian w jej lokalu |
 | `dlugosc_zmiany` | `SHIFT_LENGTH` | `min_shift_hours` (0,5–24) | część `own` krótszych niż tyle godzin |
 | `nie_sam` | `NOT_ALONE` | opcjonalnie `shift_type`, `closing`, dni | część `own`, przy których w tym lokalu nikt inny nie ma zmiany nachodzącej w czasie |
 
@@ -1853,8 +1852,12 @@ Rozszerzenia istniejących typów:
 
 Solver (`_text_request`): jak dotąd waga prośby przez szacunek zmian osoby (`estimate`) za każdą złą zmianę albo
 dzień; dla okien (`wolne_z_rzedu`, `wolne_weekendy`, okna `min_days`) waga przez liczbę okien. `nie_sam`: dla każdej
-możliwej zmiany osoby `alone ≥ x − Σ (obsadzone zmiany nachodzące − ja na nich)`; `nie_wiecej_niz_inni`: zmienna
-nadwyżki `n·moje − suma innych` (n = liczba innych), kara przez `estimate·n`. Walidator liczy dokładne udziały.
+możliwej zmiany osoby `alone ≥ x − Σ (obsadzone zmiany nachodzące − ja na nich)`. Walidator liczy dokładne udziały.
+
+„Nie więcej niż inni” nie jest typem (Piotr, 27.11.2026, po przeglądzie Prelinta: „bez sensu prośba”, a równy
+podział zmian i tak ustawia kierownik zasadami `fair_closings` / `fair_weekends`): asystent pracownika ustawia
+`leave_to_manager=true` i mówi, że przekazuje to kierownikowi; asystent kierownika traktuje takie polecenie jako
+zasadę z katalogu, nie polecenie o osobie.
 
 Asystent: w schemacie odpowiedzi (pracownik i kierownik) osiem nowych pól bez null, z wartościami domyślnymi
 (limit API: najwyżej 24 opcjonalne i 16 „albo” w schemacie pracownika): `count` (`dni_z_rzedu`: najwyżej dni,
@@ -1868,11 +1871,13 @@ zmianie). `next_shift_type` sprawdzany jak `shift_type`.
 tygodnia bez dat); `TextRequest.part_can_last` przepuszcza godziny „nie mogę” z dniami tygodnia (bez dat).
 Generator dalej pomija godziny (`readings.calendar_only`), a całe dni liczy jak `wolne_dni`. `GET /me/requests`
 liczy `cannot_marks` także dla prośby przeniesionej z wcześniejszego miesiąca, dla dni okresu (miesiąca) na ekranie,
-a „Twoje prośby” pokazują przy niej przycisk zaznaczenia w kalendarzu.
+a „Twoje prośby” pokazują przy niej przycisk zaznaczenia w kalendarzu. „Poproś o dyspozycje”
+(`ask_for_availability`) daje osobom z taką prośbą, której dni w tym okresie kalendarz jeszcze nie pokazuje
+(`availability.api.lasting_cannot_left`), to samo powiadomienie z `lasting_cannot: true`, a `notification_text`
+dopisuje przypomnienie o przycisku (po przeglądzie Prelinta, 27.11.2026).
 
 Założenia: wszystko to miękkie życzenia (twarde jest tylko „nie mogę” w kalendarzu i zasady „bez wyjątków”);
-tydzień to poniedziałek–niedziela, weekend to sobota i niedziela; „nie więcej niż inni” porównuje do średniej,
-nie do osoby z najmniejszą liczbą; `nie_sam` nie dokłada drugiej osoby (obsadę ustawia kierownik). Zmiany spoza
+tydzień to poniedziałek–niedziela, weekend to sobota i niedziela; `nie_sam` nie dokłada drugiej osoby (obsadę ustawia kierownik). Zmiany spoza
 problemu są czytane 7 dni przed okresem (`EXTERNAL_MARGIN`), więc przy „co trzeci weekend” i rzadszych weekendy
 sprzed tego marginesu liczą się jako wolne (pierwsze okno może być łagodniejsze); „co drugi weekend” ma pełne dane.
 Polecenie kierownika `wolne_dni` nie ma godzin (godziny „nie mogę” zaznacza pracownik w swoim kalendarzu).

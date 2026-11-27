@@ -8,6 +8,8 @@ from django.utils import timezone
 
 from apps.assistant import llm, readings
 from apps.assistant.models import ManagerInstruction
+from apps.notifications.models import Notification
+from apps.notifications.services import notification_text
 from apps.scheduling.models import SchedulePeriod
 from apps.scheduling.problem_builder import build_problem
 from apps.staffing.models import ShiftType
@@ -65,11 +67,6 @@ class TestReadings:
             ({"type": "wolne_weekendy", "count": 2, "out_of": 3}, "Ola: 2 z każdych 3 kolejnych weekendów wolne"),
             ({"type": "wolne_weekendy", "count": 1}, "Ola: co najmniej 1 wolny weekend w okresie grafiku"),
             ({"type": "stala_pora"}, "Ola: cały tydzień ta sama pora zmian"),
-            ({"type": "nie_wiecej_niz_inni", "closing": True}, "Ola: nie więcej zamknięć niż średnio inni"),
-            (
-                {"type": "nie_wiecej_niz_inni", "weekdays": [6, 7]},
-                "Ola: nie więcej dni pracy niż średnio inni w weekendy",
-            ),
             ({"type": "dlugosc_zmiany", "shift_hours": 6}, "Ola: zmiany nie krótsze niż 6 godz."),
             ({"type": "nie_sam", "closing": True}, "Ola: nie w pojedynkę na zamknięciu"),
             ({"type": "nie_sam"}, "Ola: nie w pojedynkę na zmianie"),
@@ -133,6 +130,8 @@ class TestReadings:
             {"type": "limit_godzin", "max_hours": 30, "shift_hours": 6},
             {"type": "wolne_dni", "weekdays": [2], "min_days": 1, "from_time": "9:00"},
             {"type": "stala_pora", "location": "Rynek"},
+            # "Nie więcej niż inni" goes to the manager, who sets fair shares in the rules (Piotr, 27.11.2026).
+            {"type": "nie_wiecej_niz_inni", "closing": True},
         ],
     )
     def test_what_cannot_be_kept_is_refused(self, values):
@@ -182,7 +181,6 @@ class TestEmployeeRequests:
                 {"free_weekends": 1, "of_weekends": 2},
             ),
             ({"type": "stala_pora", "weekdays": []}, "same_shift_type", {}),
-            ({"type": "nie_wiecej_niz_inni", "weekdays": [6, 7]}, "not_more_than_others", {"closing": False}),
             ({"type": "dlugosc_zmiany", "shift_hours": 6, "weekdays": []}, "shift_length", {"min_shift_hours": 6.0}),
             ({"type": "nie_sam", "closing": True, "weekdays": []}, "not_alone", {"closing": True}),
             (
@@ -248,6 +246,23 @@ class TestEmployeeRequests:
         # Its own month offers the Fridays of that month, as before.
         [mine] = my_requests(api, shop)
         assert mine["cannot_marks"][0]["days"][0] >= shop["period"].start.isoformat()
+
+    def test_asking_for_availability_reminds_of_a_lasting_cannot(self, api, shop, with_key, monkeypatch):
+        answer = reading(weekdays=[2], cannot=True, lasting=True, from_time="9:00", to_time="11:00")
+        status, row, _ = read(api, shop, monkeypatch, answer, "Na stałe we wtorki nie mogę od 9 do 11.")
+        assert status == "interpreted" and row.lasting
+        start = shop["period"].end + timedelta(days=1)
+        later = SchedulePeriod.objects.create(
+            location=shop["location"], start=start, end=(start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        )
+        api.login(shop["manager"])
+        assert api.post(f"/api/periods/{later.pk}/ask-availability").json()["notified"] == 2
+        sent = {n.user_id: n.payload for n in Notification.objects.filter(kind="availability_requested")}
+        assert sent[shop["worker"].pk]["lasting_cannot"] is True
+        assert "lasting_cannot" not in sent[shop["kasia"].membership.user_id]
+        assert notification_text("availability_requested", sent[shop["worker"].pk]).endswith(
+            "Masz prośbę na stałe „nie mogę”. Zaznacz ją w kalendarzu przyciskiem w „Twoje prośby”."
+        )
 
     def test_a_cannot_with_one_of_the_days_is_only_a_wish(self, api, shop, with_key, monkeypatch):
         period = shop["period"]

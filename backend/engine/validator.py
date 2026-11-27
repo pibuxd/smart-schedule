@@ -198,18 +198,6 @@ def _has_free_run(days: list[date], busy: set[date], length: int) -> bool:
     return False
 
 
-def not_more_than_others_peers(problem: Problem, request: Request, counted: list[Slot]) -> list[str]:
-    """not_more_than_others: the other people who could take one of the counted shifts (the shift's location and
-    position), the ones who only keep shifts they already have left out."""
-    return [
-        e.id
-        for e in problem.employees
-        if e.id != request.employee
-        and e.available
-        and any(e.works_in(s.location) and s.position in e.positions for s in counted)
-    ]
-
-
 class _Checker:
     def __init__(self, problem: Problem, schedule: Schedule) -> None:
         self.p = problem
@@ -943,8 +931,6 @@ class _Checker:
                 if not weeks:
                     return 0.0
                 return sum(1 for types in weeks.values() if len(types) > 1) / len(weeks)
-            case RequestType.NOT_MORE_THAN_OTHERS:
-                return self._not_more_than_others_degree(request)
             case RequestType.NOT_ALONE:
                 counted = [s for s in own if request.counts_slot(s)]
                 if not counted:
@@ -1007,21 +993,6 @@ class _Checker:
                 bad += 1
         return bad / len(first)
 
-    def _not_more_than_others_degree(self, request: Request) -> float | None:
-        counted = [s for s in self.p.slots if request.counts_slot(s)]
-        others = not_more_than_others_peers(self.p, request, counted)
-        if not others:
-            return None
-
-        def load(employee_id: str) -> int:
-            return len({s.date for s in counted if self.assignment.get(s.id) == employee_id})
-
-        mine = load(request.employee)
-        if not mine:
-            return 0.0
-        average = sum(load(e) for e in others) / len(others)
-        return min(1.0, max(0.0, mine - average) / mine)
-
     def _someone_else_at(self, slot: Slot, employee_id: str) -> bool:
         """Someone other than the person works in the slot's location at an overlapping time."""
         return any(
@@ -1078,6 +1049,5 @@ __all__ = [
     "ValidationReport",
     "Violation",
     "is_valid",
-    "not_more_than_others_peers",
     "validate",
 ]
