@@ -47,6 +47,17 @@ PreferenceTypeName = Literal[
     "cel_godzin",
     "wolne_dni",
     "chce_pracowac",
+    # 27.11.2026 (docs/plan.md section 48)
+    "pora_dnia",
+    "dni_z_rzedu",
+    "wolne_z_rzedu",
+    "po_zmianie",
+    "lokal",
+    "wolne_weekendy",
+    "stala_pora",
+    "nie_wiecej_niz_inni",
+    "dlugosc_zmiany",
+    "nie_sam",
 ]
 LevelName = Literal["bardzo_wazne", "wazne", "mile_widziane"]
 HoursPeriodName = Literal["day", "week", "period"]
@@ -142,14 +153,30 @@ def tracking(usage: Usage) -> Iterator[Usage]:
         _tracked.reset(token)
 
 
+# What a field means when a model writes null for "not this type" (the answer schemas have no null there).
+NOT_SET = {
+    "target_hours": 0,
+    "prefer_weekdays": [],
+    "hours_meaning": "unsaid",
+    "at_least": False,
+    "count": 0,
+    "out_of": 0,
+    "avoid": False,
+    "same_day": False,
+    "closing": False,
+    "shift_hours": 0,
+}
+
+
 class Preference(BaseModel):
     """One scheduling preference of the employee who wrote, of a type from the closed list."""
 
     type: PreferenceTypeName
     person: str | None = Field(description="Co-worker it is about, exactly as on the list of co-workers; else null.")
     shift_type: str | None = Field(
-        description="Shift name: the shift of typ_zmiany; optional in chce_pracowac, limit_zmian, and in "
-        "unikaj_osoby / preferuj_osobe when only that shift counts; else null."
+        description="Shift name: the shift of typ_zmiany and po_zmianie (after which shift); optional in "
+        "chce_pracowac, limit_zmian, dni_z_rzedu, nie_wiecej_niz_inni, nie_sam, and in unikaj_osoby / "
+        "preferuj_osobe when only that shift counts; else null."
     )
     avoid_shift_type: bool = Field(description="typ_zmiany: true = does NOT want this shift, false = wants only it.")
     # Plain strings with defaults, not nullable: the answer schema may have at most 16 union-typed fields.
@@ -180,11 +207,14 @@ class Preference(BaseModel):
         "unsaid = the person said neither (ask in question). Other types: unsaid.",
     )
     hours_period: HoursPeriodName = Field(
-        description="Window of limit_godzin / limit_zmian / cel_godzin: day = each day, week = each Monday–Sunday "
-        "week, period = the whole period. Other types: period.",
+        description="Window of limit_godzin / limit_zmian / cel_godzin, of min_days in chce_pracowac / wolne_dni and "
+        "of wolne_z_rzedu: day = each day, week = each Monday–Sunday week, period = the whole period. Other types: "
+        "period.",
     )
     min_days: int | None = Field(
-        description='chce_pracowac: on how many of the given days ("albo 12, albo 13" = 1); null = all of them.'
+        description='chce_pracowac: on how many of the given days ("albo 12, albo 13" = 1); wolne_dni: how many of '
+        'the given days off are enough ("albo 24, albo 31 wolne" = 1); in each week with hours_period=week; null = '
+        "all of them."
     )
     shifts_per_day: int | None = Field(description="chce_pracowac: shifts wanted on each such day (1–3); null = 1.")
     dates: list[str] = Field(description="Concrete days as YYYY-MM-DD, inside the period of the message.")
@@ -192,17 +222,53 @@ class Preference(BaseModel):
     cannot: bool = Field(
         default=False,
         description="wolne_dni: true when the person says they CANNOT work then (not just prefer), on dates or on "
-        "weekdays of this period (not for good).",
+        "weekdays (also for good); never with min_days.",
     )
     from_time: str = Field(
         default="",
-        description="wolne_dni with cannot only in part of the day: HH:MM the hours they cannot work start ('' = "
-        "from the start of the day).",
+        description="wolne_dni with cannot only in part of the day: HH:MM the hours they cannot work start; "
+        "pora_dnia: HH:MM the hours start ('' = from the start of the day).",
     )
     to_time: str = Field(
         default="",
-        description="wolne_dni with cannot only in part of the day: HH:MM those hours end ('' = to the end of the "
-        "day). Both '' = the whole day.",
+        description="wolne_dni with cannot only in part of the day: HH:MM those hours end; pora_dnia: HH:MM the "
+        "hours end ('' = to the end of the day). Both '' in wolne_dni = the whole day.",
+    )
+    # Added 27.11.2026, all without null (the schema limit, see `position`): 0 / '' / false = not this type.
+    count: int = Field(
+        default=0,
+        description="dni_z_rzedu: most days in a row; wolne_z_rzedu: free days in a row wanted; po_zmianie: free "
+        "days after that shift (1 = the next day); wolne_weekendy: how many free weekends. Else 0.",
+    )
+    out_of: int = Field(
+        default=0,
+        description="wolne_weekendy: in every this many weekends in a row ('co drugi weekend' = count 1, out_of 2); "
+        "0 = in the whole period. Else 0.",
+    )
+    next_shift_type: str = Field(
+        default="",
+        description="po_zmianie: the shift not wanted in the days after ('po zamknięciu nie otwarcie'); '' = any.",
+    )
+    location: str = Field(
+        default="", description="lokal: the location, exactly as on the list of the person's locations; else ''."
+    )
+    avoid: bool = Field(
+        default=False,
+        description="pora_dnia: true = rather NOT work in these hours, false = shifts inside them; lokal: true = "
+        "not this location (see rather). Else false.",
+    )
+    same_day: bool = Field(
+        default=False,
+        description="unikaj_osoby: true = not on the same days at all (any shift); preferuj_osobe: true = the same "
+        "days at work and the same days off. Else false.",
+    )
+    closing: bool = Field(
+        default=False,
+        description="Only shifts marked 'zamyka lokal' count ('zamknięcia'), instead of one shift_type: in "
+        "unikaj_osoby, preferuj_osobe, limit_zmian, dni_z_rzedu, po_zmianie, nie_wiecej_niz_inni, nie_sam. Else false.",
+    )
+    shift_hours: float = Field(
+        default=0, description="dlugosc_zmiany: the shortest shift (hours) the person wants; else 0."
     )
     lasting: bool = Field(
         default=False,
@@ -212,16 +278,27 @@ class Preference(BaseModel):
     level: LevelName
     confidence: float = Field(description="0–1: how sure you are that this is what the person meant.")
 
-    @field_validator("position", "from_time", "to_time", mode="before")
+    @field_validator("position", "from_time", "to_time", "next_shift_type", "location", mode="before")
     @classmethod
     def _null_is_empty(cls, value):
         return "" if value is None else value
 
-    @field_validator("target_hours", "prefer_weekdays", "hours_meaning", mode="before")
+    @field_validator(
+        "target_hours",
+        "prefer_weekdays",
+        "hours_meaning",
+        "count",
+        "out_of",
+        "avoid",
+        "same_day",
+        "closing",
+        "shift_hours",
+        mode="before",
+    )
     @classmethod
     def _null_is_none(cls, value, info):
         if value is None:  # a model on OpenRouter may write null for "not this type"
-            return {"target_hours": 0, "prefer_weekdays": [], "hours_meaning": "unsaid"}[info.field_name]
+            return NOT_SET[info.field_name]
         return value
 
 
@@ -287,8 +364,9 @@ class NewInstruction(BaseModel):
     person: str = Field(description="Who it is about, exactly as on the list of people.")
     other_person: str | None = Field(description="unikaj_osoby / preferuj_osobe: the second person.")
     shift_type: str | None = Field(
-        description="Shift name: the shift of typ_zmiany; optional in chce_pracowac, limit_zmian, and in "
-        "unikaj_osoby / preferuj_osobe when only that shift counts."
+        description="Shift name: the shift of typ_zmiany and po_zmianie (after which shift); optional in "
+        "chce_pracowac, limit_zmian, dni_z_rzedu, nie_wiecej_niz_inni, nie_sam, and in unikaj_osoby / "
+        "preferuj_osobe when only that shift counts."
     )
     avoid_shift_type: bool
     position: str = Field(default="", description="stanowisko: the position, exactly as on the list; else ''.")
@@ -307,27 +385,69 @@ class NewInstruction(BaseModel):
         description="cel_godzin: true = at least target_hours, more is fine ('co najmniej', 'minimum'); false = about.",
     )
     hours_period: HoursPeriodName = Field(
-        description="Window of limit_godzin / limit_zmian / cel_godzin: day = each day, week = each Monday–Sunday "
-        "week, period = the whole period. Other types: period.",
+        description="Window of limit_godzin / limit_zmian / cel_godzin, of min_days in chce_pracowac / wolne_dni and "
+        "of wolne_z_rzedu: day = each day, week = each Monday–Sunday week, period = the whole period. Other types: "
+        "period.",
     )
-    min_days: int | None
+    min_days: int | None = Field(
+        description="chce_pracowac: on how many of the days; wolne_dni: how many of the days off are enough; in "
+        "each week with hours_period=week; null = all of them."
+    )
     shifts_per_day: int | None
+    # Added 27.11.2026, as in `Preference` (no null).
+    from_time: str = Field(default="", description="pora_dnia: HH:MM the hours start; '' = from the start of the day.")
+    to_time: str = Field(default="", description="pora_dnia: HH:MM the hours end; '' = to the end of the day.")
+    count: int = Field(
+        default=0,
+        description="dni_z_rzedu: most days in a row; wolne_z_rzedu: free days in a row; po_zmianie: free days "
+        "after that shift; wolne_weekendy: how many free weekends. Else 0.",
+    )
+    out_of: int = Field(
+        default=0, description="wolne_weekendy: in every this many weekends in a row; 0 = in the period. Else 0."
+    )
+    next_shift_type: str = Field(default="", description="po_zmianie: the shift not wanted after; '' = any.")
+    location: str = Field(
+        default="", description="lokal: the location, exactly as on the list of the person's locations; else ''."
+    )
+    avoid: bool = Field(
+        default=False, description="pora_dnia: true = NOT in these hours; lokal: true = not this location."
+    )
+    same_day: bool = Field(
+        default=False,
+        description="unikaj_osoby: not on the same days at all; preferuj_osobe: the same days at work and off.",
+    )
+    closing: bool = Field(
+        default=False,
+        description="Only shifts marked 'zamyka lokal' count, instead of one shift_type (see the employee types).",
+    )
+    shift_hours: float = Field(default=0, description="dlugosc_zmiany: the shortest shift in hours; else 0.")
     dates: list[str] = Field(description="Concrete days as YYYY-MM-DD, inside the period of the agreements.")
     weekdays: list[int] = Field(description="Repeating weekdays, 1 = Monday … 7 = Sunday. May be empty.")
     place: int | None = Field(
         description="Null to append on acceptance. Only use a number for an explicit rank (1 = first)."
     )
 
-    @field_validator("position", mode="before")
+    @field_validator("position", "from_time", "to_time", "next_shift_type", "location", mode="before")
     @classmethod
     def _null_is_empty(cls, value):
         return "" if value is None else value
 
-    @field_validator("target_hours", "prefer_weekdays", "at_least", mode="before")
+    @field_validator(
+        "target_hours",
+        "prefer_weekdays",
+        "at_least",
+        "count",
+        "out_of",
+        "avoid",
+        "same_day",
+        "closing",
+        "shift_hours",
+        mode="before",
+    )
     @classmethod
     def _null_is_none(cls, value, info):
         if value is None:  # a model on OpenRouter may write null for "not this type"
-            return {"target_hours": 0, "prefer_weekdays": [], "at_least": False}[info.field_name]
+            return NOT_SET[info.field_name]
         return value
 
 
@@ -539,7 +659,10 @@ kalendarza dyspozycji i nie wysyłasz wiadomości.
 Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
 - unikaj_osoby: nie chce zmian z osobą z listy współpracowników; preferuj_osobe: chce zmian z tą osobą.
   Gdy chodzi tylko o jedną zmianę („nie stawiajcie mnie z Zuzanną na zamknięciu”), podaj ją w shift_type
-  (zamknięcie = zmiana oznaczona „zamyka lokal”; gdy nie ma takiej albo jest ich kilka, nie zgaduj, jak niżej).
+  (zamknięcie = zmiana oznaczona „zamyka lokal”; gdy jest ich kilka, a chodzi o każde zamknięcie, zamiast
+  shift_type ustaw closing=true; gdy nie ma żadnej, nie zgaduj, tylko zapytaj). same_day=true, gdy chodzi o dni,
+  nie o wspólne zmiany: „nie w te same dni co Marek” = unikaj_osoby (żadna zmiana tego samego dnia), „chcę mieć
+  wolne razem z mężem” (mąż pracuje tutaj) = preferuj_osobe (te same dni pracy i te same dni wolne).
 - typ_zmiany: chce tylko danej zmiany z listy (avoid_shift_type=false) albo nie chce jej (true); daty lub dni
   tygodnia zawężają, kiedy to obowiązuje.
 - stanowisko: gdy ma kilka stanowisk (lista „Twoje stanowiska”), nie chce pracować na jednym z nich
@@ -569,15 +692,47 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
   liczby: zapytaj w question, ile godzin w tygodniu albo w miesiącu chce wyrobić.
 - wolne_dni: woli nie pracować w podane dni lub dni tygodnia. Gdy pisze, że NIE MOŻE (egzamin, sesja, lekarz,
   wyjazd), ustaw cannot=true: aplikacja zaproponuje zaznaczenie „nie mogę” w kalendarzu. Gdy chodzi tylko o część
-  dnia („we wtorki nie mogę od 9:00 do 11:00”, „po 18 nie mogę”), z cannot=true i konkretnymi dniami w dates, podaj
-  te godziny w from_time/to_time (HH:MM; puste = od początku albo do końca dnia). Nigdy nie zamieniaj kilku godzin
-  na cały dzień wolny. „Nie mogę” w kalendarzu jest tylko na cały dzień, więc aplikacja pokaże przycisk, który
-  zaznaczy te dni jako „Mogę” tylko poza tymi godzinami („do 9:00 i od 11:00”; „Chętnie” zostaje). W answer powiedz
-  właśnie to: zapiszemy, że w te dni może pracować do 9:00 i od 11:00, i wystarczy nacisnąć przycisk pod prośbą;
-  generator nie da wtedy zmiany, która nachodzi na 9:00–11:00. Gdy tylko woli nie pracować w jakichś godzinach
-  (nie „nie mogę”), nie podawaj godzin: to typ inne, przeczyta kierownik.
+  dnia („we wtorki nie mogę od 9:00 do 11:00”, „po 18 nie mogę”), z cannot=true i dniami (dates albo weekdays),
+  podaj te godziny w from_time/to_time (HH:MM; puste = od początku albo do końca dnia). Nigdy nie zamieniaj kilku
+  godzin na cały dzień wolny. „Nie mogę” w kalendarzu jest tylko na cały dzień, więc aplikacja pokaże przycisk,
+  który zaznaczy te dni jako „Mogę” tylko poza tymi godzinami („do 9:00 i od 11:00”; „Chętnie” zostaje). W answer
+  powiedz właśnie to: zapiszemy, że w te dni może pracować do 9:00 i od 11:00, i wystarczy nacisnąć przycisk pod
+  prośbą; generator nie da wtedy zmiany, która nachodzi na 9:00–11:00. „Nie mogę” w dni tygodnia może być na
+  stałe („w piątki nigdy nie mogę”, „na stałe we wtorki nie mogę od 9 do 11”): wtedy przycisk będzie przy prośbie
+  w każdym kolejnym miesiącu. Gdy tylko woli nie pracować w jakichś godzinach (nie „nie mogę”), to pora_dnia.
+  Gdy wystarczy część z podanych dni („albo 24, albo 31 wolne”, „sobota albo niedziela wolna”), podaj w min_days,
+  ile z nich ma być wolnych (cannot=false); z hours_period=week w każdym tygodniu („w każdym tygodniu sobota albo
+  niedziela wolna” = weekdays 6–7, min_days=1, week).
 - chce_pracowac: chce pracować w podane dni; „albo 12, albo 13” to min_days=1; kilka zmian jednego dnia to
-  shifts_per_day; konkretna zmiana to shift_type.
+  shifts_per_day; konkretna zmiana to shift_type. Z hours_period=week min_days liczy się w każdym tygodniu: „co
+  najmniej 4 dni w tygodniu” = weekdays 1–7, min_days=4, week; „przynajmniej 2 ranne zmiany w tygodniu” = to samo
+  z shift_type porannej zmiany i min_days=2.
+- pora_dnia: godziny, w których woli pracować (avoid=false: zmiana ma się w nich mieścić; „wolę zaczynać po 10” =
+  from_time 10:00, to_time ''; „wolę kończyć do 18” = to_time 18:00), albo w których woli nie pracować (avoid=true:
+  „wolę nie pracować od 12 do 14”). Daty lub dni tygodnia zawężają, kiedy. Gdy NIE MOŻE w tych godzinach, to
+  wolne_dni z cannot. Gdy godziny to dokładnie jedna zmiana z listy, użyj typ_zmiany.
+- dni_z_rzedu: najwyżej count dni pracy pod rząd („nie więcej niż 3 dni pod rząd” = count 3); z shift_type liczą
+  się tylko te zmiany („najwyżej 2 nocki pod rząd”), z closing=true tylko zamknięcia.
+- wolne_z_rzedu: count wolnych dni pod rząd; hours_period=week w każdym tygodniu („dwa dni wolne razem w tygodniu”
+  = count 2, week), period raz w okresie („raz w miesiącu 4 dni wolnego pod rząd” = count 4, period). Dłuższe
+  wolne niż 6 dni to urlop: zostaw kierownikowi.
+- po_zmianie: po zmianie shift_type (po każdym zamknięciu: closing=true) count dni wolnego (1 = następny dzień;
+  „po nocce dzień wolny” = shift_type nocnej zmiany, count 1). Gdy przeszkadza tylko jedna zmiana następnego dnia,
+  podaj ją w next_shift_type: „po zamknięciu nie dawajcie mi otwarcia” = zamknięcie, next_shift_type otwierającej
+  zmiany, count 1.
+- lokal: gdy pracuje w kilku lokalach (lista „Twoje lokale”), location = nazwa z tej listy: tylko ten lokal
+  (avoid=false, rather=false), woli go (rather=true, inne też mogą być) albo nie ten lokal (avoid=true). Gdy ma
+  jeden lokal, nie zapisuj. O pracy w lokalu spoza listy decyduje kierownik (leave_to_manager=true).
+- wolne_weekendy: count wolnych weekendów (sobota i niedziela) w każdych out_of kolejnych weekendach („co drugi
+  weekend wolny” = count 1, out_of 2) albo w całym okresie (out_of 0: „choć jeden wolny weekend w miesiącu” =
+  count 1).
+- stala_pora: w każdym tygodniu ta sama zmiana, bez skakania z rana na popołudnie („cały tydzień na jedną zmianę”).
+- nie_wiecej_niz_inni: nie więcej takich zmian niż inni: shift_type albo closing=true („nie więcej zamknięć niż
+  inni”), dni tygodnia („nie więcej weekendów niż inni” = weekdays 6–7); bez nich dni pracy w ogóle.
+- dlugosc_zmiany: zmiany nie krótsze niż shift_hours godzin („na mniej niż 6 godzin nie opłaca mi się dojeżdżać” =
+  6). Najwyżej tyle godzin dziennie to limit_godzin z hours_period=day.
+- nie_sam: nie chce być sam na zmianie; z shift_type albo closing=true tylko na niej („nie chcę sama zamykać”).
+  Generator nie dołoży drugiej osoby, tylko nie postawi go tam, gdzie byłby sam.
 Dopytaj, zamiast zgadywać: gdy nie wiesz, o który dzień, osobę, zmianę albo ile chodzi, albo życzenie nie pasuje
 do typów, ale jeden szczegół może to zmienić, zadaj w question jedno krótkie pytanie (najwyżej jedno zdanie, z
 możliwymi odpowiedziami, gdy są) i zostaw preferences puste, także te, których jesteś pewny: aplikacja nic nie
@@ -594,7 +749,7 @@ nadal nie wiesz na pewno, zapytaj jeszcze raz, krócej i tylko o to, czego braku
 mówi kontekst; questions_in_a_row liczy pytania już zadane). Czego po ostatnim pytaniu nadal nie da się wyrazić,
 zostaw kierownikowi. Gdy nowa wiadomość jest o czymś innym, answers_question=null, a pytanie dalej czeka.
 Gdy życzenia nie da się wyrazić tymi typami nawet po doprecyzowaniu (np. zamiana z konkretną osobą na konkretny
-dzień, praca w innym lokalu, urlop), nie wymyślaj preferencji:
+dzień, praca w lokalu, w którym nie pracuje, urlop), nie wymyślaj preferencji:
 ustaw leave_to_manager=true i powiedz w answer, że kierownik przeczyta to sam (i co pracownik może zrobić sam).
 Samo pytanie nie jest prośbą: preferences puste, leave_to_manager=false, question puste.
 Poziom oddaje wagę, jaką sprawie nadał pracownik: bardzo_wazne tylko przy poważnym powodzie (zdrowie, opieka,
@@ -603,12 +758,13 @@ Wykrzykniki, wielkie litery i słowa „bardzo ważne” bez powodu nie podnosz�
 Daty preferencji muszą leżeć w okresie wiadomości z kontekstu; o dniach spoza niego powiedz w answer, że może to
 zrobić od razu: w „Kiedy mogę” przejść strzałką do tamtego miesiąca i tam napisać tę prośbę (kalendarz sięga trzech
 miesięcy naprzód). Nie każ czekać, aż ten miesiąc nadejdzie albo kierownik poprosi o dyspozycje.
-Na stałe (lasting): życzenie ogólne, bez dat (dni tygodnia, osoba, zmiana, limit: „nie pracuję w piątki”, „nie
-stawiajcie mnie z Zuzanną”), obowiązuje na stałe, we wszystkich kolejnych miesiącach, aż pracownik je zakończy:
-lasting=true, także gdy nie mówi „zawsze”. lasting=false, gdy są konkretne dni albo życzenie dotyczy tylko tego
-miesiąca („w grudniu”, „w tym miesiącu”, „do świąt”) albo chwilowego powodu (sesja, remont, choroba). Gdy pracownik
-sam mówi, że to na jakiś czas, a nie wiadomo, czy dłużej niż ten miesiąc („na razie”, „przez jakiś czas”), zapytaj
-w question: „Czy to tylko na <miesiąc>, czy na stałe?”. „Do odwołania” = na stałe.
+Na stałe (lasting): życzenie ogólne, bez dat (dni tygodnia, osoba, zmiana, limit, przerwa, weekendy: „nie pracuję w
+piątki”, „nie stawiajcie mnie z Zuzanną”, „po nocce dzień wolny”), obowiązuje na stałe, we wszystkich kolejnych
+miesiącach, aż pracownik je zakończy: lasting=true, także gdy nie mówi „zawsze”. lasting=false, gdy są konkretne dni
+albo życzenie dotyczy tylko tego miesiąca („w grudniu”, „w tym miesiącu”, „do świąt”) albo chwilowego powodu (sesja,
+remont, choroba). Gdy pracownik sam mówi, że to na jakiś czas, a nie wiadomo, czy dłużej niż ten miesiąc („na
+razie”, „przez jakiś czas”), zapytaj w question: „Czy to tylko na <miesiąc>, czy na stałe?”. „Do odwołania” = na
+stałe.
 Korekta: jeśli pracownik wyraźnie poprawia jedną ze swoich wcześniejszych próśb („jednak nie piątki, tylko
 soboty”), podaj jej numer w replaces_request i pełną nową preferencję (nie samą różnicę). Nie łącz niezależnych
 próśb. Korekta nie cofa decyzji kierownika i nie zmienia kalendarza. Gdy poprawia „nie mogę” z całych dni na
@@ -692,8 +848,19 @@ Plan ma dwa rodzaje zmian ustawień (oraz godziny pracy z punktu 3 i ułożenie 
    dni tygodnia, w które najlepiej, np. „Kasia ma mieć ok. 20 godzin w tygodniu, najlepiej w weekendy” = 20, week,
    prefer_weekdays 6–7; to ustalenie na ten okres, a stały „Cel godzin w miesiącu” osoby kierownik zmienia sam
    w „Pracownicy”),
-   wolne_dni (daty lub dni tygodnia; „tylko w weekendy” = wolne_dni w dni 1–5), chce_pracowac (min_days = w ilu
-   z dni, shifts_per_day = ile zmian danego dnia, opcjonalne shift_type).
+   wolne_dni (daty lub dni tygodnia; „tylko w weekendy” = wolne_dni w dni 1–5; min_days = ile z tych dni wolnych),
+   chce_pracowac (min_days = w ilu z dni, shifts_per_day = ile zmian danego dnia, opcjonalne shift_type); min_days
+   z hours_period=week liczy się w każdym tygodniu („Ania co tydzień sobota albo niedziela wolna” = wolne_dni,
+   weekdays 6–7, min_days=1, week),
+   pora_dnia (from_time/to_time; avoid=true = nie w tych godzinach), dni_z_rzedu (count = najwyżej dni pracy pod
+   rząd; opcjonalnie shift_type), wolne_z_rzedu (count wolnych dni pod rząd; week albo period), po_zmianie (po
+   zmianie shift_type count dni wolnego; next_shift_type = tylko bez tej zmiany potem), lokal (osoba pracująca
+   w kilku lokalach: location = tylko ten lokal, z avoid=true bez niego), wolne_weekendy (count wolnych weekendów
+   w każdych out_of kolejnych; out_of 0 = w okresie), stala_pora (cały tydzień ta sama zmiana),
+   nie_wiecej_niz_inni (nie więcej niż średnio inni: shift_type, zamknięć albo dni tygodnia), dlugosc_zmiany
+   (shift_hours = najkrótsza zmiana), nie_sam (nie sama na zmianie; opcjonalnie shift_type).
+   closing=true zamiast shift_type, gdy chodzi o każde zamknięcie (jest kilka zmian „zamyka lokal”); same_day=true
+   w unikaj_osoby / preferuj_osobe, gdy chodzi o te same dni, a nie o wspólne zmiany.
 Polecenia o osobach są preferencjami, nie twardymi zakazami ani gwarancją przydziału. Zatwierdzenie planu zapisuje
 ustawienia do następnego układania grafiku; generator rusza tylko przy arrange, a dyspozycji ani publikacji plan nie
 zmienia.

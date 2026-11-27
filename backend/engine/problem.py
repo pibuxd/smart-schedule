@@ -56,6 +56,32 @@ class RequestType(StrEnum):
     # "w trzecim tygodniu stycznia nie chcę być sprzedawcą": for someone with several positions, not on (`avoid`) or
     # only on one of `positions` (ids; a person with the same position in several locations has one id per location).
     POSITION = "position"
+    # Added 27.11.2026 (docs/plan.md section 48), all soft like the others:
+    # "wolę zaczynać po 10" / "wolę nie pracować od 12 do 14": shifts inside (or, with `avoid`, clear of) the hours
+    # `from_time`–`to_time` (either may be open).
+    TIME_OF_DAY = "time_of_day"
+    # "najwyżej 3 dni z rzędu", "nie więcej niż 2 nocki pod rząd": at most `max_in_row` days in a row with a shift
+    # (of `shift_type`, or closing with `closing`).
+    DAYS_IN_ROW = "days_in_row"
+    # "2 dni wolne pod rząd w każdym tygodniu": a run of `free_in_row` free days in each window.
+    DAYS_OFF_IN_ROW = "days_off_in_row"
+    # "po nocce dzień wolny": after a shift of `shift_type` (or a closing one) no shift (of `next_shift_type`, if
+    # set) on the next `days_after` days.
+    REST_AFTER = "rest_after"
+    # "wolę Rynek", "nie na Dworcowej": for someone working in several locations, only on (or, with `avoid`, not on)
+    # one of `locations`.
+    LOCATION = "location"
+    # "jeden wolny weekend w miesiącu", "co drugi weekend wolny": at least `free_weekends` free weekends in the
+    # period, or in every `of_weekends` weekends in a row.
+    FREE_WEEKENDS = "free_weekends"
+    # "obojętnie ranki czy popołudnia, byle cały tydzień tak samo": one shift type in each week.
+    SAME_SHIFT_TYPE = "same_shift_type"
+    # "nie więcej zamknięć niż inni": no more days with such a shift than the average of the others who can take them.
+    NOT_MORE_THAN_OTHERS = "not_more_than_others"
+    # "nie chcę zmian krótszych niż 6 godzin": shifts of at least `min_shift_hours`.
+    SHIFT_LENGTH = "shift_length"
+    # "nie chcę być sam na zamknięciu": someone else in the location at the same time.
+    NOT_ALONE = "not_alone"
     OTHER = "other"  # read by the manager, not scored
 
 
@@ -264,8 +290,25 @@ class Request:
     # shift_type; optional restriction for want_work, shifts_limit and avoid_person / prefer_person ("nie razem
     # na zamknięciu": only shifts of this type count)
     shift_type: str | None = None
-    avoid: bool = False  # shift_type / position: True = "not this one", False = "only this one"
+    # shift_type / position / location / time_of_day: True = "not this one", False = "only this one"
+    avoid: bool = False
     positions: frozenset[str] = frozenset()  # position: the position (its ids in every location of the person)
+    locations: frozenset[str] = frozenset()  # location: the location ids
+    # Only shifts that close the location count ("zamknięcia"), like `shift_type` (both may be set).
+    closing: bool = False
+    # avoid_person / prefer_person: whole days in any location instead of shifts ("nie w te same dni co Marek",
+    # "te same dni wolne co Kasia").
+    same_day: bool = False
+    # time_of_day: the hours on the location's wall clock; an end at or before the start is the next morning.
+    from_time: time | None = None
+    to_time: time | None = None
+    max_in_row: int | None = None  # days_in_row
+    free_in_row: int | None = None  # days_off_in_row
+    days_after: int = 1  # rest_after
+    next_shift_type: str | None = None  # rest_after: only this shift is unwelcome after (None = any shift)
+    free_weekends: int | None = None  # free_weekends
+    of_weekends: int = 0  # free_weekends: in every this many weekends in a row (0 = in the period)
+    min_shift_hours: float | None = None  # shift_length
     max_hours: float | None = None  # hours_limit, over the dates of the request (or the whole period)
     max_shifts: int | None = None  # shifts_limit, in each window (same windows as hours_limit)
     target_hours: float | None = None  # hours_target, in each window (same windows as hours_limit)
@@ -326,9 +369,10 @@ class Request:
 
     def shift_windows(self, problem: Problem) -> list[tuple[date, date, int]]:
         """shifts_limit: inclusive bounds and shifts already worked elsewhere in them. Shift types belong to one
-        location, so with a `shift_type` shifts elsewhere never count."""
+        location and shifts elsewhere do not say whether they close, so with a `shift_type` or `closing` shifts
+        elsewhere never count."""
         return [
-            (first, last, 0 if self.shift_type else len(self._external(problem, first, last)))
+            (first, last, 0 if not self.any_shift else len(self._external(problem, first, last)))
             for first, last in self.windows(problem)
         ]
 
@@ -354,8 +398,111 @@ class Request:
         return result
 
     def counts_slot(self, slot: Slot) -> bool:
-        """A shift this request is about: on its days and, when it names a shift type, of that type."""
-        return self.covers(slot.date) and (self.shift_type is None or slot.shift_type == self.shift_type)
+        """A shift this request is about: on its days and, when it names a shift type (or closing), of that type."""
+        return (
+            self.covers(slot.date)
+            and (self.shift_type is None or slot.shift_type == self.shift_type)
+            and (not self.closing or slot.is_closing)
+        )
+
+    def unwelcome_after(self, slot: Slot) -> bool:
+        """rest_after: a shift that should not come in the days after (of `next_shift_type`, or any)."""
+        return self.next_shift_type is None or slot.shift_type == self.next_shift_type
+
+    @property
+    def any_shift(self) -> bool:
+        """Every shift counts (no shift type, not only closings): shifts outside the problem count too."""
+        return self.shift_type is None and not self.closing
+
+    def count_windows(self, problem: Problem) -> list[tuple[list[date], int]]:
+        """want_work, and days_off with `min_days`: (the request's days in the window, how many of them are needed)
+        for each window. Without a weekly window: one window of all the days, `wanted_days()` of them. In each week
+        only the days inside the period count, and a week cut by the period needs its share of `min_days`
+        (rounded; a window that needs none is left out)."""
+        if not self.dates:
+            return []
+        if not self.weekly_hours:
+            return [(sorted(self.dates), self.wanted_days())]
+        result = []
+        for first, last in self.windows(problem):
+            covered = sorted(d for d in self.dates if first <= d <= last)
+            inside = [d for d in covered if problem.period_start <= d <= problem.period_end]
+            if not inside:
+                continue
+            wanted = min(self.min_days or len(covered), len(covered))
+            need = min(len(inside), round(wanted * len(inside) / len(covered)))
+            if need > 0:
+                result.append((inside, need))
+        return result
+
+    def days_off_windows(self, problem: Problem) -> list[list[date]]:
+        """days_off_in_row: the days of each window (the period, or each Monday–Sunday week) inside the period and on
+        the request's days; windows shorter than the run asked for are left out."""
+        if not self.weekly_hours:
+            bounds = [(problem.period_start, problem.period_end)]
+        else:
+            monday = problem.period_start - timedelta(days=problem.period_start.weekday())
+            bounds = []
+            while monday <= problem.period_end:
+                bounds.append((monday, monday + timedelta(days=6)))
+                monday += timedelta(days=7)
+        result = []
+        for first, last in bounds:
+            days = []
+            day = max(first, problem.period_start)
+            while day <= min(last, problem.period_end):
+                if self.covers(day):
+                    days.append(day)
+                day += timedelta(days=1)
+            if len(days) >= (self.free_in_row or 1):
+                result.append(days)
+        return result
+
+    def weekend_groups(self, problem: Problem) -> list[tuple[list[date], int]]:
+        """free_weekends: (the Saturdays of a group of weekends, how many of them should be free). A weekend belongs
+        to the period when its Saturday or Sunday does. With `of_weekends` = K: every K weekends in a row that
+        include one of the period, the K − 1 weekends before the period too (known from shifts outside it)."""
+        first = problem.period_start - timedelta(days=(problem.period_start.weekday() - 5) % 7)
+        if first + timedelta(days=1) < problem.period_start:
+            first += timedelta(days=7)  # the Sunday before the period start is not in it
+        inside = []
+        saturday = first
+        while saturday <= problem.period_end:
+            inside.append(saturday)
+            saturday += timedelta(days=7)
+        wanted = self.free_weekends or 1
+        if not inside:
+            return []
+        if self.of_weekends < 2:
+            return [(inside, min(wanted, len(inside)))]
+        size = self.of_weekends
+        before = [inside[0] - timedelta(days=7 * k) for k in range(size - 1, 0, -1)]
+        weekends = before + inside
+        return [
+            (weekends[i : i + size], min(wanted, size))
+            for i in range(len(weekends) - size + 1)
+            if weekends[i + size - 1] >= inside[0]
+        ]
+
+    def wrong_hours(self, problem: Problem, slot: Slot) -> bool:
+        """time_of_day: the shift is not what the person asked for. Without `avoid` it starts before `from_time`
+        or ends after `to_time` (the next morning when `to_time` is not after `from_time`); with `avoid` it
+        overlaps those hours on its day, the day before or the day after."""
+        if self.avoid:
+            for offset in (-1, 0, 1):
+                start, end = problem.window_on(slot.date + timedelta(days=offset), self.from_time, self.to_time)
+                if slot.start_utc < end and start < slot.end_utc:
+                    return True
+            return False
+        tz = problem.tz
+        if self.from_time is not None and slot.start_utc < local_datetime(slot.date, self.from_time, tz):
+            return True
+        if self.to_time is not None:
+            overnight = self.from_time is not None and self.to_time <= self.from_time
+            last = local_datetime(slot.date + timedelta(days=1 if overnight else 0), self.to_time, tz)
+            if slot.end_utc > last:
+                return True
+        return False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", RequestType(self.type))
@@ -363,6 +510,7 @@ class Request:
         object.__setattr__(self, "manager_priority", ManagerPriority(self.manager_priority))
         object.__setattr__(self, "dates", frozenset(self.dates))
         object.__setattr__(self, "positions", frozenset(self.positions))
+        object.__setattr__(self, "locations", frozenset(self.locations))
         object.__setattr__(self, "preferred_dates", frozenset(self.preferred_dates))
 
     def covers(self, day: date) -> bool:
@@ -582,6 +730,11 @@ class Problem:
         if entry.from_time_2 is not None:
             windows.append(self._window(entry.date, entry.from_time_2, entry.to_time_2))
         return windows
+
+    def window_on(self, day: date, start_time: time | None, end_time: time | None) -> tuple[datetime, datetime]:
+        """Hours of a day as real instants (UTC): None = from the start / to the end of the day; an end at or before
+        the start is the next morning."""
+        return self._window(day, start_time, end_time)
 
     def _window(self, day: date, start_time: time | None, end_time: time | None) -> tuple[datetime, datetime]:
         start = local_datetime(day, start_time or time(0), self.tz)

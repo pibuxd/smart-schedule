@@ -15,6 +15,16 @@ limit_godzin, limit_zmian and cel_godzin), prefer_weekdays (cel_godzin: the hour
 25.11.2026), so such hours are never scored: they only offer to mark the rest of those days "mogę" (`complement`).
 An employee's message with several wishes keeps the others in `more` (a list of readings like this one).
 
+Types added on 27.11.2026 (docs/plan.md section 48): pora_dnia (from_time / to_time: the hours shifts should fit in,
+with avoid: the hours to keep free), dni_z_rzedu (max_in_row, optionally of shift_type / closing), wolne_z_rzedu
+(free_in_row, hours_period week or period), po_zmianie (after shift_type / closing: days_after free days, or only
+without next_shift_type), lokal (locations: ids of one location name, location_name, avoid, rather), wolne_weekendy
+(free_weekends, of_weekends: in every so many weekends, 0 = in the period), stala_pora, nie_wiecej_niz_inni
+(optionally shift_type / closing), dlugosc_zmiany (min_shift_hours), nie_sam (optionally shift_type / closing).
+closing: only shifts that close the location count ("zamknięcia"). same_day (unikaj_osoby / preferuj_osobe): whole
+days, not shared shifts. chce_pracowac and wolne_dni count min_days in each week with hours_period week; wolne_dni
+with min_days: that many of the days off are enough ("albo 24, albo 31").
+
 What the assistant returns is never trusted as is: names are matched against the location's own lists and
 anything that cannot be checked makes the reading unusable (`clean` returns None).
 """
@@ -36,14 +46,48 @@ TYPES = (
     "cel_godzin",
     "wolne_dni",
     "chce_pracowac",
+    "pora_dnia",
+    "dni_z_rzedu",
+    "wolne_z_rzedu",
+    "po_zmianie",
+    "lokal",
+    "wolne_weekendy",
+    "stala_pora",
+    "nie_wiecej_niz_inni",
+    "dlugosc_zmiany",
+    "nie_sam",
     "inne",
 )
 # The types counted per day, week or period (`hours_period`).
 WINDOWED = ("limit_godzin", "limit_zmian", "cel_godzin")
+# The types counted per week or in the whole period (min_days, a run of days off).
+WEEKLY = ("chce_pracowac", "wolne_dni", "wolne_z_rzedu")
 # Most hours a target can name in one window (a day, a week, the longest period).
 TARGET_MOST = {"day": 24, "week": 7 * 24, "period": 744}
 # Types where a shift name may narrow the wish (for typ_zmiany it is the wish itself).
-SHIFT_TYPED = ("typ_zmiany", "chce_pracowac", "unikaj_osoby", "preferuj_osobe", "limit_zmian")
+SHIFT_TYPED = (
+    "typ_zmiany",
+    "chce_pracowac",
+    "unikaj_osoby",
+    "preferuj_osobe",
+    "limit_zmian",
+    "dni_z_rzedu",
+    "po_zmianie",
+    "nie_wiecej_niz_inni",
+    "nie_sam",
+)
+# Types where only the shifts that close the location may count ("zamknięcia", `closing`).
+CLOSING = (
+    "unikaj_osoby",
+    "preferuj_osobe",
+    "limit_zmian",
+    "dni_z_rzedu",
+    "po_zmianie",
+    "nie_wiecej_niz_inni",
+    "nie_sam",
+)
+# What `count` means in each type, and its bounds.
+COUNTED = {"dni_z_rzedu": (1, 13), "wolne_z_rzedu": (1, 6), "po_zmianie": (1, 3), "wolne_weekendy": (1, 5)}
 LEVELS = ("bardzo_wazne", "wazne", "mile_widziane")
 
 _WEEKDAYS = ("w poniedziałki", "we wtorki", "w środy", "w czwartki", "w piątki", "w soboty", "w niedziele")
@@ -128,15 +172,23 @@ def clean(
     rather: bool = False,
     from_time: str | None = None,
     to_time: str | None = None,
+    count: int = 0,
+    out_of: int = 0,
+    next_shift_type: str | None = None,
+    location: str | None = None,
+    same_day: bool = False,
+    closing: bool = False,
+    shift_hours: float = 0,
     people: Mapping[str, str],
     shift_types: Mapping[str, str],
     positions: Mapping[str, list[str]] | None = None,
+    locations: Mapping[str, list[str]] | None = None,
 ) -> dict[str, Any] | None:
     """The checked reading, or None when it is not something the generator can use.
 
     `people` and `shift_types` map the labels sent to the assistant back to ids, `positions` the names of the
-    person's positions to their ids. `weekdays` come as 1 = Monday … 7 = Sunday (as people count them) and are stored
-    as 0–6, like `prefer_weekdays`.
+    person's positions to their ids, `locations` the names of the person's locations to their ids. `weekdays` come
+    as 1 = Monday … 7 = Sunday (as people count them) and are stored as 0–6, like `prefer_weekdays`.
     """
     if type not in TYPES or type == "inne":
         return None
@@ -144,16 +196,31 @@ def clean(
     if (
         (person and type not in ("unikaj_osoby", "preferuj_osobe"))
         or (shift_type and type not in SHIFT_TYPED)
-        or (avoid and type not in ("typ_zmiany", "stanowisko"))  # stanowisko reads `avoid_position` only
+        # stanowisko reads `avoid_position` only
+        or (avoid and type not in ("typ_zmiany", "stanowisko", "pora_dnia", "lokal"))
         or ((position or avoid_position) and type != "stanowisko")
+        or (rather and type not in ("stanowisko", "lokal"))
         or (max_hours is not None and type != "limit_godzin")
         or (max_shifts is not None and type != "limit_zmian")
         or ((target_hours is not None or prefer_weekdays or at_least) and type != "cel_godzin")
-        or ((min_days is not None or shifts_per_day is not None) and type != "chce_pracowac")
-        or ((from_time or to_time) and type != "wolne_dni")
+        or (min_days is not None and type not in ("chce_pracowac", "wolne_dni"))
+        or (shifts_per_day is not None and type != "chce_pracowac")
+        or ((from_time or to_time) and type not in ("wolne_dni", "pora_dnia"))
+        or (count and type not in COUNTED)
+        or (out_of and type != "wolne_weekendy")
+        or (next_shift_type and type != "po_zmianie")
+        or (location and type != "lokal")
+        or (same_day and (type not in ("unikaj_osoby", "preferuj_osobe") or shift_type or closing))
+        or (closing and type not in CLOSING)
+        or (shift_hours and type != "dlugosc_zmiany")
     ):
         return None
-    if type not in WINDOWED:
+    if type in WEEKLY:
+        # Only "each week" or "the whole period" (a day window means nothing here); without min_days a week is
+        # the same as the period for chce_pracowac and wolne_dni.
+        if hours_period != "week" or (type != "wolne_z_rzedu" and min_days is None):
+            hours_period = "period"
+    elif type not in WINDOWED:
         hours_period = "period"  # the window means nothing for other types (the answer schema always fills it)
     dates, weekdays, prefer_weekdays = list(dates), list(weekdays), list(prefer_weekdays)
     if any(_parse_date(v) is None for v in dates) or any(
@@ -225,6 +292,17 @@ def clean(
         start, end = _clock(from_time), _clock(to_time)
         if start is False or end is False or (start is not None and start == end):
             return None
+        if min_days is not None:
+            # "albo 24, albo 31 wolne": only whole days (the hours are for the calendar alone)
+            if not isinstance(min_days, int) or isinstance(min_days, bool) or min_days < 1 or start or end:
+                return None
+            if days and not week and min_days >= len(days):
+                min_days = None  # "all of them" said as a number
+            elif week and not days and min_days >= len(week):
+                min_days = None
+        if min_days is not None:
+            data["min_days"] = min_days
+            data["hours_period"] = hours_period
         if start == "00:00":
             start = None  # "od północy"
         if end == "00:00":
@@ -249,6 +327,67 @@ def clean(
             min_days = None  # "all of them" said as a number
         data["min_days"] = min_days
         data["shifts_per_day"] = shifts_per_day or 1
+        if min_days is not None:
+            data["hours_period"] = hours_period
+    elif type == "pora_dnia":
+        start, end = _clock(from_time), _clock(to_time)
+        if start is False or end is False or (start is not None and start == end):
+            return None
+        if start == "00:00":
+            start = None  # "od północy" = from the start of the day
+        if end == "00:00" and start is None:
+            end = None  # "do północy" with no start: the whole day (with a start, "14:00–0:00" stays)
+        if not start and not end:
+            return None
+        data.update({"from_time": start, "to_time": end, "avoid": bool(avoid)})
+    elif type in COUNTED:
+        least, most = COUNTED[type]
+        if type == "po_zmianie" and not count:
+            count = 1  # "po nocce dzień wolny" said without a number
+        if not isinstance(count, int) or isinstance(count, bool) or not least <= count <= most:
+            return None
+        if type == "po_zmianie":
+            if not shift_type and not closing:
+                return None  # after which shift?
+            if next_shift_type:
+                found = _lookup(next_shift_type, shift_types)
+                if found is None:
+                    return None
+                data["next_shift_type"] = found
+        if (
+            type == "wolne_weekendy"
+            and out_of
+            and (isinstance(out_of, bool) or not 2 <= out_of <= 5 or count >= out_of)
+        ):
+            return None  # "co drugi weekend" = 1 of 2; at most every fifth
+        key = {"dni_z_rzedu": "max_in_row", "wolne_z_rzedu": "free_in_row", "po_zmianie": "days_after"}
+        data[key.get(type, "free_weekends")] = count
+        if type == "wolne_weekendy":
+            data["of_weekends"] = out_of or 0
+        if type == "wolne_z_rzedu":
+            data["hours_period"] = hours_period
+    elif type == "lokal":
+        ids = _lookup(location, locations or {})
+        if not ids:
+            return None
+        data["locations"] = sorted(str(i) for i in ids)
+        data["location_name"] = next(label for label in locations or {} if locations[label] == ids)
+        data["avoid"] = bool(avoid)
+        if rather and not avoid:
+            data["rather"] = True
+    elif type == "dlugosc_zmiany":
+        if not isinstance(shift_hours, int | float) or isinstance(shift_hours, bool) or not 0.5 <= shift_hours <= 24:
+            return None
+        data["min_shift_hours"] = float(shift_hours)
+    if type in ("dni_z_rzedu", "po_zmianie", "nie_wiecej_niz_inni", "nie_sam") and shift_type:
+        found = _lookup(shift_type, shift_types)
+        if found is None:
+            return None
+        data["shift_type"] = found
+    if closing:
+        data["closing"] = True
+    if same_day:
+        data["same_day"] = True
     return data
 
 
@@ -460,13 +599,50 @@ def _one_week(data: Mapping[str, Any]) -> bool:
     return bool(days) and not data.get("weekdays") and len({d - timedelta(days=d.weekday()) for d in days}) == 1
 
 
+def _plural(count: int, one: str, few: str, many: str) -> str:
+    """Polish plural: 1 zmiana, 3 zmiany, 5 zmian."""
+    if count == 1:
+        return f"1 {one}"
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return f"{count} {few}"
+    return f"{count} {many}"
+
+
 def _shift_count(count: int) -> str:
     """3 zmiany, 5 zmian, 1 zmiana (Polish plural)."""
-    if count == 1:
-        return "1 zmiana"
-    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
-        return f"{count} zmiany"
-    return f"{count} zmian"
+    return _plural(count, "zmiana", "zmiany", "zmian")
+
+
+def _day_count(count: int) -> str:
+    return "1 dzień" if count == 1 else f"{count} dni"
+
+
+def _shifts_of(data: Mapping[str, Any], shift_types: Mapping[str, str], count: int) -> str:
+    """ "3 zmiany „Nocna”", "2 zamknięcia", "4 dni pracy": what a count of the reading is about."""
+    if data.get("closing"):
+        return _plural(count, "zamknięcie", "zamknięcia", "zamknięć")
+    if data.get("shift_type"):
+        return f"{_shift_count(count)} „{shift_types.get(str(data['shift_type']), '?')}”"
+    return f"{_day_count(count)} pracy"
+
+
+def _shift_name(data: Mapping[str, Any], shift_types: Mapping[str, str], on: bool = True) -> str:
+    """ "na zamknięciu" / "na zmianie „Nocna”" (on), "zamknięciu" / "zmianie „Nocna”"; "" with neither."""
+    if data.get("closing"):
+        return "na zamknięciu" if on else "zamknięciu"
+    if data.get("shift_type"):
+        name = f"zmianie „{shift_types.get(str(data['shift_type']), '?')}”"
+        return f"na {name}" if on else name
+    return ""
+
+
+_ORDINAL = {2: "drugi", 3: "trzeci", 4: "czwarty", 5: "piąty"}
+
+
+def _period_word(data: Mapping[str, Any], when: str) -> str:
+    if data.get("hours_period") == "week":
+        return " w tygodniu" if _one_week(data) else " w każdym tygodniu"
+    return "" if when else " w okresie grafiku"
 
 
 def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift_types: Mapping[str, str]) -> str:
@@ -475,15 +651,17 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
     match data.get("type"):
         case "unikaj_osoby":
             other = people.get(str(data.get("subject_employee")), "ktoś")
-            if data.get("shift_type"):
-                name = shift_types.get(str(data["shift_type"]), "?")
-                return f"{who} i {other}: nie razem na zmianie „{name}”{when}"
+            if data.get("same_day"):
+                return f"{who} i {other}: nie w te same dni{when}"
+            if data.get("shift_type") or data.get("closing"):
+                return f"{who} i {other}: nie razem {_shift_name(data, shift_types)}{when}"
             return f"{who} i {other}: osobno, nie na tej samej zmianie{when}"
         case "preferuj_osobe":
             other = people.get(str(data.get("subject_employee")), "ktoś")
-            if data.get("shift_type"):
-                name = shift_types.get(str(data["shift_type"]), "?")
-                return f"{who} i {other}: razem na zmianie „{name}”{when}"
+            if data.get("same_day"):
+                return f"{who} i {other}: te same dni pracy i te same dni wolne{when}"
+            if data.get("shift_type") or data.get("closing"):
+                return f"{who} i {other}: razem {_shift_name(data, shift_types)}{when}"
             return f"{who} i {other}: razem na zmianie{when}"
         case "typ_zmiany":
             name = shift_types.get(str(data.get("shift_type")), "?")
@@ -507,6 +685,9 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             count = int(data.get("max_shifts") or 0)
             name = f" „{shift_types.get(str(data['shift_type']), '?')}”" if data.get("shift_type") else ""
             limit = f"żadnej zmiany{name}" if count == 0 else f"najwyżej {_shift_count(count)}{name}"
+            if data.get("closing"):
+                closings = _plural(count, "zamknięcie", "zamknięcia", "zamknięć")
+                limit = f"żadnego zamknięcia{name}" if count == 0 else f"najwyżej {closings}{name}"
             if data.get("hours_period") == "week":
                 return f"{who}: {limit} w każdym tygodniu{when}"
             if data.get("hours_period") == "day":
@@ -533,6 +714,11 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
                 return f"{who}:{when} „Mogę” tylko {can_words(complement(data))} (nie może {hours})"
             if data.get("cannot"):
                 return f"{who}: wolne{when} („nie mogę”)"
+            need = data.get("min_days")
+            if need:
+                which = "jeden z tych dni" if need == 1 else f"{need} z tych dni"
+                week = " w każdym tygodniu" if data.get("hours_period") == "week" else ""
+                return f"{who}: wolne{when} ({which}{week})"
             return f"{who}: wolne{when}"
         case "chce_pracowac":
             shifts = data.get("shifts_per_day") or 1
@@ -542,7 +728,65 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
             need = data.get("min_days")
             if need:
                 which = "jeden z tych dni" if need == 1 else f"{need} z tych dni"
-                return f"{who}: {what}{when} ({which})"
+                week = " w każdym tygodniu" if data.get("hours_period") == "week" else ""
+                return f"{who}: {what}{when} ({which}{week})"
             return f"{who}: {what}{when}"
+        case "pora_dnia":
+            start, end = data.get("from_time"), data.get("to_time")
+            hours = hours_words(data)
+            if data.get("avoid"):
+                if start and not end:
+                    hours = f"po {hours.removeprefix('od ')}"
+                elif end and not start:
+                    hours = f"przed {hours.removeprefix('do ')}"
+                else:
+                    hours = f"w godzinach {hours}"
+                return f"{who}: najlepiej bez pracy {hours}{when}"
+            return f"{who}: zmiany najlepiej {hours if not (start and end) else f'w godzinach {hours}'}{when}"
+        case "dni_z_rzedu":
+            return f"{who}: najwyżej {_shifts_of(data, shift_types, int(data.get('max_in_row') or 0))} z rzędu{when}"
+        case "wolne_z_rzedu":
+            days = _day_count(int(data.get("free_in_row") or 0))
+            return f"{who}: co najmniej {days} wolnego z rzędu{_period_word(data, when)}{when}"
+        case "po_zmianie":
+            after = _shift_name(data, shift_types, on=False) or "zmianie"
+            count = int(data.get("days_after") or 1)
+            if data.get("next_shift_type"):
+                then = "następnego dnia" if count == 1 else f"przez {count} dni"
+                name = shift_types.get(str(data["next_shift_type"]), "?")
+                return f"{who}: po {after} bez zmiany „{name}” {then}{when}"
+            free = "dzień wolny" if count == 1 else f"{count} dni wolnego"
+            return f"{who}: po {after} {free}{when}"
+        case "lokal":
+            name = data.get("location_name") or "?"
+            if data.get("avoid"):
+                return f"{who}: bez lokalu „{name}”{when}"
+            if data.get("rather"):
+                return f"{who}: chętniej lokal „{name}”{when} (inne też mogą być)"
+            return f"{who}: tylko lokal „{name}”{when}"
+        case "wolne_weekendy":
+            count, size = int(data.get("free_weekends") or 1), int(data.get("of_weekends") or 0)
+            if size and count == 1:
+                return f"{who}: wolny co {_ORDINAL.get(size, size)} weekend{when}"
+            if size:
+                return f"{who}: {count} z każdych {size} kolejnych weekendów wolne{when}"
+            weekends = _plural(count, "wolny weekend", "wolne weekendy", "wolnych weekendów")
+            return f"{who}: co najmniej {weekends}{when or ' w okresie grafiku'}"
+        case "stala_pora":
+            return f"{who}: cały tydzień ta sama pora zmian{when}"
+        case "nie_wiecej_niz_inni":
+            if data.get("closing"):
+                what = "zamknięć"
+            elif data.get("shift_type"):
+                what = f"zmian „{shift_types.get(str(data['shift_type']), '?')}”"
+            else:
+                what = "dni pracy"
+            return f"{who}: nie więcej {what} niż inni{when}"
+        case "dlugosc_zmiany":
+            hours = data.get("min_shift_hours") or 0
+            shown = int(hours) if float(hours).is_integer() else hours
+            return f"{who}: zmiany nie krótsze niż {shown} godz.{when}"
+        case "nie_sam":
+            return f"{who}: nie w pojedynkę {_shift_name(data, shift_types) or 'na zmianie'}{when}"
         case _:
             return f"{who}: do Twojej oceny"

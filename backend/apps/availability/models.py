@@ -238,11 +238,10 @@ class TextRequest(CompanyOwnedModel):
 
     @staticmethod
     def part_can_last(part: dict) -> bool:
-        """Whether one wish can count in later months: not about concrete days, and not hours someone cannot work,
-        which only the calendar keeps on days of this period (Piotr, 26.11.2026)."""
-        from apps.assistant.readings import calendar_only
-
-        return not part.get("dates") and not calendar_only(part)
+        """Whether one wish can count in later months: not about concrete days. Hours someone cannot work on
+        weekdays ("na stałe we wtorki nie mogę od 9 do 11") last too since 27.11.2026: each later month offers to
+        mark them in its calendar (they were period-only from 26.11.2026)."""
+        return not part.get("dates")
 
     @property
     def can_last(self) -> bool:

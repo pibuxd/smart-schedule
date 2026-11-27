@@ -1658,9 +1658,9 @@ Spec: „Poprawki po raporcie testów PR #82 (26.11.2026)”.
   (własne godziny dnia przed zmianą), `one_shift_days` (dni z „albo”, które zostają „albo”). `offer` daje `None`
   dla dnia zablokowanego, dnia z całodniowym „nie mogę” przy prośbie na cały dzień, dnia, w którym nic się nie
   zmienia, i dnia z całodniowym „nie mogę”, w którym nic nie zostaje.
-- Na stałe: `TextRequest.part_can_last(part)` = bez dat i nie `readings.calendar_only`. Z niego `can_last`
-  i `set_lasting` (część z godzinami nigdy nie dostaje `lasting`). `PATCH /me/requests/{id}` z `lasting: true` daje
-  409 z `_cannot_last` (osobne zdanie, gdy prośba ma godziny „nie mogę”). `MyRequestOut.parts` (`RequestPartOut`:
+- Na stałe: `TextRequest.part_can_last(part)` = bez dat (do 27.11.2026 także nie `readings.calendar_only`; od
+  sekcji 48 godziny „nie mogę” w dni tygodnia mogą być na stałe). Z niego `can_last` i `set_lasting`.
+  `PATCH /me/requests/{id}` z `lasting: true` daje 409 z `_cannot_last`. `MyRequestOut.parts` (`RequestPartOut`:
   `summary`, `calendar_only`, `can_last`) mówi ekranowi, co dostaje generator i co jest tylko w tym okresie.
 - `MyRequestOut.unmarked_days` wraca przejściowo (do 2027): tylko dni propozycji na cały dzień, które starszy ekran
   umie zapisać; ekran go nie czyta.
@@ -1789,3 +1789,64 @@ ma wtedy tylko czwartek, 14,10, więc wygrywają ustawienia kierownika (80% wagi
 z Anną” i zamknięcia z kierownikiem zmiany. Solver nagradza każdą wspólną zmianę przy `preferuj_osobe` (walidator
 liczy udział wspólnych zmian), ale kara za każdą zmianę bez tej osoby zamiast nagrody dała gorszy grafik (14,03 →
 15,73: zamknięcia bez kierownika zmiany), więc zostaje jak jest.
+
+## 48. Więcej rodzajów próśb pracownika (27.11.2026)
+
+Piotr (27.11.2026): lista 20 próśb, których asystent nie umiał zamienić na nic, co generator liczy, i „obsłuż te
+typy” (spec.md, „Więcej rodzajów próśb pracownika”). Te same typy mają polecenia kierownika o osobie.
+
+Nowe typy odczytu (`readings.TYPES`) i ich `RequestType` (solver: miękka kara, walidator: stopień złamania 0–1;
+`own` = zmiany osoby w dniach prośby):
+
+| odczyt | RequestType | pola | stopień złamania |
+|---|---|---|---|
+| `pora_dnia` | `TIME_OF_DAY` | `from_time`, `to_time` („HH:MM”, jedna może być pusta), `avoid` | część `own`, które nie mieszczą się w godzinach (`avoid=false`: początek nie wcześniej niż `from_time`, koniec nie później niż `to_time`; noc, gdy koniec ≤ początek) albo na nie nachodzą (`avoid=true`, okno tego, poprzedniego i następnego dnia) |
+| `dni_z_rzedu` | `DAYS_IN_ROW` | `max_in_row` (1–13), opcjonalnie `shift_type` albo `closing` | część dni `own` (z tą zmianą), w które ciąg dni pracy przekracza limit; zmiany spoza problemu liczą się bez `shift_type`/`closing` |
+| `wolne_z_rzedu` | `DAYS_OFF_IN_ROW` | `free_in_row` (1–6), `hours_period` `week`/`period` | część okien (tygodni) bez ciągu tylu wolnych dni wewnątrz okresu (wolny = bez zmiany tu i poza problemem) |
+| `po_zmianie` | `REST_AFTER` | `shift_type` albo `closing`, opcjonalnie `next_shift_type`, `days_after` (1–3) | część zmian tej pory, po których w kolejnych `days_after` dniach jest zmiana (tej drugiej pory albo dowolna; dowolna także poza problemem) |
+| `lokal` | `LOCATION` | `locations` (id), `location_name`, `avoid`, `rather` | część `own` w lokalu (`avoid`) albo poza nim |
+| `wolne_weekendy` | `FREE_WEEKENDS` | `free_weekends` (≥1), `of_weekends` (0 = w okresie, 2–5 = w każdych tylu kolejnych) | okres: brakujące wolne weekendy / potrzebne; co K: część okien K kolejnych weekendów z za małą liczbą wolnych; weekend = sobota i niedziela (data początku zmiany), weekend sprzed okresu liczy się ze zmianami spoza problemu |
+| `stala_pora` | `SAME_SHIFT_TYPE` | dni | część tygodni z `own`, w których są różne pory (`shift_type`) |
+| `nie_wiecej_niz_inni` | `NOT_MORE_THAN_OTHERS` | opcjonalnie `shift_type`, `closing`, dni | `min(1, max(0, moje − średnia innych) / moje)`, liczone w dniach z taką zmianą; inni = pozostałe osoby z dostępnych, które mają stanowisko którejś z tych zmian w jej lokalu |
+| `dlugosc_zmiany` | `SHIFT_LENGTH` | `min_shift_hours` (0,5–24) | część `own` krótszych niż tyle godzin |
+| `nie_sam` | `NOT_ALONE` | opcjonalnie `shift_type`, `closing`, dni | część `own`, przy których w tym lokalu nikt inny nie ma zmiany nachodzącej w czasie |
+
+Rozszerzenia istniejących typów:
+
+- `chce_pracowac` i `wolne_dni` mają `hours_period` (`week`/`period`): `min_days` liczy się w każdym tygodniu
+  (`Request.count_windows`: dni prośby w oknie i w okresie, w tygodniu przeciętym potrzeba proporcjonalnie mniej,
+  zaokrąglona; okno z potrzebą 0 odpada). Stopień: średnia okien `max(0, potrzeba − dobre dni) / potrzeba`.
+- `wolne_dni` ma `min_days` („albo 24, albo 31” = 1): wolny dzień = bez zmiany tu i poza problemem. Bez `min_days`
+  jak dotąd (część dni prośby, w które osoba pracuje). Z `min_days` nie ma `cannot` (kalendarz nie zaznaczy „jeden
+  z dni”).
+- `unikaj_osoby` / `preferuj_osobe` z `same_day`: dni, nie zmiany, w każdym lokalu problemu i poza nim (`unikaj`:
+  część moich dni pracy, w które ta osoba też pracuje; `preferuj`: część dni, w które pracuje tylko jedno z nas,
+  wśród dni, w które pracuje ktoś z nas). Bez `shift_type`.
+- `closing` (`Request.closing`): `counts_slot` liczy tylko zmiany, które zamykają lokal („zamknięcia”, gdy jest kilka
+  takich zmian albo nazwa nie mówi, że to zamknięcie).
+
+Solver (`_text_request`): jak dotąd waga prośby przez szacunek zmian osoby (`estimate`) za każdą złą zmianę albo
+dzień; dla okien (`wolne_z_rzedu`, `wolne_weekendy`, okna `min_days`) waga przez liczbę okien. `nie_sam`: dla każdej
+możliwej zmiany osoby `alone ≥ x − Σ (obsadzone zmiany nachodzące − ja na nich)`; `nie_wiecej_niz_inni`: zmienna
+nadwyżki `n·moje − suma innych` (n = liczba innych), kara przez `estimate·n`. Walidator liczy dokładne udziały.
+
+Asystent: w schemacie odpowiedzi (pracownik i kierownik) osiem nowych pól bez null, z wartościami domyślnymi
+(limit API: najwyżej 24 opcjonalne i 16 „albo” w schemacie pracownika): `count` (`dni_z_rzedu`: najwyżej dni,
+`wolne_z_rzedu`: wolnych dni z rzędu, `po_zmianie`: dni wolnego po zmianie, `wolne_weekendy`: wolnych weekendów),
+`out_of` (`wolne_weekendy`: w każdych tylu weekendach), `next_shift_type`, `location`, `avoid` (`pora_dnia`,
+`lokal`), `same_day`, `closing`, `shift_hours` (`dlugosc_zmiany`). `from_time`/`to_time` służą też `pora_dnia`.
+W kontekście pracownika z kilkoma lokalami jest „Twoje lokale”; nazwa spoza listy daje pytanie aplikacji (jak przy
+zmianie). `next_shift_type` sprawdzany jak `shift_type`.
+
+„Nie mogę” na stałe (spec, ostatni punkt): `_checked_preference` zostawia `cannot` także przy `lasting` (dni
+tygodnia bez dat); `TextRequest.part_can_last` przepuszcza godziny „nie mogę” z dniami tygodnia (bez dat).
+Generator dalej pomija godziny (`readings.calendar_only`), a całe dni liczy jak `wolne_dni`. `GET /me/requests`
+liczy `cannot_marks` także dla prośby przeniesionej z wcześniejszego miesiąca, dla dni okresu (miesiąca) na ekranie,
+a „Twoje prośby” pokazują przy niej przycisk zaznaczenia w kalendarzu.
+
+Założenia: wszystko to miękkie życzenia (twarde jest tylko „nie mogę” w kalendarzu i zasady „bez wyjątków”);
+tydzień to poniedziałek–niedziela, weekend to sobota i niedziela; „nie więcej niż inni” porównuje do średniej,
+nie do osoby z najmniejszą liczbą; `nie_sam` nie dokłada drugiej osoby (obsadę ustawia kierownik). Zmiany spoza
+problemu są czytane 7 dni przed okresem (`EXTERNAL_MARGIN`), więc przy „co trzeci weekend” i rzadszych weekendy
+sprzed tego marginesu liczą się jako wolne (pierwsze okno może być łagodniejsze); „co drugi weekend” ma pełne dane.
+Polecenie kierownika `wolne_dni` nie ma godzin (godziny „nie mogę” zaznacza pracownik w swoim kalendarzu).
