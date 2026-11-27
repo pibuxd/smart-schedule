@@ -139,3 +139,11 @@ def register_push_device(request, payload: PushDeviceIn):
         raise HttpError(400, "Zaloguj się jeszcze raz w aplikacji.")
     push.register_device(request.user, session_key, payload.platform, payload.token)
     return Status(204, None)
+
+
+@router.delete("/me/push-devices", response={204: None})
+def unregister_push_device(request):
+    """This phone (the app's switch on "Powiadomienia") stops getting my push notifications, while I stay logged in.
+    The notifications stay in the app. The app registers the phone again when the switch is turned back on."""
+    push.forget_session(request.user, request.session.session_key)
+    return Status(204, None)

@@ -606,3 +606,92 @@ export const useRegisterPushDevice = <TError = ErrorOut,
       > => {
       return useMutation(getRegisterPushDeviceMutationOptions(options), queryClient);
     }
+    export type unregisterPushDeviceResponse204 = {
+  data: void
+  status: 204
+}
+
+export type unregisterPushDeviceResponseSuccess = (unregisterPushDeviceResponse204) & {
+  headers: Headers;
+};
+;
+
+export type unregisterPushDeviceResponse = (unregisterPushDeviceResponseSuccess)
+
+export const getUnregisterPushDeviceUrl = () => {
+
+
+
+
+  return `/api/me/push-devices`
+}
+
+/**
+ * This phone (the app's switch on "Powiadomienia") stops getting my push notifications, while I stay logged in.
+ * The notifications stay in the app. The app registers the phone again when the switch is turned back on.
+ * @summary Unregister Push Device
+ */
+export const unregisterPushDevice = async ( options?: Parameters<typeof apiFetch>[1]): Promise<unregisterPushDeviceResponse> => {
+
+  return apiFetch<unregisterPushDeviceResponse>(getUnregisterPushDeviceUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnregisterPushDeviceMutationKey = () => ['unregisterPushDevice'] as const;
+
+export const getUnregisterPushDeviceMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterPushDevice>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unregisterPushDevice>>, TError,void, TContext> => {
+
+const mutationKey = getUnregisterPushDeviceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unregisterPushDevice>>, void> = () => {
+
+
+          return  unregisterPushDevice(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnregisterPushDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof unregisterPushDevice>>>
+
+    export type UnregisterPushDeviceMutationError = unknown
+
+
+    /**
+ * This phone (the app's switch on "Powiadomienia") stops getting my push notifications, while I stay logged in.
+ * The notifications stay in the app. The app registers the phone again when the switch is turned back on.
+ * @summary Unregister Push Device
+ */
+export const useUnregisterPushDevice = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterPushDevice>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof unregisterPushDevice>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getUnregisterPushDeviceMutationOptions(options), queryClient);
+    }

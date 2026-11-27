@@ -1789,3 +1789,29 @@ ma wtedy tylko czwartek, 14,10, więc wygrywają ustawienia kierownika (80% wagi
 z Anną” i zamknięcia z kierownikiem zmiany. Solver nagradza każdą wspólną zmianę przy `preferuj_osobe` (walidator
 liczy udział wspólnych zmian), ale kara za każdą zmianę bez tej osoby zamiast nagrody dała gorszy grafik (14,03 →
 15,73: zamknięcia bez kierownika zmiany), więc zostaje jak jest.
+
+## 48. Wyłączanie powiadomień na telefonie (27.11.2026)
+
+Spec: „Aplikacje na iPhone'a i Androida”, punkt o wyłączaniu powiadomień. Piotr: „dodaj do aplikacji na telefon
+opcje wyłączenia powiadomień w telefonie”.
+
+- Serwer: `DELETE /me/push-devices` (`unregister_push_device`) wywołuje `push.forget_session` dla bieżącej sesji,
+  czyli odpina ten telefon (jak „Wyloguj”, ale sesja trwa). Bez telefonu `push.queue` nie kolejkuje nawet zadania.
+  Bez nowych pól i migracji: włączenie z powrotem to zwykłe `POST /me/push-devices`.
+- Na telefon, nie na konto: przełącznik jest tylko w aplikacji i mówi o tym telefonie (inne telefony tej osoby
+  dalej dostają push), tak jak zgoda systemu. Wybór jest w Preferences pod kluczem osoby
+  (`grafikomat.push-off.<id>`), więc nowe logowanie tej osoby na tym telefonie nie rejestruje go znowu, a inna osoba
+  na wspólnym telefonie ma swój wybór. Przeinstalowanie aplikacji zaczyna od włączonych (jak zgoda systemu).
+- Frontend: `src/native/push.ts` (`pushSwitch`, `setPush`; `enablePush(person)` czyta wybór osoby i przy
+  wyłączonych nic nie robi; `sendToken` nie wysyła przy wyłączonych). Wyłączenie: najpierw serwer (czeka na
+  rejestrację w drodze, żeby nie doszła po odpięciu), potem zapis wyboru; błąd sieci zostawia włączone i pokazuje
+  „Nie udało się wyłączyć.”; 401 też liczy się jako wyłączone (sesja i tak się skończyła). Włączenie pyta system
+  o zgodę tylko wtedy, gdy jeszcze nie pytał. Zgoda odebrana w systemie (`denied`): `blocked`, przełącznik
+  nieaktywny z jednym zdaniem; po powrocie do aplikacji (`resume`, `visibilitychange`) telefon z nową zgodą
+  rejestruje się sam, bez pytania systemu (okno zgody samo wstrzymuje i wznawia aplikację).
+- Ekran: `features/notifications/PhonePushSwitch.tsx` pod nagłówkiem „Powiadomienia” (pracownik i kierownik),
+  `components/ui/switch.tsx` (`role="switch"`; włączony: wypełniony kolorem akcentu, gałka po prawej). Ukryty na
+  stronie WWW i w buildzie Androida bez `google-services.json`.
+
+Założenia: jedno słowo „Na tym telefonie” zamiast opisu (nagłówek ekranu mówi, o czym); powiadomienia już leżące
+w systemie zostają przy wyłączaniu.

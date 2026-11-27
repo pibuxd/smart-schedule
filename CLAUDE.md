@@ -113,9 +113,11 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   `NATIVE_APP_ORIGINS`, and a day of use moves the session's end. `src/api/http.ts` (`send`) is the only place that
   knows; the web keeps cookies + CSRF. Push: `services.notify` queues `notifications.send_push` (`push.queue`) when a
   recipient has a `PushDevice`; phones register after login (`POST /me/push-devices`, tied to the session) and
-  logout unpins them (`push.forget_session`). Write notifications only through `notify`, give each kind a route in
-  `services.push_path` (what a tap opens: `?dzien=`, `?oferta=`, `?okres=`, read by the route files) and put the ids
-  it needs in the payload. Native code: `GrafikomatPlugin.java` (SMS User Consent, Firebase check), `AppDelegate.swift`.
+  logout unpins them (`push.forget_session`); the "Na tym telefonie" switch on "Powiadomienia" unpins one phone
+  (`DELETE /me/push-devices`) and the app keeps that choice per person (`push.ts` `setPush`). Write notifications
+  only through `notify`, give each kind a route in `services.push_path` (what a tap opens: `?dzien=`, `?oferta=`,
+  `?okres=`, read by the route files) and put the ids it needs in the payload. Native code: `GrafikomatPlugin.java`
+  (SMS User Consent, Firebase check), `AppDelegate.swift`.
 - Login codes: `apps/accounts/login.py`; SMS goes through `settings.SMS_BACKEND` (console by default; tests use
   the `sms_outbox` fixture). Rate limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`.
 - Inviting many people (`apps/tenancy/people_list.py` reads a pasted list or a CSV/XLSX/PDF file without a model;
