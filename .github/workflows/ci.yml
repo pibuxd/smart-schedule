@@ -62,3 +62,26 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.50.1
+          cache: true
+      - run: flutter pub get
+      - name: Generated API client is up to date
+        run: |
+          dart run swagger_parser
+          git diff --exit-code lib/api/generated
+          test -z "$(git status --porcelain lib/api/generated)"
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
