@@ -781,7 +781,7 @@ def describe(data: Mapping[str, Any], who: str, people: Mapping[str, str], shift
                 what = f"zmian „{shift_types.get(str(data['shift_type']), '?')}”"
             else:
                 what = "dni pracy"
-            return f"{who}: nie więcej {what} niż inni{when}"
+            return f"{who}: nie więcej {what} niż średnio inni{when}"
         case "dlugosc_zmiany":
             hours = data.get("min_shift_hours") or 0
             shown = int(hours) if float(hours).is_integer() else hours

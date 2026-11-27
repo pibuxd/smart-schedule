@@ -23,7 +23,8 @@ albo odrzucić). Te same rodzaje może wydać kierownik jako polecenie o osobie.
 - Lokal (dla osób, które pracują w kilku lokalach): „wolę Rynek”, „tylko na Rynku”, „w tym tygodniu nie na
   Dworcowej”.
 - Wolne weekendy: „chcę choć jeden wolny weekend w miesiącu”, „co drugi weekend wolny”. Wolny weekend to sobota
-  i niedziela bez zmiany zaczynającej się w te dni. „Co drugi” sprawdza też ostatni weekend przed okresem, jeśli
+  i niedziela bez zmiany zaczynającej się w te dni (nocka z piątku na sobotę go nie zajmuje; asystent mówi to, gdy
+  pracownik pyta). „Co drugi” sprawdza też ostatni weekend przed okresem, jeśli
   osoba miała wtedy zmianę w opublikowanym grafiku.
 - Najmniej dni lub zmian w każdym tygodniu: „chcę pracować co najmniej 4 dni w tygodniu”, „co najmniej 2 nocki
   w tygodniu”. Wcześniej „co najmniej N z tych dni” liczyło się tylko w całym okresie.
@@ -35,16 +36,20 @@ albo odrzucić). Te same rodzaje może wydać kierownik jako polecenie o osobie.
   Dotąd „nie razem” znaczyło tylko „nie na zmianach w tym samym czasie”, a „razem” „na tej samej zmianie”.
 - Ta sama pora przez cały tydzień, obojętnie która: „ranki czy popołudnia, byle cały tydzień tak samo”.
 - Nie więcej niż inni: „nie chcę mieć więcej zamknięć niż inni”, „nie więcej weekendów niż inni”. Porównanie
-  z osobami, które mogą wziąć te zmiany (to samo stanowisko w tym lokalu): liczy się nadwyżka ponad średnią.
+  z osobami, które mogą wziąć te zmiany (to samo stanowisko w tym lokalu): liczy się nadwyżka ponad średnią, więc
+  opis prośby mówi „nie więcej … niż średnio inni”.
 - Długość zmiany: „nie chcę zmian krótszych niż 6 godzin, nie opłaca mi się dojazd”. Najwyżej tyle godzin na
   zmianę to dalej limit godzin dziennie.
 - Nie w pojedynkę: „nie chcę być sam na zamknięciu” (na zmianie, na której w tym samym czasie w lokalu nie ma nikogo
   innego). Generator może wtedy dać tę zmianę komuś innemu; drugiej osoby nie dopisze, bo obsadę ustawia kierownik.
+  Asystent mówi to wprost (gdy nikt inny nie może, osoba może zostać sama), a gdy powodem jest bezpieczeństwo,
+  zapisuje prośbę i oddaje wiadomość także kierownikowi do przeczytania.
 - „Nie mogę” na stałe: „nigdy nie mogę w piątki”, „na stałe we wtorki nie mogę od 9 do 11, mam zajęcia”. Dotąd
   całe dni zapisywały się na stałe tylko jako życzenie, a godzin w ogóle nie dało się zapisać na stałe (szły do
   kierownika). Teraz taka prośba jest na stałe i w każdym miesiącu, w którym obowiązuje, „Twoje prośby” pokazują ten
   sam przycisk, co w miesiącu, w którym ją napisano: zaznaczyć te dni jako „Nie mogę” (całe dni) albo jako „Mogę”
-  poza tymi godzinami. Twardo działa dopiero zaznaczenie w kalendarzu, jak dotąd. Do tego czasu całe dni generator
+  poza tymi godzinami. Twardo działa dopiero zaznaczenie w kalendarzu, jak dotąd, więc asystent mówi wprost, że
+  przycisk trzeba nacisnąć w każdym miesiącu. Przypomnienie o tym przy nowym okresie to pomysł na później. Do tego czasu całe dni generator
   traktuje jak życzenie wolnego (jak dotąd), a godzin nie liczy (decyzja Piotra z 25.11.2026: godziny „nie mogę”
   zapisuje tylko kalendarz).
 - Dalej do kierownika idą: zamiana z konkretną osobą, urlop, nowe stanowisko albo nowy lokal, choroba

@@ -65,8 +65,11 @@ class TestReadings:
             ({"type": "wolne_weekendy", "count": 2, "out_of": 3}, "Ola: 2 z każdych 3 kolejnych weekendów wolne"),
             ({"type": "wolne_weekendy", "count": 1}, "Ola: co najmniej 1 wolny weekend w okresie grafiku"),
             ({"type": "stala_pora"}, "Ola: cały tydzień ta sama pora zmian"),
-            ({"type": "nie_wiecej_niz_inni", "closing": True}, "Ola: nie więcej zamknięć niż inni"),
-            ({"type": "nie_wiecej_niz_inni", "weekdays": [6, 7]}, "Ola: nie więcej dni pracy niż inni w weekendy"),
+            ({"type": "nie_wiecej_niz_inni", "closing": True}, "Ola: nie więcej zamknięć niż średnio inni"),
+            (
+                {"type": "nie_wiecej_niz_inni", "weekdays": [6, 7]},
+                "Ola: nie więcej dni pracy niż średnio inni w weekendy",
+            ),
             ({"type": "dlugosc_zmiany", "shift_hours": 6}, "Ola: zmiany nie krótsze niż 6 godz."),
             ({"type": "nie_sam", "closing": True}, "Ola: nie w pojedynkę na zamknięciu"),
             ({"type": "nie_sam"}, "Ola: nie w pojedynkę na zmianie"),

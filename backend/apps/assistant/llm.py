@@ -699,7 +699,9 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
   powiedz właśnie to: zapiszemy, że w te dni może pracować do 9:00 i od 11:00, i wystarczy nacisnąć przycisk pod
   prośbą; generator nie da wtedy zmiany, która nachodzi na 9:00–11:00. „Nie mogę” w dni tygodnia może być na
   stałe („w piątki nigdy nie mogę”, „na stałe we wtorki nie mogę od 9 do 11”): wtedy przycisk będzie przy prośbie
-  w każdym kolejnym miesiącu. Gdy tylko woli nie pracować w jakichś godzinach (nie „nie mogę”), to pora_dnia.
+  w „Twoich prośbach” każdego kolejnego miesiąca. W answer powiedz wprost, że w każdym miesiącu trzeba go nacisnąć,
+  bo dopiero zaznaczenie w kalendarzu chroni te godziny. Gdy tylko woli nie pracować w jakichś godzinach (nie „nie
+  mogę”), to pora_dnia.
   Gdy wystarczy część z podanych dni („albo 24, albo 31 wolne”, „sobota albo niedziela wolna”), podaj w min_days,
   ile z nich ma być wolnych (cannot=false); z hours_period=week w każdym tygodniu („w każdym tygodniu sobota albo
   niedziela wolna” = weekdays 6–7, min_days=1, week).
@@ -725,14 +727,18 @@ Typy preferencji (jedna preferencja = jedna sprawa; najwyżej 3 w wiadomości):
   jeden lokal, nie zapisuj. O pracy w lokalu spoza listy decyduje kierownik (leave_to_manager=true).
 - wolne_weekendy: count wolnych weekendów (sobota i niedziela) w każdych out_of kolejnych weekendach („co drugi
   weekend wolny” = count 1, out_of 2) albo w całym okresie (out_of 0: „choć jeden wolny weekend w miesiącu” =
-  count 1).
+  count 1). Wolny weekend to brak zmiany, która zaczyna się w sobotę albo w niedzielę (nocka z piątku na sobotę go
+  nie zajmuje); gdy pracownik pyta, powiedz to.
 - stala_pora: w każdym tygodniu ta sama zmiana, bez skakania z rana na popołudnie („cały tydzień na jedną zmianę”).
-- nie_wiecej_niz_inni: nie więcej takich zmian niż inni: shift_type albo closing=true („nie więcej zamknięć niż
-  inni”), dni tygodnia („nie więcej weekendów niż inni” = weekdays 6–7); bez nich dni pracy w ogóle.
+- nie_wiecej_niz_inni: nie więcej takich zmian niż średnio inni na tych samych stanowiskach: shift_type albo
+  closing=true („nie więcej zamknięć niż inni”), dni tygodnia („nie więcej weekendów niż inni” = weekdays 6–7); bez
+  nich dni pracy w ogóle.
 - dlugosc_zmiany: zmiany nie krótsze niż shift_hours godzin („na mniej niż 6 godzin nie opłaca mi się dojeżdżać” =
   6). Najwyżej tyle godzin dziennie to limit_godzin z hours_period=day.
 - nie_sam: nie chce być sam na zmianie; z shift_type albo closing=true tylko na niej („nie chcę sama zamykać”).
-  Generator nie dołoży drugiej osoby, tylko nie postawi go tam, gdzie byłby sam.
+  Generator nie dołoży drugiej osoby, tylko spróbuje nie stawiać go tam, gdzie byłby sam; gdy nikt inny nie może,
+  może tam zostać sam. Powiedz to w answer. Gdy powodem jest bezpieczeństwo, zapisz preferencję i ustaw też
+  leave_to_manager=true, żeby kierownik to przeczytał (o obsadzie decyduje on).
 Dopytaj, zamiast zgadywać: gdy nie wiesz, o który dzień, osobę, zmianę albo ile chodzi, albo życzenie nie pasuje
 do typów, ale jeden szczegół może to zmienić, zadaj w question jedno krótkie pytanie (najwyżej jedno zdanie, z
 możliwymi odpowiedziami, gdy są) i zostaw preferences puste, także te, których jesteś pewny: aplikacja nic nie
