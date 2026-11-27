@@ -12,6 +12,22 @@ kod SMS ma się podpowiadać systemowo z możliwością wpisania ręcznie, a pow
 platformach i otwierać właściwą zmianę albo okres grafiku, także gdy aplikacja była zamknięta. Wysłanie wersji do
 sklepów zostaje decyzją Piotra. Szczegóły techniczne i instrukcja sklepów: [mobile.md](mobile.md).
 
+Piotr (27.11.2026): aplikacje mają być natywne, nie stroną spakowaną w aplikacji (obawa przed odrzuceniem przez Apple
+za „stronę w ramce”, wytyczna 4.2). Wybrał Flutter i zakres pierwszej wersji:
+
+- Nowa aplikacja we Flutterze (katalog `mobile/`, jeden kod na iPhone'a i Androida), z tym samym API Django przez
+  HTTPS i tym samym logowaniem w nagłówku co aplikacja z Capacitora. Strona WWW i serwer zostają bez zmian.
+- Pierwsza wersja: wszystko, co ma pracownik („Mój grafik”, „Kiedy mogę”, „Twoje prośby” z asystentem,
+  „Powiadomienia”, zaproszenia, „Twoje dane”) oraz szybkie sprawy kierownika z telefonu: powiadomienia, „Oddane
+  zmiany”, „Godziny” i asystent. Układanie i edycja grafiku, ustawienia lokalu, zasady, ludzie, stawki, zapraszanie
+  i „Dostęp” zostają na stronie; aplikacja mówi kierownikowi, że zrobi to na stronie.
+- Zakładanie firmy też zostaje na stronie (aplikacja nie ma przycisku „Załóż firmę”).
+- Wygląd jak na stronie (te same kolory, rozmiary i słowa), ale z natywnymi elementami telefonu; tekst systemowym
+  krojem telefonu.
+- Do czasu, aż nowa aplikacja będzie gotowa do sklepów, w repozytorium zostaje aplikacja z Capacitora; potem znika,
+  a nowa aplikacja przejmuje jej identyfikator (`pl.grafikomat.app`), powiadomienia push i miejsce w sklepach.
+- Wszystko poniżej (logowanie, sesja, push, wyłączanie powiadomień, „Wyloguj”) obowiązuje też nową aplikację.
+
 - Aplikacje to ta sama aplikacja React co strona, spakowana w aplikacji (Capacitor 8), z tymi samymi ekranami. Adres
   serwera jest wpisany przy budowaniu aplikacji i zawsze ma HTTPS.
 - Logowanie jak na stronie: numer i kod SMS. Na Androidzie system pokazuje SMS z kodem i pyta, czy Grafikomat może
@@ -635,7 +651,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Backend w całości w Pythonie: Django + Django Ninja (OpenAPI), PostgreSQL, migracje Django, sesje Django + własny moduł logowania kodem SMS.
 - Kolejka: Procrastinate na Postgresie (bez Redisa i RabbitMQ), osobny proces worker z tego samego kodu. Zapis danych i dodanie zadania do kolejki w jednej transakcji.
 - Frontend w TypeScripcie, bez Next.js: React + Vite (SPA), TanStack Router + TanStack Query, Tailwind + shadcn/ui, React Hook Form + Zod, dnd-kit. Klient API generowany z OpenAPI (orval).
-- Aplikacje iOS i Android (od 26.11.2026): Capacitor z tym samym frontendem spakowanym w aplikacji; push przez APNs i Firebase Cloud Messaging wysyła worker.
+- Aplikacje iOS i Android: od 27.11.2026 natywna aplikacja we Flutterze (`mobile/`, Dart), klient API generowany z tego samego OpenAPI; do jej publikacji zostaje aplikacja z Capacitora (26.11.2026, ten sam frontend spakowany w aplikacji). Push przez APNs i Firebase Cloud Messaging wysyła worker.
 - Docker Compose: Django, worker, Postgres, Caddy. Caddy serwuje frontend i przekazuje /api do Django pod jedną domeną. Na razie uruchamiane lokalnie; wdrożenie na jeden serwer VPS ma być później jednym krokiem.
 
 ## UX i wygląd

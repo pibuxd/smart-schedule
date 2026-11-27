@@ -1,0 +1,13 @@
+# The app's API client, generated from the same schema as the website's (`frontend/openapi.json`).
+# Refresh after an API change: `dart run swagger_parser` (CI fails when lib/api/generated is stale).
+# Unknown enum values from a newer server are kept, not rejected: phones run older app versions for a while.
+swagger_parser:
+  schema_path: ../frontend/openapi.json
+  output_directory: lib/api/generated
+  generation:
+    root_api_class_name: GrafikomatApi
+    http_client: dio
+    serializer: plain
+    unknown_enum_values: preserve
+    unknown_discriminator_values: preserve
+    page_width: 120

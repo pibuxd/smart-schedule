@@ -1815,3 +1815,51 @@ opcje wyłączenia powiadomień w telefonie”.
 
 Założenia: jedno słowo „Na tym telefonie” zamiast opisu (nagłówek ekranu mówi, o czym); powiadomienia już leżące
 w systemie zostają przy wyłączaniu.
+
+## 49. Natywna aplikacja we Flutterze (27.11.2026)
+
+Spec: „Aplikacje na iPhone'a i Androida”, decyzja z 27.11.2026. Piotr: „chcę żeby to była natywna aplikacja na iOS
+i Android”, potem wybór Flutter i zakresu (pracownik + szybkie sprawy kierownika). Budowanie: [mobile.md](mobile.md).
+
+Etapy (jeden PR każdy):
+
+1. Szkielet i logowanie: projekt `mobile/`, klient API, wygląd, logowanie kodem SMS, sesja, zaproszenia, wybór
+   firmy, „Twoje dane”, „Wyloguj”, CI.
+2. „Mój grafik”: najbliższa zmiana, miesiąc, minione zmiany, oddawanie i branie zmian, godziny i wypłata.
+3. „Kiedy mogę”: kalendarz z czterema stanami (kolor + ikona + wzór), godziny, termin, „Wyślij kierownikowi”.
+4. „Twoje prośby” i asystent pracownika (czat z prawej, pytania asystenta, „Na stałe”).
+5. Powiadomienia i push (APNs/FCM jak w sekcji 46, przełącznik „Na tym telefonie” z sekcji 48), kod SMS na
+   Androidzie (SMS User Consent), dotknięcie powiadomienia otwiera trasę z `push_path`.
+6. Kierownik z telefonu: powiadomienia, „Oddane zmiany”, „Godziny”, asystent; reszta panelu odsyła na stronę.
+7. Do sklepów: ikony, ekran startowy, podpisywanie, wersje, iPad (tak albo nie), usunięcie aplikacji z Capacitora
+   (`frontend/ios`, `frontend/android`, `src/native`) i przeniesienie identyfikatora `pl.grafikomat.app`.
+
+Technika:
+
+- Flutter 3.50 (Dart 3.14). Material jest w pakiecie `material_ui` (`package:material_ui/material_ui.dart`), bo
+  `package:flutter/material.dart` jest przestarzały od 3.50. Stan: Riverpod 3 (bez generowania kodu), trasy:
+  go_router z tymi samymi ścieżkami co strona (`/logowanie`, `/zaproszenia`, `/twoje-dane`, `/grafik`,
+  `/kiedy-moge`, `/powiadomienia`, później `/kierownik/...`), więc `services.push_path` działa bez zmian. Zakładki
+  pracownika: `StatefulShellRoute.indexedStack` (każda pamięta swój stan).
+- Klient API: `swagger_parser` z `frontend/openapi.json` do `mobile/lib/api/generated` (Dio, modele bez
+  `build_runner`, `unknown_enum_values: preserve`, więc stara wersja aplikacji przeżyje nową wartość wyliczenia
+  z serwera). Nie edytujemy go ręcznie; CI sprawdza, czy jest aktualny (`dart run swagger_parser --check`).
+- Sesja: jak aplikacja z Capacitora (`apps/core/native.py`): nagłówek `X-Grafikomat-Client` (`ios`, `android`)
+  i klucz w `X-Grafikomat-Session`; `lib/api/client.dart` (`SessionInterceptor`) jest jedynym miejscem, które o tym
+  wie. Klucz i wybrana firma w `flutter_secure_storage` (Keychain, Android Keystore). 401 przy wysłanym kluczu =
+  sesja wygasła: klucz znika, logowanie mówi „Sesja wygasła. Zaloguj się jeszcze raz. To, co już zapisane,
+  zostało.”. Ponawianie jak na stronie (`lib/api/errors.dart`, `retryDelay`: brak odpowiedzi i 502/503/504 do 4
+  razy, inne 5xx raz).
+- Adres serwera wpisany przy budowaniu: `--dart-define-from-file=config/local.json` (klucz `API_ORIGIN`, plik poza
+  repozytorium, wzór `config/example.json`). Wersja do sklepu bez adresu `https://` pokazuje błąd zamiast ekranów.
+- Wygląd: `lib/ui/theme.dart` przenosi tokeny z `frontend/src/styles/tokens.css` (kolory, 44/48 px, promienie,
+  16 px tekstu); krój systemowy telefonu. Słowa i komunikaty jak na stronie, z tymi samymi zasadami prostego języka.
+- Bez wspólnego kodu ze stroną: logika (numer telefonu, numer konta) przeniesiona do Darta z tymi samymi
+  przypadkami w testach (`test/shared/`).
+- Testy: `flutter test` z `FakeServer` (`test/helpers.dart`), który odpowiada na żądania Dio jak serwer i zapisuje,
+  co aplikacja wysłała. `web/` służy tylko do podglądu ekranów w przeglądarce (zrzuty bez telefonu).
+
+Założenia etapu 1: zakładanie firmy tylko na stronie (bez linku w aplikacji, żeby nie wyglądało jak zakup poza
+App Store); osoba, która już pracuje w firmie i ma zaproszenie, może wrócić do grafiku bez decyzji („Wróć do
+grafiku”, w aplikacji nie ma paska adresu); zakładki 2–4 pokazują „Ten ekran jest jeszcze w budowie” do swoich
+etapów; podpisywanie wersji do sklepu, ikony i iPad w etapie 7.
