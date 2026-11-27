@@ -26,16 +26,6 @@ class ComingScreen extends StatelessWidget {
   }
 }
 
-class AvailabilityTab extends StatelessWidget {
-  const AvailabilityTab({super.key});
-
-  @override
-  Widget build(BuildContext context) => const ComingScreen(
-    title: 'Kiedy mogę',
-    what: 'Tu zaznaczysz, kiedy możesz pracować, i napiszesz do asystenta. Na razie zrobisz to na stronie Grafikomatu.',
-  );
-}
-
 class NotificationsTab extends StatelessWidget {
   const NotificationsTab({super.key});
 

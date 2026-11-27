@@ -1826,7 +1826,7 @@ Etapy (jeden PR każdy):
 1. Szkielet i logowanie: projekt `mobile/`, klient API, wygląd, logowanie kodem SMS, sesja, zaproszenia, wybór
    firmy, „Twoje dane”, „Wyloguj”, CI.
 2. „Mój grafik”: najbliższa zmiana, miesiąc, minione zmiany, oddawanie i branie zmian, godziny i wypłata.
-3. „Kiedy mogę”: kalendarz z czterema stanami (kolor + ikona + wzór), godziny, termin, „Wyślij kierownikowi”.
+3. „Kiedy mogę”: kalendarz z trzema stanami (kolor + ikona + wzór), godziny, termin, „Wyślij kierownikowi”.
 4. „Twoje prośby” i asystent pracownika (czat z prawej, pytania asystenta, „Na stałe”).
 5. Powiadomienia i push (APNs/FCM jak w sekcji 46, przełącznik „Na tym telefonie” z sekcji 48), kod SMS na
    Androidzie (SMS User Consent), dotknięcie powiadomienia otwiera trasę z `push_path`.
@@ -1880,3 +1880,20 @@ Założenia etapu 2 („Mój grafik”, `lib/features/schedule/`):
   Arkusze („Oddać tę zmianę?”, „Zgłoś inne godziny”) wysuwają się od dołu nad paskiem zakładek.
 - Zwijana sekcja to `lib/ui/fold.dart` (jak `<Section collapsible>`: obracana strzałka, kilka słów stanu w
   nagłówku), arkusz to `lib/ui/sheet.dart`.
+
+Założenia etapu 3 („Kiedy mogę”, `lib/features/availability/`):
+
+- Ekran, słowa i zasady jak `AvailabilityScreen` na stronie (miesiące, termin, szare dni, kilka lokali, „Godziny
+  dnia”, „Dni z godzinami”, „Wyślij kierownikowi”); `marks.ts` przeniesiony z tymi samymi przypadkami w testach,
+  testy ekranu, kalendarza i arkusza godzin z `AvailabilityScreen.test.tsx`, `AvailabilityCalendar.test.tsx` i
+  `DayHoursSheet.test.tsx`. `/kiedy-moge?miesiac=` otwiera miesiąc z powiadomienia jak na stronie.
+- Stuknięcie zaznacza jeden dzień, a przesunięcie palcem przewija ekran (jak palcem na stronie; przeciągania myszą
+  po wielu dniach w aplikacji nie ma). Pasek trzech stanów stoi na dole nad zakładkami jak `sticky` na stronie; na
+  niskim ekranie (poniżej 800 px) jest niższy i bez linii podpowiedzi.
+- Godziny wybiera się z listy co pół godziny, jak na stronie, razem z zapisaną godziną pomiędzy. Zapisane godziny
+  bez początku albo końca („do 15:00”) otwierają się od albo do północy (na stronie lista pokazałaby 14:00).
+- Każde stuknięcie zapisuje się samo, po kolei (późniejszy wybór dnia nie wyprzedzi wcześniejszego). Aplikacja nie
+  sprawdza sieci telefonu jak strona („Brak internetu…”): po ponowieniach klienta nieudany zapis zostaje na ekranie
+  z „Nie zapisano” i „Zapisz jeszcze raz”. Przeciągnięcie w dół odświeża kalendarz tylko, gdy wszystko jest zapisane.
+- W zdaniach o szarych dniach nie ma linku do „Mojego grafiku”, bo ta zakładka jest zawsze na dole ekranu.
+- „Twoje prośby” i asystent pod kalendarzem przychodzą w etapie 4.

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -20,24 +21,27 @@ class Reply {
 
 /// A request the app sent, as the fake server saw it.
 class Sent {
-  Sent(this.method, this.path, this.headers, this.body);
+  Sent(this.method, this.path, this.headers, this.body, [this.query = const {}]);
 
   final String method;
   final String path;
   final Map<String, dynamic> headers;
   final Object? body;
+
+  /// `?start=2026-12-01&end=…`
+  final Map<String, String> query;
 }
 
 /// Answers the app's API calls in tests: `on('GET /api/me', (sent) => Reply(200, {...}))`. A call nobody answers
-/// fails the test with its address.
+/// fails the test with its address. An answer may come later (a `Future<Reply>`), like a slow network.
 class FakeServer implements HttpClientAdapter {
-  final _routes = <String, Reply Function(Sent sent)>{};
+  final _routes = <String, FutureOr<Reply> Function(Sent sent)>{};
   final List<Sent> requests = [];
 
-  void on(String route, Reply Function(Sent sent) reply) => _routes[route] = reply;
+  void on(String route, FutureOr<Reply> Function(Sent sent) reply) => _routes[route] = reply;
 
   /// An answer used only when the test gave none for [route].
-  void byDefault(String route, Reply Function(Sent sent) reply) => _routes.putIfAbsent(route, () => reply);
+  void byDefault(String route, FutureOr<Reply> Function(Sent sent) reply) => _routes.putIfAbsent(route, () => reply);
 
   Iterable<Sent> sent(String route) => requests.where((r) => '${r.method} ${r.path}' == route);
 
@@ -49,12 +53,12 @@ class FakeServer implements HttpClientAdapter {
   ) async {
     Object? body;
     if (options.data is String) body = jsonDecode(options.data as String);
-    final sent = Sent(options.method, options.uri.path, Map.of(options.headers), body);
+    final sent = Sent(options.method, options.uri.path, Map.of(options.headers), body, options.uri.queryParameters);
     requests.add(sent);
     final route = '${options.method} ${options.uri.path}';
     final handler = _routes[route];
     if (handler == null) fail('Nothing answers $route');
-    final reply = handler(sent);
+    final reply = await handler(sent);
     return ResponseBody.fromString(
       reply.body == null ? '' : jsonEncode(reply.body),
       reply.status,

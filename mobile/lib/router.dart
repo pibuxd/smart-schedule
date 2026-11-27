@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'features/auth/invitations_screen.dart';
+import 'features/availability/availability_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/my_data_screen.dart';
 import 'features/employee/coming_screens.dart';
@@ -34,10 +35,14 @@ String? sessionRedirect(Session session, Uri uri) {
 }
 
 final _isoDay = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+final _isoMonth = RegExp(r'^\d{4}-\d{2}$');
 final _id = RegExp(r'^[\w-]{1,64}$');
 
 /// `?dzien=2026-12-04` from a notification, or null for anything else.
 String? searchDay(String? value) => value != null && _isoDay.hasMatch(value) ? value : null;
+
+/// `?miesiac=2026-12` from a notification about that month's availability, or null for anything else.
+String? searchMonth(String? value) => value != null && _isoMonth.hasMatch(value) ? value : null;
 
 /// `?oferta=<id>`, `?okres=<id>`
 String? searchId(String? value) => value != null && _id.hasMatch(value) ? value : null;
@@ -77,7 +82,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/kiedy-moge', builder: (context, state) => const AvailabilityTab())],
+            routes: [
+              GoRoute(
+                path: '/kiedy-moge',
+                builder: (context, state) {
+                  final month = searchMonth(state.uri.queryParameters['miesiac']);
+                  return AvailabilityTab(key: ValueKey(month ?? ''), month: month);
+                },
+              ),
+            ],
           ),
           StatefulShellBranch(
             routes: [GoRoute(path: '/powiadomienia', builder: (context, state) => const NotificationsTab())],
