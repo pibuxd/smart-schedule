@@ -319,11 +319,25 @@ void main() {
   });
 
   testWidgets('explains an empty schedule and points to "Kiedy mogę"', (tester) async {
-    await open(tester, server(shifts: []), clock: () => dayBefore);
+    final api = server(shifts: [])
+      ..on('GET /api/me/availability', (_) => const Reply(200, {'period': null, 'days': [], 'submitted_at': null}))
+      ..on(
+        'GET /api/me/calendar',
+        (_) => const Reply(200, {
+          'start': '2026-11-01',
+          'end': '2026-11-30',
+          'days': [],
+          'locked': [],
+          'period': null,
+          'submitted_at': null,
+          'location_names': ['Rynek'],
+        }),
+      );
+    await open(tester, api, clock: () => dayBefore);
     expect(find.text('Nie masz jeszcze zmian w grafiku'), findsOneWidget);
     await tap(tester, find.text('Zaznacz, kiedy możesz pracować'));
-    expect(find.text('Kiedy mogę'), findsWidgets);
-    expect(rich('Tu zaznaczysz, kiedy możesz pracować'), findsOneWidget);
+    expect(find.text('Kiedy mogę pracować'), findsOneWidget);
+    expect(rich('Zaznacz, kiedy możesz pracować w kolejnych miesiącach'), findsOneWidget);
   });
 
   testWidgets('says which schedule the manager is still arranging', (tester) async {

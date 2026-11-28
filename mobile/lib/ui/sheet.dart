@@ -3,14 +3,14 @@ import 'package:material_ui/material_ui.dart';
 import 'theme.dart';
 
 /// A sheet that slides up from the bottom, like the website's `Sheet`: a title, one line saying what it is about, and
-/// its content. It grows with the keyboard, and a swipe down or a tap outside closes it.
-Future<void> showAppSheet(
+/// its content. It grows with the keyboard, and a swipe down or a tap outside closes it (the result is then null).
+Future<T?> showAppSheet<T>(
   BuildContext context, {
   required String title,
   String? description,
   required WidgetBuilder builder,
 }) {
-  return showModalBottomSheet<void>(
+  return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
     // Over the tab bar too, like sheets in other apps.

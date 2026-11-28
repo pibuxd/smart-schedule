@@ -38,13 +38,15 @@ class EmployeeShell extends StatelessWidget {
 }
 
 /// One tab's screen: its title with "Twoje dane" at the top right, then the notes every tab shows (the name to
-/// fill in, a new invitation) and the tab's content. Pull down to refresh.
+/// fill in, a new invitation) and the tab's content. Pull down to refresh. [bottom] stays at the foot of the screen
+/// above the tabs while the content scrolls.
 class TabScreen extends ConsumerWidget {
-  const TabScreen({super.key, required this.title, required this.children, this.onRefresh});
+  const TabScreen({super.key, required this.title, required this.children, this.onRefresh, this.bottom});
 
   final String title;
   final List<Widget> children;
   final Future<void> Function()? onRefresh;
+  final Widget? bottom;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -84,28 +86,37 @@ class TabScreen extends ConsumerWidget {
         ],
       ),
     );
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title),
-            if (company != null && session.me.companies.length > 1)
-              Text(
-                company.name,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.inkMuted),
-              ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Twoje dane',
-            icon: const Icon(Icons.account_circle_outlined),
-            onPressed: () => context.push('/twoje-dane'),
-          ),
+    final appBar = AppBar(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title),
+          if (company != null && session.me.companies.length > 1)
+            Text(
+              company.name,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.inkMuted),
+            ),
         ],
       ),
-      body: onRefresh == null ? list : RefreshIndicator.adaptive(onRefresh: onRefresh!, child: list),
+      actions: [
+        IconButton(
+          tooltip: 'Twoje dane',
+          icon: const Icon(Icons.account_circle_outlined),
+          onPressed: () => context.push('/twoje-dane'),
+        ),
+      ],
+    );
+    final body = onRefresh == null ? list : RefreshIndicator.adaptive(onRefresh: onRefresh!, child: list);
+    return Scaffold(
+      appBar: appBar,
+      body: bottom == null
+          ? body
+          : Column(
+              children: [
+                Expanded(child: body),
+                bottom!,
+              ],
+            ),
     );
   }
 }
