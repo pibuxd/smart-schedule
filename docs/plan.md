@@ -1915,7 +1915,8 @@ Założenia etapu 4 („Twoje prośby” i asystent, `lib/features/requests/`):
   otwartej klawiaturze.
 - Niewysłana wiadomość zostaje po wyjściu z rozmowy (osobno dla każdego miesiąca, do wylogowania). Enter robi nową
   linię, wysyła przycisk.
-- „Zaznacz „Mogę”…” zapisuje kalendarz jak stuknięcie; „Kiedy mogę” wczytuje go od nowa po wyjściu z rozmowy.
+- „Zaznacz „Mogę”…” zapisuje kalendarz jak stuknięcie; „Kiedy mogę” wczytuje go od nowa po wyjściu z rozmowy. Dni,
+  które jeszcze się zapisują albo się nie zapisały, zostają przy tym takie, jak wybrał pracownik.
 - Lista próśb pyta serwer co 2 sekundy, dopóki asystent czyta świeżą wiadomość (najdłużej minutę), jak strona.
 - Zakładki mają podpisy 12 px, żeby cztery mieściły się w jednej linii na telefonie 390 px („Powiadomienia”).
 

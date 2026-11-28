@@ -6,6 +6,7 @@ import 'package:grafikomat/router.dart';
 import 'package:grafikomat/session/prefs.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'package:grafikomat/features/availability/availability_data.dart';
 import 'package:grafikomat/features/availability/availability_screen.dart';
 
 import '../helpers.dart';
@@ -334,6 +335,43 @@ void main() {
     await tap(tester, inSheet(find.text('Zmień miesiąc bez zapisu')));
     expect(find.text('Styczeń 2027'), findsOneWidget);
     expect(find.text('Zapisane'), findsOneWidget);
+  });
+
+  testWidgets('keeps a mark that did not save when the calendar is read again', (tester) async {
+    final api = server();
+    var fail = true;
+    api.on('PUT /api/me/calendar', (_) => fail ? const Reply(503, {'detail': 'x'}) : const Reply(204));
+    final container = await open(tester, api);
+    await tap(tester, day('wtorek 1 grudnia: mogę'));
+    await tester.pump(const Duration(seconds: 30)); // the app's own retries
+    await settle(tester);
+    expect(find.text('Nie zapisano'), findsOneWidget);
+
+    // Meanwhile a day is marked from "Twoje prośby", which reads the calendar again.
+    api.on(
+      'GET /api/me/calendar',
+      (_) => const Reply(200, {
+        'start': '2026-12-01',
+        'end': '2026-12-31',
+        'days': [
+          {'date': '2026-12-02', 'state': 'cannot'},
+        ],
+        'locked': [],
+        'unpublished': [],
+        'period': period,
+        'submitted_at': null,
+        'location_names': ['Rynek'],
+      }),
+    );
+    container.invalidate(myCalendarProvider);
+    await settle(tester);
+    expect(day('środa 2 grudnia: nie mogę'), findsOneWidget);
+    expect(day('wtorek 1 grudnia: nie mogę'), findsOneWidget);
+    expect(find.text('Nie zapisano'), findsOneWidget);
+    fail = false;
+    await tap(tester, find.text('Zapisz jeszcze raz'));
+    expect(find.text('Zapisane'), findsOneWidget);
+    expect(written(api).last, {'date': '2026-12-01', 'state': 'cannot', 'one_shift': false});
   });
 
   testWidgets('warns plainly that "chętnie" with hours blocks other shifts that day', (tester) async {

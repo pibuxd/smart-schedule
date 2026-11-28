@@ -195,9 +195,9 @@ class _MonthEditor extends ConsumerWidget {
         ],
       );
     }
-    // A fresh read (pull to refresh) starts the editor again from what the server has.
+    // A fresh read (pull to refresh, or a day marked from "Twoje prośby") brings in what the server has; the editor
+    // stays, so days still saving or not saved keep the employee's choice ([_EditorState.didUpdateWidget]).
     return _Editor(
-      key: ObjectKey(initial),
       companyId: companyId,
       month: month,
       readOnly: readOnly,
@@ -213,7 +213,6 @@ enum _SaveStatus { saved, saving, failed }
 
 class _Editor extends ConsumerStatefulWidget {
   const _Editor({
-    super.key,
     required this.companyId,
     required this.month,
     required this.readOnly,
@@ -236,15 +235,39 @@ class _Editor extends ConsumerStatefulWidget {
 }
 
 class _EditorState extends ConsumerState<_Editor> {
-  late Marks _marks = marksFromServer(widget.initial.days);
-  late DateTime? _submittedAt = widget.initial.submittedAt;
-  late final Set<String> _locked = widget.initial.locked.toSet();
+  Marks _marks = {};
+  DateTime? _submittedAt;
+  Set<String> _locked = {};
   // Days of a schedule the manager has arranged but not published yet: "Mój grafik" does not show them.
-  late final Set<String> _unpublished = (widget.initial.unpublished ?? const []).toSet();
-  late final List<String> _dates = [
-    for (var day = parseDate(widget.initial.start); !day.isAfter(parseDate(widget.initial.end)); day = addDays(day, 1))
-      toIsoDate(day),
-  ];
+  Set<String> _unpublished = {};
+  List<String> _dates = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load(widget.initial);
+  }
+
+  @override
+  void didUpdateWidget(_Editor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.initial, widget.initial)) _load(widget.initial);
+  }
+
+  /// What the server has, except the days still on their way or not saved: those keep what the employee chose.
+  void _load(MyCalendarOut initial) {
+    final kept = {
+      for (final date in {..._failed.keys, ..._sending.keys}) date: markOf(_marks, date),
+    };
+    _marks = {...marksFromServer(initial.days), ...kept};
+    _submittedAt = initial.submittedAt;
+    _locked = initial.locked.toSet();
+    _unpublished = (initial.unpublished ?? const []).toSet();
+    _dates = [
+      for (var day = parseDate(initial.start); !day.isAfter(parseDate(initial.end)); day = addDays(day, 1))
+        toIsoDate(day),
+    ];
+  }
 
   /// What a tap marks; [_hoursTool] = a tap opens the day's hours instead ("Godziny dnia").
   AvailabilityState _tool = AvailabilityState.cannot;
@@ -256,6 +279,8 @@ class _EditorState extends ConsumerState<_Editor> {
   Future<void> _queue = Future.value();
   int _pending = 0;
   final Marks _failed = {};
+  // Days with a write on its way (how many), kept like [_failed] when the calendar is read again meanwhile.
+  final Map<String, int> _sending = {};
 
   bool _submitting = false;
   Object? _submitError;
@@ -265,6 +290,9 @@ class _EditorState extends ConsumerState<_Editor> {
   void _send(Marks changes) {
     if (changes.isEmpty) return;
     _pending += 1;
+    for (final date in changes.keys) {
+      _sending[date] = (_sending[date] ?? 0) + 1;
+    }
     setState(() => _status = _SaveStatus.saving);
     final api = ref.read(apiProvider);
     final body = CalendarIn(
@@ -283,6 +311,14 @@ class _EditorState extends ConsumerState<_Editor> {
         }
         _saveError = errorMessage(error, networkProblem);
       } finally {
+        for (final date in changes.keys) {
+          final left = (_sending[date] ?? 1) - 1;
+          if (left > 0) {
+            _sending[date] = left;
+          } else {
+            _sending.remove(date);
+          }
+        }
         _pending -= 1;
         if (_pending == 0 && mounted) {
           setState(() => _status = _failed.isEmpty ? _SaveStatus.saved : _SaveStatus.failed);
