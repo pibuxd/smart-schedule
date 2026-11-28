@@ -92,6 +92,42 @@ def _positions(data: dict) -> frozenset[str]:
     return frozenset(str(v) for v in values) if isinstance(values, list) else frozenset()
 
 
+def _whole(value, least: int = 1) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= least else None
+
+
+def _clock(value) -> time | None:
+    try:
+        return time.fromisoformat(value) if isinstance(value, str) and value else None
+    except ValueError:
+        return None
+
+
+def _new_fields(data: dict) -> dict:
+    """The fields of the request types added on 27.11.2026 (docs/plan.md section 50), as `Request` arguments."""
+    kind, fields = data.get("type"), {"closing": data.get("closing") is True}
+    if kind in ("unikaj_osoby", "preferuj_osobe"):
+        fields["same_day"] = data.get("same_day") is True
+    elif kind == "pora_dnia":
+        fields.update(from_time=_clock(data.get("from_time")), to_time=_clock(data.get("to_time")))
+    elif kind == "lokal" and isinstance(data.get("locations"), list):
+        fields["locations"] = frozenset(str(v) for v in data["locations"])
+    elif kind == "dni_z_rzedu":
+        fields["max_in_row"] = _whole(data.get("max_in_row"))
+    elif kind == "wolne_z_rzedu":
+        fields["free_in_row"] = _whole(data.get("free_in_row"))
+    elif kind == "po_zmianie":
+        fields["days_after"] = _whole(data.get("days_after")) or 1
+        fields["next_shift_type"] = str(data["next_shift_type"]) if data.get("next_shift_type") else None
+    elif kind == "wolne_weekendy":
+        fields["free_weekends"] = _whole(data.get("free_weekends"))
+        fields["of_weekends"] = _whole(data.get("of_weekends"), least=2) or 0
+    elif kind == "dlugosc_zmiany":
+        hours = data.get("min_shift_hours")
+        fields["min_shift_hours"] = float(hours) if isinstance(hours, int | float) and hours > 0 else None
+    return fields
+
+
 REQUEST_TYPES = {
     "unikaj_osoby": RequestType.AVOID_PERSON,
     "preferuj_osobe": RequestType.PREFER_PERSON,
@@ -102,6 +138,15 @@ REQUEST_TYPES = {
     "cel_godzin": RequestType.HOURS_TARGET,
     "wolne_dni": RequestType.DAYS_OFF,
     "chce_pracowac": RequestType.WANT_WORK,
+    "pora_dnia": RequestType.TIME_OF_DAY,
+    "dni_z_rzedu": RequestType.DAYS_IN_ROW,
+    "wolne_z_rzedu": RequestType.DAYS_OFF_IN_ROW,
+    "po_zmianie": RequestType.REST_AFTER,
+    "lokal": RequestType.LOCATION,
+    "wolne_weekendy": RequestType.FREE_WEEKENDS,
+    "stala_pora": RequestType.SAME_SHIFT_TYPE,
+    "dlugosc_zmiany": RequestType.SHIFT_LENGTH,
+    "nie_sam": RequestType.NOT_ALONE,
     "inne": RequestType.OTHER,
 }
 
@@ -146,6 +191,7 @@ def instruction_request(data, employee_id, instruction_id, rank, start, end, nam
         daily_hours=data.get("hours_period") == "day",
         min_days=_min_days(data),
         shifts_per_day=_shifts_per_day(data),
+        **_new_fields(data),
         summary=readings.describe(data, names[employee_id], names, shift_names),
         by_manager=True,
         rank=rank,
@@ -592,6 +638,7 @@ class _Reader:
             daily_hours=data.get("hours_period") == "day",
             min_days=_min_days(data),
             shifts_per_day=_shifts_per_day(data),
+            **(_new_fields(data) if kind != RequestType.OTHER else {}),
             summary=str(data.get("part_summary") or data.get("summary") or row.text[:200]),
             # A request for a month (no period) or a lasting one is about the person: it counts where they work.
             location=str(row.period.location_id) if row.period_id and not row.lasting else None,

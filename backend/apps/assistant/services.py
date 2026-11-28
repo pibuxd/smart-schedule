@@ -116,6 +116,18 @@ def own_positions(employee: EmployeeProfile) -> dict[str, list[str]]:
     return result
 
 
+def own_locations(employee: EmployeeProfile) -> dict[str, list[str]]:
+    """The person's live locations (main and extra): name -> ids, for "tylko w Rynku" (reading type `lokal`)."""
+    result: dict[str, list[str]] = {}
+    rows = Location.objects.for_company(employee.company_id).filter(
+        pk__in=employee.location_ids(), archived_at__isnull=True
+    )
+    for pk, name in rows.order_by("name").values_list("pk", "name"):
+        label = next((n for n in result if n.casefold() == name.casefold()), name)
+        result.setdefault(label, []).append(str(pk))
+    return result
+
+
 def _today_line(today: date) -> str:
     return f"Dzisiaj: {today.isoformat()} ({WEEKDAY_NAMES[today.weekday()]})."
 
@@ -144,6 +156,7 @@ def request_context(
     people = _people(location, exclude_id=text_request.employee_id)
     shift_types = _shift_types(location)
     positions = sorted(own_positions(text_request.employee))
+    locations = sorted(own_locations(text_request.employee))
     if text_request.period_id:
         span = (
             f"Okres tej wiadomości (kierownik prosi o dyspozycje): od {start.isoformat()} do {end.isoformat()}, "
@@ -162,6 +175,7 @@ def request_context(
             f"Lokal główny: {location.name}.",
             span,
             f"Twoje stanowiska: {', '.join(positions) or '(brak)'}.",
+            f"Twoje lokale: {', '.join(locations)}." if len(locations) > 1 else "",
             f"Współpracownicy: {', '.join(people) or '(brak)'}.",
             f"Zmiany w lokalu: {_shift_lines(shift_types)}.",
             holidays_line([today, start, end]),
@@ -433,10 +447,21 @@ def _unknown_name_question(reply: llm.EmployeeReply, people: dict[str, str], shi
                 if len(similar) == 1:
                     return f"Czy chodzi o tę osobę: {similar[0]}? Odpisz „tak” albo napisz, o kogo."
                 return f"Nie ma w lokalu osoby „{name}”. O kogo chodzi? Napisz imię tak, jak jest w grafiku."
-        shift = (preference.shift_type or "").strip()[:40]
-        known = readings._lookup(shift, shift_types) is not None
-        if shift and shift_types and preference.type in readings.SHIFT_TYPED and not known:
-            return f"Nie ma w lokalu zmiany „{shift}”. O którą zmianę chodzi: {_or_words(list(shift_types))}?"
+        for shift, typed in (
+            ((preference.shift_type or "").strip()[:40], preference.type in readings.SHIFT_TYPED),
+            (preference.next_shift_type.strip()[:40], preference.type == "po_zmianie"),
+        ):
+            if shift and shift_types and typed and readings._lookup(shift, shift_types) is None:
+                return f"Nie ma w lokalu zmiany „{shift}”. O którą zmianę chodzi: {_or_words(list(shift_types))}?"
+    return ""
+
+
+def _location_question(reply: llm.EmployeeReply, locations: dict[str, list[str]]) -> str:
+    """A question the app asks by itself about a location wish naming none of the person's locations."""
+    for preference in reply.preferences[:MAX_PREFERENCES]:
+        known = readings._lookup(preference.location.strip()[:60], locations)
+        if preference.type == "lokal" and len(locations) > 1 and not known:
+            return f"O który lokal chodzi: {_or_words(list(locations))}?"
     return ""
 
 
@@ -494,6 +519,7 @@ def _checked_reply(
     raw = reply.model_dump(mode="json")
     answer = reply.answer.strip()[:2000]
     positions = own_positions(row.employee)
+    locations = own_locations(row.employee)
     if reply.topic == "unrelated":
         outcome = _Outcome(TextRequest.Status.REJECTED)
         outcome.interpretation = {"type": "out_of_scope", "summary": UNRELATED_REQUEST_REPLY}
@@ -515,6 +541,9 @@ def _checked_reply(
         if not question:
             question = _position_question(reply, positions)
             why = "stanowisko" if question else ""
+        if not question:
+            question = _location_question(reply, locations)
+            why = "lokal" if question else ""
         if not question:
             question = _hours_meaning_question(reply)
             why = "około czy co najmniej" if question else ""
@@ -539,6 +568,7 @@ def _checked_reply(
             can_ask=can_ask,
             sure=sure,
             positions=positions,
+            locations=locations,
         )
     if answering:
         outcome.answer_to = answered
@@ -585,12 +615,13 @@ def _checked_preferences(
     can_ask: bool = False,
     sure: bool = False,
     positions: dict[str, list[str]] | None = None,
+    locations: dict[str, list[str]] | None = None,
 ) -> _Outcome:
     """`can_ask`: the app may ask the person to confirm a reading the assistant doubts (fewer than `MAX_QUESTIONS`
     questions in a row so far). `sure`: the person has just said "yes" to such a question, so a doubt is settled.
-    `positions`: the person's own positions (name -> ids), the only ones a position wish may name."""
+    `positions` / `locations`: the person's own positions / locations (name -> ids), the only ones a wish may name."""
     span = request_span(row)
-    positions = positions or {}
+    positions, locations = positions or {}, locations or {}
     parts, why, doubt, notes = [], "", "", []
     if len(reply.preferences) > MAX_PREFERENCES:
         why = "za dużo próśb w jednej wiadomości"
@@ -605,7 +636,10 @@ def _checked_preferences(
         ):
             notes.append(_one_position_note(positions))  # "only as a seller" for a seller only: nothing to keep
             continue
-        data, problem = _checked_preference(preference, span, people, shift_types, row.text, positions)
+        if preference.type == "lokal" and len(locations) < 2:
+            notes.append(ONE_LOCATION_NOTE)  # one location: nothing to choose
+            continue
+        data, problem = _checked_preference(preference, span, people, shift_types, row.text, positions, locations)
         if data is None:
             why = problem
         else:
@@ -763,6 +797,9 @@ def checked_hours(
 
 
 OTHER_POSITION = "stanowisko spoza stanowisk tej osoby"
+ONE_LOCATION_NOTE = (
+    "Pracujesz w jednym lokalu, więc nie ma czego wybierać. O pracy w innym lokalu decyduje kierownik: napisz do niego."
+)
 
 
 def _checked_preference(
@@ -772,6 +809,7 @@ def _checked_preference(
     shift_types: dict[str, str],
     text: str,
     positions: dict[str, list[str]] | None = None,
+    locations: dict[str, list[str]] | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     """(checked part of an interpretation, "") or (None, why it cannot be used). A reading the assistant itself
     doubts (confidence below `ASSISTANT_MIN_CONFIDENCE`) comes with why as well, (data, "pewność 0.40"): the person is
@@ -784,7 +822,7 @@ def _checked_preference(
         type=preference.type,
         person=preference.person,
         shift_type=preference.shift_type,
-        avoid=preference.avoid_shift_type,
+        avoid=preference.avoid_shift_type or preference.avoid,
         max_hours=preference.max_hours,
         max_shifts=preference.max_shifts,
         target_hours=preference.target_hours or None,
@@ -804,9 +842,17 @@ def _checked_preference(
         rather=preference.rather,
         from_time=preference.from_time,
         to_time=preference.to_time,
+        count=preference.count,
+        out_of=preference.out_of,
+        next_shift_type=preference.next_shift_type,
+        location=preference.location,
+        same_day=preference.same_day,
+        closing=preference.closing,
+        shift_hours=preference.shift_hours,
         people=people,
         shift_types=shift_types,
         positions=positions,
+        locations=locations,
     )
     if data is None:
         if preference.type == "stanowisko":
@@ -818,13 +864,14 @@ def _checked_preference(
     if data["weekdays"] and data["dates"]:
         # "w piątki" with those Fridays listed too: the weekdays already say it ("w piątki", not "w piątki i 4.12…").
         data["dates"] = [d for d in data["dates"] if date.fromisoformat(d).weekday() not in data["weekdays"]]
-    if preference.cannot and data["type"] == "wolne_dni" and not lasting:
-        # Dates, or weekdays of this period ("w grudniu we wtorki"): concrete days the calendar can mark.
+    if preference.cannot and data["type"] == "wolne_dni" and not data.get("min_days"):
+        # Days the calendar can mark: dates, weekdays of this period, or (lasting, since 27.11.2026) weekdays of every
+        # later month too, offered again in each. "Albo 24, albo 31" (min_days) is no day to mark.
         data["cannot"] = True
     if readings.calendar_only(data) and not data.get("cannot"):
-        # Hours are kept only for "nie mogę" on days of this period, marked in the calendar as "mogę" outside them;
-        # a softer "wolę nie od 9 do 11", or every Tuesday for good, has no place to keep them.
-        return None, "godziny bez „nie mogę” w dni tego okresu"
+        # Hours are kept only for "nie mogę", marked in the calendar as "mogę" outside them; a softer "wolę nie od 9
+        # do 11" is pora_dnia.
+        return None, "godziny bez „nie mogę”"
     data["lasting"] = lasting
     summary = readings.describe(
         data,
@@ -1011,7 +1058,7 @@ def command_context(
         f"Okresy grafiku lokalu (ostatnie i przyszłe): {period_words}.",
         f"Osoby: {', '.join(people) or '(brak)'}.",
         f"Stanowiska: {', '.join(position_names.values()) or '(brak)'}.",
-        *([f"Lokale tego kierownika (do zaproszeń): {', '.join(managed)}."] if managed else []),
+        *([f"Lokale tego kierownika (do zaproszeń i polecenia lokal): {', '.join(managed)}."] if managed else []),
         f"Zmiany: {_shift_lines(shift_types)}.",
         holidays_line([today, today + timedelta(days=92), *(p.end for p in periods)]),
         "",
@@ -1595,11 +1642,15 @@ def check_plan(
             .filter(location=location, removed_at__isnull=True, employees__pk=employee)
             .values_list("name", "pk")
         )
+        places = {}
+        if new.type == "lokal":
+            profile = EmployeeProfile.objects.for_company(location.company_id).filter(pk=employee).first()
+            places = own_locations(profile) if profile is not None else {}
         data = readings.clean(
             type=new.type,
             person=new.other_person,
             shift_type=new.shift_type,
-            avoid=new.avoid_shift_type,
+            avoid=new.avoid_shift_type or new.avoid,
             position=new.position,
             avoid_position=new.avoid_position,
             positions={name: [str(pk)] for name, pk in held},
@@ -1617,11 +1668,28 @@ def check_plan(
             weekdays=new.weekdays,
             min_days=new.min_days,
             shifts_per_day=new.shifts_per_day,
+            # Hours only for pora_dnia: "nie może od 9 do 11" is the person's own calendar, not an instruction.
+            from_time=new.from_time if new.type == "pora_dnia" else "",
+            to_time=new.to_time if new.type == "pora_dnia" else "",
+            count=new.count,
+            out_of=new.out_of,
+            next_shift_type=new.next_shift_type,
+            location=new.location,
+            same_day=new.same_day,
+            closing=new.closing,
+            shift_hours=new.shift_hours,
             people=others,
             shift_types=shift_types,
+            locations=places,
         )
         if data is None:
-            if new.type == "stanowisko":
+            if new.type == "lokal":
+                mine = ", ".join(f"„{name}”" for name in places) or "żadnym"
+                notes.append(
+                    f"Osoba „{new.person}” nie pracuje w lokalu „{new.location}” (pracuje w: {mine}). Lokale osoby "
+                    "zmienisz w zakładce „Pracownicy”."
+                )
+            elif new.type == "stanowisko":
                 mine = ", ".join(f"„{name}”" for name, _ in held) or "żadnego"
                 notes.append(
                     f"Osoba „{new.person}” nie pracuje na stanowisku „{new.position}” (ma: {mine}). Stanowiska "

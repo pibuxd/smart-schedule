@@ -245,7 +245,7 @@ REQUEST_TEMPLATES = [
     ("Nie mogę zamykać w piątki, odbieram dziecko z przedszkola o 17.", "typ_zmiany", "bardzo_wazne"),
     ("Wolałbym nie pracować z {other} na nocce, nie dogadujemy się co do pieca.", "unikaj_osoby", "wazne"),
     ("Proszę o zmiany popołudniowe, rano zawożę mamę na rehabilitację.", "typ_zmiany", "wazne"),
-    ("Mogę pracować najwyżej 3 dni w tygodniu, bo mam drugą pracę.", "limit_godzin", "bardzo_wazne"),
+    ("Mogę pracować najwyżej 3 dni w tygodniu, bo mam drugą pracę.", "limit_zmian", "bardzo_wazne"),
     ("Byłoby super, gdybym miała zmiany z {other}, uczy mnie obsługi ekspresu.", "preferuj_osobe", "mile_widziane"),
     ("Od połowy miesiąca mam praktyki, wtedy tylko weekendy.", "inne", "bardzo_wazne"),
     ("Nie dawajcie mi proszę zamknięć, wracam ostatnim autobusem.", "typ_zmiany", "wazne"),
@@ -608,6 +608,9 @@ def _text_requests(rng: random.Random, employees, period: SchedulePeriod, count:
             if kind == "cel_godzin":
                 weekly = {"target_hours": 40.0, "hours_period": "week"}
                 interpretation.update(weekly, summary="Około 40 godz. w każdym tygodniu.")
+            if kind == "limit_zmian":
+                weekly = {"max_shifts": 3, "hours_period": "week"}
+                interpretation.update(weekly, summary="Najwyżej 3 zmiany w każdym tygodniu.")
         requests.append(
             TextRequest(
                 company_id=author.company_id,

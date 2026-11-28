@@ -184,6 +184,20 @@ def _week_start(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
 
+def _has_free_run(days: list[date], busy: set[date], length: int) -> bool:
+    """`days` (sorted) hold `length` free days in a row (calendar days, none of them in `busy`)."""
+    run, previous = 0, None
+    for day in days:
+        if day in busy:
+            run, previous = 0, None
+            continue
+        run = run + 1 if previous is not None and day == previous + timedelta(days=1) else 1
+        previous = day
+        if run >= length:
+            return True
+    return False
+
+
 class _Checker:
     def __init__(self, problem: Problem, schedule: Schedule) -> None:
         self.p = problem
@@ -206,6 +220,9 @@ class _Checker:
                 continue
             self.assignment[slot_id] = employee_id
 
+        self.slots_by_location: dict[str, list[Slot]] = defaultdict(list)
+        for slot in problem.slots:
+            self.slots_by_location[slot.location].append(slot)
         self.slots_of: dict[str, list[Slot]] = defaultdict(list)
         for slot in problem.slots:
             employee_id = self.assignment.get(slot.id)
@@ -763,9 +780,19 @@ class _Checker:
             )
         return result
 
+    def external_days(self, employee_id: str) -> set[date]:
+        """Days the person has a shift outside this problem (another location, a published neighbouring period)."""
+        return {e.date for e in self.p.external_shifts if e.employee == employee_id}
+
+    def worked_days(self, employee_id: str) -> set[date]:
+        """Days with a shift here or outside this problem."""
+        return {s.date for s in self.slots_of.get(employee_id, ())} | self.external_days(employee_id)
+
     def request_degree(self, request: Request) -> float | None:
         """0 = kept … 1 = fully broken; None = not something the schedule can keep (scored by nobody)."""
         own = [s for s in self.slots_of.get(request.employee, ()) if request.covers(s.date)]
+        if request.type in (RequestType.AVOID_PERSON, RequestType.PREFER_PERSON) and request.same_day:
+            return self._same_day_degree(request, own)
         match request.type:
             case RequestType.AVOID_PERSON | RequestType.PREFER_PERSON:
                 if request.subject_employee is None:
@@ -836,20 +863,144 @@ class _Checker:
             case RequestType.DAYS_OFF:
                 if not request.dates:
                     return None
-                worked = {s.date for s in own}
-                return len(worked & request.dates) / len(request.dates)
+                if request.min_days is None:
+                    worked = {s.date for s in own}
+                    return len(worked & request.dates) / len(request.dates)
+                # "albo 24, albo 31 wolne": enough free days (no shift here or elsewhere) in each window.
+                busy = self.worked_days(request.employee)
+                degrees = [
+                    max(0, need - sum(1 for d in days if d not in busy)) / need
+                    for days, need in request.count_windows(self.p)
+                ]
+                return sum(degrees) / len(degrees) if degrees else None
             case RequestType.WANT_WORK:
                 if not request.dates:
                     return None
-                need = request.wanted_days()
                 per_day: dict[date, int] = defaultdict(int)
                 for s in own:
                     if request.shift_type is None or s.shift_type == request.shift_type:
                         per_day[s.date] += 1
-                good = sum(1 for count in per_day.values() if count >= request.shifts_per_day)
-                return max(0, need - good) / need
+                degrees = []
+                for days, need in request.count_windows(self.p):
+                    good = sum(1 for d in days if per_day.get(d, 0) >= request.shifts_per_day)
+                    degrees.append(max(0, need - good) / need)
+                return sum(degrees) / len(degrees) if degrees else None
+            case RequestType.TIME_OF_DAY:
+                if request.from_time is None and request.to_time is None:
+                    return None
+                if not own:
+                    return 0.0
+                return sum(1 for s in own if request.wrong_hours(self.p, s)) / len(own)
+            case RequestType.LOCATION:
+                if not request.locations:
+                    return None
+                if not own:
+                    return 0.0
+                return sum(1 for s in own if (s.location in request.locations) == request.avoid) / len(own)
+            case RequestType.SHIFT_LENGTH:
+                if not request.min_shift_hours:
+                    return None
+                if not own:
+                    return 0.0
+                return sum(1 for s in own if s.hours < request.min_shift_hours - _EPS) / len(own)
+            case RequestType.DAYS_IN_ROW:
+                return self._days_in_row_degree(request)
+            case RequestType.DAYS_OFF_IN_ROW:
+                if not request.free_in_row:
+                    return None
+                busy = self.worked_days(request.employee)
+                windows = request.days_off_windows(self.p)
+                broken = sum(1 for days in windows if not _has_free_run(days, busy, request.free_in_row))
+                return broken / len(windows) if windows else None
+            case RequestType.REST_AFTER:
+                return self._rest_after_degree(request, own)
+            case RequestType.FREE_WEEKENDS:
+                groups = request.weekend_groups(self.p)
+                if not groups:
+                    return None
+                busy = self.worked_days(request.employee)
+                degrees = []
+                for saturdays, need in groups:
+                    free = sum(1 for sat in saturdays if not {sat, sat + timedelta(days=1)} & busy)
+                    degrees.append(max(0, need - free) / need)
+                return sum(degrees) / len(degrees)
+            case RequestType.SAME_SHIFT_TYPE:
+                weeks: dict[date, set[str]] = defaultdict(set)
+                for s in own:
+                    weeks[_week_start(s.date)].add(s.shift_type)
+                if not weeks:
+                    return 0.0
+                return sum(1 for types in weeks.values() if len(types) > 1) / len(weeks)
+            case RequestType.NOT_ALONE:
+                counted = [s for s in own if request.counts_slot(s)]
+                if not counted:
+                    return 0.0
+                alone = sum(1 for s in counted if not self._someone_else_at(s, request.employee))
+                return alone / len(counted)
             case _:
                 return None
+
+    def _same_day_degree(self, request: Request, own: list[Slot]) -> float | None:
+        """avoid_person / prefer_person by whole days, in every location and outside this problem too."""
+        if request.subject_employee is None:
+            return None
+        p = self.p
+
+        def days_of(employee_id: str) -> set[date]:
+            days = self.worked_days(employee_id)
+            return {d for d in days if p.period_start <= d <= p.period_end and request.covers(d)}
+
+        theirs = days_of(request.subject_employee)
+        if request.type == RequestType.AVOID_PERSON:
+            mine = {s.date for s in own}
+            return len(mine & theirs) / len(mine) if mine else 0.0
+        mine = days_of(request.employee)
+        either = mine | theirs
+        return len(mine ^ theirs) / len(either) if either else 0.0
+
+    def _days_in_row_degree(self, request: Request) -> float | None:
+        """The share of the person's days (with such a shift) on which the run of days in a row is too long."""
+        limit = request.max_in_row
+        if not limit:
+            return None
+        counted = {s.date for s in self.slots_of.get(request.employee, ()) if request.counts_slot(s)}
+        if not counted:
+            return 0.0
+        worked = set(counted)
+        if request.any_shift:
+            worked |= {d for d in self.external_days(request.employee) if request.covers(d)}
+        broken, run, previous = 0, 0, None
+        for day in sorted(worked):
+            run = run + 1 if previous is not None and day == previous + timedelta(days=1) else 1
+            previous = day
+            if run > limit and day in counted:
+                broken += 1
+        return broken / len(counted)
+
+    def _rest_after_degree(self, request: Request, own: list[Slot]) -> float | None:
+        """The share of the person's shifts of that kind followed by an unwelcome shift in the next days."""
+        if request.any_shift:
+            return None  # "after which shift" is the request itself
+        first = [s for s in own if request.counts_slot(s)]
+        if not first:
+            return 0.0
+        mine = self.slots_of.get(request.employee, ())
+        outside = self.external_days(request.employee) if request.next_shift_type is None else set()
+        bad = 0
+        for slot in first:
+            after = {slot.date + timedelta(days=k) for k in range(1, request.days_after + 1)}
+            if after & outside or any(s.date in after and request.unwelcome_after(s) for s in mine):
+                bad += 1
+        return bad / len(first)
+
+    def _someone_else_at(self, slot: Slot, employee_id: str) -> bool:
+        """Someone other than the person works in the slot's location at an overlapping time."""
+        return any(
+            other.id != slot.id
+            and self.assignment.get(other.id) not in (None, employee_id)
+            and slot.matches_pair(other, avoid=True)
+            for other in self.slots_by_location.get(slot.location, ())
+        )
 
     # ----------------------------------------------------------------- everything
 

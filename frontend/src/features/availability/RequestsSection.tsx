@@ -688,6 +688,17 @@ function RequestsWindow({
   const update = useUpdateMyRequest({ mutation: { onSuccess: refresh } });
   const finish = useEndMyRequest({ mutation: { onSuccess: refresh } });
   const [ending, setEnding] = useState<string | null>(null);
+  // A lasting "nie mogę" written earlier offers this month's days too: the same save as a tap in the calendar.
+  const queryClient = useQueryClient();
+  const markCannot = useSaveMyCalendar({
+    mutation: {
+      onSuccess: () =>
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            String(query.queryKey[0]).startsWith("/api/me/"),
+        }),
+    },
+  });
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(
     null,
   );
@@ -709,7 +720,8 @@ function RequestsWindow({
     (last.status === "rejected" || last.status === "answered")
       ? last
       : undefined;
-  const failure = update.error ?? remove.error ?? finish.error;
+  const failure =
+    update.error ?? remove.error ?? finish.error ?? markCannot.error;
   const endRequest = (request: MyRequestOut, ended: boolean) =>
     finish.mutate(
       {
@@ -1018,6 +1030,23 @@ function RequestsWindow({
                     </span>
                   )}
               </div>
+              {editable && !request.ended && (
+                <div className="grid gap-2 pr-2 pb-2 empty:hidden">
+                  {(request.cannot_marks ?? []).map((mark) => (
+                    <CannotMark
+                      key={mark.days.join()}
+                      mark={mark}
+                      disabled={finish.isPending}
+                      marking={markCannot.isPending}
+                      onMark={() =>
+                        markCannot.mutate({
+                          data: { company_id: companyId, days: markedDays(mark) },
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -1264,7 +1293,7 @@ export function RequestsChat({
             {!periodId &&
               "Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. "}
             {assistantReads
-              ? "Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób i nazwy zmian w lokalu. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, wypłatę, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Kierownik i jego asystent AI widzą Twoje dyspozycje, zapisane prośby (z pytaniami asystenta o nie) i to, co przekażesz kierownikowi. Reszty rozmowy nie widzą."
+              ? "Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób, nazwy zmian i nazwy Twoich lokali. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, wypłatę, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Kierownik i jego asystent AI widzą Twoje dyspozycje, zapisane prośby (z pytaniami asystenta o nie) i to, co przekażesz kierownikowi. Reszty rozmowy nie widzą."
               : "Przeczyta to tylko kierownik."}
           </p>
         </Disclosure>

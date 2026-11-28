@@ -678,6 +678,13 @@ class _Builder:
             elif measure.request_id is not None:
                 self._text_request(requests[measure.request_id], weight)
 
+    def _external_days(self, employee_id: str) -> set[date]:
+        return {e.date for e in self.externals.get(employee_id, ())}
+
+    def _busy(self, employee_id: str, day: date, external: set[date]) -> cp_model.LinearExprT:
+        """1 when the person works that day (a shift outside the problem makes it a constant 1)."""
+        return 1 if day in external else self.own_day(employee_id, day)
+
     def _text_request(self, request, weight: float) -> None:
         own = [(s, v) for s, v in self.x_of_emp.get(request.employee, ()) if request.covers(s.date)]
         if not own:
@@ -686,6 +693,11 @@ class _Builder:
         covered_days = len(request.dates) if request.dates else (self.p.period_end - self.p.period_start).days + 1
         period_days = (self.p.period_end - self.p.period_start).days + 1
         estimate = max(1.0, self._per_person_estimate(location) * min(1.0, covered_days / period_days))
+        if request.type in (RequestType.AVOID_PERSON, RequestType.PREFER_PERSON) and request.same_day:
+            self._same_day(request, own, weight / estimate)
+            return
+        if self._new_request(request, own, weight, estimate):
+            return
         match request.type:
             case RequestType.AVOID_PERSON | RequestType.PREFER_PERSON:
                 theirs = self.x_of_emp.get(request.subject_employee, ())
@@ -786,6 +798,16 @@ class _Builder:
             case RequestType.DAYS_OFF:
                 if not request.dates:  # no dates: left to the manager, as in the validator
                     return
+                if request.min_days is not None:
+                    # "albo 24, albo 31 wolne": enough free days in each window (a shift elsewhere is no day off).
+                    external = self._external_days(request.employee)
+                    windows = request.count_windows(self.p)
+                    for n, (days, need) in enumerate(windows):
+                        free = [1 - self._busy(request.employee, d, external) for d in days]
+                        short = self.m.new_int_var(0, need, f"days_off_short[{request.id},{n}]")
+                        self.m.add(short >= need - sum(free))
+                        self.add_penalty(weight / len(windows) / need, short)
+                    return
                 by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
                 for slot, var in own:
                     by_day[slot.date].append(var)
@@ -794,21 +816,181 @@ class _Builder:
             case RequestType.WANT_WORK:
                 if not request.dates:
                     return
-                need = request.wanted_days()
                 by_day = defaultdict(list)
                 for slot, var in own:
                     if request.shift_type is None or slot.shift_type == request.shift_type:
                         by_day[slot.date].append(var)
-                good = []
+                kept_on: dict[date, cp_model.IntVar] = {}
                 for day, vars_ in by_day.items():
                     kept = self.m.new_bool_var(f"want_work[{request.id},{day}]")
                     self.m.add(request.shifts_per_day * kept <= sum(vars_))
-                    good.append(kept)
-                short = self.m.new_int_var(0, need, f"want_work_short[{request.id}]")
-                self.m.add(short >= need - sum(good))
-                self.add_penalty(weight / need, short)
+                    kept_on[day] = kept
+                windows = request.count_windows(self.p)
+                for n, (days, need) in enumerate(windows):
+                    short = self.m.new_int_var(0, need, f"want_work_short[{request.id},{n}]")
+                    self.m.add(short >= need - sum(kept_on[d] for d in days if d in kept_on))
+                    self.add_penalty(weight / len(windows) / need, short)
             case _:
                 return
+
+    def _same_day(self, request, own, unit: float) -> None:
+        """avoid_person / prefer_person by whole days ("nie w te same dni co Marek", "te same dni wolne co Kasia")."""
+        subject = request.subject_employee
+        if subject is None:
+            return
+        me, mine_outside = request.employee, self._external_days(request.employee)
+        theirs_outside = self._external_days(subject)
+        if request.type == RequestType.AVOID_PERSON:
+            for day in sorted({s.date for s, _ in own}):
+                mine = self.own_day(me, day)
+                theirs = self._busy(subject, day, theirs_outside)
+                if isinstance(theirs, int):
+                    if theirs:
+                        self.add_penalty(unit, mine)
+                    continue
+                both = self.m.new_bool_var(f"same_day[{request.id},{day}]")
+                self.m.add(both >= mine + theirs - 1)
+                self.add_penalty(unit, both)
+            return
+        days = {s.date for s, _ in own} | {s.date for s, _ in self.x_of_emp.get(subject, ())}
+        for day in sorted(d for d in days if request.covers(d)):
+            mine, theirs = self._busy(me, day, mine_outside), self._busy(subject, day, theirs_outside)
+            if isinstance(mine, int) and isinstance(theirs, int):
+                continue
+            apart = self.m.new_bool_var(f"apart[{request.id},{day}]")
+            self.m.add(apart >= mine - theirs)
+            self.m.add(apart >= theirs - mine)
+            self.add_penalty(unit, apart)
+
+    def _new_request(self, request, own, weight: float, estimate: float) -> bool:
+        """The request types added on 27.11.2026 (docs/plan.md section 50); False for the others."""
+        p, me = self.p, request.employee
+        match request.type:
+            case RequestType.TIME_OF_DAY:
+                if request.from_time is None and request.to_time is None:
+                    return True
+                for slot, var in own:
+                    if request.wrong_hours(p, slot):
+                        self.add_penalty(weight / estimate, var)
+            case RequestType.LOCATION:
+                for slot, var in own:
+                    if request.locations and (slot.location in request.locations) == request.avoid:
+                        self.add_penalty(weight / estimate, var)
+            case RequestType.SHIFT_LENGTH:
+                for slot, var in own:
+                    if request.min_shift_hours and slot.hours < request.min_shift_hours - 1e-9:
+                        self.add_penalty(weight / estimate, var)
+            case RequestType.DAYS_IN_ROW:
+                self._days_in_row(request, weight / estimate)
+            case RequestType.DAYS_OFF_IN_ROW:
+                length = request.free_in_row
+                windows = request.days_off_windows(p) if length else []
+                external = self._external_days(me)
+                for n, days in enumerate(windows):
+                    blocks = []
+                    for i in range(len(days) - length + 1):
+                        run = days[i : i + length]
+                        if run[-1] - run[0] != timedelta(days=length - 1) or any(d in external for d in run):
+                            continue
+                        block = self.m.new_bool_var(f"free_run[{request.id},{run[0]}]")
+                        for d in run:
+                            busy = self.own_day(me, d)
+                            if not isinstance(busy, int):
+                                self.m.add(block + busy <= 1)
+                        blocks.append(block)
+                    broken = self.m.new_bool_var(f"no_free_run[{request.id},{n}]")
+                    self.m.add(sum(blocks) + broken >= 1)
+                    self.add_penalty(weight / len(windows), broken)
+            case RequestType.REST_AFTER:
+                if request.any_shift:
+                    return True
+                mine = self.x_of_emp.get(me, ())
+                outside = self._external_days(me) if request.next_shift_type is None else set()
+                for slot, var in own:
+                    if not request.counts_slot(slot):
+                        continue
+                    after = {slot.date + timedelta(days=k) for k in range(1, request.days_after + 1)}
+                    if after & outside:
+                        self.add_penalty(weight / estimate, var)
+                        continue
+                    later = [v for s, v in mine if s.date in after and request.unwelcome_after(s)]
+                    if later:
+                        bad = self.m.new_bool_var(f"rest_after[{request.id},{slot.id}]")
+                        for v in later:
+                            self.m.add(bad >= var + v - 1)
+                        self.add_penalty(weight / estimate, bad)
+            case RequestType.FREE_WEEKENDS:
+                groups = request.weekend_groups(p)
+                external = self._external_days(me)
+                free_on: dict[date, cp_model.LinearExprT] = {}
+                for saturdays, _ in groups:
+                    for sat in saturdays:
+                        if sat in free_on:
+                            continue
+                        days = (sat, sat + timedelta(days=1))
+                        if any(d in external for d in days):
+                            free_on[sat] = 0
+                            continue
+                        busy = [b for b in (self.own_day(me, d) for d in days) if not isinstance(b, int)]
+                        if not busy:
+                            free_on[sat] = 1
+                            continue
+                        free = self.m.new_bool_var(f"free_weekend[{request.id},{sat}]")
+                        for b in busy:
+                            self.m.add(free + b <= 1)
+                        free_on[sat] = free
+                for n, (saturdays, need) in enumerate(groups):
+                    short = self.m.new_int_var(0, need, f"weekends_short[{request.id},{n}]")
+                    self.m.add(short >= need - sum(free_on[sat] for sat in saturdays))
+                    self.add_penalty(weight / len(groups) / need, short)
+            case RequestType.SAME_SHIFT_TYPE:
+                weeks: dict[date, dict[str, list[cp_model.IntVar]]] = defaultdict(lambda: defaultdict(list))
+                for slot, var in own:
+                    weeks[_week_start(slot.date)][slot.shift_type].append(var)
+                for monday, by_type in sorted(weeks.items()):
+                    if len(by_type) < 2:
+                        continue
+                    used = [self._or(v, f"pora[{request.id},{monday},{t}]") for t, v in by_type.items()]
+                    mixed = self.m.new_bool_var(f"pora_mixed[{request.id},{monday}]")
+                    self.m.add((len(used) - 1) * mixed >= sum(used) - 1)
+                    self.add_penalty(weight / len(weeks), mixed)
+            case RequestType.NOT_ALONE:
+                for slot, var in own:
+                    if not request.counts_slot(slot):
+                        continue
+                    others = [
+                        o for o in self.slots_of(slot.location) if o.id != slot.id and slot.matches_pair(o, avoid=True)
+                    ]
+                    filled = [(1 - self.u[o.id]) - self.x.get((me, o.id), 0) for o in others]
+                    alone = self.m.new_bool_var(f"alone[{request.id},{slot.id}]")
+                    self.m.add(alone >= var - sum(filled))
+                    self.add_penalty(weight / estimate, alone)
+            case _:
+                return False
+        return True
+
+    def _days_in_row(self, request, unit: float) -> None:
+        limit = request.max_in_row
+        if not limit:
+            return
+        me = request.employee
+        by_day: dict[date, list[cp_model.IntVar]] = defaultdict(list)
+        for slot, var in self.x_of_emp.get(me, ()):
+            if request.counts_slot(slot):
+                by_day[slot.date].append(var)
+        external = {d for d in self._external_days(me) if request.covers(d)} if request.any_shift else set()
+        worked = {d: self._or(v, f"in_row[{request.id},{d}]") for d, v in by_day.items()}
+
+        def on(day: date) -> cp_model.LinearExprT:
+            return 1 if day in external else worked.get(day, 0)
+
+        for day in sorted(worked):
+            window = sum(on(day - timedelta(days=k)) for k in range(1, limit + 1))
+            if isinstance(window, int) and window < limit:
+                continue
+            broken = self.m.new_bool_var(f"in_row_broken[{request.id},{day}]")
+            self.m.add(broken >= window + worked[day] - limit)
+            self.add_penalty(unit, broken)
 
     # ----------------------------------------------------------------- stability and variants
 

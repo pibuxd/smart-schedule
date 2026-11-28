@@ -651,11 +651,19 @@ def _request_out(
     calendar: _Calendar | None = None,
     later: int = 0,
     carried_to: date | None = None,
+    screen: tuple[date, date] | None = None,
 ) -> MyRequestOut:
     """`later`: how many messages of the same chat came after this one (the assistant reads the last few).
-    `carried_to`: the first day of the period (month) on screen when the request is a lasting one written earlier."""
+    `carried_to`: the first day of the period (month) on screen when the request is a lasting one written earlier;
+    `screen`: the days of that period (month), where its lasting "nie mogę" can be marked in the calendar."""
     carried = carried_to is not None
-    unmarked, notes = _calendar_facts(text_request, calendar) if calendar is not None and not carried else ([], [])
+    ended = carried and text_request.ends_from is not None and text_request.ends_from <= carried_to
+    if calendar is None or (carried and (screen is None or ended)):
+        unmarked, notes = [], []
+    elif carried:
+        unmarked, notes = _calendar_facts(text_request, calendar, span=screen, lasting_only=True)
+    else:
+        unmarked, notes = _calendar_facts(text_request, calendar)
     interpreted = text_request.status == TextRequest.Status.INTERPRETED
     question = (text_request.question or None) if text_request.status == TextRequest.Status.ANSWERED else None
     waiting = bool(question) and not text_request.answers.all()
@@ -680,7 +688,7 @@ def _request_out(
         carried_from=text_request.starts_on if carried else None,
         ends_from=text_request.ends_from,
         ended_by=text_request.ended_by_whom,
-        ended=carried and text_request.ends_from is not None and text_request.ends_from <= carried_to,
+        ended=ended,
     )
 
 
@@ -736,17 +744,24 @@ def _hours_proposals(row: TextRequest) -> list[HoursProposalOut]:
     return result
 
 
-def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotMarkOut], list[str]]:
+def _calendar_facts(
+    row: TextRequest, calendar: _Calendar, span: tuple[date, date] | None = None, lasting_only: bool = False
+) -> tuple[list[CannotMarkOut], list[str]]:
+    """Days the request says the person cannot work that the calendar does not show so yet, and notes where the
+    calendar says the opposite. `span`: the days to look at (the request's own period by default); `lasting_only`:
+    a lasting request carried into a later month, where only its lasting "nie mogę" counts (no notes)."""
     from apps.assistant.readings import calendar_only, dates_in
     from apps.assistant.services import request_span
 
     if row.status != TextRequest.Status.INTERPRETED or not row.interpretation:
         return [], []
-    start, end = request_span(row)
+    start, end = span or request_span(row)
     # Every part about a day counts together: a whole day (None), or all the hours the person cannot work then.
     cannot: dict[date, list[tuple[str | None, str | None]] | None] = {}
     notes = []
     for part in [row.interpretation, *(row.interpretation.get("more") or [])]:
+        if lasting_only and not (part.get("lasting") and part.get("cannot")):
+            continue
         days = sorted(dates_in(part, start, end))
         if part.get("type") == "wolne_dni":
             if part.get("cannot"):
@@ -756,7 +771,7 @@ def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotM
                         cannot[day] = None
                     else:
                         cannot.setdefault(day, []).append(hours)
-            if calendar_only(part):
+            if calendar_only(part) or lasting_only:
                 continue  # "chętnie" stays, only in the hours the person can
             eager = [d for d in days if calendar.states.get(d) == AvailabilityState.PREFER]
             if eager:
@@ -802,6 +817,28 @@ def _calendar_facts(row: TextRequest, calendar: _Calendar) -> tuple[list[CannotM
     return sorted(unmarked, key=lambda mark: mark.days[0]), notes
 
 
+def lasting_cannot_left(ctx: TenantContext, period, profile_ids) -> set:
+    """The people (profile ids) with a lasting "nie mogę" written for an earlier month whose days in `period` the
+    calendar does not show yet. "Poproś o dyspozycje" reminds them to mark it with the button in "Twoje prośby":
+    the generator reads only the calendar, never the request."""
+    rows = ctx.qs(TextRequest).filter(
+        TextRequest.lasting_from(period.start),
+        employee_id__in=list(profile_ids),
+        status=TextRequest.Status.INTERPRETED,
+    )
+    carried: dict = {}
+    for row in rows.select_related("employee"):
+        if not row.is_own([period]):
+            carried.setdefault(row.employee_id, (row.employee, []))[1].append(row)
+    span = (period.start, period.end)
+    left = set()
+    for employee_id, (employee, requests) in carried.items():
+        calendar = _Calendar(ctx, employee, *span)
+        if any(_calendar_facts(row, calendar, span=span, lasting_only=True)[0] for row in requests):
+            left.add(employee_id)
+    return left
+
+
 def _parts(row: TextRequest) -> list[RequestPartOut]:
     from apps.assistant.readings import calendar_only
 
@@ -818,14 +855,6 @@ def _parts(row: TextRequest) -> list[RequestPartOut]:
 
 
 def _cannot_last(row: TextRequest) -> str:
-    from apps.assistant.readings import calendar_only
-
-    data = row.interpretation or {}
-    if any(calendar_only(part) for part in [data, *(data.get("more") or [])]):
-        return (
-            "Godziny, w których nie możesz, zaznaczasz w kalendarzu na dni tego okresu, więc ta prośba nie może być "
-            "na stałe."
-        )
     return "Ta prośba dotyczy tylko konkretnych dni, więc nie może być na stałe."
 
 
@@ -842,6 +871,10 @@ def _summary(row: TextRequest) -> str | None:
         else None
     )
     return str(summary) + legacy_hours_notice(row.interpretation, row.text) if summary else None
+
+
+def _month_end(first: date) -> date:
+    return (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
 
 
 def _request_month(day: date) -> date:
@@ -880,11 +913,13 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
         .order_by("created_at")
     )
     carried = {r.pk for r in requests if not own(r)}
+    # The days on screen: a lasting "nie mogę" written earlier can be marked in the calendar here too.
+    screen = (period.start, period.end) if period_id is not None else (first_day, _month_end(first_day))
     calendar = None
-    if any(r.pk not in carried for r in requests):
+    if requests:
         from apps.assistant.services import request_span
 
-        spans = [request_span(r) for r in requests if r.pk not in carried]
+        spans = [request_span(r) for r in requests if r.pk not in carried] + ([screen] if carried else [])
         calendar = _Calendar(ctx, profile, min(s for s, _ in spans), max(e for _, e in spans))
     # Messages after each one in its own chat (a period, or a month without one): see `context.MAX_CONVERSATION`.
     later, seen = [], {}
@@ -893,7 +928,7 @@ def my_requests(request, company_id: UUID, period_id: UUID | None = None, month:
         later.append(seen.get(chat, 0))
         seen[chat] = seen.get(chat, 0) + 1
     return [
-        _request_out(r, calendar, n, carried_to=first_day if r.pk in carried else None)
+        _request_out(r, calendar, n, carried_to=first_day if r.pk in carried else None, screen=screen)
         for r, n in zip(requests, reversed(later), strict=True)
     ]
 
