@@ -1,9 +1,40 @@
 # Aplikacje iOS i Android
 
-Aplikacje to ten sam frontend React/Vite spakowany w aplikacji przez Capacitor 8. Łączą się z API Django przez
-HTTPS. Strona WWW działa bez zmian. Zakres opisuje [spec.md](spec.md) („Aplikacje na iPhone'a i Androida”),
-a technikę [plan.md](plan.md) (sekcja 46). Ten plik mówi, jak zbudować aplikacje, podpisać je, przetestować
-i opublikować.
+Od 27.11.2026 powstaje natywna aplikacja we Flutterze (`mobile/`, [plan.md](plan.md) sekcja 49), która zastąpi
+aplikacje z Capacitora. Do czasu jej publikacji obie są w repozytorium: nowa w `mobile/`, stara (ten sam frontend
+React/Vite spakowany w aplikacji przez Capacitor 8) w `frontend/ios` i `frontend/android`. Obie łączą się z API
+Django przez HTTPS tak samo (sesja w nagłówku, push z workera). Strona WWW działa bez zmian. Zakres opisuje
+[spec.md](spec.md) („Aplikacje na iPhone'a i Androida”), a technikę [plan.md](plan.md) (sekcje 46 i 49). Ten plik
+mówi, jak zbudować aplikacje, podpisać je, przetestować i opublikować.
+
+## Aplikacja Flutter (`mobile/`)
+
+Wymagania: Flutter 3.50 (stable, Dart 3.14). Android: JDK 21 i Android SDK (Android Studio). iOS: Mac z Xcode 26.
+
+```bash
+cd mobile
+cp config/example.json config/local.json      # raz; adres serwera w API_ORIGIN, np. https://grafikomat.pl
+flutter pub get
+flutter run --dart-define-from-file=config/local.json      # na podłączonym telefonie albo w symulatorze
+flutter analyze && flutter test                 # przed każdym PR (CI robi to samo)
+dart run swagger_parser                         # po zmianie API: klient z ../frontend/openapi.json
+```
+
+- Adres serwera jest wpisany w aplikację przy budowaniu (`API_ORIGIN`); `config/local.json` jest poza
+  repozytorium. Wersja do sklepu (`flutter build ipa` / `flutter build appbundle`) bez adresu `https://` pokazuje
+  błąd zamiast ekranów. Podczas pracy telefon może łączyć się z komputerem w tej samej sieci przez `http://`.
+- Serwer musi przepuścić aplikację: żądania mają nagłówek `X-Grafikomat-Client` i klucz sesji w
+  `X-Grafikomat-Session` (`apps/core/native.py`). Telefon nie wysyła originu, więc `NATIVE_APP_ORIGINS` dotyczy
+  tylko podglądu w przeglądarce.
+- Podgląd ekranów bez telefonu (np. zrzuty w chmurze): `flutter build web --profile
+  --dart-define=API_ORIGIN=http://localhost:8000`, katalog `build/web` serwowany lokalnie, a serwer Django
+  z `NATIVE_APP_ORIGINS=http://localhost:<port>`. Ten podgląd nie jest publikowany.
+- Identyfikator `pl.grafikomat.app` jest już w projektach Xcode i Gradle; podpisywanie, ikony i numer wersji
+  dochodzą w etapie 7 (do tego czasu wersja `release` na Androidzie podpisuje się kluczem debug).
+
+## Aplikacja z Capacitora (`frontend/ios`, `frontend/android`)
+
+Wszystko poniżej dotyczy aplikacji z Capacitora, dopóki nowa jej nie zastąpi.
 
 **Wysłanie wersji do sklepów to decyzja Piotra.** Nic w repozytorium nie wysyła niczego do App Store Connect ani do
 Google Play.
@@ -215,4 +246,5 @@ lokalizacji, aparatu. Dane aplikacji nie trafiają do kopii zapasowej Androida (
 - **Domena serwera**: adres `sslip.io` nadaje się do testów, do sklepu lepiej własna domena (Apple sprawdza, czy
   aplikacja działa w czasie przeglądu).
 - **Wytyczna Apple 4.2** (minimalna funkcjonalność): aplikacja na tym samym kodzie co strona może zostać uznana za
-  „stronę w ramce”. Atuty: powiadomienia push, podpowiedź kodu, zapis plików, praca na telefonie. Ryzyko zostaje.
+  „stronę w ramce”. Dlatego od 27.11.2026 powstaje natywna aplikacja we Flutterze (`mobile/`); do sklepów idzie ona,
+  nie aplikacja z Capacitora.

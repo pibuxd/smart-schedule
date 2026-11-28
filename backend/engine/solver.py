@@ -863,7 +863,7 @@ class _Builder:
             self.add_penalty(unit, apart)
 
     def _new_request(self, request, own, weight: float, estimate: float) -> bool:
-        """The request types added on 27.11.2026 (docs/plan.md section 49); False for the others."""
+        """The request types added on 27.11.2026 (docs/plan.md section 50); False for the others."""
         p, me = self.p, request.employee
         match request.type:
             case RequestType.TIME_OF_DAY:

@@ -1,0 +1,20 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # Generated from frontend/openapi.json by swagger_parser (swagger_parser.yaml); never edited by hand.
+    - lib/api/generated/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+
+formatter:
+  page_width: 120
+
+linter:
+  rules:
+    prefer_single_quotes: true
+    always_declare_return_types: true
+    avoid_print: true
+    unawaited_futures: true

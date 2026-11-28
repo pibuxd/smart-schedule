@@ -1,4 +1,4 @@
-"""The request types added on 27.11.2026 on the assistant's side (docs/plan.md section 49): what a reading may say,
+"""The request types added on 27.11.2026 on the assistant's side (docs/plan.md section 50): what a reading may say,
 how it is described, and what the generator gets from it."""
 
 from datetime import time, timedelta

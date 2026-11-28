@@ -56,7 +56,7 @@ class RequestType(StrEnum):
     # "w trzecim tygodniu stycznia nie chcę być sprzedawcą": for someone with several positions, not on (`avoid`) or
     # only on one of `positions` (ids; a person with the same position in several locations has one id per location).
     POSITION = "position"
-    # Added 27.11.2026 (docs/plan.md section 49), all soft like the others:
+    # Added 27.11.2026 (docs/plan.md section 50), all soft like the others:
     # "wolę zaczynać po 10" / "wolę nie pracować od 12 do 14": shifts inside (or, with `avoid`, clear of) the hours
     # `from_time`–`to_time` (either may be open).
     TIME_OF_DAY = "time_of_day"

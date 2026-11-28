@@ -15,7 +15,7 @@ limit_godzin, limit_zmian and cel_godzin), prefer_weekdays (cel_godzin: the hour
 25.11.2026), so such hours are never scored: they only offer to mark the rest of those days "mogę" (`complement`).
 An employee's message with several wishes keeps the others in `more` (a list of readings like this one).
 
-Types added on 27.11.2026 (docs/plan.md section 49): pora_dnia (from_time / to_time: the hours shifts should fit in,
+Types added on 27.11.2026 (docs/plan.md section 50): pora_dnia (from_time / to_time: the hours shifts should fit in,
 with avoid: the hours to keep free), dni_z_rzedu (max_in_row, optionally of shift_type / closing), wolne_z_rzedu
 (free_in_row, hours_period week or period), po_zmianie (after shift_type / closing: days_after free days, or only
 without next_shift_type), lokal (locations: ids of one location name, location_name, avoid, rather), wolne_weekendy

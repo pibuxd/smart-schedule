@@ -1659,7 +1659,7 @@ Spec: „Poprawki po raporcie testów PR #82 (26.11.2026)”.
   dla dnia zablokowanego, dnia z całodniowym „nie mogę” przy prośbie na cały dzień, dnia, w którym nic się nie
   zmienia, i dnia z całodniowym „nie mogę”, w którym nic nie zostaje.
 - Na stałe: `TextRequest.part_can_last(part)` = bez dat (do 27.11.2026 także nie `readings.calendar_only`; od
-  sekcji 49 godziny „nie mogę” w dni tygodnia mogą być na stałe). Z niego `can_last` i `set_lasting`.
+  sekcji 50 godziny „nie mogę” w dni tygodnia mogą być na stałe). Z niego `can_last` i `set_lasting`.
   `PATCH /me/requests/{id}` z `lasting: true` daje 409 z `_cannot_last`. `MyRequestOut.parts` (`RequestPartOut`:
   `summary`, `calendar_only`, `can_last`) mówi ekranowi, co dostaje generator i co jest tylko w tym okresie.
 - `MyRequestOut.unmarked_days` wraca przejściowo (do 2027): tylko dni propozycji na cały dzień, które starszy ekran
@@ -1816,7 +1816,72 @@ opcje wyłączenia powiadomień w telefonie”.
 Założenia: jedno słowo „Na tym telefonie” zamiast opisu (nagłówek ekranu mówi, o czym); powiadomienia już leżące
 w systemie zostają przy wyłączaniu.
 
-## 49. Więcej rodzajów próśb pracownika (27.11.2026)
+## 49. Natywna aplikacja we Flutterze (27.11.2026)
+
+Spec: „Aplikacje na iPhone'a i Androida”, decyzja z 27.11.2026. Piotr: „chcę żeby to była natywna aplikacja na iOS
+i Android”, potem wybór Flutter i zakresu (pracownik + szybkie sprawy kierownika). Budowanie: [mobile.md](mobile.md).
+
+Etapy (jeden PR każdy):
+
+1. Szkielet i logowanie: projekt `mobile/`, klient API, wygląd, logowanie kodem SMS, sesja, zaproszenia, wybór
+   firmy, „Twoje dane”, „Wyloguj”, CI.
+2. „Mój grafik”: najbliższa zmiana, miesiąc, minione zmiany, oddawanie i branie zmian, godziny i wypłata.
+3. „Kiedy mogę”: kalendarz z czterema stanami (kolor + ikona + wzór), godziny, termin, „Wyślij kierownikowi”.
+4. „Twoje prośby” i asystent pracownika (czat z prawej, pytania asystenta, „Na stałe”).
+5. Powiadomienia i push (APNs/FCM jak w sekcji 46, przełącznik „Na tym telefonie” z sekcji 48), kod SMS na
+   Androidzie (SMS User Consent), dotknięcie powiadomienia otwiera trasę z `push_path`.
+6. Kierownik z telefonu: powiadomienia, „Oddane zmiany”, „Godziny”, asystent; reszta panelu odsyła na stronę.
+7. Do sklepów: ikony, ekran startowy, podpisywanie, wersje, iPad (tak albo nie), usunięcie aplikacji z Capacitora
+   (`frontend/ios`, `frontend/android`, `src/native`) i przeniesienie identyfikatora `pl.grafikomat.app`.
+
+Technika:
+
+- Flutter 3.50 (Dart 3.14). Material jest w pakiecie `material_ui` (`package:material_ui/material_ui.dart`), bo
+  `package:flutter/material.dart` jest przestarzały od 3.50. Stan: Riverpod 3 (bez generowania kodu), trasy:
+  go_router z tymi samymi ścieżkami co strona (`/logowanie`, `/zaproszenia`, `/twoje-dane`, `/grafik`,
+  `/kiedy-moge`, `/powiadomienia`, później `/kierownik/...`), więc `services.push_path` działa bez zmian. Zakładki
+  pracownika: `StatefulShellRoute.indexedStack` (każda pamięta swój stan).
+- Klient API: `swagger_parser` z `frontend/openapi.json` do `mobile/lib/api/generated` (Dio, modele bez
+  `build_runner`, `unknown_enum_values: preserve`, więc stara wersja aplikacji przeżyje nową wartość wyliczenia
+  z serwera). Nie edytujemy go ręcznie; CI sprawdza, czy jest aktualny (`dart run swagger_parser --check`).
+- Sesja: jak aplikacja z Capacitora (`apps/core/native.py`): nagłówek `X-Grafikomat-Client` (`ios`, `android`)
+  i klucz w `X-Grafikomat-Session`; `lib/api/client.dart` (`SessionInterceptor`) jest jedynym miejscem, które o tym
+  wie. Klucz i wybrana firma w `flutter_secure_storage` (Keychain, Android Keystore). 401 przy wysłanym kluczu =
+  sesja wygasła: klucz znika, logowanie mówi „Sesja wygasła. Zaloguj się jeszcze raz. To, co już zapisane,
+  zostało.”. Ponawianie jak na stronie (`lib/api/errors.dart`, `retryDelay`: brak odpowiedzi i 502/503/504 do 4
+  razy, inne 5xx raz).
+- Adres serwera wpisany przy budowaniu: `--dart-define-from-file=config/local.json` (klucz `API_ORIGIN`, plik poza
+  repozytorium, wzór `config/example.json`). Wersja do sklepu bez adresu `https://` pokazuje błąd zamiast ekranów.
+- Wygląd: `lib/ui/theme.dart` przenosi tokeny z `frontend/src/styles/tokens.css` (kolory, 44/48 px, promienie,
+  16 px tekstu); krój systemowy telefonu. Słowa i komunikaty jak na stronie, z tymi samymi zasadami prostego języka.
+- Bez wspólnego kodu ze stroną: logika (numer telefonu, numer konta) przeniesiona do Darta z tymi samymi
+  przypadkami w testach (`test/shared/`).
+- Testy: `flutter test` z `FakeServer` (`test/helpers.dart`), który odpowiada na żądania Dio jak serwer i zapisuje,
+  co aplikacja wysłała. `web/` służy tylko do podglądu ekranów w przeglądarce (zrzuty bez telefonu).
+
+Założenia etapu 1: zakładanie firmy tylko na stronie (bez linku w aplikacji, żeby nie wyglądało jak zakup poza
+App Store; osoba bez firmy i bez zaproszeń czyta „Prowadzisz lokal? Firmę założysz na stronie Grafikomatu.”); osoba, która już pracuje w firmie i ma zaproszenie, może wrócić do grafiku bez decyzji („Wróć do
+grafiku”, w aplikacji nie ma paska adresu); zakładki 2–4 pokazują „Ten ekran jest jeszcze w budowie” do swoich
+etapów; podpisywanie wersji do sklepu, ikony i iPad w etapie 7.
+
+Założenia etapu 2 („Mój grafik”, `lib/features/schedule/`):
+
+- Ekran i słowa jak `MyScheduleScreen` na stronie. Logika z `rows.ts`, `hours.ts`, dat i złotówek przeniesiona do
+  Darta z tymi samymi przypadkami (`test/schedule/schedule_logic_test.dart`), testy ekranu przeniesione z
+  `MyScheduleScreen.test.tsx`.
+- Godziny w „Zgłoś inne godziny” wpisuje się na klawiaturze z cyframi, a dwukropek dopisuje się sam („1530” →
+  „15:30”, „600” → „6:00”); ikona zegara obok otwiera systemowy wybór godziny (24 h). „Wychodzę teraz” bierze
+  godzinę z zegara lokalu (z `start_time` i `start_at` zmiany), w jakiejkolwiek strefie jest telefon.
+- Ekran odświeża się przeciągnięciem w dół, po powrocie do aplikacji i sam o początku i końcu najbliższej zmiany
+  („Trwa Twoja zmiana”, przejście do „Minionych zmian”). Czas w testach daje `clockProvider` (`pumpApp(clock:)`).
+- `/grafik?dzien=` i `?oferta=` (dotknięte powiadomienie, etap 5) obrysowują dzień albo zmianę do wzięcia i
+  przewijają do niej; zwinięte „Zmiany do wzięcia” same się wtedy rozwijają.
+- Bez zmian dzień ma przycisk „Zaznacz, kiedy możesz pracować” zamiast linku w zdaniu (większe pole do dotknięcia).
+  Arkusze („Oddać tę zmianę?”, „Zgłoś inne godziny”) wysuwają się od dołu nad paskiem zakładek.
+- Zwijana sekcja to `lib/ui/fold.dart` (jak `<Section collapsible>`: obracana strzałka, kilka słów stanu w
+  nagłówku), arkusz to `lib/ui/sheet.dart`.
+
+## 50. Więcej rodzajów próśb pracownika (27.11.2026)
 
 Piotr (27.11.2026): lista 20 próśb, których asystent nie umiał zamienić na nic, co generator liczy, i „obsłuż te
 typy” (spec.md, „Więcej rodzajów próśb pracownika”). Te same typy mają polecenia kierownika o osobie.
@@ -1881,3 +1946,4 @@ tydzień to poniedziałek–niedziela, weekend to sobota i niedziela; `nie_sam` 
 problemu są czytane 7 dni przed okresem (`EXTERNAL_MARGIN`), więc przy „co trzeci weekend” i rzadszych weekendy
 sprzed tego marginesu liczą się jako wolne (pierwsze okno może być łagodniejsze); „co drugi weekend” ma pełne dane.
 Polecenie kierownika `wolne_dni` nie ma godzin (godziny „nie mogę” zaznacza pracownik w swoim kalendarzu).
+
