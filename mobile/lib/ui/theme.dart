@@ -141,7 +141,7 @@ ThemeData appTheme() {
       indicatorColor: AppColors.accentSoft,
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
-          fontSize: 14,
+          fontSize: 12,
           fontWeight: FontWeight.w600,
           color: states.contains(WidgetState.selected) ? AppColors.accent : AppColors.inkMuted,
         ),

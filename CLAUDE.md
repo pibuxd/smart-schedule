@@ -298,4 +298,6 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   that knows the session header), `session/` (who is logged in, chosen company), `router.dart` (`sessionRedirect`),
   `ui/` (theme with the web's tokens, status views, `Fold` = `<Section collapsible>`, `showAppSheet`), `shared/`
   (logic ported from the web with the same test cases), `features/<area>/` screens. Same Polish copy and plain-language rules as the web; every screen has empty, loading
-  and error states. Manager screens beyond the quick tasks send the person to the website.
+  and error states. Manager screens beyond the quick tasks send the person to the website. The employee's chat is a
+  page of its own over the tabs (`features/requests/employee_chat.dart`, `openEmployeeChat`), opened by the last tab
+  and by "Twoje prośby"; it follows the month of "Kiedy mogę" while that tab is open (`EmployeeChatMemory.screen`).

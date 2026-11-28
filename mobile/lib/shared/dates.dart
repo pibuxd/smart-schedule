@@ -148,3 +148,9 @@ num spanHours(String from, String to) {
   final hours = (span / 60 * 10).round() / 10;
   return hours == hours.roundToDouble() ? hours.toInt() : hours;
 }
+
+/// "od grudnia" for the first day of a month, else "od 15 grudnia": since when a request counts or stops.
+String sinceWords(String iso) {
+  final day = parseDate(iso);
+  return day.day == 1 ? 'od ${monthGenitive(day)}' : 'od ${dayAndMonth(day)}';
+}
