@@ -65,19 +65,24 @@ class TabScreen extends ConsumerWidget {
       );
     }
     final company = session.company;
-    final list = ListView(
+    // One column, not a lazy list: a tapped notification scrolls to a row far down, which must already exist.
+    final list = SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 32),
-      children: [
-        if (session.me.firstName.isEmpty) ...[ProfileNameForm(me: session.me), const SizedBox(height: 16)],
-        if (session.me.pendingInvitations > 0) ...[
-          OutlinedButton(
-            onPressed: () => context.push('/zaproszenia'),
-            child: const Text('Masz nowe zaproszenie do pracy. Zobacz'),
-          ),
-          const SizedBox(height: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (session.me.firstName.isEmpty) ...[ProfileNameForm(me: session.me), const SizedBox(height: 16)],
+          if (session.me.pendingInvitations > 0) ...[
+            OutlinedButton(
+              onPressed: () => context.push('/zaproszenia'),
+              child: const Text('Masz nowe zaproszenie do pracy. Zobacz'),
+            ),
+            const SizedBox(height: 16),
+          ],
+          ...children,
         ],
-        ...children,
-      ],
+      ),
     );
     return Scaffold(
       appBar: AppBar(

@@ -26,16 +26,6 @@ class ComingScreen extends StatelessWidget {
   }
 }
 
-class ScheduleTab extends StatelessWidget {
-  const ScheduleTab({super.key});
-
-  @override
-  Widget build(BuildContext context) => const ComingScreen(
-    title: 'Mój grafik',
-    what: 'Tu zobaczysz swoje zmiany, oddasz zmianę i weźmiesz cudzą. Na razie sprawdzisz to na stronie Grafikomatu.',
-  );
-}
-
 class AvailabilityTab extends StatelessWidget {
   const AvailabilityTab({super.key});
 

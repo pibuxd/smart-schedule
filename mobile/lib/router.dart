@@ -7,6 +7,7 @@ import 'features/auth/login_screen.dart';
 import 'features/auth/my_data_screen.dart';
 import 'features/employee/coming_screens.dart';
 import 'features/employee/employee_shell.dart';
+import 'features/schedule/my_schedule_screen.dart';
 import 'features/start_screen.dart';
 import 'session/session.dart';
 
@@ -32,6 +33,15 @@ String? sessionRedirect(Session session, Uri uri) {
   }
 }
 
+final _isoDay = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+final _id = RegExp(r'^[\w-]{1,64}$');
+
+/// `?dzien=2026-12-04` from a notification, or null for anything else.
+String? searchDay(String? value) => value != null && _isoDay.hasMatch(value) ? value : null;
+
+/// `?oferta=<id>`, `?okres=<id>`
+String? searchId(String? value) => value != null && _id.hasMatch(value) ? value : null;
+
 /// Tells the router to look again when the session changes (logged in, logged out, invitation accepted).
 class _SessionListenable extends ChangeNotifier {
   void changed() => notifyListeners();
@@ -54,7 +64,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, shell) => EmployeeShell(shell: shell),
         branches: [
           StatefulShellBranch(
-            routes: [GoRoute(path: '/grafik', builder: (context, state) => const ScheduleTab())],
+            routes: [
+              GoRoute(
+                path: '/grafik',
+                builder: (context, state) {
+                  final day = searchDay(state.uri.queryParameters['dzien']);
+                  final offer = searchId(state.uri.queryParameters['oferta']);
+                  // A new notification opens the screen afresh on what it is about.
+                  return ScheduleTab(key: ValueKey('${day ?? ''}/${offer ?? ''}'), focusDay: day, focusOffer: offer);
+                },
+              ),
+            ],
           ),
           StatefulShellBranch(
             routes: [GoRoute(path: '/kiedy-moge', builder: (context, state) => const AvailabilityTab())],
