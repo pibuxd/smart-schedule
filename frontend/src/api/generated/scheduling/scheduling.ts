@@ -602,8 +602,9 @@ export const getAskForAvailabilityUrl = (periodId: string,) => {
 
 /**
  * "Poproś o dyspozycje": an in-app notice with the period and the deadline for every active employee of the
- * location (or only those who have not finished). Nothing is arranged automatically: the manager arranges the
- * schedule when the deadline has passed or everyone has answered.
+ * location (or only those who have not finished); people with a lasting "nie mogę" not yet in this period's calendar
+ * are reminded to mark it. Nothing is arranged automatically: the manager arranges the schedule when the deadline
+ * has passed or everyone has answered.
  * @summary Ask For Availability
  */
 export const askForAvailability = async (periodId: string,
@@ -672,8 +673,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     /**
  * "Poproś o dyspozycje": an in-app notice with the period and the deadline for every active employee of the
- * location (or only those who have not finished). Nothing is arranged automatically: the manager arranges the
- * schedule when the deadline has passed or everyone has answered.
+ * location (or only those who have not finished); people with a lasting "nie mogę" not yet in this period's calendar
+ * are reminded to mark it. Nothing is arranged automatically: the manager arranges the schedule when the deadline
+ * has passed or everyone has answered.
  * @summary Ask For Availability
  */
 export const useAskForAvailability = <TError = ErrorOut,
