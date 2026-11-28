@@ -76,14 +76,16 @@ class _RequestsWindowState extends ConsumerState<RequestsWindow> {
   }
 
   Future<bool> _change(Future<void> Function() call, void Function(bool busy) busy, {bool calendar = false}) async {
+    // Taken now: the other screens must hear of the change also when this one is gone by the time it is saved.
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() {
       busy(true);
       _error = null;
     });
     try {
       await call();
+      refreshAfterRequest(container, calendar: calendar);
       if (!mounted) return true;
-      refreshAfterRequest(ref, calendar: calendar);
       try {
         await ref.read(myRequestsProvider(_key).future);
       } catch (_) {

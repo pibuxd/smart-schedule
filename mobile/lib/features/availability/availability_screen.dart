@@ -589,8 +589,12 @@ class _EditorState extends ConsumerState<_Editor> {
       key: ValueKey('${widget.companyId}:${ofPeriod ? period.id : initial.start}'),
       companyId: widget.companyId,
       scope: ofPeriod
-          ? ChatScope(periodId: period.id, editable: !readOnly && period.editable)
-          : ChatScope(month: initial.start, editable: !readOnly && initial.end.compareTo(todayIso) >= 0),
+          ? ChatScope(companyId: widget.companyId, periodId: period.id, editable: !readOnly && period.editable)
+          : ChatScope(
+              companyId: widget.companyId,
+              month: initial.start,
+              editable: !readOnly && initial.end.compareTo(todayIso) >= 0,
+            ),
       start: ofPeriod ? period.start : initial.start,
       end: ofPeriod ? period.end : initial.end,
       assistantReads: widget.assistantReads,

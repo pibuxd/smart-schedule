@@ -394,9 +394,12 @@ class RemoveControl extends StatelessWidget {
 /// Reports of other hours the assistant prepared from one message (overtime, leaving early). Nothing goes to the
 /// manager by itself: "Wyślij kierownikowi" sends one, as the same report from "Mój grafik".
 class HoursProposals extends StatelessWidget {
-  const HoursProposals({super.key, required this.request});
+  const HoursProposals({super.key, required this.request, this.readOnly = false});
 
   final MyRequestOut request;
+
+  /// The company's access has expired (the chat opened to read): nothing can be sent.
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -415,6 +418,7 @@ class HoursProposals extends StatelessWidget {
                 key: ValueKey('${proposal.date}:${proposal.startTime}:${proposal.endTime}'),
                 proposal: proposal,
                 requestId: request.id,
+                readOnly: readOnly,
               ),
             ),
         ],
@@ -433,10 +437,11 @@ const _sentWords = {
 };
 
 class _Proposal extends ConsumerStatefulWidget {
-  const _Proposal({super.key, required this.proposal, required this.requestId});
+  const _Proposal({super.key, required this.proposal, required this.requestId, required this.readOnly});
 
   final HoursProposalOut proposal;
   final String requestId;
+  final bool readOnly;
 
   @override
   ConsumerState<_Proposal> createState() => _ProposalState();
@@ -448,6 +453,7 @@ class _ProposalState extends ConsumerState<_Proposal> {
 
   Future<void> _send(String assignmentId) async {
     final proposal = widget.proposal;
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() {
       _sending = true;
       _error = null;
@@ -465,7 +471,7 @@ class _ProposalState extends ConsumerState<_Proposal> {
               requestId: widget.requestId,
             ),
           );
-      refreshAfterRequest(ref, schedule: true);
+      refreshAfterRequest(container, schedule: true);
     } catch (error) {
       if (mounted) setState(() => _error = error);
     } finally {
@@ -541,6 +547,11 @@ class _ProposalState extends ConsumerState<_Proposal> {
             )
           else if (assignmentId == null)
             const Text('Grafik się zmienił i nie masz już tej zmiany, więc tego zgłoszenia nie wyślesz.', style: _small)
+          else if (widget.readOnly)
+            const Text(
+              'Firma ma teraz wstrzymany dostęp do aplikacji, więc tego zgłoszenia nie wyślesz.',
+              style: _small,
+            )
           else
             Align(
               alignment: Alignment.centerLeft,

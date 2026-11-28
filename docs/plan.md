@@ -1909,15 +1909,18 @@ Założenia etapu 4 („Twoje prośby” i asystent, `lib/features/requests/`):
 - Rozmowa to osobny ekran nad zakładkami (przejście telefonu: na iPhonie wsuwa się z prawej i cofa przesunięciem od
   krawędzi), a nie wysuwany panel jak na stronie. Otwiera ją czwarta zakładka „Asystent” (albo „Prośby”, gdy
   asystent jest wyłączony; bez niej, gdy firma nie ma dostępu) i przyciski „Twoich próśb”. Na „Kiedy mogę” rozmowa
-  dotyczy miesiąca na ekranie, gdzie indziej okresu, o który prosi kierownik, albo tego miesiąca.
+  dotyczy miesiąca na ekranie, także zamkniętego (wtedy do czytania, jak z „Pokaż rozmowę”; review Piotra, 28.11.2026;
+  strona otwiera wtedy najbliższy otwarty okres), gdzie indziej okresu, o który prosi kierownik, albo tego miesiąca.
 - Najnowsza wiadomość jest na dole i rozmowa otwiera się przy niej. Drobny druk („O prośbach i Twoich danych”) otwiera
   się w arkuszu, krótkimi akapitami: z linku pod polem (widać go zawsze, jak zwiniętą sekcję na stronie) i z przycisku
   „i” u góry rozmowy. Nie rozwija się pod polem, bo zabierałby rozmowę przy otwartej klawiaturze.
 - Gdy firma ma wstrzymany dostęp, nie ma zakładki rozmowy, ale „Pokaż rozmowę” w „Twoich prośbach” otwiera ją do
-  czytania; pod nią jest zdanie o wstrzymanym dostępie zamiast „Prośby na ten okres są już zamknięte”.
-- Niewysłana wiadomość zostaje po wyjściu z rozmowy (osobno dla każdego miesiąca, do wylogowania). Enter robi nową
-  linię, wysyła przycisk.
-- „Zaznacz „Mogę”…” zapisuje kalendarz jak stuknięcie; „Kiedy mogę” wczytuje go od nowa po wyjściu z rozmowy. Dni,
+  czytania; pod nią jest zdanie o wstrzymanym dostępie zamiast „Prośby na ten okres są już zamknięte”, a przygotowane
+  zgłoszenia innych godzin nie mają wtedy „Wyślij kierownikowi”.
+- Niewysłana wiadomość zostaje po wyjściu z rozmowy (osobno dla każdej firmy i miesiąca, do wylogowania). Enter robi
+  nową linię, wysyła przycisk. Wiadomość wysłana tuż przed zamknięciem rozmowy znika z pola, gdy serwer ją przyjmie.
+- „Zaznacz „Mogę”…” zapisuje kalendarz jak stuknięcie; „Kiedy mogę” wczytuje go od nowa po zapisie, także gdy rozmowa
+  została zamknięta, zanim serwer odpowiedział. Dni,
   które jeszcze się zapisują albo się nie zapisały, zostają przy tym takie, jak wybrał pracownik. Prośba „nie mogę” na
   stałe z wcześniejszego miesiąca (sekcja 50) ma w „Twoich prośbach” ten sam przycisk dla dni miesiąca na ekranie.
 - Lista próśb pyta serwer co 2 sekundy, dopóki asystent czyta świeżą wiadomość (najdłużej minutę), jak strona.

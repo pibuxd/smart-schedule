@@ -13,20 +13,33 @@ import 'requests_chat.dart';
 import 'requests_data.dart';
 
 /// What the chat keeps while the app is open: the conversation of the screen on view ("Kiedy mogę" sets its month)
-/// and the unsent message of every conversation. A new login starts it afresh.
+/// and the unsent message of every conversation (by [ChatScope.key], so per company too). A new login starts it
+/// afresh.
 class EmployeeChatMemory {
   ChatScope? screen;
-  final Map<String, String> drafts = {};
+  final Map<String, TextEditingController> _drafts = {};
+
+  /// The field's text of one conversation. It outlives the chat page, so a message sent just before the chat was
+  /// closed still clears it once the server took the message.
+  TextEditingController draft(ChatScope scope) => _drafts.putIfAbsent(scope.key, TextEditingController.new);
+
+  void dispose() {
+    for (final draft in _drafts.values) {
+      draft.dispose();
+    }
+  }
 }
 
 final employeeChatMemoryProvider = Provider<EmployeeChatMemory>((ref) {
   ref.watch(sessionProvider.select((session) => session is SessionReady ? session.me.id : null));
-  return EmployeeChatMemory();
+  final memory = EmployeeChatMemory();
+  ref.onDispose(memory.dispose);
+  return memory;
 });
 
 /// Opens the employee's chat as a page of its own, over the tabs: on [scope] when given (from "Twoje prośby"), else on
-/// [screen] (the month of "Kiedy mogę" when that tab is open), else on the period the manager asked for, or this month
-/// before that.
+/// [screen] (the month of "Kiedy mogę" when that tab is open, also a closed one: its history, to read), else on the
+/// period the manager asked for, or this month before that.
 Future<void> openEmployeeChat(BuildContext context, WidgetRef ref, {ChatScope? scope, ChatScope? screen}) {
   final session = ref.read(sessionProvider);
   final company = session is SessionReady ? session.company : null;
@@ -60,9 +73,11 @@ class EmployeeChatPage extends ConsumerWidget {
     final today = ref.read(clockProvider)();
     final period = data?.period;
     final nearest = period != null && period.editable
-        ? ChatScope(periodId: period.id, editable: true)
-        : ChatScope(month: '${monthOf(toIsoDate(today))}-01', editable: true);
-    final scope = data == null ? null : asked ?? (screen?.editable == true ? screen : null) ?? nearest;
+        ? ChatScope(companyId: company.id, periodId: period.id, editable: true)
+        : ChatScope(companyId: company.id, month: '${monthOf(toIsoDate(today))}-01', editable: true);
+    // The conversation on screen, as "Pokaż rozmowę" there opens it; [ChatScope.editable] decides what can be written.
+    final onScreen = screen?.companyId == company.id ? screen : null;
+    final scope = data == null ? null : (asked?.companyId == company.id ? asked : null) ?? onScreen ?? nearest;
     final subtitle =
         (scope == null ? null : scopeLine(scope, period)) ??
         (assistantReads ? 'Zapytaj o swój grafik albo napisz prośbę.' : 'Napisz prośbę do kierownika.');
@@ -97,8 +112,7 @@ class EmployeeChatPage extends ConsumerWidget {
               scope: scope,
               assistantReads: assistantReads,
               only: onlyWords(scope, period),
-              draft: memory.drafts[scope.key] ?? '',
-              onDraftChanged: (text) => memory.drafts[scope.key] = text,
+              draft: memory.draft(scope),
               readOnly: company.readOnly,
             )
           : availability.hasError

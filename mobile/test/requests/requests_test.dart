@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grafikomat/features/requests/chat_parts.dart';
 import 'package:grafikomat/router.dart';
 import 'package:grafikomat/session/prefs.dart';
+import 'package:grafikomat/session/session.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../helpers.dart';
@@ -213,6 +216,32 @@ void main() {
       // The calendar of "Kiedy mogę" is read again, so it shows the marks once the chat is closed.
       final reads = api.sent('GET /api/me/calendar').length;
       await back(tester);
+      expect(api.sent('GET /api/me/calendar').length, reads + 1);
+    });
+
+    testWidgets('has the calendar read again when the chat was closed before the marks were saved', (tester) async {
+      final saved = Completer<Reply>();
+      final api = server(
+        assistantReads: true,
+        rows: () => [
+          request({
+            'summary': 'Wolne 14.12 („nie mogę”).',
+            'cannot_marks': [
+              {
+                'days': ['2026-12-14'],
+              },
+            ],
+          }),
+        ],
+      )..on('PUT /api/me/calendar', (_) => saved.future);
+      await open(tester, api);
+      await openChat(tester);
+      await tap(tester, find.text('Zaznacz „nie mogę”'));
+      await back(tester);
+      final reads = api.sent('GET /api/me/calendar').length;
+
+      saved.complete(const Reply(204));
+      await settle(tester);
       expect(api.sent('GET /api/me/calendar').length, reads + 1);
     });
 
@@ -565,6 +594,71 @@ void main() {
       expect(tester.widget<TextField>(field('Twoja wiadomość')).controller!.text, '');
     });
 
+    testWidgets('clears a sent message also when the chat was closed before the server answered', (tester) async {
+      var rows = <Object?>[];
+      final answer = Completer<Reply>();
+      final api = server(rows: () => rows, assistantReads: true)
+        ..on('POST /api/me/requests', (sent) {
+          rows = [
+            request({'text': (sent.body! as Map)['text'], 'status': 'new', 'summary': null}),
+          ];
+          return answer.future;
+        });
+      await open(tester, api);
+      await openChat(tester);
+      await tester.enterText(field('Twoja wiadomość'), 'Wolę piątki rano');
+      await tap(tester, find.text('Wyślij'));
+      await back(tester); // a weak signal: the chat is closed while the message is on its way
+
+      answer.complete(Reply(201, rows.first));
+      await settle(tester);
+      await openChat(tester);
+      expect(find.text('Wolę piątki rano'), findsOneWidget);
+      // Not in the field again, ready to be sent twice.
+      expect(tester.widget<TextField>(field('Twoja wiadomość')).controller!.text, '');
+    });
+
+    testWidgets('keeps the message of each company apart', (tester) async {
+      final api = server(rows: () => [], assistantReads: true)
+        ..on(
+          'GET /api/me',
+          (_) => Reply(
+            200,
+            meJson(
+              companies: [
+                {
+                  'id': 'c1',
+                  'name': 'Piekarnia Pod Lipą',
+                  'role': 'employee',
+                  'read_only': false,
+                  'works_shifts': true,
+                },
+                {'id': 'c2', 'name': 'Kawiarnia Rynek', 'role': 'employee', 'read_only': false, 'works_shifts': true},
+              ],
+            ),
+          ),
+        );
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final container = await pumpApp(tester, api, stored: {Prefs.sessionKey: 'k'}, clock: () => today);
+      await tap(tester, chatTab('Asystent'));
+      await tester.enterText(field('Twoja wiadomość'), 'Wolne 24 grudnia');
+      await back(tester);
+
+      // The same December in another company: its own, empty field, so nothing goes there by mistake.
+      container.read(companyChoiceProvider.notifier).choose('c2');
+      await settle(tester);
+      await tap(tester, chatTab('Asystent'));
+      expect(tester.widget<TextField>(field('Twoja wiadomość')).controller!.text, '');
+      await back(tester);
+
+      container.read(companyChoiceProvider.notifier).choose('c1');
+      await settle(tester);
+      await tap(tester, chatTab('Asystent'));
+      expect(tester.widget<TextField>(field('Twoja wiadomość')).controller!.text, 'Wolne 24 grudnia');
+    });
+
     testWidgets('lets the employee forward a rejected request to the manager without claiming it was sent', (
       tester,
     ) async {
@@ -841,6 +935,35 @@ void main() {
       });
     });
 
+    testWidgets('sends nothing while the company has no access', (tester) async {
+      await open(
+        tester,
+        server(
+          asked: null,
+          assistantReads: true,
+          readOnly: true,
+          rows: () => [
+            request(),
+            request({
+              'id': 'r2',
+              'text': 'Źle się czuję, wyjdę o 11.',
+              'status': 'answered',
+              'summary': null,
+              'reply': 'Przygotowałem zgłoszenie innych godzin.',
+              'hours_reports': [proposal()],
+            }),
+          ],
+        ),
+      );
+      await tap(tester, find.text('Pokaż rozmowę'));
+      expect(part('Zgłoszenia innych godzin'), findsOneWidget);
+      expect(find.text('Wyślij kierownikowi'), findsNothing);
+      expect(
+        find.text('Firma ma teraz wstrzymany dostęp do aplikacji, więc tego zgłoszenia nie wyślesz.'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('says when the shift is gone or the manager decided', (tester) async {
       await open(
         tester,
@@ -1097,6 +1220,23 @@ void main() {
       await tap(tester, chatTab('Mój grafik'));
       await tap(tester, chatTab('Asystent'));
       expect(find.text('Prośby na grudzień 2026.'), findsOneWidget);
+    });
+
+    testWidgets('on "Kiedy mogę" opens a closed month to read, like "Pokaż rozmowę"', (tester) async {
+      final api = server(asked: {...december, 'editable': false}, rows: () => [request()], assistantReads: true);
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final container = await pumpApp(tester, api, stored: {Prefs.sessionKey: 'k'}, clock: () => today);
+      container.read(routerProvider).go('/kiedy-moge');
+      await settle(tester);
+      expect(find.text('Grudzień 2026'), findsOneWidget);
+      await tap(tester, chatTab('Asystent'));
+      expect(find.text('Prośby na grudzień 2026.'), findsOneWidget);
+      expect(asked(api).last, {'company_id': 'c1', 'period_id': 'p1'});
+      expect(find.text('Wolałabym nie pracować w piątki.'), findsOneWidget);
+      expect(find.textContaining('Prośby na ten okres są już zamknięte.'), findsOneWidget);
+      expect(field('Twoja wiadomość'), findsNothing);
     });
 
     testWidgets('is called "Prośby" when the assistant is off', (tester) async {

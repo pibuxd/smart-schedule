@@ -44,8 +44,7 @@ Future<void> showAboutRequests(BuildContext context, {required bool assistantRea
     );
 
 /// The conversation (the website's `RequestsChat`): every message with the assistant's answer, newest at the bottom,
-/// and the field to write. The message being written lives outside ([draft], [onDraftChanged]), so leaving the chat
-/// does not lose it.
+/// and the field to write. The message being written lives outside ([draft]), so leaving the chat does not lose it.
 class RequestsChat extends ConsumerStatefulWidget {
   const RequestsChat({
     super.key,
@@ -54,7 +53,6 @@ class RequestsChat extends ConsumerStatefulWidget {
     required this.assistantReads,
     required this.only,
     required this.draft,
-    required this.onDraftChanged,
     this.readOnly = false,
   });
 
@@ -64,8 +62,9 @@ class RequestsChat extends ConsumerStatefulWidget {
 
   /// "w grudniu": the month (or days of the period) of this chat, for "Tylko w grudniu" / "Na stałe".
   final String only;
-  final String draft;
-  final ValueChanged<String> onDraftChanged;
+
+  /// The field's text, kept by the caller for this conversation (not disposed here).
+  final TextEditingController draft;
 
   /// The company's access has expired: the conversation can be read, but nothing written.
   final bool readOnly;
@@ -75,8 +74,7 @@ class RequestsChat extends ConsumerStatefulWidget {
 }
 
 class _RequestsChatState extends ConsumerState<RequestsChat> {
-  late final TextEditingController _text = TextEditingController(text: widget.draft)
-    ..addListener(() => widget.onDraftChanged(_text.text));
+  TextEditingController get _text => widget.draft;
   final _feed = ScrollController();
 
   bool _creating = false;
@@ -90,21 +88,22 @@ class _RequestsChatState extends ConsumerState<RequestsChat> {
 
   @override
   void dispose() {
-    _text.dispose();
     _feed.dispose();
     super.dispose();
   }
 
-  /// Runs one change, then waits for the fresh list, so a card never shows its old state after the button.
+  /// Runs one change, then waits for the fresh list, so a card never shows its old state after the button. When the
+  /// chat was closed before the server answered, the other screens are still told (the calendar after "Zaznacz").
   Future<bool> _change(Future<void> Function() call, void Function(bool busy) busy, {bool calendar = false}) async {
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() {
       busy(true);
       _error = null;
     });
     try {
       await call();
+      refreshAfterRequest(container, calendar: calendar);
       if (!mounted) return true;
-      refreshAfterRequest(ref, calendar: calendar);
       try {
         await ref.read(myRequestsProvider(_key).future);
       } catch (_) {
@@ -124,7 +123,8 @@ class _RequestsChatState extends ConsumerState<RequestsChat> {
   }
 
   Future<void> _send() async {
-    final text = _text.text.trim();
+    final draft = widget.draft;
+    final text = draft.text.trim();
     if (text.isEmpty || _creating) return;
     final scope = widget.scope;
     final sent = await _change(
@@ -141,10 +141,11 @@ class _RequestsChatState extends ConsumerState<RequestsChat> {
           ),
       (busy) => _creating = busy,
     );
-    if (sent && mounted) {
-      _text.clear();
-      _toBottom();
-    }
+    if (!sent) return;
+    // Also when the chat was closed meanwhile: the draft is kept outside it and must not be sent twice. Text written
+    // after the message went (in a chat opened again) stays.
+    if (draft.text.trim() == text) draft.clear();
+    if (mounted) _toBottom();
   }
 
   Future<void> _update(MyRequestOut request, RequestChangeIn change) => _change(
@@ -232,6 +233,7 @@ class _RequestsChatState extends ConsumerState<RequestsChat> {
               key: ValueKey(request.id),
               request: request,
               assistantReads: assistantReads,
+              readOnly: widget.readOnly,
               status: RequestStatus(
                 request: request,
                 editable: editable && request.status != MyRequestOutStatus.superseded,
@@ -336,12 +338,16 @@ class _Exchange extends StatelessWidget {
     required this.assistantReads,
     required this.status,
     required this.remove,
+    this.readOnly = false,
   });
 
   final MyRequestOut request;
   final bool assistantReads;
   final Widget status;
   final Widget? remove;
+
+  /// The company's access has expired: prepared reports of other hours cannot be sent.
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +368,7 @@ class _Exchange extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         status,
-        HoursProposals(request: request),
+        HoursProposals(request: request, readOnly: readOnly),
       ],
     );
     final fromAssistant =
