@@ -179,8 +179,36 @@ tylko kluczem przesyłania.
 
 1. play.google.com/console → konto dewelopera (25 USD jednorazowo; konto firmy potrzebuje numeru D-U-N-S).
 2. Utwórz aplikację, wyślij `.aab` do **Testy wewnętrzne** (do 100 osób z listy e-mail, dostępne w kilka minut).
-3. Konto osobiste założone po listopadzie 2023 musi przed produkcją przejść **test zamknięty: co najmniej 12 osób
-   przez 14 dni bez przerwy**. Konto firmowe nie ma tego wymogu.
+3. Konto osobiste założone po 13.11.2023 (konto Piotra) musi przed produkcją przejść **test zamknięty: co najmniej
+   12 osób zapisanych bez przerwy przez 14 dni przed wnioskiem** (pomoc Google, „App testing requirements for new
+   personal developer accounts”). Osoba, która się wypisze, przestaje się liczyć; lepiej zebrać 15–20 osób.
+   Test zamknięty da się uruchomić dopiero po wypełnieniu „Treści aplikacji” (polityka prywatności, dane logowania
+   dla recenzenta, bezpieczeństwo danych z usuwaniem konta). Testerzy niczego nie instalują z pliku: lista ich
+   adresów Gmail w Konsoli Play, link „Zostań testerem” i instalacja ze Sklepu Play na telefonie z Androidem.
+   Po 14 dniach: Panel → „Zgłoś do produkcji” (ankieta w trzech częściach, odpowiedź zwykle w ciągu 7 dni).
+
+#### Lokal testerów (Piotr, 28.11.2026)
+
+Testerzy dostają w Grafikomacie jeden wspólny lokal, na start pusty. Każdy nowy polski numer, który zaloguje się na
+zwykłym ekranie logowania, sam do niego dołącza, losowo jako kierownik albo pracownik, aż do 3 kierowników
+i 15 pracowników (`apps/tenancy/testers.py`). Potem nowy numer słyszy, że miejsca są zajęte.
+
+1. Bramka SMS: w panelu szybkisms.pl włącz REST API i wygeneruj token. W `.env` serwera:
+   `SMS_BACKEND=apps.accounts.sms.SzybkiSmsSender`, `SZYBKISMS_TOKEN=…`, opcjonalnie `SZYBKISMS_SENDER=…` (nazwa
+   nadawcy zatwierdzona w panelu; puste = domyślna konta). `SZYBKISMS_SANDBOX=1` sprawdza połączenie bez wysyłania.
+2. Konto recenzenta (Google i Apple wymagają logowania bez kodu jednorazowego): w `.env` `REVIEW_LOGIN_PHONE` (numer,
+   który nie dostaje SMS-ów od Grafikomatu, najlepiej Twój zapasowy) i `REVIEW_LOGIN_CODE` (6 cyfr). Ten numer
+   loguje się zawsze tym kodem, bez SMS-a; reszta zasad (5 prób, ważność 5 minut, limity) bez zmian.
+3. `docker compose exec api python manage.py tester_location --name "Nazwa lokalu"` tworzy pustą firmę z lokalem
+   (dostęp na 90 dni, zasady dobrej praktyki, bez stanowisk, zmian i ludzi), dodaje konto recenzenta jako
+   kierownika i wypisuje linię `TESTERS_LOCATION_ID=…`. Dopisz ją do `.env` i uruchom `deploy/update.sh` (albo
+   `docker compose up -d`), żeby kontenery ją przeczytały.
+4. To samo polecenie bez `--name` pokazuje, ile miejsc zajęto; `--days 60` daje dostęp na 60 dni od dziś.
+   Kierownika lub pracownika, który odpadł, usuwa się w aplikacji jak każdego (zwalnia miejsce).
+5. W Konsoli Play → Treść aplikacji → Dane logowania: numer i kod recenzenta po angielsku, np. „Phone: <numer>,
+   tap »Wyślij kod«, then enter <kod>. The account is a manager of the test location.”
+6. **Przed publikacją dla wszystkich** usuń `TESTERS_LOCATION_ID` z `.env` (każde polecenie `manage.py` ostrzega
+   `accounts.W003`, dopóki jest ustawione). Konto recenzenta zostaje na kolejne przeglądy.
 
 ### Co sprawdzić na prawdziwych telefonach
 
@@ -238,11 +266,10 @@ lokalizacji, aparatu. Dane aplikacji nie trafiają do kopii zapasowej Androida (
   usunąć; Google Play wymaga strony z prośbą o usunięcie. Grafikomat jeszcze tego nie ma. Trzeba zdecydować, co
   zostaje w historii grafików po usunięciu osoby (dziś usunięcie z lokalu ukrywa osobę, a historia zostaje).
 - **Polityka prywatności** pod stałym adresem (oba sklepy jej wymagają).
-- **Konto dla recenzentów.** Logowanie jest tylko kodem SMS, a recenzent Apple/Google go nie dostanie. Potrzebny numer
-  demonstracyjny ze stałym kodem (wyłącznie dla jednego konta z danymi przykładowymi) albo inny sposób; decyzja
-  Piotra.
-- **Bramka SMS** zamiast kodu w logu serwera (`SMS_BACKEND`), żeby testerzy z TestFlight i Google Play dostali kody.
-  Dla podpowiedzi kodu na Androidzie SMS musi przyjść od nadawcy spoza kontaktów (tak działa każda bramka).
+- **Konto dla recenzentów** i **bramka SMS** są od 28.11.2026 (`REVIEW_LOGIN_*`, `SzybkiSmsSender`, sekcja „Lokal
+  testerów”); trzeba je tylko ustawić w `.env` serwera. Dla podpowiedzi kodu na Androidzie SMS musi przyjść od
+  nadawcy spoza kontaktów (tak działa każda bramka). Strona `/sms-logs` na serwerze (spoza repozytorium) pokazuje
+  kody każdemu: wyłącz ją, zanim aplikację dostanie ktoś obcy.
 - **Domena serwera**: adres `sslip.io` nadaje się do testów, do sklepu lepiej własna domena (Apple sprawdza, czy
   aplikacja działa w czasie przeglądu).
 - **Wytyczna Apple 4.2** (minimalna funkcjonalność): aplikacja na tym samym kodzie co strona może zostać uznana za

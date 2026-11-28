@@ -1994,3 +1994,40 @@ problemu są czytane 7 dni przed okresem (`EXTERNAL_MARGIN`), więc przy „co t
 sprzed tego marginesu liczą się jako wolne (pierwsze okno może być łagodniejsze); „co drugi weekend” ma pełne dane.
 Polecenie kierownika `wolne_dni` nie ma godzin (godziny „nie mogę” zaznacza pracownik w swoim kalendarzu).
 
+## 51. Test zamknięty w Google Play i bramka SMS (28.11.2026)
+
+Zakres: spec.md, „Test zamknięty w Google Play i bramka SMS”. Instrukcja dla Piotra: docs/mobile.md, „Lokal testerów”.
+
+1. **Bramka SMS.** `apps.accounts.sms.SzybkiSmsSender`: REST API szybkisms.pl 1.3, `POST /rest/messages/sms` z tokenem
+   `SZYBKISMS_TOKEN` (Bearer), ciało `{"recipients": "+48…", "message": …, "unicode": false}` (bez polskich znaków kod
+   mieści się w jednym SMS-ie) i `sender` z `SZYBKISMS_SENDER`, gdy ustawiony. `SZYBKISMS_SANDBOX` = system testowy
+   bramki (`/rest-sandbox`). Odpowiedź 200 z `status_code` QUEUED to sukces; REJECTED albo inny kod HTTP podnosi
+   `SmsNotSent` (bez treści wiadomości, bo jest w niej kod), a `login.request_login_code` jak dotąd cofa zapisany kod
+   i odpowiada 503. Klient `httpx2` (już w zależnościach), limit czasu 10 s. Ostrzeżenie `accounts.W002` przy
+   bramce bez tokenu.
+2. **Lokal testerów.** `apps/tenancy/testers.py`. `TESTERS_LOCATION_ID` (puste = wyłączone; zły albo zarchiwizowany
+   lokal też wyłącza), `TESTERS_MANAGERS` (3), `TESTERS_EMPLOYEES` (15).
+   - `login.may_receive_code` zwraca teraz powód (konto, zaproszenie, rejestracja, tester) zamiast `bool`. Nowy numer
+     +48 bez konta i zaproszenia, z `purpose="login"`, dostaje kod, gdy jest wolne miejsce; kod ma
+     `LoginCode.for_testers` (migracja accounts 0003). Bez miejsca: 404 z `TESTERS_FULL`.
+   - `verify_login_code`: nowe konto z kodu `for_testers` w tej samej transakcji przechodzi przez `testers.join`:
+     blokada doradcza na lokal (dwa logowania naraz po kolei), losowanie roli (`secrets.randbelow` z liczby wolnych
+     miejsc, więc 3 + 15 miejsc kończy się jako 3 + 15 osób w losowej kolejności), zaproszenie od nikogo
+     (`invited_by` puste) przyjęte od razu przez `invitations.accept_invitation`. Gdy miejsca zajęto między kodem
+     a logowaniem: 400 z `TESTERS_FULL` i konto nie powstaje (punkt zapisu wokół `create_user`). Numer, który w
+     międzyczasie dostał zaproszenie, nie dołącza (widzi zaproszenie).
+   - `testers.places` liczy kierowników lokalu (członkostwa `manager` z tym lokalem, bez konta recenzenta) i
+     pracowników (profile członkostw `employee`, `works_in_q`, nieusunięte). Kierownik, który dodał siebie do grafiku,
+     nie zajmuje miejsca pracownika. Ostrzeżenie `accounts.W003`, dopóki test jest włączony.
+   - Polecenie `tester_location [--name …] [--days N]`: tworzy pustą firmę z jednym lokalem o tej nazwie (zasady
+     dobrej praktyki przez `apps.rules.defaults.add_good_practice_rules`, wydzielone z `create_location`; dostęp
+     `Subscription` na 90 dni) albo, gdy test jest włączony, pokazuje zajęte miejsca; drugi raz z tą samą nazwą przed
+     ustawieniem `.env` znajduje ten sam lokal. Dodaje konto recenzenta jako kierownika.
+3. **Konto recenzenta.** `REVIEW_LOGIN_PHONE` + `REVIEW_LOGIN_CODE` (6 cyfr; oba albo żaden, inaczej wyłączone
+   i ostrzeżenie `accounts.W004`). `_issue_code` zapisuje skrót stałego kodu i nie wysyła SMS-a; ważność, 5 prób,
+   jednorazowość i limity jak dla każdego kodu. Konto musi istnieć (tworzy je `tester_location`), bo nowy numer nie
+   dostaje kodu inaczej niż przez test.
+4. **Założenia.** Kierownicy testerów mają rolę `manager`, nie `owner` (nie zapraszają kierowników ani nie zakładają
+   lokali). Firma testerów nie ma właściciela; dostęp przedłuża `tester_location --days`. Bez zmian w API ani
+   w aplikacjach: ekran logowania pokazuje `detail` z 404/400 jak dotąd.
+
