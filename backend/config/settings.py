@@ -135,6 +135,20 @@ LOGIN_CODES_PER_PHONE_PER_HOUR = int(env("LOGIN_CODES_PER_PHONE_PER_HOUR", "5"))
 LOGIN_CODES_PER_IP_PER_HOUR = int(env("LOGIN_CODES_PER_IP_PER_HOUR", "20"))
 # New numbers (no account, no invitation) one address may send a registration code to per hour.
 REGISTER_NUMBERS_PER_IP_PER_HOUR = int(env("REGISTER_NUMBERS_PER_IP_PER_HOUR", "5"))
+# The szybkisms.pl gateway (SMS_BACKEND=apps.accounts.sms.SzybkiSmsSender): the API token made in its panel, the
+# sender name (empty = the account's default) and its sandbox, which sends nothing (Piotr, 28.11.2026).
+SZYBKISMS_TOKEN = env("SZYBKISMS_TOKEN", "").strip()
+SZYBKISMS_SENDER = env("SZYBKISMS_SENDER", "").strip()
+SZYBKISMS_SANDBOX = env_bool("SZYBKISMS_SANDBOX", False)
+# The closed test of the phone apps (apps/tenancy/testers.py): a new Polish number that logs in joins this location
+# as a manager or an employee, drawn from the places still free. Empty = off; turn it off before everyone may sign up.
+TESTERS_LOCATION_ID = env("TESTERS_LOCATION_ID", "").strip()
+TESTERS_MANAGERS = int(env("TESTERS_MANAGERS", "3"))
+TESTERS_EMPLOYEES = int(env("TESTERS_EMPLOYEES", "15"))
+# The store reviewers' account (Google Play and Apple need a login that works without a one-time code): this number
+# logs in with this fixed 6-digit code and gets no SMS. Both empty = off.
+REVIEW_LOGIN_PHONE = env("REVIEW_LOGIN_PHONE", "").strip()
+REVIEW_LOGIN_CODE = env("REVIEW_LOGIN_CODE", "").strip()
 
 # Django admin (superuser password): failed logins allowed per address per hour.
 ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR = int(env("ADMIN_LOGIN_FAILURES_PER_IP_PER_HOUR", "10"))

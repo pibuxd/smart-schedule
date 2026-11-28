@@ -163,6 +163,9 @@ class LoginCode(UUIDModel):
     attempts = models.PositiveSmallIntegerField(default=0)
     used_at = models.DateTimeField(null=True, blank=True)
     ip = models.GenericIPAddressField(null=True, blank=True)
+    # Sent only because the closed test lets new numbers in (apps/tenancy/testers.py): the first login with it puts
+    # the new account in the test location.
+    for_testers = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "kod logowania"

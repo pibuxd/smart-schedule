@@ -629,8 +629,7 @@ def create_group(request, payload: GroupIn):
 )
 def create_location(request, payload: LocationIn):
     """A new location starts with the good-practice rules switched on (or follows its group's rules)."""
-    from apps.rules.models import RuleSetting
-    from engine.rules_catalog import RULES
+    from apps.rules.defaults import add_good_practice_rules
 
     ctx = tenant_context(request, payload.company_id)
     _require_owner(ctx)
@@ -649,17 +648,7 @@ def create_location(request, payload: LocationIn):
     with transaction.atomic():
         _save_unique(location, "Lokal o tej nazwie już jest w firmie.")
         if location.group_id is None:
-            good = [rule for rule in RULES if rule.good_practice]
-            RuleSetting.objects.for_company(ctx.company).bulk_create(
-                RuleSetting(
-                    company=ctx.company,
-                    location=location,
-                    rule_code=rule.code,
-                    position=place,
-                    is_hard=rule.default_hard,
-                )
-                for place, rule in enumerate(good, start=1)
-            )
+            add_good_practice_rules(location)
     return Status(201, _location_out(location))
 
 

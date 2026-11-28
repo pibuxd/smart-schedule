@@ -4,6 +4,26 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Test zamknięty w Google Play i bramka SMS (prośba Piotra z 28.11.2026)
+
+Piotr ma osobiste konto Google Play, więc przed publikacją musi przejść test zamknięty: co najmniej 12 osób przez
+14 dni. Testerzy potrzebują w Grafikomacie lokalu, w którym jest z kim pracować.
+
+- Jeden lokal testerów, na start pusty (bez stanowisk, zmian i ludzi): miejsce na 3 kierowników i 15 pracowników.
+- Każdy nowy tester dołącza do niego sam: nowy polski numer (bez konta i bez zaproszenia) dostaje kod na zwykłym
+  ekranie logowania, a pierwsze logowanie od razu dodaje go do lokalu, losowo jako kierownika albo pracownika, z miejsc,
+  które jeszcze są wolne. Zaproszenia nie trzeba akceptować. Imię i nazwisko tester wpisuje jak każdy nowy pracownik.
+- Miejsca liczą ludzi, którzy są teraz w lokalu: osoba zaproszona przez kierownika-testera też zajmuje miejsce
+  pracownika, a usunięta zwalnia je. Gdy miejsc nie ma, nowy numer słyszy „Miejsca dla testerów są już zajęte.
+  Napisz do osoby, która zaprosiła Cię do testów.”
+- Numer z innego kraju nie dołącza sam (jak przy zakładaniu firmy); „Załóż firmę” i zaproszenia działają jak dotąd.
+- Kody przychodzą prawdziwym SMS-em przez bramkę szybkisms.pl (wybór Piotra).
+- Konto recenzenta sklepu (Google Play i Apple wymagają logowania, które nie potrzebuje kodu jednorazowego): jeden
+  numer z ustawień serwera loguje się zawsze tym samym kodem i nie dostaje SMS-a. Jest kierownikiem lokalu testerów
+  i nie zajmuje miejsca testera.
+- Przed publikacją dla wszystkich test się wyłącza (pusty `TESTERS_LOCATION_ID`); wtedy nowy numer znów słyszy
+  „Nie znamy tego numeru…”.
+
 ## Więcej rodzajów próśb pracownika (prośba Piotra z 27.11.2026)
 
 Piotr (27.11.2026) poprosił o listę próśb, których asystent nie umie zamienić na nic, co generator uwzględni
@@ -678,7 +698,7 @@ j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z
 - Wyłącznie kod SMS, bez haseł, Google i e-maila. Tożsamość to numer telefonu zapisany w formacie E.164 (normalizacja biblioteką phonenumbers). Kod 6 cyfr, ważny 5 minut, max 5 prób; sesja ok. 60 dni.
 - Numery z innych krajów (Piotr 25.11.2026: w lokalach pracują np. Ukraińcy z własnymi numerami): przy logowaniu, rejestracji i zaproszeniu jest wybór kraju przed numerem, domyślnie Polska (+48), dalej Ukraina i kilkanaście krajów, z których ludzie najczęściej przyjeżdżają do pracy, oraz „Inny kraj”. Numer wpisany z „+” albo „00” działa przy każdym wybranym kraju. Na liście osób i w pliku (CSV, XLSX, PDF) numer bez kierunkowego jest polski, chyba że kierownik wybierze nad listą inny kraj („Numery bez kierunkowego są z kraju”: Excel gubi zero, więc ukraińskie 050… przychodzi jako 50…, co wyglądałoby na polski numer); numer z innego kraju niż wybrany musi mieć „+” albo „00”. Polski numer działa jak wcześniej (każdy poprawny); zagraniczny musi być numerem komórki, bo kod przychodzi SMS-em (superadmin może w panelu dodać każdy poprawny numer, gdy prawdziwa komórka zostanie odrzucona, a kierownik potem ją zaprasza). Zapisane numery +48 się nie zmieniają.
 - Kody wysyłamy tylko na numery, które mają konto albo oczekujące zaproszenie, oraz przy rejestracji nowego menedżera. Nową firmę zakłada się tylko numerem +48 (to jedyny SMS na numer, za który nikt nie ręczy; SMS za granicę kosztuje więcej i jest celem oszustw SMS); numer z innego kraju dostaje kod po zaproszeniu od kierownika albo gdy ma już konto. Limity: kilka kodów na numer na godzinę i limit na adres IP.
-- Lokalnie kod wypisywany w konsoli. Prawdziwa bramka SMS (np. SMSAPI.pl) za wymienialnym interfejsem, dopiero przy wdrożeniu.
+- Lokalnie kod wypisywany w konsoli. Prawdziwa bramka SMS za wymienialnym interfejsem: od 28.11.2026 szybkisms.pl (sekcja „Test zamknięty w Google Play i bramka SMS” na początku).
 - Menedżer zaprasza pracownika po numerze telefonu: wiersz w tabeli invitations ze statusem (oczekuje / przyjęte / odrzucone / anulowane), unikalne oczekujące zaproszenie na parę (placówka, numer). SMS z zaproszeniem NIE jest wysyłany. Pracownik po zalogowaniu widzi zaproszenie: Akceptuj / Odrzuć; akceptacja w jednej transakcji. Kto ma już konto, widzi nowe zaproszenie od razu.
 - Limity dokładnie: kolejny kod najwcześniej po 60 s, najwyżej 5 kodów na numer na godzinę i 20 próśb o kod z jednego adresu IP na godzinę (liczą się też prośby dla nieznanych numerów). Nowy kod unieważnia poprzedni. W bazie jest tylko skrót kodu.
 - Nieznany numer przy logowaniu dostaje jasną odpowiedź ("Nie znamy tego numeru. Poproś kierownika o zaproszenie…"), a nie udawane wysłanie kodu: dla osób niechętnych technologii czekanie na SMS, który nie przyjdzie, jest gorsze niż ryzyko, że ktoś sprawdzi, czy numer ma konto (to ryzyko ogranicza limit na adres IP).

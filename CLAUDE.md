@@ -61,6 +61,7 @@ DJANGO_DEBUG=1 uv run python manage.py procrastinate worker   # all queues (in D
 uv run python manage.py assistant_misses --days 30 > misses.csv   # what the assistant could not turn into settings
 uv run python manage.py assistant_costs --month 2026-11 --by person > costs.csv   # what the assistant cost (also --by location|company)
 uv run python manage.py generate_schedule --company 6a1e0000-0000-4000-8000-000000000001  # try the generator now
+uv run python manage.py tester_location [--name "…"] [--days 90]   # the store testers' location: create it or see places
 uv run pytest                                             # tests (need Postgres)
 DJANGO_DEBUG=1 uv run pytest tests/engine                 # engine tests only, no database needed
 uv run ruff check . && uv run ruff format --check .       # lint
@@ -134,8 +135,12 @@ so everything merged to `main` goes live by itself). The server uses `.env` made
   only through `notify`, give each kind a route in `services.push_path` (what a tap opens: `?dzien=`, `?oferta=`,
   `?okres=`, read by the route files) and put the ids it needs in the payload. Native code: `GrafikomatPlugin.java`
   (SMS User Consent, Firebase check), `AppDelegate.swift`.
-- Login codes: `apps/accounts/login.py`; SMS goes through `settings.SMS_BACKEND` (console by default; tests use
-  the `sms_outbox` fixture). Rate limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`.
+- Login codes: `apps/accounts/login.py`; SMS goes through `settings.SMS_BACKEND` (console by default, on the server
+  the szybkisms.pl gateway `sms.SzybkiSmsSender` with `SZYBKISMS_TOKEN`; tests use the `sms_outbox` fixture). Rate
+  limits need the client IP: `apps.core.http.client_ip` + `DJANGO_NUM_PROXIES`. Store test (Piotr, 28.11.2026,
+  plan.md 51): while `TESTERS_LOCATION_ID` is set, a new +48 number on the plain login screen gets a code
+  (`LoginCode.for_testers`) and its first login joins that location as a manager or an employee drawn from the free
+  places (`apps/tenancy/testers.py`, 3 + 15); `REVIEW_LOGIN_PHONE` logs in with the fixed `REVIEW_LOGIN_CODE`, no SMS.
 - Inviting many people (`apps/tenancy/people_list.py` reads a pasted list or a CSV/XLSX/PDF file without a model;
   `invitations.check_people` / `invite_people` decide; `Invitation.positions` are given on acceptance). The manager's
   assistant reads a file too (`assistant-commands/file`, `AssistantCommand.attachment`, text dropped once read) and
