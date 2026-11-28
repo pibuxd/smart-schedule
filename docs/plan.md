@@ -1894,6 +1894,8 @@ Założenia etapu 3 („Kiedy mogę”, `lib/features/availability/`):
   bez początku albo końca („do 15:00”) otwierają się od albo do północy (na stronie lista pokazałaby 14:00).
 - Każde stuknięcie zapisuje się samo, po kolei (późniejszy wybór dnia nie wyprzedzi wcześniejszego). Aplikacja nie
   sprawdza sieci telefonu jak strona („Brak internetu…”): po ponowieniach klienta nieudany zapis zostaje na ekranie
-  z „Nie zapisano” i „Zapisz jeszcze raz”. Przeciągnięcie w dół odświeża kalendarz tylko, gdy wszystko jest zapisane.
+  z „Nie zapisano” i „Zapisz jeszcze raz”. Przeciągnięcie w dół odświeża kalendarz tylko, gdy wszystko jest zapisane;
+  inaczej mówi dlaczego („Jeszcze zapisuję…” albo „Masz niezapisane zmiany…” z „Zapisz jeszcze raz”). Nieudane
+  zaznaczenia są tylko w pamięci aplikacji: po jej zamknięciu przepadają (do sprawdzenia w pilotażu).
 - W zdaniach o szarych dniach nie ma linku do „Mojego grafiku”, bo ta zakładka jest zawsze na dole ekranu.
 - „Twoje prośby” i asystent pod kalendarzem przychodzą w etapie 4.

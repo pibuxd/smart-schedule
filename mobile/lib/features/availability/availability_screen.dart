@@ -320,8 +320,29 @@ class _EditorState extends ConsumerState<_Editor> {
   }
 
   Future<void> _refresh() async {
-    // Unsaved marks would be lost: they are written first ("Zapisz jeszcze raz").
-    if (_status != _SaveStatus.saved) return;
+    // Unsaved marks would be lost: they are written first ("Zapisz jeszcze raz"), and the pull says why it waits.
+    if (_status != _SaveStatus.saved) {
+      final failed = _status == _SaveStatus.failed;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              failed ? 'Masz niezapisane zmiany. Zapisz je, zanim odświeżysz.' : 'Jeszcze zapisuję. Odśwież za chwilę.',
+            ),
+            backgroundColor: failed ? AppColors.cannot : null,
+            behavior: SnackBarBehavior.floating,
+            action: failed
+                ? SnackBarAction(
+                    label: 'Zapisz jeszcze raz',
+                    textColor: AppColors.accentInk,
+                    onPressed: () => _send(Map.of(_failed)),
+                  )
+                : null,
+          ),
+        );
+      return;
+    }
     ref.invalidate(myAvailabilityProvider(widget.companyId));
     final key = (companyId: widget.companyId, month: widget.month);
     ref.invalidate(myCalendarProvider(key));

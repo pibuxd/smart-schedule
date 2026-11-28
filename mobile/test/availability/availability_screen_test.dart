@@ -286,6 +286,28 @@ void main() {
     expect(written(api).last, {'date': '2026-12-01', 'state': 'cannot', 'one_shift': false});
   });
 
+  testWidgets('says why pulling down does not refresh while a mark is unsaved', (tester) async {
+    final api = server();
+    var fail = true;
+    api.on('PUT /api/me/calendar', (_) => fail ? const Reply(503, {'detail': 'x'}) : const Reply(204));
+    await open(tester, api);
+    await tap(tester, day('wtorek 1 grudnia: mogę'));
+    await tester.pump(const Duration(seconds: 30)); // the app's own retries
+    await settle(tester);
+    final reads = api.sent('GET /api/me/calendar').length;
+    final list = find.descendant(of: find.byType(RefreshIndicator), matching: find.byType(Scrollable)).first;
+    await tester.drag(list, const Offset(0, 3000)); // back to the top
+    await settle(tester);
+    await tester.fling(list, const Offset(0, 400), 1000);
+    await settle(tester);
+    expect(find.text('Masz niezapisane zmiany. Zapisz je, zanim odświeżysz.'), findsOneWidget);
+    expect(api.sent('GET /api/me/calendar').length, reads);
+    expect(day('wtorek 1 grudnia: nie mogę'), findsOneWidget);
+    fail = false;
+    await tap(tester, find.widgetWithText(SnackBarAction, 'Zapisz jeszcze raz'));
+    expect(find.text('Zapisane'), findsOneWidget);
+  });
+
   testWidgets('warns plainly that "chętnie" with hours blocks other shifts that day', (tester) async {
     await open(tester, server());
     await tap(tester, find.text('Godziny dnia'));
