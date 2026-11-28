@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grafikomat/features/requests/chat_parts.dart';
@@ -429,6 +430,15 @@ void main() {
       expect(find.textContaining('Przeczyta to tylko kierownik'), findsNothing);
     });
 
+    testWidgets('keeps who reads the messages one tap away under the field, in short paragraphs', (tester) async {
+      await open(tester, server(rows: () => [], assistantReads: true));
+      await openChat(tester);
+      await tap(tester, find.widgetWithText(TextButton, 'O prośbach i Twoich danych'));
+      final text = tester.widget<Text>(find.textContaining('Reszty rozmowy nie widzą')).data!;
+      expect(text.split('\n\n'), hasLength(4));
+      expect(text.split('\n\n').last, startsWith('Kierownik i jego asystent AI widzą'));
+    });
+
     testWidgets('says that only the manager reads the request when the assistant is off', (tester) async {
       await open(tester, server(rows: () => []));
       expect(find.text('Napisz prośbę'), findsOneWidget);
@@ -724,6 +734,16 @@ void main() {
       expect(find.byTooltip('Edytuj prośbę'), findsNothing);
       expect(find.byTooltip('Usuń prośbę'), findsNothing);
       expect(find.text('Pokaż rozmowę'), findsOneWidget);
+      await tap(tester, find.text('Pokaż rozmowę'));
+      expect(find.textContaining('Prośby na ten okres są już zamknięte.'), findsOneWidget);
+    });
+
+    testWidgets('says why nothing can be written while the company has no access', (tester) async {
+      await open(tester, server(rows: () => [request()], readOnly: true));
+      await tap(tester, find.text('Pokaż rozmowę'));
+      expect(find.text('Wolałabym nie pracować w piątki.'), findsOneWidget);
+      expect(find.textContaining('Firma ma teraz wstrzymany dostęp do aplikacji, więc nie napiszesz'), findsOneWidget);
+      expect(find.textContaining('Prośby na ten okres są już zamknięte.'), findsNothing);
     });
 
     testWidgets('says plainly when there are no requests yet', (tester) async {
@@ -1090,6 +1110,24 @@ void main() {
       expect(chatTab('Mój grafik'), findsOneWidget);
       expect(chatTab('Asystent'), findsNothing);
       expect(chatTab('Prośby'), findsNothing);
+    });
+
+    testWidgets('lets the tab labels grow with the text size only as far as they fit', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      double labelSize() => MediaQuery.textScalerOf(tester.element(chatTab('Asystent'))).scale(12);
+
+      // A phone: "Powiadomienia" (in the tests' wide font) would not fit even at the normal size, so no growth.
+      await openApp(tester, server(rows: () => [], assistantReads: true));
+      expect(labelSize(), 12);
+
+      // A wide screen: the labels grow, but not past the size at which "Powiadomienia" still fits its tab.
+      tester.view.physicalSize = const Size(2400, 2532);
+      await settle(tester);
+      expect(labelSize(), greaterThan(12));
+      expect(labelSize(), lessThan(12 * 1.3));
+      final label = tester.renderObject<RenderParagraph>(chatTab('Powiadomienia'));
+      expect(label.getMaxIntrinsicWidth(double.infinity), lessThanOrEqualTo(label.size.width + 0.5));
     });
   });
 }

@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 import '../../api/generated/exports.dart';
 import '../../session/session.dart';
 import '../../shared/dates.dart';
-import '../../ui/sheet.dart';
 import '../../ui/status.dart';
 import '../../ui/theme.dart';
 import '../availability/availability_data.dart';
@@ -86,14 +85,8 @@ class EmployeeChatPage extends ConsumerWidget {
             IconButton(
               tooltip: 'O prośbach i Twoich danych',
               icon: const Icon(Icons.info_outline),
-              onPressed: () => showAppSheet<void>(
-                context,
-                title: 'O prośbach i Twoich danych',
-                builder: (context) => Text(
-                  aboutRequests(assistantReads: assistantReads, month: scope.periodId == null),
-                  style: const TextStyle(height: 1.5),
-                ),
-              ),
+              onPressed: () =>
+                  showAboutRequests(context, assistantReads: assistantReads, month: scope.periodId == null),
             ),
         ],
       ),
@@ -106,6 +99,7 @@ class EmployeeChatPage extends ConsumerWidget {
               only: onlyWords(scope, period),
               draft: memory.drafts[scope.key] ?? '',
               onDraftChanged: (text) => memory.drafts[scope.key] = text,
+              readOnly: company.readOnly,
             )
           : availability.hasError
           ? Padding(

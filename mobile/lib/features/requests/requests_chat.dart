@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../api/client.dart';
 import '../../api/errors.dart';
 import '../../api/generated/exports.dart';
+import '../../ui/sheet.dart';
 import '../../ui/status.dart';
 import '../../ui/theme.dart';
 import 'chat_parts.dart';
@@ -14,17 +15,33 @@ import 'requests_data.dart';
 const _muted = TextStyle(fontSize: 14, color: AppColors.inkMuted);
 
 /// The fine print of the chat, behind the "i" button at its top: what a request is, and who reads it.
-String aboutRequests({required bool assistantReads, required bool month}) =>
-    'W jednej wiadomości możesz zapytać o coś i napisać do trzech próśb. Napisz też powód, jeśli jest ważny. '
-    'Dyspozycje zaznacz w kalendarzu. Prośba „Na stałe” liczy się też w kolejnych miesiącach, dopóki jej nie '
-    'zakończysz w „Twoich prośbach”. '
-    '${month ? 'Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik. ' : ''}'
-    '${assistantReads ? 'Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona '
-              'osób, nazwy zmian i nazwy Twoich lokali. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, '
-              'wypłatę, dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego '
-              'nie zmienia sam: nie układa grafiku i nie zmienia kalendarza. Kierownik i jego asystent AI widzą Twoje '
-              'dyspozycje, zapisane prośby (z pytaniami asystenta o nie) i to, co przekażesz kierownikowi. Reszty '
-              'rozmowy nie widzą.' : 'Przeczyta to tylko kierownik.'}';
+/// The same words as the website's fold, in short paragraphs for a phone.
+String aboutRequests({required bool assistantReads, required bool month}) => [
+  'W jednej wiadomości możesz zapytać o coś i napisać do trzech próśb. Napisz też powód, jeśli jest ważny. '
+      'Dyspozycje zaznacz w kalendarzu.',
+  'Prośba „Na stałe” liczy się też w kolejnych miesiącach, dopóki jej nie zakończysz w „Twoich prośbach”.'
+      '${month ? ' Prośba dotyczy tego miesiąca. Kierownik weźmie ją pod uwagę, gdy będzie układać na niego grafik.' : ''}',
+  if (assistantReads) ...[
+    'Asystent AI (zewnętrzna usługa) czyta Twoją wiadomość, Twoje wcześniejsze prośby oraz imiona osób, nazwy zmian '
+        'i nazwy Twoich lokali. Żeby odpowiedzieć, sprawdza to, co widzisz w aplikacji: Twój grafik, wypłatę, '
+        'dyspozycje, prośby, zmiany do wzięcia i powiadomienia. Nie dostaje numerów telefonów. Niczego nie zmienia '
+        'sam: nie układa grafiku i nie zmienia kalendarza.',
+    'Kierownik i jego asystent AI widzą Twoje dyspozycje, zapisane prośby (z pytaniami asystenta o nie) i to, co '
+        'przekażesz kierownikowi. Reszty rozmowy nie widzą.',
+  ] else
+    'Przeczyta to tylko kierownik.',
+].join('\n\n');
+
+/// "O prośbach i Twoich danych": from the "i" at the top of the chat and the line under the field.
+Future<void> showAboutRequests(BuildContext context, {required bool assistantReads, required bool month}) =>
+    showAppSheet<void>(
+      context,
+      title: 'O prośbach i Twoich danych',
+      builder: (context) => Text(
+        aboutRequests(assistantReads: assistantReads, month: month),
+        style: const TextStyle(height: 1.5),
+      ),
+    );
 
 /// The conversation (the website's `RequestsChat`): every message with the assistant's answer, newest at the bottom,
 /// and the field to write. The message being written lives outside ([draft], [onDraftChanged]), so leaving the chat
@@ -38,6 +55,7 @@ class RequestsChat extends ConsumerStatefulWidget {
     required this.only,
     required this.draft,
     required this.onDraftChanged,
+    this.readOnly = false,
   });
 
   final String companyId;
@@ -48,6 +66,9 @@ class RequestsChat extends ConsumerStatefulWidget {
   final String only;
   final String draft;
   final ValueChanged<String> onDraftChanged;
+
+  /// The company's access has expired: the conversation can be read, but nothing written.
+  final bool readOnly;
 
   @override
   ConsumerState<RequestsChat> createState() => _RequestsChatState();
@@ -272,10 +293,31 @@ class _RequestsChatState extends ConsumerState<RequestsChat> {
                       footer: assistantReads ? null : 'Wiadomość dla kierownika.',
                     )
                   else
-                    const Text(
-                      'Prośby na ten okres są już zamknięte. Jeśli coś się zmieniło, porozmawiaj z kierownikiem.',
+                    Text(
+                      widget.readOnly
+                          ? 'Firma ma teraz wstrzymany dostęp do aplikacji, więc nie napiszesz nowej prośby. Jeśli coś '
+                                'się zmieniło, porozmawiaj z kierownikiem.'
+                          : 'Prośby na ten okres są już zamknięte. Jeśli coś się zmieniło, porozmawiaj z kierownikiem.',
                       style: _muted,
                     ),
+                  // Who reads the messages stays one tap away under the field, as on the website.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.inkMuted,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: const Size(0, touch),
+                        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: () => showAboutRequests(
+                        context,
+                        assistantReads: assistantReads,
+                        month: widget.scope.periodId == null,
+                      ),
+                      child: const Text('O prośbach i Twoich danych'),
+                    ),
+                  ),
                 ],
               ),
             ),

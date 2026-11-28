@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -34,26 +36,34 @@ class EmployeeShell extends ConsumerWidget {
     final assistantReads = !chat || assistantReadsOf(ref.watch(myAvailabilityProvider(company.id)));
     return Scaffold(
       body: shell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
-        onDestinationSelected: (index) {
-          if (index == tabs.length) {
-            final screen = ref.read(employeeChatMemoryProvider).screen;
-            openEmployeeChat(context, ref, screen: shell.currentIndex == availabilityTab ? screen : null);
-            return;
-          }
-          // Tapping the open tab again goes back to its first screen.
-          shell.goBranch(index, initialLocation: index == shell.currentIndex);
-        },
-        destinations: [
-          for (final tab in tabs)
-            NavigationDestination(icon: Icon(tab.icon), selectedIcon: Icon(tab.selected), label: tab.label),
-          if (chat)
-            NavigationDestination(
-              icon: const Icon(Icons.chat_bubble_outline),
-              label: assistantReads ? 'Asystent' : 'Prośby',
+      bottomNavigationBar: LayoutBuilder(
+        builder: (context, box) {
+          final labels = [for (final tab in tabs) tab.label, if (chat) assistantReads ? 'Asystent' : 'Prośby'];
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: tabLabelScaler(context, labels, box.maxWidth)),
+            child: NavigationBar(
+              selectedIndex: shell.currentIndex,
+              onDestinationSelected: (index) {
+                if (index == tabs.length) {
+                  final screen = ref.read(employeeChatMemoryProvider).screen;
+                  openEmployeeChat(context, ref, screen: shell.currentIndex == availabilityTab ? screen : null);
+                  return;
+                }
+                // Tapping the open tab again goes back to its first screen.
+                shell.goBranch(index, initialLocation: index == shell.currentIndex);
+              },
+              destinations: [
+                for (final tab in tabs)
+                  NavigationDestination(icon: Icon(tab.icon), selectedIcon: Icon(tab.selected), label: tab.label),
+                if (chat)
+                  NavigationDestination(
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: assistantReads ? 'Asystent' : 'Prośby',
+                  ),
+              ],
             ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -141,4 +151,27 @@ class TabScreen extends ConsumerWidget {
             ),
     );
   }
+}
+
+/// The tab labels grow with the phone's text size, but only as far as the longest one ("Powiadomienia") still fits
+/// its tab, so no label breaks in the middle of a word on a narrow phone. Never below the normal size.
+TextScaler tabLabelScaler(BuildContext context, List<String> labels, double width) {
+  final scaler = MediaQuery.textScalerOf(context);
+  if (labels.isEmpty || !width.isFinite) return scaler;
+  final style =
+      Theme.of(context).navigationBarTheme.labelTextStyle?.resolve({WidgetState.selected}) ??
+      const TextStyle(fontSize: 12);
+  var widest = 0.0;
+  for (final label in labels) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    widest = math.max(widest, painter.width);
+    painter.dispose();
+  }
+  // Each tab gets an equal share of the bar; a little room stays at its edges.
+  final room = width / labels.length - 8;
+  return scaler.clamp(maxScaleFactor: widest == 0 ? double.infinity : math.max(1.0, room / widest));
 }
