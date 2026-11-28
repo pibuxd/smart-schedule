@@ -308,6 +308,34 @@ void main() {
     expect(find.text('Zapisane'), findsOneWidget);
   });
 
+  testWidgets('asks before another month drops marks that did not save', (tester) async {
+    final api = server();
+    var fail = true;
+    api.on('PUT /api/me/calendar', (_) => fail ? const Reply(503, {'detail': 'x'}) : const Reply(204));
+    await open(tester, api);
+    await tap(tester, day('wtorek 1 grudnia: mogę'));
+    await tester.pump(const Duration(seconds: 30)); // the app's own retries
+    await settle(tester);
+    expect(find.text('Nie zapisano'), findsOneWidget);
+
+    await tap(tester, find.byTooltip('Następny miesiąc'));
+    expect(find.text('Zmiany się nie zapisały'), findsOneWidget);
+    fail = false;
+    await tap(tester, inSheet(find.text('Zapisz jeszcze raz')));
+    expect(find.text('Grudzień 2026'), findsOneWidget);
+    expect(find.text('Zapisane'), findsOneWidget);
+    expect(written(api).last, {'date': '2026-12-01', 'state': 'cannot', 'one_shift': false});
+
+    fail = true;
+    await tap(tester, day('środa 2 grudnia: mogę'));
+    await tester.pump(const Duration(seconds: 30));
+    await settle(tester);
+    await tap(tester, find.byTooltip('Następny miesiąc'));
+    await tap(tester, inSheet(find.text('Zmień miesiąc bez zapisu')));
+    expect(find.text('Styczeń 2027'), findsOneWidget);
+    expect(find.text('Zapisane'), findsOneWidget);
+  });
+
   testWidgets('warns plainly that "chętnie" with hours blocks other shifts that day', (tester) async {
     await open(tester, server());
     await tap(tester, find.text('Godziny dnia'));

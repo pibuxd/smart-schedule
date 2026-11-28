@@ -8,6 +8,7 @@ import '../../api/errors.dart';
 import '../../api/generated/exports.dart';
 import '../../session/session.dart';
 import '../../shared/dates.dart';
+import '../../ui/sheet.dart';
 import '../../ui/status.dart';
 import '../../ui/theme.dart';
 import '../employee/employee_shell.dart';
@@ -96,9 +97,12 @@ class _AvailabilityTabState extends ConsumerState<AvailabilityTab> {
       month: month,
       readOnly: company.readOnly,
       today: today,
-      pager: ({required bool busy}) => _MonthPager(
+      pager: ({required bool busy, Future<bool> Function()? leave}) => _MonthPager(
         month: month,
-        onChange: (month) => setState(() => _chosen = month),
+        onChange: (month) async {
+          if (leave != null && !await leave()) return;
+          if (mounted) setState(() => _chosen = month);
+        },
         canGoBack: !busy && month.compareTo(thisMonth) > 0,
         canGoForward: !busy && month.compareTo(lastMonth) < 0,
       ),
@@ -106,7 +110,9 @@ class _AvailabilityTabState extends ConsumerState<AvailabilityTab> {
   }
 }
 
-typedef _PagerBuilder = Widget Function({required bool busy});
+/// [busy]: a save is running, so the arrows wait. [leave]: some marks did not save; it asks before they are dropped
+/// and says whether to change the month.
+typedef _PagerBuilder = Widget Function({required bool busy, Future<bool> Function()? leave});
 
 class _MonthPager extends StatelessWidget {
   const _MonthPager({required this.month, required this.onChange, required this.canGoBack, required this.canGoForward});
@@ -319,6 +325,30 @@ class _EditorState extends ConsumerState<_Editor> {
     }
   }
 
+  /// Another month starts from what the server has, so marks that did not save would be dropped: ask first. "Zapisz
+  /// jeszcze raz" stays on this month; changing it anyway is allowed, so a save the server keeps refusing never traps
+  /// the screen.
+  Future<bool> _leaveUnsaved() async {
+    final leave = await showAppSheet<bool>(
+      context,
+      title: 'Zmiany się nie zapisały',
+      description: 'Jeśli zmienisz miesiąc, te zaznaczenia przepadną.',
+      builder: (context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Zapisz jeszcze raz')),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Zmień miesiąc bez zapisu'),
+          ),
+        ],
+      ),
+    );
+    if (leave == false && mounted) _send(Map.of(_failed));
+    return leave ?? false;
+  }
+
   Future<void> _refresh() async {
     // Unsaved marks would be lost: they are written first ("Zapisz jeszcze raz"), and the pull says why it waits.
     if (_status != _SaveStatus.saved) {
@@ -378,7 +408,7 @@ class _EditorState extends ConsumerState<_Editor> {
             )
           : null,
       children: [
-        widget.pager(busy: _status == _SaveStatus.saving),
+        widget.pager(busy: _status == _SaveStatus.saving, leave: _status == _SaveStatus.failed ? _leaveUnsaved : null),
         gap,
         _PeriodNote(period: period, readOnly: widget.readOnly, today: widget.today),
         if (editable) ...[const SizedBox(height: 8), _SaveIndicator(status: _status)],
