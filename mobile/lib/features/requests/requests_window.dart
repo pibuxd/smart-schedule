@@ -50,6 +50,7 @@ class _RequestsWindowState extends ConsumerState<RequestsWindow> {
   bool _updating = false;
   bool _deleting = false;
   bool _finishing = false;
+  bool _marking = false;
   Object? _error;
 
   RequestsKey get _key => requestsKey(widget.companyId, widget.scope);
@@ -74,7 +75,7 @@ class _RequestsWindowState extends ConsumerState<RequestsWindow> {
     super.dispose();
   }
 
-  Future<bool> _change(Future<void> Function() call, void Function(bool busy) busy) async {
+  Future<bool> _change(Future<void> Function() call, void Function(bool busy) busy, {bool calendar = false}) async {
     setState(() {
       busy(true);
       _error = null;
@@ -82,7 +83,7 @@ class _RequestsWindowState extends ConsumerState<RequestsWindow> {
     try {
       await call();
       if (!mounted) return true;
-      refreshAfterRequest(ref);
+      refreshAfterRequest(ref, calendar: calendar);
       try {
         await ref.read(myRequestsProvider(_key).future);
       } catch (_) {
@@ -144,6 +145,19 @@ class _RequestsWindowState extends ConsumerState<RequestsWindow> {
     );
     if (mounted) setState(() => _ending = null);
   }
+
+  /// A lasting "nie mogę" written in an earlier month offers this month's days too: the same save as a tap in the
+  /// calendar (27.11.2026).
+  Future<void> _markCannot(CannotMarkOut mark) => _change(
+    () => ref
+        .read(apiProvider)
+        .availability
+        .saveMyCalendar(
+          body: CalendarIn(companyId: widget.companyId, days: markedDays(mark)),
+        ),
+    (busy) => _marking = busy,
+    calendar: true,
+  );
 
   void _openChat() => openEmployeeChat(context, ref, scope: widget.scope);
 
@@ -355,6 +369,17 @@ class _RequestsWindowState extends ConsumerState<RequestsWindow> {
                       child: _Carried(
                         request: request,
                         since: since,
+                        marks: editable && !request.ended
+                            ? [
+                                for (final mark in request.cannotMarks ?? const <CannotMarkOut>[])
+                                  CannotMarkCard(
+                                    mark: mark,
+                                    disabled: _finishing,
+                                    marking: _marking,
+                                    onMark: () => _markCannot(mark),
+                                  ),
+                              ]
+                            : const [],
                         action: !editable
                             ? null
                             : !request.ended
@@ -510,10 +535,11 @@ class _Saved extends StatelessWidget {
 
 /// A lasting request from an earlier month: it counts here until ended ("Zakończ"), and an end can be taken back.
 class _Carried extends StatelessWidget {
-  const _Carried({required this.request, required this.since, required this.action});
+  const _Carried({required this.request, required this.since, required this.marks, required this.action});
 
   final MyRequestOut request;
   final String since;
+  final List<Widget> marks;
   final Widget? action;
 
   @override
@@ -530,6 +556,7 @@ class _Carried extends StatelessWidget {
         Text(request.text, style: request.ended ? const TextStyle(color: AppColors.inkMuted) : null),
         Text(note, style: _muted),
         if (action != null) Align(alignment: Alignment.centerLeft, child: action),
+        for (final mark in marks) ...[const SizedBox(height: 8), mark],
       ],
     );
   }

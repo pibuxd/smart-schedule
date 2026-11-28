@@ -113,7 +113,7 @@ class RequestStatus extends StatelessWidget {
         if (request.notes.isNotEmpty) _Notes(notes: request.notes),
         if (editable)
           for (final mark in marks)
-            _CannotMark(mark: mark, disabled: busy, marking: marking, onMark: () => actions.markCannot(mark)),
+            CannotMarkCard(mark: mark, disabled: busy, marking: marking, onMark: () => actions.markCannot(mark)),
         if (editable) _WrongChoice(request: request, busy: busy, actions: actions),
       ]);
     }
@@ -211,10 +211,17 @@ class LastingChoice extends StatelessWidget {
   }
 }
 
-/// Days the request says the person cannot work that the calendar does not show so. "Nie mogę" is always a whole day
+/// Days the request says the person cannot work that the calendar does not show so (in the chat, and under a lasting
+/// request from an earlier month in "Twoje prośby", for this month's days). "Nie mogę" is always a whole day
 /// (Piotr, 25.11.2026), so with hours the button marks those days "mogę" only in the rest of the day.
-class _CannotMark extends StatelessWidget {
-  const _CannotMark({required this.mark, required this.disabled, required this.marking, required this.onMark});
+class CannotMarkCard extends StatelessWidget {
+  const CannotMarkCard({
+    super.key,
+    required this.mark,
+    required this.disabled,
+    required this.marking,
+    required this.onMark,
+  });
 
   final CannotMarkOut mark;
   final bool disabled;

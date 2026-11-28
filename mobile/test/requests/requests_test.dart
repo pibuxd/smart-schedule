@@ -424,6 +424,7 @@ void main() {
       expect(find.text('W czym pomóc?'), findsOneWidget);
       await tap(tester, find.byTooltip('O prośbach i Twoich danych'));
       expect(find.textContaining('sprawdza to, co widzisz w aplikacji'), findsOneWidget);
+      expect(find.textContaining('nazwy zmian i nazwy Twoich lokali'), findsOneWidget);
       expect(find.textContaining('Reszty rozmowy nie widzą'), findsOneWidget);
       expect(find.textContaining('Przeczyta to tylko kierownik'), findsNothing);
     });
@@ -900,6 +901,84 @@ void main() {
       expect(find.text('Zakończona: nie obowiązuje od stycznia.'), findsOneWidget);
       expect(body(api, 'POST /api/me/requests/r1/end'), {'company_id': 'c1', 'period_id': 'p1', 'ended': true});
       expect(find.text('Przywróć'), findsOneWidget);
+    });
+
+    testWidgets("offers this month's days of a lasting „nie mogę” written earlier", (tester) async {
+      // 27.11.2026: "na stałe we wtorki nie mogę od 9 do 11" may last; each month offers its own Tuesdays.
+      const rest = [
+        {'start': '00:00', 'end': '09:00'},
+        {'start': '11:00', 'end': '00:00'},
+      ];
+      final api = server(
+        asked: january,
+        rows: () => [
+          request({
+            'text': 'Na stałe we wtorki nie mogę od 9 do 11.',
+            'summary': 'We wtorki „Mogę” tylko do 9:00 i od 11:00.',
+            'lasting': true,
+            'carried_from': '2026-12-01',
+            'cannot_marks': [
+              {
+                'days': ['2027-01-05', '2027-01-12'],
+                'from_time': '09:00',
+                'to_time': '11:00',
+                'windows': rest,
+                'prefer_days': [],
+                'whole_day': false,
+              },
+            ],
+          }),
+        ],
+      );
+      await open(tester, api);
+      final calendarReads = api.sent('GET /api/me/calendar').length;
+      await tap(tester, find.text('Zaznacz „Mogę” do 9:00 i od 11:00'));
+      expect(body(api, 'PUT /api/me/calendar'), {
+        'company_id': 'c1',
+        'days': [
+          for (final date in ['2027-01-05', '2027-01-12'])
+            {
+              'date': date,
+              'state': 'neutral',
+              'from_time': '00:00',
+              'to_time': '09:00',
+              'from_time_2': '11:00',
+              'to_time_2': '00:00',
+              'one_shift': false,
+            },
+        ],
+      });
+      // "Kiedy mogę" above reads its calendar again, so the days show the new hours.
+      expect(api.sent('GET /api/me/calendar').length, greaterThan(calendarReads));
+    });
+
+    testWidgets('offers no days of a lasting „nie mogę” once it is ended', (tester) async {
+      await open(
+        tester,
+        server(
+          asked: january,
+          rows: () => [
+            request({
+              'lasting': true,
+              'carried_from': '2026-12-01',
+              'ended': true,
+              'ended_by': 'employee',
+              'ends_from': '2027-01-01',
+              'cannot_marks': [
+                {
+                  'days': ['2027-01-05'],
+                  'from_time': null,
+                  'to_time': null,
+                  'windows': [],
+                  'prefer_days': [],
+                  'whole_day': false,
+                },
+              ],
+            }),
+          ],
+        ),
+      );
+      expect(find.text('Zaznacz „nie mogę”'), findsNothing);
     });
 
     testWidgets('does not bring back a request the manager ended', (tester) async {
