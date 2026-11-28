@@ -84,7 +84,7 @@ def test_a_file_becomes_a_plan_of_invitations_without_numbers_for_the_model(api,
     assert "512" not in seen["file_text"] and "600" not in seen["file_text"]
     assert "Kowalska Anna | [TEL1] | kasjerka" in seen["file_text"]
     assert seen["file_name"] == "lista.csv"
-    assert f"Lokale tego kierownika (do zaproszeń): {a['location'].name}." in seen["context"]
+    assert f"Lokale tego kierownika (do zaproszeń i polecenia lokal): {a['location'].name}." in seen["context"]
     assert body["lines"] == shown(["Zaproszę: Anna Kowalska, 512 345 678, Kasa.", "Zaproszę: Jan Nowak, 600 100 200."])
     assert body["notes"][0] == services.INVITES_NOTE
     assert "Jan Nowak: Piekarz" in body["notes"][1]

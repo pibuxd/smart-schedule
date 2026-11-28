@@ -641,6 +641,27 @@ def random_problem(seed: int):
         Request("r4", people[3].id, "shift_type", shift_type="m", avoid=True),
         Request("r5", people[0].id, "other"),
         Request("r6", people[-1].id, "position", positions=frozenset({BAKER}), avoid=True),
+        # Types added on 27.11.2026 (docs/plan.md section 50).
+        Request("r7", people[1].id, "time_of_day", from_time=time(10), to_time=time(22)),
+        Request("r8", people[2].id, "days_in_row", max_in_row=2, shift_type="n"),
+        Request("r9", people[3].id, "days_off_in_row", free_in_row=2, weekly_hours=True),
+        Request("r10", people[0].id, "rest_after", shift_type="n", days_after=2),
+        Request("r11", people[1].id, "location", locations=frozenset({"loc-2"}), avoid=True),
+        Request("r12", people[2].id, "free_weekends", free_weekends=1, of_weekends=2),
+        Request("r13", people[3].id, "same_shift_type", level="mile_widziane"),
+        Request("r15", people[1].id, "shift_length", min_shift_hours=8.5),
+        Request("r16", people[2].id, "not_alone", closing=True),
+        Request("r17", people[3].id, "avoid_person", subject_employee=people[0].id, same_day=True),
+        Request("r18", people[0].id, "prefer_person", subject_employee=people[2].id, same_day=True),
+        Request(
+            "r19",
+            people[1].id,
+            "days_off",
+            dates=frozenset(MON + timedelta(days=d) for d in range(days)),
+            min_days=2,
+            weekly_hours=True,
+        ),
+        Request("r20", people[2].id, "days_in_row", max_in_row=3),
     ]
     published = {s.id: rng.choice([None, *[p.id for p in people]]) for s in slots if rng.random() < 0.3}
     return problem(

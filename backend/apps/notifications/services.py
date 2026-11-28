@@ -231,7 +231,10 @@ def notification_text(kind: str, payload: dict) -> str:
                     f"Kierownik prosił {asked}. Grafik na ten okres jest już układany, więc tych dni nie zmienisz. "
                     "Swoje zmiany zobaczysz w „Mój grafik”, gdy kierownik go opublikuje."
                 )
-            return f"Kierownik prosi {asked}. Zaznacz, kiedy możesz pracować, najpóźniej do {_day(p.get('deadline'))}."
+            text = f"Kierownik prosi {asked}. Zaznacz, kiedy możesz pracować, najpóźniej do {_day(p.get('deadline'))}."
+            if p.get("lasting_cannot"):
+                text += " Masz prośbę na stałe „nie mogę”. Zaznacz ją w kalendarzu przyciskiem w „Twoje prośby”."
+            return text
         case "schedule_published":
             where = f"na okres {_range(p)} ({p.get('location_name', '')})"
             if p.get("changed"):

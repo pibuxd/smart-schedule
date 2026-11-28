@@ -4,6 +4,57 @@
 Plan techniczny (architektura, modele, endpointy, ekrany, etapy): [plan.md](plan.md).
 Założenia przyjęte przy planowaniu są w sekcji "Założenia" na końcu planu.
 
+## Więcej rodzajów próśb pracownika (prośba Piotra z 27.11.2026)
+
+Piotr (27.11.2026) poprosił o listę próśb, których asystent nie umie zamienić na nic, co generator uwzględni
+(szły do kierownika jako tekst), a potem: „obsłuż te typy”. Teraz asystent zapisuje je jako prośby, a generator
+liczy je miękko, jak inne prośby (bardzo ważna, ważna, mile widziana; kierownik może dać ważniejsza, mniej ważna
+albo odrzucić). Te same rodzaje może wydać kierownik jako polecenie o osobie.
+
+- Pora dnia jako życzenie: „wolę zaczynać po 10”, „najchętniej kończę przed 18”, „wolę nie pracować od 12 do 14”.
+  Generator stara się dawać zmiany, które zaczynają się nie wcześniej, kończą się nie później albo nie nachodzą na
+  te godziny. To nie zakaz: twardo ogranicza dzień tylko „Mogę tylko w tych godzinach” w kalendarzu.
+- Dni pod rząd: „najwyżej 3 dni pracy z rzędu”, „nie więcej niż 2 nocki pod rząd” (dni z rzędu, w które osoba ma
+  daną zmianę albo zamknięcie). Zmiany z innych lokali i z opublikowanego sąsiedniego grafiku też się liczą.
+- Wolne pod rząd: „chcę mieć 2 dni wolne pod rząd w każdym tygodniu” (od poniedziałku do niedzieli; w tygodniu
+  przeciętym przez początek albo koniec okresu liczą się dni okresu).
+- Wolne po zmianie: „po nocce chcę mieć dzień wolny”, „po nocce 2 dni wolnego”, „po zamknięciu nie chcę otwarcia
+  następnego dnia”.
+- Lokal (dla osób, które pracują w kilku lokalach): „wolę Rynek”, „tylko na Rynku”, „w tym tygodniu nie na
+  Dworcowej”.
+- Wolne weekendy: „chcę choć jeden wolny weekend w miesiącu”, „co drugi weekend wolny”. Wolny weekend to sobota
+  i niedziela bez zmiany zaczynającej się w te dni (nocka z piątku na sobotę go nie zajmuje; asystent mówi to, gdy
+  pracownik pyta). „Co drugi” sprawdza też ostatni weekend przed okresem, jeśli
+  osoba miała wtedy zmianę w opublikowanym grafiku.
+- Najmniej dni lub zmian w każdym tygodniu: „chcę pracować co najmniej 4 dni w tygodniu”, „co najmniej 2 nocki
+  w tygodniu”. Wcześniej „co najmniej N z tych dni” liczyło się tylko w całym okresie.
+- Wolne w jeden z kilku dni: „albo 24, albo 31 grudnia wolne”, „sobota albo niedziela wolna, obojętnie która”,
+  „2 dni wolne w tygodniu, obojętnie które”. Tego nie zaznacza się w kalendarzu („nie mogę” jest zawsze na
+  konkretny dzień), więc to zawsze życzenie.
+- Nie w te same dni co ktoś: „nie w te same dni co Marek, mamy dziecko” (żadnej zmiany tego samego dnia, w każdym
+  lokalu). Te same dni co ktoś: „chcę mieć wolne w te same dni co Kasia” (oboje pracują albo oboje mają wolne).
+  Dotąd „nie razem” znaczyło tylko „nie na zmianach w tym samym czasie”, a „razem” „na tej samej zmianie”.
+- Ta sama pora przez cały tydzień, obojętnie która: „ranki czy popołudnia, byle cały tydzień tak samo”.
+- Długość zmiany: „nie chcę zmian krótszych niż 6 godzin, nie opłaca mi się dojazd”. Najwyżej tyle godzin na
+  zmianę to dalej limit godzin dziennie.
+- Nie w pojedynkę: „nie chcę być sam na zamknięciu” (na zmianie, na której w tym samym czasie w lokalu nie ma nikogo
+  innego). Generator może wtedy dać tę zmianę komuś innemu; drugiej osoby nie dopisze, bo obsadę ustawia kierownik.
+  Asystent mówi to wprost (gdy nikt inny nie może, osoba może zostać sama), a gdy powodem jest bezpieczeństwo,
+  zapisuje prośbę i oddaje wiadomość także kierownikowi do przeczytania.
+- „Nie mogę” na stałe: „nigdy nie mogę w piątki”, „na stałe we wtorki nie mogę od 9 do 11, mam zajęcia”. Dotąd
+  całe dni zapisywały się na stałe tylko jako życzenie, a godzin w ogóle nie dało się zapisać na stałe (szły do
+  kierownika). Teraz taka prośba jest na stałe i w każdym miesiącu, w którym obowiązuje, „Twoje prośby” pokazują ten
+  sam przycisk, co w miesiącu, w którym ją napisano: zaznaczyć te dni jako „Nie mogę” (całe dni) albo jako „Mogę”
+  poza tymi godzinami. Twardo działa dopiero zaznaczenie w kalendarzu, jak dotąd, więc asystent mówi wprost, że
+  przycisk trzeba nacisnąć w każdym miesiącu. Gdy kierownik prosi o dyspozycje na nowy okres, osoba z taką prośbą,
+  której dni w tym okresie nie są jeszcze zaznaczone, dostaje w tym samym powiadomieniu przypomnienie o przycisku
+  (po przeglądzie Prelinta, 27.11.2026). Do zaznaczenia całe dni generator traktuje jak życzenie wolnego (jak
+  dotąd), a godzin nie liczy (decyzja Piotra z 25.11.2026: godziny „nie mogę” zapisuje tylko kalendarz).
+- Dalej do kierownika idą: zamiana z konkretną osobą, urlop, nowe stanowisko albo nowy lokal, choroba
+  w opublikowanym grafiku, stawki, a także „nie więcej zamknięć (weekendów) niż inni” (decyzja Piotra z 27.11.2026:
+  równy podział zmian ustawia kierownik zasadami „Równy podział zamknięć” i „Równy podział weekendów”, więc taka prośba nie
+  jest liczona przez generator; asystent mówi, że przekazuje ją kierownikowi).
+
 ## Aplikacje na iPhone'a i Androida (prośba Piotra z 26.11.2026)
 
 Piotr (26.11.2026): aplikacje iOS i Android przez Capacitor, z frontendem spakowanym w aplikacji, korzystające
@@ -85,10 +136,11 @@ okresu.”
   w te dni godziny 8:00–18:00, a prośba mówi, że nie możesz 9:00–11:00”), a przycisk zapisuje 8:00–9:00 i
   11:00–18:00. Do naciśnięcia kalendarz zostaje, jak był. Gdy poza godzinami „nie mogę” nic nie zostaje, przycisk
   zaznacza „Nie mogę” na cały dzień.
-- Godziny „nie mogę” nigdy nie są na stałe. Prośba tylko z takimi godzinami nie ma wyboru „Na stałe”, a serwer
-  odrzuca taką próbę zdaniem „Godziny, w których nie możesz, zaznaczasz w kalendarzu na dni tego okresu, więc ta
-  prośba nie może być na stałe.” W prośbie mieszanej „Na stałe” utrwala tylko życzenie o stanowisku, a pod wyborem
-  jest linijka „Tylko w grudniu: …” z częścią o godzinach.
+- Godziny „nie mogę” w konkretne dni nigdy nie są na stałe. Prośba tylko z nimi nie ma wyboru „Na stałe”, a serwer
+  odrzuca taką próbę zdaniem „Ta prośba dotyczy tylko konkretnych dni, więc nie może być na stałe.” W prośbie
+  mieszanej „Na stałe” utrwala tylko pozostałe życzenia, a pod wyborem jest linijka „Tylko w grudniu: …” z częścią
+  o tych dniach. Od 27.11.2026 godziny „nie mogę” w dni tygodnia mogą być na stałe (sekcja „Więcej rodzajów próśb
+  pracownika”): każdy kolejny miesiąc pokazuje przy prośbie przycisk ze swoimi dniami.
 - Karta prośby mówi, co dostaje generator. Przy samych godzinach: „Generator nie dostaje tej prośby. Godziny,
   w których nie możesz, zaczną obowiązywać dopiero po zaznaczeniu w kalendarzu przyciskiem niżej.” Przy mieszanej:
   „Generator grafiku spróbuje spełnić: …” i to samo zdanie o godzinach. Po zaznaczeniu: „…obowiązują tak, jak są
@@ -615,7 +667,7 @@ e) Niezależny walidator w Pythonie (osobny od solvera, pytest z przypadkami gra
 f) Stabilność: przy ponownym generowaniu w trakcie okresu kara za każdą zmianę względem opublikowanego grafiku, żeby jedna nieobecność nie przetasowała całego miesiąca. Dni, które minęły, są zamrożone.
 g) Wyjaśnienia: szybkie sprawdzenie bezpośrednich przyczyn (dyspozycyjność, limit godzin, odpoczynek, stanowisko) bez ponownego uruchamiania solvera dla każdej prośby. Głębsza analiza tylko na żądanie menedżera.
 h) Kierownik dostosowuje generator poleceniami tekstem do asystenta (LLM): zasady, ich ważność i poprawki wyniku; asystent zamienia polecenie na ustawienia z zamkniętych list i sam nigdy nie układa grafiku (układa go generator; z czatu rusza tylko po zatwierdzeniu planu z punktem o ułożeniu). Docelowo wszystko ma być ustawialne poleceniem. Polecenie daje plan, który kierownik widzi prostymi zdaniami (ułożonymi przez aplikację, nie przez model) razem ze skutkiem na ostatnim grafiku; nic się nie zmienia, dopóki kierownik planu nie zatwierdzi. Plan może: włączyć, wyłączyć, ustawić i przesunąć zasadę z katalogu, oznaczyć ją "bez wyjątków", dodać albo usunąć polecenie o konkretnej osobie (dwie osoby osobno lub razem, osoba tylko na danej zmianie lub bez niej, limit godzin, wolne w daty lub dni tygodnia, praca w daty lub dni tygodnia z liczbą dni, z których wystarczy część, i liczbą zmian danego dnia), a na wyraźną prośbę kierownika także ułożyć grafik okresu od nowa albo inaczej po zatwierdzeniu (sekcja „Inny grafik na prośbę kierownika”). W poleceniu kierownika i prośbie pracownika limit godzin osoby może dotyczyć całego okresu albo każdego tygodnia od poniedziałku do niedzieli. Wspólna zmiana oznacza ten sam lokal, typ zmiany i godziny. W starszych wpisach jednoznaczny limit tygodniowy jest oznaczony informacją o zmianie sposobu liczenia. Przydział w grafiku kierownika pokazuje podstawę wpisu i wpływ zamiany na zasady i prośby. Polecenia o osobach liczą się razem z zasadami kierownika (nie z prośbami pracowników) i mają własną kolejność.
-i) Prośby pracowników LLM zamienia na strukturę: typ z zamkniętej listy (unikaj_osoby, preferuj_osobe, typ_zmiany, stanowisko, limit_godzin, limit_zmian, cel_godzin, wolne_dni, chce_pracowac, inne; unikaj_osoby i preferuj_osobe mogą dotyczyć tylko jednej zmiany, np. "nie stawiajcie mnie z Zuzanną na zamknięciu" = nie razem na zmianie, która zamyka lokal, a gdzie indziej mogą pracować razem; limit_zmian = "najwyżej 3 nocki w tygodniu": najwyżej tyle zmian (danego rodzaju albo wszystkich) dziennie, w każdym tygodniu albo w okresie, dodane 20.11.2026 po teście Piotra; cel_godzin = "w pierwszym tygodniu chcę wyrobić 30 godzin, najlepiej pod koniec tygodnia": około tylu godzin dziennie, w każdym tygodniu albo w okresie (mniej i więcej to tak samo odstępstwo; przy wyraźnym "co najmniej" liczy się tylko brak godzin, a gdy pracownik nie powie ani "około", ani "co najmniej", asystent pyta, decyzja Piotra z 26.11.2026), opcjonalnie z dniami tygodnia, w które najlepiej, dodane 26.11.2026 po teście Piotra, wcześniej taka prośba szła do kierownika jako tekst; wolne_dni = "wolę nie pracować w te dni lub dni tygodnia", miękko, bo twarde "nie mogę" zaznacza się w kalendarzu; "nie mogę" tylko w części dnia ("we wtorki nie mogę od 9 do 11") od 25.11.2026 nie jest liczone, tylko daje przycisk, który zaznacza te dni jako "mogę" w pozostałych godzinach; chce_pracowac = "chcę pracować w te dni", z liczbą dni, z których wystarczy część ("albo 12, albo 13" = jeden z nich), i liczbą zmian danego dnia ("dwie zmiany pod rząd"), dodane 15.11.2026 po teście Piotra), kogo dotyczy, daty, dni tygodnia, poziom (bardzo_wazne / wazne / mile_widziane), pewność 0-1, opis jednym zdaniem. Do LLM wysyłaj tylko treść prośby, okres grafiku, nazwy zmian i imiona z danego lokalu (nazwisko skrócone do litery tylko przy takich samych imionach). Od 19.11.2026 asystent może też sam odczytać przez API to, co pracownik widzi w aplikacji (sekcja „Asystent odpowiada na wszystko o Grafikomacie i lokalu”). Bez klucza API (zmienna OPENROUTER_API_KEY albo ANTHROPIC_API_KEY), przy typie "inne" albo gdy odpowiedź wskazuje dzień spoza okresu, prośba trafia do menedżera bez interpretacji. Od 22.11.2026 asystent przy niepewnym dniu, osobie, zmianie lub zakresie najpierw dopytuje pracownika, najwyżej trzy razy z rzędu (decyzja Piotra z 22.11.2026; sekcja „Asystent pracownika dopytuje”); przy niskiej pewności (poniżej 0,6) i przy osobie lub zmianie spoza lokalu pyta sama aplikacja. Do menedżera trafia to, czego po ostatniej odpowiedzi nadal nie da się zapisać (wcześniej niska pewność i osoba lub zmiana spoza lokalu szły do menedżera od razu). Kierownik widzi przy niej powód: asystent był wyłączony, nie był pewny albo wystąpił błąd. Prośbę, która przyszła przy wyłączonym asystencie albo przy błędzie, kierownik może jednym przyciskiem dać asystentowi do przeczytania, gdy asystent już działa. Pracownik widzi, jak prośba została zrozumiana, i może powiedzieć "nie o to mi chodziło" (wtedy czyta ją kierownik).
+i) Prośby pracowników LLM zamienia na strukturę: typ z zamkniętej listy (unikaj_osoby, preferuj_osobe, typ_zmiany, stanowisko, limit_godzin, limit_zmian, cel_godzin, wolne_dni, chce_pracowac, od 27.11.2026 także pora_dnia, dni_z_rzedu, wolne_z_rzedu, po_zmianie, lokal, wolne_weekendy, stala_pora, dlugosc_zmiany, nie_sam (sekcja „Więcej rodzajów próśb pracownika”), inne; unikaj_osoby i preferuj_osobe mogą dotyczyć tylko jednej zmiany, np. "nie stawiajcie mnie z Zuzanną na zamknięciu" = nie razem na zmianie, która zamyka lokal, a gdzie indziej mogą pracować razem; limit_zmian = "najwyżej 3 nocki w tygodniu": najwyżej tyle zmian (danego rodzaju albo wszystkich) dziennie, w każdym tygodniu albo w okresie, dodane 20.11.2026 po teście Piotra; cel_godzin = "w pierwszym tygodniu chcę wyrobić 30 godzin, najlepiej pod koniec tygodnia": około tylu godzin dziennie, w każdym tygodniu albo w okresie (mniej i więcej to tak samo odstępstwo; przy wyraźnym "co najmniej" liczy się tylko brak godzin, a gdy pracownik nie powie ani "około", ani "co najmniej", asystent pyta, decyzja Piotra z 26.11.2026), opcjonalnie z dniami tygodnia, w które najlepiej, dodane 26.11.2026 po teście Piotra, wcześniej taka prośba szła do kierownika jako tekst; wolne_dni = "wolę nie pracować w te dni lub dni tygodnia", miękko, bo twarde "nie mogę" zaznacza się w kalendarzu; "nie mogę" tylko w części dnia ("we wtorki nie mogę od 9 do 11") od 25.11.2026 nie jest liczone, tylko daje przycisk, który zaznacza te dni jako "mogę" w pozostałych godzinach; chce_pracowac = "chcę pracować w te dni", z liczbą dni, z których wystarczy część ("albo 12, albo 13" = jeden z nich), i liczbą zmian danego dnia ("dwie zmiany pod rząd"), dodane 15.11.2026 po teście Piotra), kogo dotyczy, daty, dni tygodnia, poziom (bardzo_wazne / wazne / mile_widziane), pewność 0-1, opis jednym zdaniem. Do LLM wysyłaj tylko treść prośby, okres grafiku, nazwy zmian i imiona z danego lokalu (nazwisko skrócone do litery tylko przy takich samych imionach), nazwę lokalu głównego, a od 27.11.2026 także nazwy wszystkich lokali osoby, gdy pracuje w kilku (do typu lokal; nazwy lokali to dane firmy, nie dane osobowe; decyzja Piotra z 27.11.2026). Od 19.11.2026 asystent może też sam odczytać przez API to, co pracownik widzi w aplikacji (sekcja „Asystent odpowiada na wszystko o Grafikomacie i lokalu”). Bez klucza API (zmienna OPENROUTER_API_KEY albo ANTHROPIC_API_KEY), przy typie "inne" albo gdy odpowiedź wskazuje dzień spoza okresu, prośba trafia do menedżera bez interpretacji. Od 22.11.2026 asystent przy niepewnym dniu, osobie, zmianie lub zakresie najpierw dopytuje pracownika, najwyżej trzy razy z rzędu (decyzja Piotra z 22.11.2026; sekcja „Asystent pracownika dopytuje”); przy niskiej pewności (poniżej 0,6) i przy osobie lub zmianie spoza lokalu pyta sama aplikacja. Do menedżera trafia to, czego po ostatniej odpowiedzi nadal nie da się zapisać (wcześniej niska pewność i osoba lub zmiana spoza lokalu szły do menedżera od razu). Kierownik widzi przy niej powód: asystent był wyłączony, nie był pewny albo wystąpił błąd. Prośbę, która przyszła przy wyłączonym asystencie albo przy błędzie, kierownik może jednym przyciskiem dać asystentowi do przeczytania, gdy asystent już działa. Pracownik widzi, jak prośba została zrozumiana, i może powiedzieć "nie o to mi chodziło" (wtedy czyta ją kierownik).
 j) "Wszystko bardzo ważne" (problem zgłoszony przez Piotra) jest niemożliwe z konstrukcji, w trzech miejscach:
    - Kierownik nie ma poziomów ważności. Ważność to wyłącznie miejsce na liście (zasad i poleceń o osobach), a każda pozycja ma inne miejsce: podniesienie jednej rzeczy zawsze obniża inne. Asystent nie może nadać poziomu, musi wybrać miejsce i napisać, co przez to spadnie niżej.
    - "Bez wyjątków" jest osobnym, świadomym wyborem (jedyny wyjątek ustawiony z góry to osobiste maksimum godzin z zapasem, decyzja Piotra z 15.11.2026, patrz wyżej): asystent ustawia je tylko na wyraźne "nigdy", plan pokazuje skutek na ostatnim grafiku, a od trzeciej takiej zasady aplikacja ostrzega, że mogą zostać zmiany bez obsady.

@@ -289,6 +289,7 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
     """ "Poproś o dyspozycje": an in-app notice with the period and the deadline for every active employee of the
     location (or only those who have not finished). Nothing is arranged automatically: the manager arranges the
     schedule when the deadline has passed or everyone has answered."""
+    from apps.availability.api import lasting_cannot_left
     from apps.availability.models import AvailabilitySubmission
     from apps.notifications.services import notify
 
@@ -301,7 +302,7 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
     if payload.only_missing:
         done = ctx.qs(AvailabilitySubmission).filter(period=period).values_list("employee_id", flat=True)
         people = people.exclude(pk__in=list(done))
-    user_ids = list(people.values_list("membership__user_id", flat=True))
+    people = list(people.values_list("pk", "membership__user_id"))
     note = {
         "period_id": str(period.pk),
         "location_name": period.location.name,
@@ -317,10 +318,16 @@ def ask_for_availability(request, period_id: UUID, payload: AskAvailabilityIn):
         if period.status != SchedulePeriod.Status.COLLECTING:
             raise HttpError(409, "Grafik na ten okres jest już ułożony.")
         agreements.bind_pending(period)
-        notify(ctx.company.pk, user_ids, "availability_requested", note)
+        # A lasting "nie mogę" from an earlier month is not in this period's calendar until the person marks it:
+        # those people get a reminder in the same notice (`lasting_cannot`).
+        remind = lasting_cannot_left(ctx, period, [pk for pk, _ in people])
+        for flag, payload in ((False, note), (True, {**note, "lasting_cannot": True})):
+            users = [user_id for pk, user_id in people if (pk in remind) == flag]
+            if users:
+                notify(ctx.company.pk, users, "availability_requested", payload)
         period.availability_requested_at = timezone.now()
         period.save(update_fields=["availability_requested_at"])
-    return AskAvailabilityOut(period=_period_out(period), notified=len(user_ids))
+    return AskAvailabilityOut(period=_period_out(period), notified=len(people))
 
 
 @router.post(

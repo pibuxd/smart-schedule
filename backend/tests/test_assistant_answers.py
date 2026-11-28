@@ -550,8 +550,8 @@ class TestEmployee:
         kept = AvailabilityDay.objects.get(employee=shop["employee"], date=days[0])
         assert (kept.from_time, kept.to_time, kept.from_time_2) == (time(8), time(18), None)
 
-    def test_hours_someone_cannot_work_never_last(self, api, shop, with_key, monkeypatch):
-        # Piotr, 26.11.2026: a request only about such hours has no "Na stałe", and the API refuses it.
+    def test_hours_someone_cannot_work_last_only_on_weekdays(self, api, shop, with_key, monkeypatch):
+        # Piotr, 26.11.2026: such hours on concrete days have no "Na stałe", and the API refuses it.
         answer = reading(
             weekdays=[], dates=[shop["period"].start.isoformat()], cannot=True, from_time="9:00", to_time="11:00"
         )
@@ -561,14 +561,14 @@ class TestEmployee:
         assert mine["parts"] == [{"summary": row.interpretation["summary"], "calendar_only": True, "can_last": False}]
         refused = api.patch(f"/api/me/requests/{row.pk}", {"lasting": True})
         assert refused.status_code == 409
-        assert refused.json()["detail"].startswith("Godziny, w których nie możesz, zaznaczasz w kalendarzu")
+        assert refused.json()["detail"] == "Ta prośba dotyczy tylko konkretnych dni, więc nie może być na stałe."
         row.refresh_from_db()
         assert row.lasting is False
-        # Weekdays of the period are no different: still only these days.
+        # 27.11.2026: on weekdays they may last; each later month offers to mark them in its calendar.
         tuesdays = reading(weekdays=[2], cannot=True, from_time="9:00", to_time="11:00")
-        _, row, _ = read(api, shop, monkeypatch, tuesdays, "W tym miesiącu we wtorki nie mogę od 9 do 11.")
-        assert row.status == "interpreted" and not row.can_last
-        assert api.patch(f"/api/me/requests/{row.pk}", {"lasting": True}).status_code == 409
+        _, row, _ = read(api, shop, monkeypatch, tuesdays, "We wtorki nie mogę od 9 do 11.")
+        assert row.status == "interpreted" and row.can_last
+        assert api.patch(f"/api/me/requests/{row.pk}", {"lasting": True}).json()["lasting"] is True
 
     def test_a_mixed_request_lasts_only_in_its_wish_about_a_position(self, api, shop, with_key, monkeypatch):
         # Piotr, 26.11.2026: "w piątki wolę salę, a we wtorki nie mogę od 9 do 11" may last in its position wish;
@@ -588,14 +588,14 @@ class TestEmployee:
             {
                 "summary": "We wtorki „Mogę” tylko do 9:00 i od 11:00 (nie może 9:00–11:00).",
                 "calendar_only": True,
-                "can_last": False,
+                "can_last": True,
             },
         ]
         response = api.patch(f"/api/me/requests/{row.pk}", {"lasting": True})
         assert response.status_code == 200 and response.json()["lasting"] is True
         row.refresh_from_db()
-        assert row.interpretation["lasting"] is True and row.interpretation["more"][0]["lasting"] is False
-        # The next period gets the position wish, never the hours (those only the calendar of this period keeps).
+        assert row.interpretation["lasting"] is True and row.interpretation["more"][0]["lasting"] is True
+        # The next period gets the position wish for the generator, and the hours as an offer for its calendar.
         start = shop["period"].end + timedelta(days=1)
         later = SchedulePeriod.objects.create(
             location=shop["location"],
@@ -606,7 +606,18 @@ class TestEmployee:
         [carried] = build_problem([later]).problem.requests
         assert carried.id == str(row.pk) and carried.type == "position"
         [there] = api.get(f"/api/me/requests?company_id={shop['company'].pk}&period_id={later.pk}").json()
-        assert there["carried_from"] == shop["period"].start.isoformat() and there["cannot_marks"] == []
+        assert there["carried_from"] == shop["period"].start.isoformat()
+        tuesdays = [later.start + timedelta(days=n) for n in range((later.end - later.start).days + 1)]
+        [mark] = there["cannot_marks"]
+        assert mark["days"] == [d.isoformat() for d in tuesdays if d.weekday() == 1]
+        assert [(w["start"], w["end"]) for w in mark["windows"]] == [("00:00", "09:00"), ("11:00", "00:00")]
+        # Ended from that period, it offers nothing there.
+        api.post(
+            f"/api/me/requests/{row.pk}/end",
+            {"company_id": str(shop["company"].pk), "period_id": str(later.pk), "ended": True},
+        )
+        [there] = api.get(f"/api/me/requests?company_id={shop['company'].pk}&period_id={later.pk}").json()
+        assert there["ended"] is True and there["cannot_marks"] == []
 
     def test_weekdays_of_the_period_someone_cannot_work_in_some_hours_count_as_days(
         self, api, shop, with_key, monkeypatch
@@ -632,10 +643,10 @@ class TestEmployee:
         )
         [mark] = my_requests(api, shop)[0]["cannot_marks"]
         assert mark["days"] == tuesdays and not mark["whole_day"]
-        # Every Tuesday for good has no days to mark: the manager reads it.
+        # Every Tuesday for good (27.11.2026): saved as lasting, its days offered in each month.
         for_good = reading(weekdays=[2], cannot=True, from_time="9:00", to_time="11:00", lasting=True)
-        status, _, _ = read(api, shop, monkeypatch, for_good, "Na stałe we wtorki nie mogę od 9 do 11.")
-        assert status == "needs_manager"
+        status, row, _ = read(api, shop, monkeypatch, for_good, "Na stałe we wtorki nie mogę od 9 do 11.")
+        assert status == "interpreted" and row.lasting and row.interpretation["cannot"] is True
 
     def test_rather_a_position_is_not_only_that_position(self, api, shop, with_key, monkeypatch):
         second = Position.objects.create(location=shop["location"], name="Bar")
